@@ -3,70 +3,75 @@ using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
-    public float moveSpeed;
+    public float _moveSpeed;
     public float _bulletCount;
-    public GunController _revolver;
-    public bool triggerHeld = false;
-    private Rigidbody myRigidbody;
-    private Camera mainCamera;
-    private PlayerInput playerInput;
-    private Vector2 moveInput;
-    private Vector2 lookInput;
-    private Vector3 moveVelocity;
+    public GunController _gun;
+    public bool _triggerHeld = false;
+    private Rigidbody _myRigidbody;
+    private Camera _mainCamera;
+    private PlayerInput _playerInput;
+    private Vector2 _moveInput;
+    private Vector2 _lookInput;
+    private Vector3 _moveVelocity;
 
     void Start()
     {
-        myRigidbody = GetComponent<Rigidbody>();
-        mainCamera = FindAnyObjectByType<Camera>();
-        playerInput = GetComponent<PlayerInput>();
+        _myRigidbody = GetComponent<Rigidbody>();
+        _mainCamera = FindAnyObjectByType<Camera>();
+        _playerInput = GetComponent<PlayerInput>();
     }
 
     public void OnMove(InputAction.CallbackContext context)
     {
-        moveInput = context.ReadValue<Vector2>();
+        _moveInput = context.ReadValue<Vector2>();
     }
 
     public void OnLook(InputAction.CallbackContext context)
     {
-        lookInput = context.ReadValue<Vector2>();
+        _lookInput = context.ReadValue<Vector2>();
     }
 
     public void OnFire(InputAction.CallbackContext context)
     {
         if (context.performed)
         {
-            if (triggerHeld == false)
+            if (_triggerHeld == false)
             {
-                _revolver.isFiring = true;
-                triggerHeld = true;  
+                _gun._isFiring = true;
+                _triggerHeld = true;  
             }
         }
 
         if (context.canceled)
         {
-            _revolver.isFiring = false;
-            triggerHeld = false; 
+            _gun._isFiring = false;
+            _triggerHeld = false; 
         }
     }
 
     void Update()
     {
+        MovePlayer();
+    }
+
+    void MovePlayer()
+    {
         // Handle Movement
-        Vector3 moveDirection = new(moveInput.x, 0f, moveInput.y);
-        moveVelocity = moveDirection * moveSpeed;
+        Vector3 moveDirection = new(_moveInput.x, 0f, _moveInput.y);
+        _moveVelocity = moveDirection * _moveSpeed;
 
         // Seamless Rotation
-        if (playerInput.currentControlScheme == "Gamepad")
+        if (_playerInput.currentControlScheme == "Gamepad")
         {
-            if (lookInput.sqrMagnitude > 0.1f)
+            if (_lookInput.sqrMagnitude > 0.1f)
             {
-                float angle = Mathf.Atan2(lookInput.x, lookInput.y) * Mathf.Rad2Deg;
+                float angle = Mathf.Atan2(_lookInput.x, _lookInput.y) * Mathf.Rad2Deg;
                 transform.rotation = Quaternion.Euler(0f, angle, 0f);
             }
         }
         else 
         {
-            Ray cameraRay = mainCamera.ScreenPointToRay(Input.mousePosition);
+            Ray cameraRay = _mainCamera.ScreenPointToRay(Input.mousePosition);
             Plane groundPlane = new(Vector3.up, Vector3.zero);
 
             if (groundPlane.Raycast(cameraRay, out float rayLength))
@@ -82,6 +87,6 @@ public class PlayerController : MonoBehaviour
 
     void FixedUpdate()
     {
-        myRigidbody.linearVelocity = moveVelocity;
+        _myRigidbody.linearVelocity = _moveVelocity;
     }
 }
