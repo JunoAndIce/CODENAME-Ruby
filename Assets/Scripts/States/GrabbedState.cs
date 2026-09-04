@@ -12,6 +12,6 @@ public class GrabbedState : EnemyStateBase
 
     public override void Tick()
     {
-        // TODO: break-out timer -> Enemy.ChangeState(Enemy.Chase)
+        // TODO: break-out timer; expose it as a bool for a transition predicate to read.
     }
 }

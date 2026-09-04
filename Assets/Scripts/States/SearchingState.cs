@@ -2,8 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Lost the player and hunting the last place they were seen. This is what makes
-/// disengagement read as deliberate rather than as the enemy instantly forgetting you —
-/// it is the state the old Alert-straight-to-Idle transition was missing.
+/// disengagement read as deliberate rather than the enemy instantly forgetting you.
 /// </summary>
 public class SearchingState : EnemyStateBase
 {
@@ -14,32 +13,20 @@ public class SearchingState : EnemyStateBase
 
     public override EnemyState Id => EnemyState.Searching;
 
-    public void SetLastKnownPosition(Vector3 position) => _lastKnownPosition = position;
+    public bool SearchExpired => _searchTimer >= Enemy.SearchDuration;
 
     public override void Enter()
     {
         _searchTimer = 0f;
+        _lastKnownPosition = Enemy.Chase.LastSeen;
     }
 
-    public override void Tick()
-    {
-        if (Enemy.DistanceToPlayer() <= Enemy.AlertRadius)
-        {
-            Enemy.ChangeState(Enemy.Chase);
-            return;
-        }
-
-        _searchTimer += Time.deltaTime;
-        if (_searchTimer >= Enemy.SearchDuration)
-        {
-            Enemy.ChangeState(Enemy.HasPatrolRoute ? Enemy.Patrol : (EnemyStateBase)Enemy.Idle);
-
-        }
-    }
+    public override void Tick() => _searchTimer += Time.deltaTime;
 
     public override void FixedTick()
     {
         if (HasArrived) { Enemy.Stop(); return; }
+
         Enemy.MoveToward(_lastKnownPosition, Enemy.SearchSpeed);
     }
 
@@ -49,8 +36,7 @@ public class SearchingState : EnemyStateBase
         {
             Vector3 delta = _lastKnownPosition - Enemy.transform.position;
             delta.y = 0f;
-            return delta.sqrMagnitude < 0.25f;
+            return delta.sqrMagnitude < 0.25f;   // within 0.5m
         }
     }
-
 }

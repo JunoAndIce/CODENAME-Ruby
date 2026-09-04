@@ -14,12 +14,44 @@ public class PlayerController : MonoBehaviour
     private Vector2 _lookInput;
     private Vector3 _moveVelocity;
 
+    // Action axis only. Locomotion runs every frame regardless of which state is active.
+    private readonly StateMachine _actions = new();
+
+    public PlayerFreeState Free { get; private set; }
+    public PlayerFiringState Firing { get; private set; }
+    public PlayerHoldingState Holding { get; private set; }
+
+    public PlayerActionState ActionState =>
+        _actions.Current is PlayerStateBase s ? s.Id : PlayerActionState.Free;
+
+    void Awake()
+    {
+        Free = new PlayerFreeState(this);
+        Firing = new PlayerFiringState(this);
+        Holding = new PlayerHoldingState(this);
+
+        At(Free, Firing, new FuncPredicate(() => _triggerHeld && _bulletCount > 0));
+        At(Firing, Free, new FuncPredicate(() => !_triggerHeld || _bulletCount <= 0));
+    }
+
     void Start()
     {
         _myRigidbody = GetComponent<Rigidbody>();
         _mainCamera = FindAnyObjectByType<Camera>();
         _playerInput = GetComponent<PlayerInput>();
+
+        _actions.SetState(Free);
     }
+
+    void At(IState from, IState to, IPredicate condition)
+        => _actions.AddTransition(from, to, condition);
+
+    void AnyTo(PlayerStateBase to, IPredicate condition)
+        => _actions.AddAnyTransition(to, condition);
+
+    public void EnterHold() => _actions.SetState(Holding);
+
+    public void ExitHold() => _actions.SetState(Free);
 
     public void OnMove(InputAction.CallbackContext context)
     {
@@ -33,25 +65,15 @@ public class PlayerController : MonoBehaviour
 
     public void OnFire(InputAction.CallbackContext context)
     {
-        if (context.performed)
-        {
-            if (_triggerHeld == false)
-            {
-                _gun._isFiring = true;
-                _triggerHeld = true;  
-            }
-        }
-
-        if (context.canceled)
-        {
-            _gun._isFiring = false;
-            _triggerHeld = false; 
-        }
+        // Input only records trigger position; PlayerFiringState drives the gun.
+        if (context.performed) _triggerHeld = true;
+        if (context.canceled) _triggerHeld = false;
     }
 
     void Update()
     {
         MovePlayer();
+        _actions.Tick();
     }
 
     void MovePlayer()
@@ -69,7 +91,7 @@ public class PlayerController : MonoBehaviour
                 transform.rotation = Quaternion.Euler(0f, angle, 0f);
             }
         }
-        else 
+        else
         {
             Ray cameraRay = _mainCamera.ScreenPointToRay(Input.mousePosition);
             Plane groundPlane = new(Vector3.up, Vector3.zero);
@@ -88,5 +110,6 @@ public class PlayerController : MonoBehaviour
     void FixedUpdate()
     {
         _myRigidbody.linearVelocity = _moveVelocity;
+        _actions.FixedTick();
     }
 }

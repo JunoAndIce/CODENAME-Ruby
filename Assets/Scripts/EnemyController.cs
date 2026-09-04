@@ -24,7 +24,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private PlayerController _player;
 
     // ENEMY STATES
-    private readonly StateMachine<EnemyStateBase> _state = new();
+    private readonly StateMachine _state = new();
     public Rigidbody Body { get; private set; }
     public Health Health { get; private set; }
     public IRagdollBody RagdollBody { get; private set; }
@@ -37,9 +37,8 @@ public class EnemyController : MonoBehaviour
     public RagdollState Ragdoll { get; private set; }
     public DeadState Dead { get; private set; }
 
-
     // GETTERS
-    public EnemyState State => _state.Current.Id;
+    public EnemyState State => _state.Current is EnemyStateBase s ? s.Id : EnemyState.Idle;
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
@@ -69,44 +68,59 @@ public class EnemyController : MonoBehaviour
         Grabbed = new GrabbedState(this);
         Ragdoll = new RagdollState(this);
         Dead = new DeadState(this);
+
+        BuildTransitions();
     }
+
+    // The whole transition graph, in one place. States never name each other.
+    private void BuildTransitions()
+    {
+        At(Idle, Chase, new FuncPredicate(() => DistanceToPlayer() <= _alertRadius));
+        At(Patrol, Chase, new FuncPredicate(() => DistanceToPlayer() <= _alertRadius));
+
+        At(Chase, Attack, new FuncPredicate(() => DistanceToPlayer() <= _attackRange));
+        At(Attack, Chase, new FuncPredicate(() => DistanceToPlayer() > _attackRange));
+
+        At(Chase, Searching, new FuncPredicate(() => Chase.LostPlayer));
+        At(Searching, Chase, new FuncPredicate(() => DistanceToPlayer() <= _alertRadius));
+
+
+        At(Searching, Patrol, new FuncPredicate(() => Searching.SearchExpired && HasPatrolRoute));
+        At(Searching, Idle, new FuncPredicate(() => Searching.SearchExpired && !HasPatrolRoute));
+
+        At(Ragdoll, Chase, new FuncPredicate(() => RagdollBody.IsSettled && !Health.IsDead));
+
+        Any(Dead, new FuncPredicate(() => Health.IsDead));
+    }
+
+    private void At(IState from, IState to, IPredicate condition)
+        => _state.AddTransition(from, to, condition);
+
+    private void Any(EnemyStateBase to, IPredicate condition)
+        => _state.AddAnyTransition(to, condition);
 
     private void Start()
     {
-        // Always make sure a Player is found if one exists, and sets the main state to either Patrolling or Idling.
         if (_player == null) _player = FindAnyObjectByType<PlayerController>();
-        ChangeState(HasPatrolRoute ? Patrol : (EnemyStateBase)Idle);
+        _state.SetState(HasPatrolRoute ? Patrol : (EnemyStateBase)Idle);
     }
 
-    private void OnEnable()
-    {
-        Health.OnDamaged += HandleDamaged;
-        Health.OnDied += HandleDied;
-    }
+    private void OnEnable() => Health.OnDamaged += HandleDamaged;
 
-    private void OnDisable()
-    {
-        Health.OnDamaged -= HandleDamaged;
-        Health.OnDied -= HandleDied;
-    }
+    private void OnDisable() => Health.OnDamaged -= HandleDamaged;
 
     private void Update() => _state.Tick();
 
     private void FixedUpdate() => _state.FixedTick();
 
-    public void ChangeState(EnemyStateBase next)
-    {
-        if (_state.Current is DeadState) return;
-        _state.Change(next);
-    }
-
+    // Externally driven transitions. Nothing can poll for these, so they bypass the table.
     public void Alert()
     {
         if (_state.Current is GrabbedState or RagdollState or DeadState) return;
-        ChangeState(Chase);
+        _state.SetState(Chase);
     }
 
-    public void EnterGrabbed() => ChangeState(Grabbed);
+    public void EnterGrabbed() => _state.SetState(Grabbed);
 
     public void Release(Vector3 velocity)
     {
@@ -114,7 +128,7 @@ public class EnemyController : MonoBehaviour
 
         // Grabbed.Exit clears isKinematic; a kinematic body ignores the launch velocity.
         Ragdoll.Launch(YConstraint.Flatten(velocity));
-        ChangeState(Ragdoll);
+        _state.SetState(Ragdoll);
     }
 
     // Will be used for patroling and searching
@@ -153,8 +167,6 @@ public class EnemyController : MonoBehaviour
     }
 
     private void HandleDamaged(float amount) => Alert();
-
-    private void HandleDied() => ChangeState(Dead);
 
     private void OnValidate()
     {

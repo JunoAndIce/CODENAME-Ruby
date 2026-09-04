@@ -22,7 +22,7 @@ public class AttackState : EnemyStateBase
     public override void Tick()
     {
         // TODO: Enemy.FaceTarget() — keep facing while attacking
-        // TODO: out of Enemy.AttackRange -> Enemy.ChangeState(Enemy.Chase)
+        // Leaving on range is declared in EnemyController.BuildTransitions, not here.
         // TODO: _cooldown -= Time.deltaTime; when it drops to 0, attack and reset it
         //       from the weapon's own cooldown rather than a field on this class
     }

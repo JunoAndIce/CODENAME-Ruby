@@ -22,7 +22,7 @@ public class PatrolState : EnemyStateBase
 
     public override void Tick()
     {
-        // TODO: player within Enemy.AlertRadius -> Enemy.ChangeState(Enemy.Chase)
+        // Alert transition is declared in EnemyController.BuildTransitions, not here.
         // TODO: reached the current waypoint -> run _waitTimer, then advance _waypointIndex
         //       (wrap with % so the route loops)
     }

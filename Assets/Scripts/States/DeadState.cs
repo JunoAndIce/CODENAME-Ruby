@@ -6,6 +6,6 @@ public class DeadState : EnemyStateBase
 
     public override EnemyState Id => EnemyState.Dead;
 
-    // Terminal — ChangeState refuses to leave. Pooled return replaces this later.
+    // Terminal — no outgoing transitions are registered. Pooled return replaces this later.
     public override void Enter() => Object.Destroy(Enemy.gameObject);
 }
