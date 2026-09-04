@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 public class PlayerController : MonoBehaviour
 {
     public float _moveSpeed;
-    public float _bulletCount;
+    public int _bulletCount;
     public GunController _gun;
     public bool _triggerHeld = false;
     private Rigidbody _myRigidbody;

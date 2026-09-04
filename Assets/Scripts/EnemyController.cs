@@ -4,178 +4,163 @@ using UnityEngine;
 [RequireComponent(typeof(Health))]
 public class EnemyController : MonoBehaviour
 {
-    [SerializeField] private float _moveSpeed = 2f;
+    // CONFIGURABLE VALUES
+    [Header("Movement")]
+    [SerializeField] private float _chaseSpeed = 2f;
+    [SerializeField] private float _patrolSpeed = 1f;
+    [SerializeField] private float _searchSpeed = 1.5f;
+
+    [Header("Awareness")]
     [SerializeField] private float _alertRadius = 12f;
-    [SerializeField] private PlayerController _player;
-    [SerializeField] private float _giveUpRadius = 18f;  // get outside this -> stop
+    [SerializeField] private float _giveUpRadius = 18f;
     [SerializeField] private float _aggroTime = 1.5f;
+    [SerializeField] private float _searchDuration = 5f;
 
-    private float _outOfRangeTimer;
+    [Header("Combat")]
+    [SerializeField] private float _attackRange = 2f;
 
-    private Rigidbody _enemyRB;
-    private Health _health;
-    private IRagdollBody _ragdoll;
-    private EnemyState _state = EnemyState.Idle;
+    [Header("Patrol")]
+    [SerializeField] private Transform[] _waypoints;
+    [SerializeField] private PlayerController _player;
 
-    public EnemyState State => _state;
+    // ENEMY STATES
+    private readonly StateMachine<EnemyStateBase> _state = new();
+    public Rigidbody Body { get; private set; }
+    public Health Health { get; private set; }
+    public IRagdollBody RagdollBody { get; private set; }
+    public IdleState Idle { get; private set; }
+    public PatrolState Patrol { get; private set; }
+    public SearchingState Searching { get; private set; }
+    public ChaseState Chase { get; private set; }
+    public AttackState Attack { get; private set; }
+    public GrabbedState Grabbed { get; private set; }
+    public RagdollState Ragdoll { get; private set; }
+    public DeadState Dead { get; private set; }
+
+
+    // GETTERS
+    public EnemyState State => _state.Current.Id;
+    public float ChaseSpeed => _chaseSpeed;
+    public float PatrolSpeed => _patrolSpeed;
+    public float SearchSpeed => _searchSpeed;
+    public float AlertRadius => _alertRadius;
+    public float GiveUpRadius => _giveUpRadius;
+    public float AggroTime => _aggroTime;
+    public float SearchDuration => _searchDuration;
+    public float AttackRange => _attackRange;
+    public Transform[] Waypoints => _waypoints;
+    public bool HasPatrolRoute => _waypoints != null && _waypoints.Length > 0;
+    public Transform PlayerTransform => _player == null ? null : _player.transform;
 
     private void Awake()
     {
-        _enemyRB = GetComponent<Rigidbody>();
-        _health = GetComponent<Health>();
+        Body = GetComponent<Rigidbody>();
+        Health = GetComponent<Health>();
 
-        if (!TryGetComponent(out _ragdoll))
+        if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
+        RagdollBody = ragdoll;
+
+        Idle = new IdleState(this);
+        Patrol = new PatrolState(this);
+        Searching = new SearchingState(this);
+        Chase = new ChaseState(this);
+        Attack = new AttackState(this);
+        Grabbed = new GrabbedState(this);
+        Ragdoll = new RagdollState(this);
+        Dead = new DeadState(this);
     }
 
     private void Start()
     {
-        if (_player == null)
-        {
-            _player = FindAnyObjectByType<PlayerController>();
-        }
+        // Always make sure a Player is found if one exists, and sets the main state to either Patrolling or Idling.
+        if (_player == null) _player = FindAnyObjectByType<PlayerController>();
+        ChangeState(HasPatrolRoute ? Patrol : (EnemyStateBase)Idle);
     }
 
     private void OnEnable()
     {
-        _health.OnDamaged += HandleDamaged;
-        _health.OnDied += HandleDied;
+        Health.OnDamaged += HandleDamaged;
+        Health.OnDied += HandleDied;
     }
 
     private void OnDisable()
     {
-        _health.OnDamaged -= HandleDamaged;
-        _health.OnDied -= HandleDied;
+        Health.OnDamaged -= HandleDamaged;
+        Health.OnDied -= HandleDied;
+    }
+
+    private void Update() => _state.Tick();
+
+    private void FixedUpdate() => _state.FixedTick();
+
+    public void ChangeState(EnemyStateBase next)
+    {
+        if (_state.Current is DeadState) return;
+        _state.Change(next);
     }
 
     public void Alert()
     {
-        if (_state == EnemyState.Grabbed || _state == EnemyState.Dead) return;
-        if (_state == EnemyState.Alert) return;
-
-        SetState(EnemyState.Alert);
+        if (_state.Current is GrabbedState or RagdollState or DeadState) return;
+        ChangeState(Chase);
     }
 
-    public void EnterGrabbed()
-    {
-        SetState(EnemyState.Grabbed);
-    }
+    public void EnterGrabbed() => ChangeState(Grabbed);
 
     public void Release(Vector3 velocity)
     {
-        _ragdoll.Ragdoll(YConstraint.Flatten(velocity));
-        SetState(EnemyState.Ragdoll);
+        if (_state.Current != Grabbed) return;
+
+        // Grabbed.Exit clears isKinematic; a kinematic body ignores the launch velocity.
+        Ragdoll.Launch(YConstraint.Flatten(velocity));
+        ChangeState(Ragdoll);
     }
 
-    private void Update()
+    // Will be used for patroling and searching
+    public void MoveToward(Vector3 target, float speed)
     {
-        switch (_state)
-        {
-            case EnemyState.Idle:
-                if (DistanceToPlayer() <= _alertRadius) Alert();
-                break;
-            case EnemyState.Alert:
-                FaceTarget();
-                if (DistanceToPlayer() > _giveUpRadius)
-                {
-                    _outOfRangeTimer += Time.deltaTime;
-                    if (_outOfRangeTimer >= _aggroTime) SetState(EnemyState.Idle);
-                }
-                else
-                {
-                    _outOfRangeTimer = 0f;
-                }
-                break;
-            case EnemyState.Ragdoll:
-                return;
-            case EnemyState.Grabbed:
-                return;
-            case EnemyState.Dead:
-                return;
-        }
+        Vector3 direction = target - transform.position;
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude > 0.01f)
+            transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+
+        Vector3 v = transform.forward * speed;
+        v.y = Body.linearVelocity.y;   // preserve gravity
+        Body.linearVelocity = v;
     }
 
-    private void FixedUpdate()
+    /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>
+    public void FaceTarget()
     {
+        if (_player == null) return;
 
-        if (_state != EnemyState.Alert) return;
-        FollowPlayer();
-    }
-
-    private void FaceTarget()
-    {
         Vector3 target = _player.transform.position;
         target.y = transform.position.y;
         transform.LookAt(target);
     }
 
-    private void FollowPlayer()
-    {
-        Vector3 v = transform.forward * _moveSpeed;
-        v.y = _enemyRB.linearVelocity.y;
-        _enemyRB.linearVelocity = v;
-    }
+    public void Stop() => Body.linearVelocity = new Vector3(0f, Body.linearVelocity.y, 0f);
 
-    private float DistanceToPlayer()
+    public float DistanceToPlayer()
     {
+        if (_player == null) return float.MaxValue;
+
         Vector3 delta = _player.transform.position - transform.position;
         delta.y = 0f;
         return delta.magnitude;
     }
 
-    private void HandleDamaged(float amount)
-    {
-        // TODO: being shot from across the room wakes an Idle enemy -> Alert()
-    }
+    private void HandleDamaged(float amount) => Alert();
 
-    private void HandleDied()
-    {
-        // TODO: SetState(EnemyState.Dead)
-    }
-
-    // ------------------------------------------------------------------
-    // State machine
-    // ------------------------------------------------------------------
-
-    private void SetState(EnemyState next)
-{
-    if (next == _state) return;
-    if (_state == EnemyState.Dead) return;
-
-    // EXIT
-    switch (_state)
-    {
-        case EnemyState.Grabbed:
-            break;
-    }
-
-    _state = next;
-
-    // ENTER
-    switch (_state)
-    {
-        case EnemyState.Idle:
-            _enemyRB.linearVelocity = Vector3.zero;
-            break;
-        case EnemyState.Grabbed:
-            _enemyRB.isKinematic = true;
-            break;
-        case EnemyState.Dead:
-            Destroy(gameObject);
-            break;
-        default:
-            break;
-    }
-}
-
-
-    // ------------------------------------------------------------------
-    // Editor
-    // ------------------------------------------------------------------
+    private void HandleDied() => ChangeState(Dead);
 
     private void OnValidate()
     {
+        // Give-up must sit outside alert, or the enemy aggros and de-aggros in the same frame.
         _giveUpRadius = Mathf.Max(_giveUpRadius, _alertRadius + 1f);
+        _attackRange = Mathf.Min(_attackRange, _alertRadius);
     }
 
     private void OnDrawGizmosSelected()
@@ -185,5 +170,21 @@ public class EnemyController : MonoBehaviour
 
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, _giveUpRadius);
+
+        Gizmos.color = Color.magenta;
+        Gizmos.DrawWireSphere(transform.position, _attackRange);
+
+        if (!HasPatrolRoute) return;
+
+        Gizmos.color = Color.cyan;
+        for (int i = 0; i < _waypoints.Length; i++)
+        {
+            if (_waypoints[i] == null) continue;
+
+            Gizmos.DrawWireCube(_waypoints[i].position, Vector3.one * 0.3f);
+
+            Transform next = _waypoints[(i + 1) % _waypoints.Length];
+            if (next != null) Gizmos.DrawLine(_waypoints[i].position, next.position);
+        }
     }
 }
