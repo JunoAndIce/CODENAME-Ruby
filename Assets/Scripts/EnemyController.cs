@@ -48,10 +48,6 @@ public class EnemyController : MonoBehaviour
         _health.OnDied -= HandleDied;
     }
 
-    // ------------------------------------------------------------------
-    // External API — the only surface slices 3-5 are allowed to touch
-    // ------------------------------------------------------------------
-
     public void Alert()
     {
         if (_state == EnemyState.Grabbed || _state == EnemyState.Dead) return;
@@ -60,32 +56,19 @@ public class EnemyController : MonoBehaviour
         SetState(EnemyState.Alert);
     }
 
-
     public void EnterGrabbed()
     {
-        // TODO: SetState(EnemyState.Grabbed)
+        SetState(EnemyState.Grabbed);
     }
 
-    /// <summary>Let go, throwing the enemy with the given velocity.</summary>
     public void Release(Vector3 velocity)
     {
         _ragdoll.Ragdoll(YConstraint.Flatten(velocity));
         SetState(EnemyState.Ragdoll);
     }
 
-    // ------------------------------------------------------------------
-    // Per-frame
-    // ------------------------------------------------------------------
-
     private void Update()
     {
-        // TODO: switch on _state —
-        //   Idle    : if PlanarDistanceToPlayer() <= _alertRadius -> Alert()
-        //   Alert   : FaceTarget()
-        //   Ragdoll : if _ragdoll.IsSettled && !_health.IsDead -> _ragdoll.Recover(), then Alert
-        //   Grabbed / Dead : nothing
-        //
-        // Idle deliberately does NOT face the player — the enemy is unaware.
         switch (_state)
         {
             case EnemyState.Idle:
@@ -116,14 +99,9 @@ public class EnemyController : MonoBehaviour
     {
 
         if (_state != EnemyState.Alert) return;
-        Steer();
+        FollowPlayer();
     }
 
-    // ------------------------------------------------------------------
-    // Movement — written out, because the planar rules are easy to get subtly wrong
-    // ------------------------------------------------------------------
-
-    /// <summary>Turn to face the player, ignoring any height difference.</summary>
     private void FaceTarget()
     {
         Vector3 target = _player.transform.position;
@@ -131,7 +109,7 @@ public class EnemyController : MonoBehaviour
         transform.LookAt(target);
     }
 
-    private void Steer()
+    private void FollowPlayer()
     {
         Vector3 v = transform.forward * _moveSpeed;
         v.y = _enemyRB.linearVelocity.y;
@@ -144,10 +122,6 @@ public class EnemyController : MonoBehaviour
         delta.y = 0f;
         return delta.magnitude;
     }
-
-    // ------------------------------------------------------------------
-    // Health reactions
-    // ------------------------------------------------------------------
 
     private void HandleDamaged(float amount)
     {
@@ -164,22 +138,36 @@ public class EnemyController : MonoBehaviour
     // ------------------------------------------------------------------
 
     private void SetState(EnemyState next)
+{
+    if (next == _state) return;
+    if (_state == EnemyState.Dead) return;
+
+    // EXIT
+    switch (_state)
     {
-        // TODO: early-out if next == _state, and never leave Dead
-
-        // TODO: EXIT the old state
-        //   Grabbed -> nothing; Release() already handed off to the ragdoll
-
-        // TODO: ENTER the new state
-        //   Idle    : zero horizontal velocity, stand still
-        //   Alert   : nothing — FixedUpdate takes over
-        //   Grabbed : _enemyRB.isKinematic = true  (the chain writes the transform;
-        //             gravity must not sag it, collisions must not tear it free)
-        //   Ragdoll : nothing — Release() already called _ragdoll.Ragdoll()
-        //   Dead    : Destroy(gameObject)   // pooled return comes later
-
-        _state = next;
+        case EnemyState.Grabbed:
+            break;
     }
+
+    _state = next;
+
+    // ENTER
+    switch (_state)
+    {
+        case EnemyState.Idle:
+            _enemyRB.linearVelocity = Vector3.zero;
+            break;
+        case EnemyState.Grabbed:
+            _enemyRB.isKinematic = true;
+            break;
+        case EnemyState.Dead:
+            Destroy(gameObject);
+            break;
+        default:
+            break;
+    }
+}
+
 
     // ------------------------------------------------------------------
     // Editor
