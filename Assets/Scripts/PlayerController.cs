@@ -6,32 +6,35 @@ public class PlayerController : MonoBehaviour
     public float _moveSpeed;
     public int _bulletCount;
     public GunController _gun;
-    public bool _triggerHeld = false;
     private Rigidbody _myRigidbody;
     private Camera _mainCamera;
     private PlayerInput _playerInput;
     private Vector2 _moveInput;
     private Vector2 _lookInput;
     private Vector3 _moveVelocity;
+    private Vector3 _aimPoint;
+    public Vector3 AimPoint => _aimPoint;
+    private bool _peekHeld;
+    public bool PeekHeld => _peekHeld;
+    private bool _triggerPressed = false;
+    public bool TriggerPressed => _triggerPressed;
 
+    [SerializeField] private float _gamepadAimDistance = 6f;
     // Action axis only. Locomotion runs every frame regardless of which state is active.
     private readonly StateMachine _actions = new();
 
     public PlayerFreeState Free { get; private set; }
-    public PlayerFiringState Firing { get; private set; }
+    public PlayerThrowingState Throwing { get; private set; }
     public PlayerHoldingState Holding { get; private set; }
 
-    public PlayerActionState ActionState =>
-        _actions.Current is PlayerStateBase s ? s.Id : PlayerActionState.Free;
+    public PlayerState ActionState =>
+        _actions.Current is PlayerStateBase s ? s.Id : PlayerState.Free;
 
     void Awake()
     {
         Free = new PlayerFreeState(this);
-        Firing = new PlayerFiringState(this);
+        Throwing = new PlayerThrowingState(this);
         Holding = new PlayerHoldingState(this);
-
-        At(Free, Firing, new FuncPredicate(() => _triggerHeld && _bulletCount > 0));
-        At(Firing, Free, new FuncPredicate(() => !_triggerHeld || _bulletCount <= 0));
     }
 
     void Start()
@@ -65,9 +68,23 @@ public class PlayerController : MonoBehaviour
 
     public void OnFire(InputAction.CallbackContext context)
     {
-        // Input only records trigger position; PlayerFiringState drives the gun.
-        if (context.performed) _triggerHeld = true;
-        if (context.canceled) _triggerHeld = false;
+        // Input only records trigger position; GunController reads it and owns the cadence.
+        if (context.performed) _triggerPressed = true;
+        if (context.canceled) _triggerPressed = false;
+    }
+
+    public void OnAim(InputAction.CallbackContext context)
+    {
+        if (context.performed) _peekHeld = true;
+        if (context.canceled) _peekHeld = false;
+    }
+
+    public void OnThrow(InputAction.CallbackContext context)
+    {
+        if (!context.performed) return;
+        if (ActionState != PlayerState.Free) return;   // chain is already out
+
+        _actions.SetState(Throwing);
     }
 
     void Update()
@@ -82,7 +99,7 @@ public class PlayerController : MonoBehaviour
         Vector3 moveDirection = new(_moveInput.x, 0f, _moveInput.y);
         _moveVelocity = moveDirection * _moveSpeed;
 
-        // Seamless Rotation
+
         if (_playerInput.currentControlScheme == "Gamepad")
         {
             if (_lookInput.sqrMagnitude > 0.1f)
@@ -90,6 +107,7 @@ public class PlayerController : MonoBehaviour
                 float angle = Mathf.Atan2(_lookInput.x, _lookInput.y) * Mathf.Rad2Deg;
                 transform.rotation = Quaternion.Euler(0f, angle, 0f);
             }
+            _aimPoint = transform.position + transform.forward * _gamepadAimDistance;
         }
         else
         {
@@ -101,7 +119,8 @@ public class PlayerController : MonoBehaviour
                 Vector3 pointToLook = cameraRay.GetPoint(rayLength);
                 Debug.DrawLine(cameraRay.origin, pointToLook, Color.red);
 
-                transform.LookAt(new Vector3(pointToLook.x, transform.position.y, pointToLook.z));
+                _aimPoint = new Vector3(pointToLook.x, transform.position.y, pointToLook.z);
+                transform.LookAt(_aimPoint);
             }
         }
     }

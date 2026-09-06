@@ -16,8 +16,7 @@ public class PatrolState : EnemyStateBase
     public override void Enter()
     {
         // TODO: reset _waitTimer
-        // TODO: pick the NEAREST waypoint, not index 0 — otherwise an enemy that just lost
-        //       the player walks all the way back to the start of its route
+        // TODO: return to route 
     }
 
     public override void Tick()

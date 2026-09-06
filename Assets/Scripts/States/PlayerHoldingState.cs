@@ -15,7 +15,7 @@ public class PlayerHoldingState : PlayerStateBase
 
     public PlayerHoldingState(PlayerController player) : base(player) { }
 
-    public override PlayerActionState Id => PlayerActionState.Holding;
+    public override PlayerState Id => PlayerState.Holding;
 
     public override void Enter()
     {

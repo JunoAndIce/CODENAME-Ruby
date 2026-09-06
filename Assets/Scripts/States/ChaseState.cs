@@ -27,7 +27,7 @@ public class ChaseState : EnemyStateBase
         if (Enemy.DistanceToPlayer() <= Enemy.GiveUpRadius)
         {
             _outOfRangeTimer = 0f;
-            _lastSeen = player.position;   // recorded while we can still see them
+            // _lastSeen = player.position;   // recorded while we can still see them
             return;
         }
 

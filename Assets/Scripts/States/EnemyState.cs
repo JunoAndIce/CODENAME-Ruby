@@ -7,7 +7,6 @@ public enum EnemyState
     Searching,
     Alert,        // chasing; ChaseState.Id
     Attacking,
-
     // Overrides — things done TO the enemy. Handled by EnemyController, no state class.
     Grabbed,
     Ragdoll,

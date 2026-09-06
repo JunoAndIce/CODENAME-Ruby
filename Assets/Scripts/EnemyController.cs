@@ -23,6 +23,10 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Transform[] _waypoints;
     [SerializeField] private PlayerController _player;
 
+    [Header("Debug")]
+    [SerializeField] private bool _setToGrabState = false;
+
+
     // ENEMY STATES
     private readonly StateMachine _state = new();
     public Rigidbody Body { get; private set; }
