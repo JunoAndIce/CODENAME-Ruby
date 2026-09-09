@@ -620,7 +620,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 523cdccb9ba1e8942876d03d68d91b42, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GunController
-  _isFiring: 0
   _bulletPrefab: {fileID: 5802336013507876380, guid: 92444344879663b42aad16c510e6da14, type: 3}
   _player: {fileID: 597591786}
   _bulletSpeed: 18
@@ -762,7 +761,6 @@ MonoBehaviour:
   _moveSpeed: 15
   _bulletCount: 6
   _gun: {fileID: 559036011}
-  _triggerHeld: 0
   _gamepadAimDistance: 6
 --- !u!54 &597591787
 Rigidbody:
@@ -944,6 +942,22 @@ MonoBehaviour:
         m_CallState: 2
     m_ActionId: cc7459c6-e7e9-4f21-8947-b7d06187cb9d
     m_ActionName: 'Player/Aim[/Keyboard/shift,/XInputControllerWindows/leftShoulder,/DualSenseGamepadHID/leftShoulder]'
+  - m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 597591786}
+        m_TargetAssemblyTypeName: 
+        m_MethodName: 
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+    m_ActionId: c70a3dfc-2879-47ca-b2de-db2ce9a63f10
+    m_ActionName: 'Player/Throw[/Mouse/rightButton,/XInputControllerWindows/rightShoulder,/DualSenseGamepadHID/rightShoulder]'
   m_NeverAutoSwitchControlSchemes: 0
   m_DefaultControlScheme: 
   m_DefaultActionMap: Player
