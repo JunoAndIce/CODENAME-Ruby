@@ -164,6 +164,63 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &282975071
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 597591785}
+    m_Modifications:
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9090883370385769790, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+      propertyPath: m_Name
+      value: All
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -638,10 +695,11 @@ GameObject:
   - component: {fileID: 597591784}
   - component: {fileID: 597591783}
   - component: {fileID: 597591782}
-  - component: {fileID: 597591789}
-  - component: {fileID: 597591786}
   - component: {fileID: 597591787}
   - component: {fileID: 597591788}
+  - component: {fileID: 597591789}
+  - component: {fileID: 597591786}
+  - component: {fileID: 597591791}
   - component: {fileID: 597591790}
   m_Layer: 0
   m_Name: Player
@@ -669,8 +727,8 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.5
-  m_Height: 2
+  m_Radius: 0.25
+  m_Height: 2.7
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!23 &597591783
@@ -680,7 +738,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 597591781}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -743,6 +801,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 1266296081}
   - {fileID: 559036007}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -758,7 +817,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ba9776780b7a75e44afe6eed82ed7e1d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  _moveSpeed: 15
+  _moveSpeed: 10
   _bulletCount: 6
   _gun: {fileID: 559036011}
   _gamepadAimDistance: 6
@@ -989,6 +1048,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YConstraint
   _maxY: 1.5
+--- !u!114 &597591791
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 597591781}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 125420f1bd92dba4da315afd7dba030f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAnimator
+  _animator: {fileID: 0}
+  _player: {fileID: 597591786}
+  _rb: {fileID: 597591787}
+  _damping: 0.1
 --- !u!1 &629404321
 GameObject:
   m_ObjectHideFlags: 0
@@ -1151,6 +1226,11 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!4 &1266296081 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8458497795612598148, guid: 47ce3763b8032bc4fbe1f5bc1fa00ce7, type: 3}
+  m_PrefabInstance: {fileID: 282975071}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1497746885
 GameObject:
   m_ObjectHideFlags: 0
@@ -1184,8 +1264,8 @@ MonoBehaviour:
   _camera: {fileID: 330585545}
   _leadFraction: 0.25
   _peekLeadFraction: 0.8
-  _damping: 0.15
-  _camHeight: 20
+  _damping: 0.1
+  _camHeight: 12
   _peekHeight: 28
   _heightDamping: 0.1
   _playerMargin: 0.25
@@ -1305,7 +1385,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: _chaseSpeed
-      value: 10
+      value: 7
       objectReference: {fileID: 0}
     - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: _alertRadius
@@ -1317,11 +1397,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: _patrolSpeed
-      value: 7
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: _searchSpeed
-      value: 6
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: _giveUpRadius
