@@ -55,7 +55,7 @@ public class WhipChain
     // Push crack: a lateral wave forced through the chain, hand to tail. Direction
     // and strength are randomized per crack so the flail never reads deterministic.
     public const float CrackWaveSpeed = 80f;  // m/s the wavefront travels (sets crack duration)
-    const float CrackPushSpeed = 18f;         // peak lateral push of the hump, m/s
+    const float CrackPushSpeed = 45f;         // peak lateral push of the hump, m/s (2.5x the original 18: the crack should crack, not tease)
     const float CrackSigma = 0.1f;            // hump width, in chain-fraction sigma
     bool _crack;
     float _crackT;                            // wavefront progress, 0 at hand -> 1 at tail

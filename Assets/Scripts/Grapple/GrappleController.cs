@@ -14,8 +14,9 @@ using UnityEngine.InputSystem;
 /// + cone math, no physics calls, scales to hundreds of nodes per map.
 ///
 /// Attached:
-/// - right click tap: PULL — consume a chain bite (TapSeconds of the pull dial at
-///   once); the solver servo turns it into closing speed.
+/// - right click tap: PULL — the same crack wave sweeps hand -> tail and the
+///   chain bite (TapSeconds of the pull dial at once) lands when the front
+///   reaches the tail; the solver servo turns it into closing speed.
 /// - right click held (after release): continuous reel-in at the pull dial rate.
 /// - q / left bumper held: same reel (movement tech).
 /// - the rope CATCHES on geometry: linecasts find wrap pivots, the whip pins to
@@ -88,10 +89,11 @@ public class GrappleController : MonoBehaviour
     Rigidbody _trailBody;     // thrown host the tail chases (null for static pushes)
     Vector3 _trailAnchor;     // tail hold-point when the pushed node was static
     float _trailTimer;
-    // Push crack: the throw impulse is armed but held until the crack wave
+    // Crack: the impulse (push OR pull) is armed but held until the crack wave
     // reaches the whip's tail — the physics lands with the animation.
     float _crackTimer;
     Vector3 _pendingPushDir;
+    bool _pendingPullCrack;   // crack is a right-click pull bite, not a push throw
 
     void Awake()
     {
@@ -101,9 +103,16 @@ public class GrappleController : MonoBehaviour
         if (_chain == null) _chain = GetComponentInChildren<LineRenderer>();
         if (_chain != null)
         {
-            // Whip silhouette: thick at the hand, thin at the tip.
+            // Whip silhouette: UNIFORM rope — flat width curve, no taper.
             _chain.widthMultiplier = 0.08f;
-            _chain.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0.35f));
+            _chain.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 1f));
+            // Dark gray rope, overriding the scene's embedded cyan Sprites/Default
+            // material tint (renderer vertex colors + material color both set so
+            // the tint holds no matter which path the sprite shader samples).
+            Color rope = new Color(0.25f, 0.25f, 0.25f);
+            _chain.startColor = rope;
+            _chain.endColor = rope;
+            _chain.material.color = rope;
         }
         CreateAimOrb();
     }
@@ -129,16 +138,19 @@ public class GrappleController : MonoBehaviour
             // push, the rope just sits at its locked length until the user acts.
             if (_input.actions["Throw"].WasReleasedThisFrame()) _throwReelArmed = true;
 
-            // Right click tap = PULL: consume a bite of chain; the servo in Solve turns
-            // it into closing speed. Same mechanic as the hold, just compressed.
-            if (_input.actions["Throw"].WasPerformedThisFrame())
+            // Right click tap = PULL, animated: the same crack wave sweeps hand ->
+            // tail and the chain bite lands when the front reaches the tail (the
+            // servo in Solve turns it into closing speed). Repeat presses while a
+            // crack is already traveling are ignored.
+            if (_input.actions["Throw"].WasPerformedThisFrame() && _crackTimer <= 0f)
             {
-                _tether.Tap(_pullImpulse);
-                TetherLog.Event($"PULL  {_tether.Describe()}");
+                ArmCrack(pull: true, Vector3.zero);
+                TetherLog.Event($"PULL ARM  crack={_crackTimer:0.00}s {_tether.Describe()}");
             }
 
-            // Right click held (from a fresh press) = continuous reel-in.
-            if (_throwReelArmed && _input.actions["Throw"].IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
+            // Right click held (from a fresh press) = continuous reel-in, but the
+            // bite stays synced to the wave: no reel until the crack lands.
+            if (_throwReelArmed && _crackTimer <= 0f && _input.actions["Throw"].IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
 
             // q / left bumper held = continuous reel (movement tech).
             if (_input.actions["Pull"].IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
@@ -182,17 +194,26 @@ public class GrappleController : MonoBehaviour
 
         if (_tether.Node == null) { Detach("node destroyed"); return; }   // node died mid-tether
 
-        // Push crack: while the wave travels down the whip the tether stays taut;
+        // Crack: while the wave travels down the whip the tether stays taut;
         // the impulse fires (and the throw trail starts) as the front reaches the tail.
         if (_crackTimer > 0f)
         {
             _crackTimer -= Time.fixedDeltaTime;
             if (_crackTimer <= 0f)
             {
-                _tether.Push(_pendingPushDir, _pushImpulse);
-                TetherLog.Event($"PUSH  (crack landed) {_tether.Describe()}");
-                if (_detachOnPush) Detach("push throw", trail: true);
-                return;
+                if (_pendingPullCrack)
+                {
+                    _pendingPullCrack = false;
+                    _tether.Tap(_pullImpulse);
+                    TetherLog.Event($"PULL  (crack landed) {_tether.Describe()}");
+                }
+                else
+                {
+                    _tether.Push(_pendingPushDir, _pushImpulse);
+                    TetherLog.Event($"PUSH  (crack landed) {_tether.Describe()}");
+                    if (_detachOnPush) Detach("push throw", trail: true);
+                    return;
+                }
             }
         }
 
@@ -333,23 +354,38 @@ public class GrappleController : MonoBehaviour
         dir.y = 0f;
         if (dir.sqrMagnitude < 0.0001f) dir = transform.forward;
 
+        if (_crackTimer > 0f) return;   // already cracking — ignore repeat presses
         dir.Normalize();
         _triggerConsumedFrame = Time.frameCount;
-        if (_crackTimer > 0f) return;   // already cracking — ignore repeat presses
 
         // Crack: a wave travels down the whip (randomized direction/strength) and
         // the impulse lands when it reaches the tail — the throw is animated, not
         // instant. The tether stays taut while the wave travels.
+        ArmCrack(pull: false, dir);
+        TetherLog.Event($"PUSH ARM  dir={dir} crack={_crackTimer:0.00}s {_tether.Describe()}");
+    }
+
+    // Shared crack-arming ceremony for both verbs: a wave travels down the whip
+    // (randomized per crack) and the verb's impulse lands when the front reaches
+    // the tail — the physics is animated, never instant. The tether stays taut
+    // while the wave travels.
+    void ArmCrack(bool pull, Vector3 pushDir)
+    {
         float crack = Mathf.Clamp(_tether.Length / WhipChain.CrackWaveSpeed, 0.1f, 0.3f);
         _whip.BeginCrack(crack);
         _crackTimer = crack;
-        _pendingPushDir = dir;
-        TetherLog.Event($"PUSH ARM  dir={dir} crack={crack:0.00}s {_tether.Describe()}");
+        _pendingPullCrack = pull;
+        _pendingPushDir = pushDir;
     }
 
     void Detach(string reason, bool trail = false)
     {
         if (_tether == null) return;
+        // A pending crack outlives nothing: without this reset, a mid-crack detach
+        // (node destroyed) freezes _crackTimer > 0 while the whip is null, and the
+        // stale crack later fires a ghost PUSH on the NEXT chain the player lands.
+        _pendingPullCrack = false;
+        _crackTimer = 0f;
         if (_tether.Node != null) _tether.Node.IsOccupied = false;
         TetherLog.Event($"DETACH  ({reason}) {_tether.Describe()}");
         if (trail)
