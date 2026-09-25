@@ -2,13 +2,15 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Player-side grapple: two context verbs over one chain.
+/// Player-side grapple: two context verbs over one physical whip.
 ///
-/// Unattached, right click / right bumper: ATTACH the closest node in range inside
-/// the aim cone (range only — the rope locks TAUT at the attach distance, clamped
-/// between min and max chain length, and can only shrink, never pay out). Node
-/// targeting scans the cheap GrappleNode.All registry: pure distance + cone math,
-/// no physics calls, scales to hundreds of nodes per map.
+/// Unattached, right click / right bumper: LAUNCH the whip — the tip strikes
+/// toward the closest node in range inside the aim cone while the tendril drags
+/// out of the coil behind it (WhipChain verlet sim). The tether becomes real
+/// when the whip LANDS on the anchor: the chain then locks TAUT at that distance
+/// (clamped between min and max chain length) and can only shrink, never pay
+/// out. Node targeting scans the cheap GrappleNode.All registry: pure distance
+/// + cone math, no physics calls, scales to hundreds of nodes per map.
 ///
 /// Attached:
 /// - right click tap: PULL — consume a chain bite (TapSeconds of the pull dial at
@@ -60,6 +62,9 @@ public class GrappleController : MonoBehaviour
     PlayerInput _input;
     Rigidbody _body;
     Tether _tether;
+    WhipChain _whip;             // physical tendril: launches, lands, then rides the tether
+    GrappleNode _pendingNode;    // node the flying whip will land on (tether starts on landing)
+    float _pendingLength;        // rope length locked at launch, used until the whip lands
     bool _triggerWasHeld;
     bool _throwReelArmed = true;   // hold-to-reel only engages from a press made AFTER the attach click
     bool _wasOverBreak;            // edge-trigger for the over-threshold warning log
@@ -70,6 +75,12 @@ public class GrappleController : MonoBehaviour
         _body = GetComponent<Rigidbody>();
         _input = GetComponent<PlayerInput>();
         if (_chain == null) _chain = GetComponentInChildren<LineRenderer>();
+        if (_chain != null)
+        {
+            // Whip silhouette: thick at the hand, thin at the tip.
+            _chain.widthMultiplier = 0.08f;
+            _chain.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0.35f));
+        }
         CreateAimOrb();
     }
 
@@ -79,7 +90,13 @@ public class GrappleController : MonoBehaviour
 
         if (_tether == null)
         {
-            if (_input.actions["Throw"].WasPerformedThisFrame()) TryAttach();
+            if (_whip != null)
+            {
+                // Whip in flight: no verbs yet. Releasing the connect press still
+                // arms hold-to-reel so landing while held stays a pure connect.
+                if (_input.actions["Throw"].WasReleasedThisFrame()) _throwReelArmed = true;
+            }
+            else if (_input.actions["Throw"].WasPerformedThisFrame()) TryLaunch();
         }
         else
         {
@@ -112,7 +129,17 @@ public class GrappleController : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (_whip == null) return;
+
+        // Node destroyed mid-flight: the whip has nowhere to land.
+        if (_pendingNode == null) { _whip = null; return; }
+
+        Vector3 anchor = _tether != null ? _tether.Anchor : _pendingNode.AnchorPoint;
+        float ropeLen = _tether != null ? _tether.Length : _pendingLength;
+        _whip.Step(_body.worldCenterOfMass, anchor, ropeLen);
+        if (_tether == null && _whip.Arrived) LandWhip();
         if (_tether == null) return;
+
         if (_tether.Node == null) { Detach("node destroyed"); return; }   // node died mid-tether
 
         _tether.Solve(_player.AimPoint);
@@ -149,7 +176,7 @@ public class GrappleController : MonoBehaviour
     {
         // Up and active when a node is grabbable (range + cone); gone the moment
         // the chain is attached. No occlusion check — the orb marks the aimed node.
-        GrappleNode target = _tether == null ? FindBestNode(transform.position, AimDirection()) : null;
+        GrappleNode target = _tether == null && _whip == null ? FindBestNode(transform.position, AimDirection()) : null;
 
         _aimOrb.SetActive(target != null);
         if (target != null) _aimOrb.transform.position = target.AnchorPoint;
@@ -163,7 +190,7 @@ public class GrappleController : MonoBehaviour
         return aimDir.normalized;
     }
 
-    void TryAttach()
+    void TryLaunch()
     {
         Vector3 aimDir = AimDirection();
 
@@ -172,20 +199,35 @@ public class GrappleController : MonoBehaviour
 
         if (best == null)
         {
-            TetherLog.Event($"ATTACH FAIL  no node in cone ({_attachCone}deg, <= {_maxChainLength}m); nodes known={GrappleNode.All.Count}");
+            TetherLog.Event($"WHIP FAIL  no node in cone ({_attachCone}deg, <= {_maxChainLength}m); nodes known={GrappleNode.All.Count}");
             return;
         }
 
-        // Rope attaches TAUT at the current distance: the tether length is locked
-        // here and can only shrink (reel). Walking away no longer spools rope out —
-        // the solver tugs you back instead. Max = attach range; min = park radius.
+        // The rope length is locked AT LAUNCH and can only shrink (reel). The whip
+        // flies out to the anchor; the tether becomes real when it lands — attach
+        // is the whip strike landing, not a teleport.
         float attachDist = Vector3.Distance(best.AnchorPoint, origin);
         attachDist = Mathf.Clamp(attachDist, _minChainLength, _maxChainLength);
-        _tether = new Tether(_body, best, attachDist, _minChainLength);
+        _pendingNode = best;
+        _pendingLength = attachDist;
+        _whip = new WhipChain(transform.position, best.AnchorPoint, attachDist, _body);
         best.IsOccupied = true;
         _throwReelArmed = false;   // the connecting click must not reel — re-arms on release
 
-        TetherLog.Event($"ATTACH  {_tether.Describe()} dist={_tether.AttachDistance:F1} hostMass={(best.IsStaticWorld ? 0 : best.Host.mass)}");
+        TetherLog.Event($"WHIP LAUNCH  -> {best.name} dist={attachDist:F1} hostMass={(best.IsStaticWorld ? 0 : best.Host.mass)}");
+    }
+
+    void LandWhip()
+    {
+        GrappleNode node = _pendingNode;
+        float dist = Vector3.Distance(node.AnchorPoint, _body.worldCenterOfMass);
+        // Rope locked at launch: running AWAY during flight never pays it out (the
+        // servo tugs you back instead); running toward shortens it — the whip lands
+        // taut at whichever is shorter. Min = park radius, max = attach range.
+        float len = Mathf.Clamp(Mathf.Min(dist, _pendingLength), _minChainLength, _maxChainLength);
+        _tether = new Tether(_body, node, len, _minChainLength);
+        _pendingNode = null;
+        TetherLog.Event($"ATTACH  whip landed {_tether.Describe()} dist={_tether.AttachDistance:F1}");
     }
 
     GrappleNode FindBestNode(Vector3 origin, Vector3 aimDir)
@@ -246,16 +288,19 @@ public class GrappleController : MonoBehaviour
         if (_tether.Node != null) _tether.Node.IsOccupied = false;
         TetherLog.Event($"DETACH  ({reason}) {_tether.Describe()}");
         _tether = null;
+        _whip = null;
         _triggerWasHeld = true;   // don't fire the gun with the release click
     }
 
     void UpdateChainVisual()
     {
         if (_chain == null) return;
-        _chain.enabled = _tether != null;
-        if (_tether == null) return;
+        _chain.enabled = _whip != null;
+        if (_whip == null) return;
 
-        _chain.SetPosition(0, transform.position);
-        _chain.SetPosition(1, _tether.Anchor);
+        // The line renderer rides the simulated chain: head at the player, tail at
+        // the anchor, interior points wherever the verlet sim (and collisions) put them.
+        _chain.positionCount = _whip.PointCount;
+        _chain.SetPositions(_whip.Points);
     }
 }

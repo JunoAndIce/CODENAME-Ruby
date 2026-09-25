@@ -23,6 +23,24 @@ every mode. The chain never takes movement away from you.
 - j-quote: "gun inputs firte when the user does not have anythign in hand, and pushes / shoots forward an object via the tether. if the item is static and is shot forth / pulled, the character should be flung forward or backwards."
 - j-quote: "when i fire and im tethered on something it should fire the tether in that direciton like i threw it. arcade style kind of. very fast, speedrunner friendly."
 
+## Whip (segmented tendril)
+
+- The whip is a **Verlet chain** (position-based, toqoz/Jakobsen style): head
+  pinned to the player, tail pinned to the node anchor, interior points simulated
+  with rope distance constraints + collider push-out. Gameplay force still comes
+  only from `Tether.Solve` — the chain is the physical tendril on top.
+- The tether becomes real when the whip LANDS on the anchor, not at click time:
+  the tail strikes toward the node, interior segments unfurl out of the coil one
+  after another, and attach = the strike landing. Nothing teleports.
+- Segment rest length = tether length / segments, so the chain straightens into
+  the taut line automatically; reeling shrinks the rest length and the reel-in
+  whip-crack emerges from the sim.
+- Corner wraps emerge from collision resolution — no wrap-point code. Wrap-aware
+  force redirection is a later Tether feature (tension across a wrap point feeds
+  the structural-break idea).
+- j-quote: "the whip needs to end in a line taught with the target that is connected and the player. As that whip goes forth the segments going from the player to the target that is whipped should fit into that line shape. And as the first segments move in the second segment should follow and so on but the end of the whip line has to sort of drag through the air to feel good. It shouldn't just teleport there there needs to be almost like a physics interaction happens."
+- j-quote: "I think doing research into how that has been implemented into games physics based with rope topology and what kind of play we can make from that within ours (and how to build it cleanly)"
+
 ## Nodes
 
 - A grapple point is a **node**. One unified system for static world + entities.
