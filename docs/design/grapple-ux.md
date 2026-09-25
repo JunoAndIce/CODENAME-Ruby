@@ -39,7 +39,10 @@ every mode. The chain never takes movement away from you.
   nodes pin to them, and Tether.Solve reroutes each end-span to its adjacent
   wrap — walk a tethered rope around a pillar and it holds you; unwrap when
   line of sight clears. Push trails the thrown host for a beat (animate out,
-  not vanish).
+  not vanish), and the throw itself is animated: PUSH ARMS a crack wave that
+  sweeps hand->tail (randomized lateral direction + strength, verlet flail)
+  and the physics impulse lands when the wavefront reaches the tail — delay =
+  rope length / CrackWaveSpeed, clamped 0.1–0.3 s.
 - j-quote: "the whip needs to end in a line taught with the target that is connected and the player. As that whip goes forth the segments going from the player to the target that is whipped should fit into that line shape. And as the first segments move in the second segment should follow and so on but the end of the whip line has to sort of drag through the air to feel good. It shouldn't just teleport there there needs to be almost like a physics interaction happens."
 - j-quote: "I think doing research into how that has been implemented into games physics based with rope topology and what kind of play we can make from that within ours (and how to build it cleanly)"
 

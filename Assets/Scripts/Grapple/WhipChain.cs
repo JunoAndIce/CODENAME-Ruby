@@ -52,6 +52,36 @@ public class WhipChain
     /// passed to Step each step (a thrown host it trails, or a landed anchor).</summary>
     public void Ride() => _arrived = true;
 
+    // Push crack: a lateral wave forced through the chain, hand to tail. Direction
+    // and strength are randomized per crack so the flail never reads deterministic.
+    public const float CrackWaveSpeed = 80f;  // m/s the wavefront travels (sets crack duration)
+    const float CrackPushSpeed = 18f;         // peak lateral push of the hump, m/s
+    const float CrackSigma = 0.1f;            // hump width, in chain-fraction sigma
+    bool _crack;
+    float _crackT;                            // wavefront progress, 0 at hand -> 1 at tail
+    float _crackDur = 1f;
+    Vector3 _crackSide;                       // randomized lateral direction of the hump
+    float _crackJitter = 1f;                  // randomized strength
+    public bool CrackActive => _crack;
+
+    /// <summary>Force a crack wave through the whip from hand to tail over `seconds`.
+    /// The lateral direction and strength are randomized each crack so the snap is
+    /// never deterministic. Timing pairs with the controller: the push impulse lands
+    /// when the wavefront reaches the tail.</summary>
+    public void BeginCrack(float seconds)
+    {
+        _crack = true;
+        _crackT = 0f;
+        _crackDur = Mathf.Max(0.05f, seconds);
+        Vector3 axis = _pos[Segments] - _pos[0];
+        axis = axis.sqrMagnitude > 0.001f ? axis.normalized : Vector3.up;
+        Vector3 side = Random.onUnitSphere;
+        side -= axis * Vector3.Dot(side, axis);
+        if (side.sqrMagnitude < 0.01f) side = Vector3.Cross(axis, Random.onUnitSphere);
+        _crackSide = side.normalized;
+        _crackJitter = Random.Range(0.7f, 1.4f);
+    }
+
     readonly Collider[] _cols = new Collider[16];
     int _colCount;
 
@@ -114,6 +144,22 @@ public class WhipChain
             Vector3 temp = _pos[i];
             _pos[i] += (_pos[i] - _old[i]) * Damping;
             _old[i] = temp;
+        }
+
+        // Crack wave: a lateral hump sweeps hand->tail during a push crack; verlet
+        // turns the sweep into a real flail that whips the tail around on arrival.
+        if (_crack)
+        {
+            _crackT += Time.fixedDeltaTime / _crackDur;
+            for (int i = 1; i < Segments; i++)
+            {
+                float s = (float)i / Segments;
+                float d = s - _crackT;
+                float w = Mathf.Exp(-(d * d) / (2f * CrackSigma * CrackSigma));
+                if (w > 0.01f)
+                    _pos[i] += _crackSide * (w * CrackPushSpeed * _crackJitter * Time.fixedDeltaTime);
+            }
+            if (_crackT >= 1f) _crack = false;
         }
 
         SnapshotCollisions();

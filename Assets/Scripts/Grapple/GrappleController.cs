@@ -88,6 +88,10 @@ public class GrappleController : MonoBehaviour
     Rigidbody _trailBody;     // thrown host the tail chases (null for static pushes)
     Vector3 _trailAnchor;     // tail hold-point when the pushed node was static
     float _trailTimer;
+    // Push crack: the throw impulse is armed but held until the crack wave
+    // reaches the whip's tail — the physics lands with the animation.
+    float _crackTimer;
+    Vector3 _pendingPushDir;
 
     void Awake()
     {
@@ -177,6 +181,20 @@ public class GrappleController : MonoBehaviour
         }
 
         if (_tether.Node == null) { Detach("node destroyed"); return; }   // node died mid-tether
+
+        // Push crack: while the wave travels down the whip the tether stays taut;
+        // the impulse fires (and the throw trail starts) as the front reaches the tail.
+        if (_crackTimer > 0f)
+        {
+            _crackTimer -= Time.fixedDeltaTime;
+            if (_crackTimer <= 0f)
+            {
+                _tether.Push(_pendingPushDir, _pushImpulse);
+                TetherLog.Event($"PUSH  (crack landed) {_tether.Describe()}");
+                if (_detachOnPush) Detach("push throw", trail: true);
+                return;
+            }
+        }
 
         // Landed: catch the rope on geometry, then ride the tether and solve.
         UpdateWraps();
@@ -316,10 +334,17 @@ public class GrappleController : MonoBehaviour
         if (dir.sqrMagnitude < 0.0001f) dir = transform.forward;
 
         dir.Normalize();
-        _tether.Push(dir, _pushImpulse);
         _triggerConsumedFrame = Time.frameCount;
-        TetherLog.Event($"PUSH  dir={dir} {_tether.Describe()}");
-        if (_detachOnPush) Detach("push throw", trail: true);
+        if (_crackTimer > 0f) return;   // already cracking — ignore repeat presses
+
+        // Crack: a wave travels down the whip (randomized direction/strength) and
+        // the impulse lands when it reaches the tail — the throw is animated, not
+        // instant. The tether stays taut while the wave travels.
+        float crack = Mathf.Clamp(_tether.Length / WhipChain.CrackWaveSpeed, 0.1f, 0.3f);
+        _whip.BeginCrack(crack);
+        _crackTimer = crack;
+        _pendingPushDir = dir;
+        TetherLog.Event($"PUSH ARM  dir={dir} crack={crack:0.00}s {_tether.Describe()}");
     }
 
     void Detach(string reason, bool trail = false)
