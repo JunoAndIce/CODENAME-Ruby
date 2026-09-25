@@ -131,14 +131,21 @@ public class GrappleController : MonoBehaviour
     {
         if (_whip == null) return;
 
-        // Node destroyed mid-flight: the whip has nowhere to land.
-        if (_pendingNode == null) { _whip = null; return; }
-
-        Vector3 anchor = _tether != null ? _tether.Anchor : _pendingNode.AnchorPoint;
-        float ropeLen = _tether != null ? _tether.Length : _pendingLength;
-        _whip.Step(_body.worldCenterOfMass, anchor, ropeLen);
-        if (_tether == null && _whip.Arrived) LandWhip();
-        if (_tether == null) return;
+        if (_tether == null)
+        {
+            // Whip still flying: it needs a live target to land on. (Once landed,
+            // _pendingNode is consumed and the guard below must NOT fire — it used
+            // to kill the whip and skip Solve the step after every landing.)
+            if (_pendingNode == null) { _whip = null; return; }   // node died mid-flight
+            _whip.Step(_body.worldCenterOfMass, _pendingNode.AnchorPoint, _pendingLength);
+            if (_whip.Arrived) LandWhip();
+            if (_tether == null) return;
+        }
+        else
+        {
+            // Landed: the chain rides the tether's locked length and live anchor.
+            _whip.Step(_body.worldCenterOfMass, _tether.Anchor, _tether.Length);
+        }
 
         if (_tether.Node == null) { Detach("node destroyed"); return; }   // node died mid-tether
 
