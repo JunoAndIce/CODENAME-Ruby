@@ -3,8 +3,8 @@ using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
-    public float _moveSpeed;
-    public int _bulletCount;
+    public float _moveSpeed = 15f;
+    public int _bulletCount = 6;
     public GunController _gun;
     private Rigidbody _myRigidbody;
     private Camera _mainCamera;
@@ -20,6 +20,8 @@ public class PlayerController : MonoBehaviour
     public bool TriggerPressed => _triggerPressed;
 
     [SerializeField] private float _gamepadAimDistance = 6f;
+    [Tooltip("Decay rate applied ONLY to external carried velocity (flings, yanks, tows). Kept out of rigidbody damping on purpose: real damping eats total velocity, and the carried-velocity scheme would misread that eaten chunk as external and cancel your move input with it.")]
+    [SerializeField] private float _flingDamping = 3f;
     // Action axis only. Locomotion runs every frame regardless of which state is active.
     private readonly StateMachine _actions = new();
 
@@ -40,6 +42,11 @@ public class PlayerController : MonoBehaviour
     void Start()
     {
         _myRigidbody = GetComponent<Rigidbody>();
+        // NOTE: rigidbody linearDamping stays at 0. The carried-velocity scheme below
+        // misreads damped-away move velocity as external, which cancels move input over
+        // time (player crawls to a stop while holding W). External decay is done
+        // explicitly on the carried term in FixedUpdate instead.
+        _myRigidbody.linearDamping = 0f;
         _mainCamera = FindAnyObjectByType<Camera>();
         _playerInput = GetComponent<PlayerInput>();
 
@@ -81,10 +88,8 @@ public class PlayerController : MonoBehaviour
 
     public void OnThrow(InputAction.CallbackContext context)
     {
-        if (!context.performed) return;
-        if (ActionState != PlayerState.Free) return;   // chain is already out
-
-        _actions.SetState(Throwing);
+        // Consumed by GrappleController (attach / reel). The old chain-grab throw
+        // state is dormant while the grapple system replaces it.
     }
 
     void Update()
@@ -128,7 +133,11 @@ public class PlayerController : MonoBehaviour
 
     void FixedUpdate()
     {
-        _myRigidbody.linearVelocity = _moveVelocity;
+        // Author movement while preserving external physics (gravity, tether impulses,
+        // knockback). The scheme itself lives in VelocityUtil so the enemy shares it.
+        VelocityUtil.ApplyAuthoredMove(_myRigidbody, _moveVelocity, _flingDamping, ref _lastAuthoredMove);
         _actions.FixedTick();
     }
+
+    Vector3 _lastAuthoredMove;
 }

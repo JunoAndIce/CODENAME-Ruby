@@ -19,6 +19,11 @@ public class EnemyController : MonoBehaviour
     [Header("Combat")]
     [SerializeField] private float _attackRange = 2f;
 
+    [Header("Physics")]
+    [Tooltip("Decay rate applied ONLY to external carried velocity (tether yanks, knockback, flings). Same carried-velocity scheme as the player: authored AI velocity is re-written every tick, so external impulses must be carried forward and decayed instead of being erased.")]
+    [SerializeField] private float _flingDamping = 3f;
+    Vector3 _lastAuthoredMove;
+
     [Header("Patrol")]
     [SerializeField] private Transform[] _waypoints;
     [SerializeField] private PlayerController _player;
@@ -131,7 +136,7 @@ public class EnemyController : MonoBehaviour
         if (_state.Current != Grabbed) return;
 
         // Grabbed.Exit clears isKinematic; a kinematic body ignores the launch velocity.
-        Ragdoll.Launch(YConstraint.Flatten(velocity));
+        Ragdoll.Launch(VelocityUtil.Flatten(velocity));
         _state.SetState(Ragdoll);
     }
 
@@ -145,8 +150,10 @@ public class EnemyController : MonoBehaviour
             transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
 
         Vector3 v = transform.forward * speed;
-        v.y = Body.linearVelocity.y;   // preserve gravity
-        Body.linearVelocity = v;
+        // Shared carried-velocity scheme (VelocityUtil): external impulses from the
+        // tether solver, push verb, and knockback survive the AI's velocity write
+        // and decay on their own — otherwise a grappled enemy reads as weightless.
+        VelocityUtil.ApplyAuthoredMove(Body, v, _flingDamping, ref _lastAuthoredMove);
     }
 
     /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>
@@ -159,7 +166,7 @@ public class EnemyController : MonoBehaviour
         transform.LookAt(target);
     }
 
-    public void Stop() => Body.linearVelocity = new Vector3(0f, Body.linearVelocity.y, 0f);
+    public void Stop() => VelocityUtil.ApplyAuthoredMove(Body, Vector3.zero, _flingDamping, ref _lastAuthoredMove);
 
     public float DistanceToPlayer()
     {

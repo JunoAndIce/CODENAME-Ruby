@@ -67,3 +67,7 @@ crashlytics-build.properties
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Editor noise
+*.swp
+mono_crash*.blob

@@ -12,6 +12,12 @@ public class GunController : MonoBehaviour
     public Transform _firePoint;
 
     private bool _triggerPressedBefore;
+    private GrappleController _grapple;
+
+    void Start()
+    {
+        _grapple = GetComponentInParent<GrappleController>();
+    }
 
     void Update()
     {
@@ -21,6 +27,10 @@ public class GunController : MonoBehaviour
         _triggerPressedBefore = _player.TriggerPressed;
 
         if (!_triggerPressedNow) return;
+        // The chain owns the trigger while tethered — AND on the frame it used it:
+        // a push detaches mid-press, so IsAttached alone would let the same click
+        // also fire the gun.
+        if (_grapple != null && (_grapple.IsAttached || _grapple.ConsumedTriggerThisFrame)) return;
         if (_shotsCounter > 0f) return;           // hammer still cycling
         if (_player._bulletCount <= 0) return;    // empty cylinder
 
