@@ -79,8 +79,8 @@ public class WhipChain
     /// <summary>One physics step. Call from FixedUpdate (fixed timestep is required
     /// for verlet stability). head = player end; target = the LIVE node anchor (a
     /// moving host redirects the flying whip and drags the landed tail); ropeLength
-    /// = the tether's current locked length (can only shrink — the visual rope never
-    /// pays out either); wraps = ordered rope-pivot points the rope is caught on —
+    /// = the tether's current locked length (reel only shrinks it; sustained
+    /// overload can yield it slightly longer — Tether.YieldSpeed). wraps = ordered rope-pivot points the rope is caught on —
     /// chain nodes pin to them so the tendril hugs corners under tension.</summary>
     public void Step(Vector3 head, Vector3 target, float ropeLength, IReadOnlyList<Vector3> wraps = null)
     {

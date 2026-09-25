@@ -62,8 +62,13 @@ every mode. The chain never takes movement away from you.
 - Tug-of-war resolved by mass (bilateral impulse pair, inverse-mass weighted).
 - Chain length is locked TAUT at attach and can only shrink (reel), bounded by
   min/max dials:
-  - `_maxChainLength` — attach range ceiling. Max is also the farthest you can
-    connect from; the rope never pays out beyond the attach distance.
+  - `_maxChainLength` — attach range ceiling AND the yield ceiling. Max is the
+    farthest you can connect from; the rope never pays out beyond it.
+  - ROPE YIELD: sustained stretch (a pull the servo can't fully absorb) pays the
+    rope OUT at a heavily damped rate (YieldSpeed ≈ 2.5 m/s) — like the character
+    gripping the chain and failing a little. The servo keeps pulling while it
+    yields, so the pair never snaps apart; overload becomes extra rope instead
+    of a hard reject or a recast. Paid-out rope stays out; reel/tap shorten it.
   - `_minChainLength` — park distance. Fully reeled, the chain becomes a ROD:
     the park distance is enforced both ways (nothing gets dragged into the
     node's collider space), and the player AIM-PARKS — servoed to the min-length
@@ -71,6 +76,7 @@ every mode. The chain never takes movement away from you.
     around the node while the chain stays locked.
 - ONE force path: the chain-error servo in Tether.Solve. Its correction speed
   is capped (MaxCorrectionSpeed = 20 m/s) — that cap is the yank ceiling.
+- j-quote: "when a tether is trying to be pulled apart instead of rejecting and keeping a minimum length what if we allow the tether length to grow if force was applied to it but we heavily dampen that force so that the growing feels the the increasing of the length of the tether feels severely limited almost as if the character is like holding back this chain with strength and then failing just a little bit. This is gonna solve a lot of problems that are physics oriented and will allow the players to let out a little more rope instead of having a recast."
 - One dial per verb: `_pullImpulse` (chain bite m/s — hold reels at this rate,
   a tap is TapSeconds = 0.3 s of it at once) and `_pushImpulse`. Pull tap and
   hold are the same mechanic, just compressed.

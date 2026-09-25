@@ -34,25 +34,35 @@ public class Tether
     // THE ceiling on pull/yank force: a chain bite of any size yanks at most this
     // fast, toward whatever end can move. 20 reads as a strong yank, not a launch.
     const float MaxCorrectionSpeed = 20f;
+
+    // Yield: how fast the rope pays out under sustained overload, in m/s. This is
+    // the "holding back the chain with strength and failing a little" dial — the
+    // servo still pulls while yielding, so the pair never snaps apart; the rope
+    // just gives a little instead of being a hard wall. Paid-out rope stays out
+    // (reel/tap shorten it); growth caps at the attach-range max.
+    const float YieldSpeed = 2.5f;
     // Park distance floor: the chain clamps here on reel/tap, and once fully reeled
     // it becomes a ROD — enforced both ways — so the tether never drags a body into
     // the node's collider space. Configurable per-chain via the controller.
     readonly float _minLength;
+    readonly float _maxLength;   // yield ceiling: overload can pay rope out, never past this
     public float MinLength => _minLength;
     public bool IsFullyReeled => _length <= _minLength + 0.001f;
 
-    public Tether(Rigidbody player, GrappleNode node, float length, float minLength)
+    public Tether(Rigidbody player, GrappleNode node, float length, float minLength, float maxLength)
     {
         _player = player;
         _node = node;
         _host = node.IsStaticWorld ? null : node.Host;
         _length = length;
         _minLength = minLength;
+        _maxLength = maxLength;
         AttachDistance = Vector3.Distance(node.AnchorPoint, player.worldCenterOfMass);
     }
 
-    /// <summary>Shorten the rope (negative meters). The rope NEVER pays out: tether
-    /// distance is locked at attach and can only shrink, so walking away tugs instead of spooling.</summary>
+    /// <summary>Shorten the rope (negative meters). Reel NEVER pays out: the rope
+    /// only shrinks through the dials — and yields slightly under sustained overload
+    /// (YieldSpeed), which is the character failing to hold the chain, not spooling.</summary>
     public void Reel(float delta) => _length = Mathf.Max(_minLength, _length + delta);
 
     /// <summary>
@@ -91,7 +101,10 @@ public class Tether
     ///
     /// One force path, three regimes (unwrapped):
     /// - stretched (dist > length): PULL servo — drives the pair together at the
-    ///   capped correction speed, split by inverse mass.
+    ///   capped correction speed, split by inverse mass. While it pulls, the rope
+    ///   YIELDS: sustained stretch pays rope out at a heavily damped rate (the
+    ///   character gripping the chain and failing a little), so overload softens
+    ///   into extra rope instead of a hard reject.
 /// - fully reeled and compressed (dist < length): ROD — the park distance is
     ///   enforced both ways, so a fully reeled chain never drags a body into the
     ///   node's collider space.
@@ -130,6 +143,12 @@ public class Tether
 
         _player.WakeUp();
         _host?.WakeUp();   // sleeping tethered bodies ignore solver impulses
+
+        // Yield: sustained stretch pays the rope out at a heavily damped rate.
+        // Paid-out rope stays out (only reel/tap shorten it); growth caps at the
+        // attach-range max, past which the servo walls again.
+        if (dist > _length && _length < _maxLength)
+            _length = Mathf.Min(Mathf.Min(dist, _length + YieldSpeed * Time.fixedDeltaTime), _maxLength);
 
         Vector3 vA = _player.linearVelocity;
         Vector3 vB = _host != null ? _host.linearVelocity : Vector3.zero;
@@ -183,6 +202,11 @@ public class Tether
         }
         float lastSpanLen = Vector3.Distance(prev, anchor);
         float pathLen2 = pathLen + lastSpanLen;
+
+        // Wrapped rope yields too: a caught rope under overload lets out a little
+        // along the wrap path instead of hard-rejecting.
+        if (pathLen2 > _length && _length < _maxLength)
+            _length = Mathf.Min(Mathf.Min(pathLen2, _length + YieldSpeed * Time.fixedDeltaTime), _maxLength);
 
         _player.WakeUp();
         _host?.WakeUp();
