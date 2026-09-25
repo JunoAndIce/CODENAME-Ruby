@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -17,12 +18,17 @@ using UnityEngine.InputSystem;
 ///   once); the solver servo turns it into closing speed.
 /// - right click held (after release): continuous reel-in at the pull dial rate.
 /// - q / left bumper held: same reel (movement tech).
-/// - fully reeled: the chain becomes a ROD at min length (nothing gets dragged
-///   into the node's collider space) and the player AIM-PARKS: servoed to the
-///   min-length point on the side of the node their aim points to — aim orbits.
+/// - the rope CATCHES on geometry: linecasts find wrap pivots, the whip pins to
+///   them, and the pull genuinely redirects — walk a tethered rope around a
+///   pillar and it holds you (Tether.Solve solves each end-span to its wrap).
+/// - fully reeled (unwrapped): the chain becomes a ROD at min length (nothing
+///   gets dragged into the node's collider space) and the player AIM-PARKS:
+///   servoed to the min-length point on the side of the node their aim points
+///   to — aim orbits.
 /// - left click / right trigger: PUSH — hurl the two bodies apart along the
 ///   mouse's offset from the held item (mouse left of the cube -> it shoots
-///   left) and release the chain ("I threw it").
+///   left) and release the chain ("I threw it"). The whip TRAILS the thrown
+///   host briefly before dying out — animate out, not vanish.
 ///
 /// The gun stands down while the chain is attached (and on the frame a push
 /// consumed the trigger): the chain owns the trigger.
@@ -68,6 +74,20 @@ public class GrappleController : MonoBehaviour
     bool _triggerWasHeld;
     bool _throwReelArmed = true;   // hold-to-reel only engages from a press made AFTER the attach click
     bool _wasOverBreak;            // edge-trigger for the over-threshold warning log
+
+    // Rope catching: ordered wrap pivots (nearest the player first) the rope is
+    // caught on; maintained by linecasts every landed physics step.
+    const int MaxWraps = 4;
+    const float AnchorMountSkip = 0.35f;   // ignore hits this close to the anchor (its own mount surface)
+    readonly List<Vector3> _wraps = new();
+    readonly RaycastHit[] _wrapHits = new RaycastHit[8];
+
+    // Throw trail: after a push, the whip stays alive and its tail rides the
+    // flying host for a beat — the throw animates out instead of vanishing.
+    const float ThrowTrailSeconds = 0.4f;
+    Rigidbody _trailBody;     // thrown host the tail chases (null for static pushes)
+    Vector3 _trailAnchor;     // tail hold-point when the pushed node was static
+    float _trailTimer;
 
     void Awake()
     {
@@ -131,25 +151,38 @@ public class GrappleController : MonoBehaviour
     {
         if (_whip == null) return;
 
-        if (_tether == null)
+        if (_tether == null && _pendingNode != null)
         {
-            // Whip still flying: it needs a live target to land on. (Once landed,
-            // _pendingNode is consumed and the guard below must NOT fire — it used
-            // to kill the whip and skip Solve the step after every landing.)
-            if (_pendingNode == null) { _whip = null; return; }   // node died mid-flight
+            // Whip flying toward its target: nothing else this step.
             _whip.Step(_body.worldCenterOfMass, _pendingNode.AnchorPoint, _pendingLength);
             if (_whip.Arrived) LandWhip();
-            if (_tether == null) return;
+            return;
         }
-        else
+
+        if (_tether == null && !_whip.Arrived)
         {
-            // Landed: the chain rides the tether's locked length and live anchor.
-            _whip.Step(_body.worldCenterOfMass, _tether.Anchor, _tether.Length);
+            _whip = null;   // flying but the target node died: nowhere to land
+            return;
+        }
+
+        if (_tether == null)
+        {
+            // Trailing a push-throw: tail rides the thrown host (or its last anchor
+            // point for static pushes) until the trail dies out.
+            _trailTimer -= Time.fixedDeltaTime;
+            Vector3 tail = _trailBody != null ? _trailBody.worldCenterOfMass : _trailAnchor;
+            _whip.Step(_body.worldCenterOfMass, tail, _pendingLength);
+            if (_trailTimer <= 0f || _trailBody == null) _whip = null;
+            return;
         }
 
         if (_tether.Node == null) { Detach("node destroyed"); return; }   // node died mid-tether
 
-        _tether.Solve(_player.AimPoint);
+        // Landed: catch the rope on geometry, then ride the tether and solve.
+        UpdateWraps();
+        _whip.Step(_body.worldCenterOfMass, _tether.Anchor, _tether.Length, _wraps);
+
+        _tether.Solve(_player.AimPoint, _wraps);
         float tension = _tether.Tension;
         _tether.Node.ReportTension(tension);
 
@@ -286,17 +319,82 @@ public class GrappleController : MonoBehaviour
         _tether.Push(dir, _pushImpulse);
         _triggerConsumedFrame = Time.frameCount;
         TetherLog.Event($"PUSH  dir={dir} {_tether.Describe()}");
-        if (_detachOnPush) Detach("push throw");
+        if (_detachOnPush) Detach("push throw", trail: true);
     }
 
-    void Detach(string reason)
+    void Detach(string reason, bool trail = false)
     {
         if (_tether == null) return;
         if (_tether.Node != null) _tether.Node.IsOccupied = false;
         TetherLog.Event($"DETACH  ({reason}) {_tether.Describe()}");
+        if (trail)
+        {
+            // Animate out: the whip survives the detach and its tail rides the
+            // thrown host (or the last anchor point for a static push).
+            _trailBody = _tether.Node != null ? _tether.Node.Host : null;
+            _trailAnchor = _whip != null ? _whip.Tail : transform.position;
+            _pendingLength = _tether.Length;
+            _trailTimer = ThrowTrailSeconds;
+            _whip?.Ride();
+        }
+        else
+        {
+            _whip = null;
+        }
+        _wraps.Clear();
         _tether = null;
-        _whip = null;
         _triggerWasHeld = true;   // don't fire the gun with the release click
+    }
+
+    // Maintain the wrap list while landed: new catches come from a blocked line
+    // of sight along the first span; a wrap with clear sight across it unwraps.
+    void UpdateWraps()
+    {
+        Vector3 head = _body.worldCenterOfMass;
+        Vector3 tail = _tether.Anchor;
+
+        Vector3 first = _wraps.Count > 0 ? _wraps[0] : tail;
+        if (PathBlocked(head, first, out RaycastHit hit))
+        {
+            _wraps.Insert(0, hit.point + hit.normal * 0.05f);
+            if (_wraps.Count > MaxWraps) _wraps.RemoveAt(_wraps.Count - 1);
+        }
+
+        for (int i = _wraps.Count - 1; i >= 0; i--)
+        {
+            Vector3 a = i == 0 ? head : _wraps[i - 1];
+            Vector3 b = i == _wraps.Count - 1 ? tail : _wraps[i + 1];
+            if (!PathBlocked(a, b, out _)) _wraps.RemoveAt(i);
+        }
+    }
+
+    // Nearest hit between two points that is not the player, not the anchor's own
+    // host body, and not the anchor's mount surface. Cheap: 1-2 casts per step.
+    bool PathBlocked(Vector3 from, Vector3 to, out RaycastHit valid)
+    {
+        valid = default;
+        Vector3 delta = to - from;
+        float dist = delta.magnitude;
+        if (dist < 0.01f) return false;
+
+        int n = Physics.RaycastNonAlloc(from, delta / dist, _wrapHits, dist, ~0, QueryTriggerInteraction.Ignore);
+        Rigidbody host = _tether.Node.Host;
+        float mountSkip = AnchorMountSkip * AnchorMountSkip;
+        float best = float.MaxValue;
+        for (int i = 0; i < n; i++)
+        {
+            RaycastHit h = _wrapHits[i];
+            if (h.collider == null) continue;
+            if (h.collider.attachedRigidbody == _body) continue;   // the player
+            if (host != null && h.collider.attachedRigidbody == host) continue;
+            if ((h.point - to).sqrMagnitude < mountSkip) continue; // anchor mount surface
+            if (h.distance < best)
+            {
+                best = h.distance;
+                valid = h;
+            }
+        }
+        return best < float.MaxValue;
     }
 
     void UpdateChainVisual()

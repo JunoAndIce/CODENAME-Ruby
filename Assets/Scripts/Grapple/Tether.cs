@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -88,20 +89,33 @@ public class Tether
     /// <summary>
     /// Enforce rope length for this physics step; Tension becomes the cost.
     ///
-    /// One force path, three regimes:
+    /// One force path, three regimes (unwrapped):
     /// - stretched (dist > length): PULL servo — drives the pair together at the
     ///   capped correction speed, split by inverse mass.
-    /// - fully reeled and compressed (dist < length): ROD — the park distance is
+/// - fully reeled and compressed (dist < length): ROD — the park distance is
     ///   enforced both ways, so a fully reeled chain never drags a body into the
     ///   node's collider space.
     /// - fully reeled: AIM-PARK — the player is servoed to the min-length point on
     ///   the side of the node their aim points to. Radius belongs to the rod/pull;
     ///   the park corrects only the angular offset, so aiming orbits you around
     ///   the node while the chain stays locked.
+    ///
+    /// Wrapped (the rope caught on geometry — wraps = ordered pivot points between
+    /// player and anchor): the wrap pivots are static, so the pull genuinely
+    /// redirects — walking a tethered rope around a pillar catches and holds. Each
+    /// END span (player to first wrap, last wrap to host) servos along its own
+    /// direction when the wrapped path exceeds the rope length. Rod/park are
+    /// skipped while wrapped: a caught rope is not a rod.
     /// </summary>
-    public void Solve(Vector3 aimPoint)
+    public void Solve(Vector3 aimPoint, IReadOnlyList<Vector3> wraps = null)
     {
         Tension = 0f;
+
+        if (wraps != null && wraps.Count > 0)
+        {
+            SolveWrapped(wraps);
+            return;
+        }
 
         Vector3 delta = _node.AnchorPoint - _player.worldCenterOfMass;
         float dist = delta.magnitude;
@@ -151,6 +165,64 @@ public class Tether
     // Aim-park orbital speed ceiling. Orbiting a ~1 m radius any faster reads as
     // teleporting; deliberately gentler than the yank cap.
     const float ParkSpeed = 6f;
+
+    // ---- wrapped solve -------------------------------------------------------
+
+    void SolveWrapped(IReadOnlyList<Vector3> wraps)
+    {
+        Vector3 playerPos = _player.worldCenterOfMass;
+        Vector3 anchor = _node.AnchorPoint;
+
+        // Path length along the wrap polyline vs the rope's material length.
+        float pathLen = 0f;
+        Vector3 prev = playerPos;
+        foreach (Vector3 w in wraps)
+        {
+            pathLen += Vector3.Distance(prev, w);
+            prev = w;
+        }
+        float lastSpanLen = Vector3.Distance(prev, anchor);
+        float pathLen2 = pathLen + lastSpanLen;
+
+        _player.WakeUp();
+        _host?.WakeUp();
+
+        float tension = 0f;
+
+        // Player end: servo toward the first wrap when its span is overlong.
+        float avail0 = _length - (pathLen2 - Vector3.Distance(playerPos, wraps[0]));
+        tension += SolveEnd(_player, wraps[0], avail0);
+
+        // Host end: servo toward the last wrap (static hosts take none).
+        if (_host != null)
+        {
+            float availN = _length - (pathLen2 - lastSpanLen);
+            tension += SolveEnd(_host, wraps[wraps.Count - 1], availN);
+        }
+
+        Tension = tension;
+        Vector3 to0 = wraps[0] - playerPos;
+        ChainDir = to0.sqrMagnitude > 0.0001f ? to0.normalized : (anchor - playerPos).normalized;
+    }
+
+    // One end vs a static wrap pivot: the pivot's inverse mass is zero, so the
+    // moving end takes the full correction — same capped servo as the straight case.
+    float SolveEnd(Rigidbody body, Vector3 pivot, float spanLength)
+    {
+        Vector3 to = pivot - body.worldCenterOfMass;
+        float d = to.magnitude;
+        if (d <= spanLength + 0.0001f || d < 0.0001f) return 0f;
+
+        Vector3 dir = to / d;
+        float positional = (d - spanLength) / Time.fixedDeltaTime;
+        float separating = -Vector3.Dot(body.linearVelocity, dir);   // + when moving away from the pivot
+        float drive = Mathf.Max(0f, Mathf.Min(positional, MaxCorrectionSpeed) + separating);
+        if (drive <= 0f) return 0f;
+
+        body.WakeUp();
+        body.linearVelocity += dir * drive;
+        return drive / Time.fixedDeltaTime;
+    }
 
     void AimPark(Vector3 aimPoint, Vector3 chainDir)
     {

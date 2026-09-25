@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -47,8 +48,15 @@ public class WhipChain
     public bool Arrived => _arrived;
     public Vector3 Tail => _pos[Segments];
 
+    /// <summary>Put the tail in RIDE mode: it pins to whatever target position is
+    /// passed to Step each step (a thrown host it trails, or a landed anchor).</summary>
+    public void Ride() => _arrived = true;
+
     readonly Collider[] _cols = new Collider[16];
     int _colCount;
+
+    readonly int[] _pins = new int[8];   // chain node indices pinned at wrap points
+    int _pinCount;
 
     public WhipChain(Vector3 head, Vector3 target, float ropeLength, Rigidbody excludeBody)
     {
@@ -72,8 +80,9 @@ public class WhipChain
     /// for verlet stability). head = player end; target = the LIVE node anchor (a
     /// moving host redirects the flying whip and drags the landed tail); ropeLength
     /// = the tether's current locked length (can only shrink — the visual rope never
-    /// pays out either).</summary>
-    public void Step(Vector3 head, Vector3 target, float ropeLength)
+    /// pays out either); wraps = ordered rope-pivot points the rope is caught on —
+    /// chain nodes pin to them so the tendril hugs corners under tension.</summary>
+    public void Step(Vector3 head, Vector3 target, float ropeLength, IReadOnlyList<Vector3> wraps = null)
     {
         _ropeLength = ropeLength;
         _target = target;
@@ -109,11 +118,41 @@ public class WhipChain
 
         SnapshotCollisions();
 
-        float straight = Vector3.Distance(_pos[0], _pos[last]);
-        // Rest length per segment: the rope's locked length spread over the chain;
+        // Pin chain nodes at wrap points (evenly by arc length along the wrap path)
+        // so the chain hugs corners exactly where the rope is caught.
+        _pinCount = 0;
+        float pathLen = 0f;
+        Vector3 prev = _pos[0];
+        if (wraps != null)
+        {
+            foreach (Vector3 w in wraps)
+            {
+                pathLen += Vector3.Distance(prev, w);
+                prev = w;
+            }
+        }
+        pathLen += Vector3.Distance(prev, _pos[last]);
+
+        if (wraps != null && wraps.Count > 0)
+        {
+            float cum = 0f;
+            prev = _pos[0];
+            foreach (Vector3 w in wraps)
+            {
+                cum += Vector3.Distance(prev, w);
+                prev = w;
+                int pin = Mathf.Clamp(Mathf.RoundToInt(cum / pathLen * Segments), 1, Segments - 1);
+                _pins[_pinCount++] = pin;
+                _pos[pin] = w;
+                _old[pin] = w;
+            }
+        }
+
+        // Rest length per segment: the rope's material length spread over the chain;
         // if the pinned ends are farther than that (momentary stretch), rest scales
         // up so the chain still connects the ends while the tether servo closes it.
-        float rest = Mathf.Max(_ropeLength, straight) / Segments;
+        // The PATH length (through wraps) is the honest taut length.
+        float rest = Mathf.Max(_ropeLength, pathLen) / Segments;
 
         for (int it = 0; it < Iterations; it++)
         {
@@ -133,8 +172,8 @@ public class WhipChain
 
         Vector3 dir = delta / dist;
         float err = dist - rest;
-        bool aPinned = a == 0;
-        bool bPinned = b == Segments;   // tail is always kinematic (flying or landed)
+        bool aPinned = IsPinned(a);
+        bool bPinned = IsPinned(b);   // tail is always kinematic (flying, riding, or landed)
 
         if (aPinned && bPinned) return;
         if (aPinned) _pos[b] -= dir * err;
@@ -144,6 +183,14 @@ public class WhipChain
             _pos[a] += dir * (err * 0.5f);
             _pos[b] -= dir * (err * 0.5f);
         }
+    }
+
+    bool IsPinned(int index)
+    {
+        if (index == 0 || index == Segments) return true;
+        for (int i = 0; i < _pinCount; i++)
+            if (_pins[i] == index) return true;
+        return false;
     }
 
     // One snapshot per step (colliders don't move between constraint iterations),
