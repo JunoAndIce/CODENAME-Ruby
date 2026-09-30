@@ -39,6 +39,6 @@ public class ChaseState : EnemyStateBase
         Transform player = Enemy.PlayerTransform;
         if (player == null) return;
 
-        Enemy.MoveToward(player.position, Enemy.ChaseSpeed);
+        Enemy.PathTo(player.position, Enemy.ChaseSpeed);
     }
 }

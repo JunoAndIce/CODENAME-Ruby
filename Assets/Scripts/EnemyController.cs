@@ -18,6 +18,7 @@ public class EnemyController : MonoBehaviour
 
     [Header("Combat")]
     [SerializeField] private float _attackRange = 2f;
+    [SerializeField] private float _grabBreakoutTime = 2.5f;
 
     [Header("Physics")]
     [Tooltip("Decay rate applied ONLY to external carried velocity (tether yanks, knockback, flings). Same carried-velocity scheme as the player: authored AI velocity is re-written every tick, so external impulses must be carried forward and decayed instead of being erased.")]
@@ -28,15 +29,12 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Transform[] _waypoints;
     [SerializeField] private PlayerController _player;
 
-    [Header("Debug")]
-    [SerializeField] private bool _setToGrabState = false;
-
-
     // ENEMY STATES
     private readonly StateMachine _state = new();
     public Rigidbody Body { get; private set; }
     public Health Health { get; private set; }
     public IRagdollBody RagdollBody { get; private set; }
+    public EnemyNavigator Navigator { get; private set; }
     public IdleState Idle { get; private set; }
     public PatrolState Patrol { get; private set; }
     public SearchingState Searching { get; private set; }
@@ -56,6 +54,7 @@ public class EnemyController : MonoBehaviour
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
     public float AttackRange => _attackRange;
+    public float GrabBreakoutTime => _grabBreakoutTime;
     public Transform[] Waypoints => _waypoints;
     public bool HasPatrolRoute => _waypoints != null && _waypoints.Length > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
@@ -68,6 +67,7 @@ public class EnemyController : MonoBehaviour
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
         RagdollBody = ragdoll;
+        Navigator = new EnemyNavigator(this);
 
         Idle = new IdleState(this);
         Patrol = new PatrolState(this);
@@ -118,7 +118,11 @@ public class EnemyController : MonoBehaviour
 
     private void OnDisable() => Health.OnDamaged -= HandleDamaged;
 
-    private void Update() => _state.Tick();
+    private void Update()
+    {
+        _state.Tick();
+        DebugDrawPath();
+    }
 
     private void FixedUpdate() => _state.FixedTick();
 
@@ -130,6 +134,13 @@ public class EnemyController : MonoBehaviour
     }
 
     public void EnterGrabbed() => _state.SetState(Grabbed);
+
+    /// <summary>Rope let go without a throw (node destroyed): drop straight into pursuit.</summary>
+    public void EndGrab()
+    {
+        if (_state.Current != Grabbed) return;
+        _state.SetState(Chase);
+    }
 
     public void Release(Vector3 velocity)
     {
@@ -166,6 +177,9 @@ public class EnemyController : MonoBehaviour
         transform.LookAt(target);
     }
 
+    /// <summary>Pathfind toward target around walls. Returns true once arrived.</summary>
+    public bool PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
+
     public void Stop() => VelocityUtil.ApplyAuthoredMove(Body, Vector3.zero, _flingDamping, ref _lastAuthoredMove);
 
     public float DistanceToPlayer()
@@ -186,8 +200,26 @@ public class EnemyController : MonoBehaviour
         _attackRange = Mathf.Min(_attackRange, _alertRadius);
     }
 
+    // Play-mode path overlay: visible in the Scene view without selecting the enemy.
+    private void DebugDrawPath()
+    {
+        Vector3[] corners = Navigator.Corners;
+        if (corners == null) return;
+
+        for (int i = 1; i < corners.Length; i++)
+            Debug.DrawLine(corners[i - 1], corners[i], Color.yellow);
+    }
+
     private void OnDrawGizmosSelected()
     {
+        Vector3[] corners = Navigator?.Corners;
+        if (corners != null)
+        {
+            Gizmos.color = Color.yellow;
+            for (int i = 1; i < corners.Length; i++)
+                Gizmos.DrawLine(corners[i - 1], corners[i]);
+        }
+
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, _alertRadius);
 

@@ -23,20 +23,6 @@ public class SearchingState : EnemyStateBase
 
     public override void Tick() => _searchTimer += Time.deltaTime;
 
-    public override void FixedTick()
-    {
-        if (HasArrived) { Enemy.Stop(); return; }
-
-        Enemy.MoveToward(_lastKnownPosition, Enemy.SearchSpeed);
-    }
-
-    private bool HasArrived
-    {
-        get
-        {
-            Vector3 delta = _lastKnownPosition - Enemy.transform.position;
-            delta.y = 0f;
-            return delta.sqrMagnitude < 0.25f;   // within 0.5m
-        }
-    }
+    // PathTo stops the enemy itself once it arrives, so arrival needs no handling here.
+    public override void FixedTick() => Enemy.PathTo(_lastKnownPosition, Enemy.SearchSpeed);
 }
