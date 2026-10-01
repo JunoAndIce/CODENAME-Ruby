@@ -26,7 +26,10 @@ public class EnemyController : MonoBehaviour
     Vector3 _lastAuthoredMove;
 
     [Header("Patrol")]
-    [SerializeField] private Transform[] _waypoints;
+    [Tooltip("Walked while unaware. Empty = idle in place. Edit with the Scene-view handles when this enemy is selected.")]
+    [SerializeField] private PatrolRoute _safeRoute = new();
+
+    [Header("References")]
     [SerializeField] private PlayerController _player;
 
     // ENEMY STATES
@@ -55,8 +58,8 @@ public class EnemyController : MonoBehaviour
     public float SearchDuration => _searchDuration;
     public float AttackRange => _attackRange;
     public float GrabBreakoutTime => _grabBreakoutTime;
-    public Transform[] Waypoints => _waypoints;
-    public bool HasPatrolRoute => _waypoints != null && _waypoints.Length > 0;
+    public PatrolRoute SafeRoute => _safeRoute;
+    public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
 
     private void Awake()
@@ -231,18 +234,38 @@ public class EnemyController : MonoBehaviour
 
         Gizmos.color = Color.magenta;
         Gizmos.DrawWireSphere(transform.position, _attackRange);
+    }
 
+    // Every enemy's route, faintly, all the time: with many enemies you can see who walks what
+    // without selecting each one. The selected enemy's areas get coloured handles on top
+    // (EnemyControllerEditor).
+    private void OnDrawGizmos()
+    {
         if (!HasPatrolRoute) return;
 
-        Gizmos.color = Color.cyan;
-        for (int i = 0; i < _waypoints.Length; i++)
+        Gizmos.color = new Color(0f, 1f, 1f, 0.35f);
+        int count = _safeRoute.Count;
+        for (int i = 0; i < count; i++)
         {
-            if (_waypoints[i] == null) continue;
+            PatrolPoint point = _safeRoute[i];
+            DrawFlatCircle(point.Position, point.Radius);
 
-            Gizmos.DrawWireCube(_waypoints[i].position, Vector3.one * 0.3f);
+            bool last = i == count - 1;
+            if (!last) Gizmos.DrawLine(point.Position, _safeRoute[i + 1].Position);
+            else if (_safeRoute.Mode == PatrolMode.Loop && count > 2) Gizmos.DrawLine(point.Position, _safeRoute[0].Position);
+        }
+    }
 
-            Transform next = _waypoints[(i + 1) % _waypoints.Length];
-            if (next != null) Gizmos.DrawLine(_waypoints[i].position, next.position);
+    private static void DrawFlatCircle(Vector3 centre, float radius)
+    {
+        const int segments = 24;
+        Vector3 previous = centre + new Vector3(radius, 0f, 0f);
+        for (int i = 1; i <= segments; i++)
+        {
+            float angle = i * Mathf.PI * 2f / segments;
+            Vector3 next = centre + new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
+            Gizmos.DrawLine(previous, next);
+            previous = next;
         }
     }
 }

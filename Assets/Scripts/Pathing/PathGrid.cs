@@ -26,7 +26,7 @@ public class PathGrid : MonoBehaviour
     [Tooltip("How far, in path metres, a flood spreads from its goal. Bounds the cost of each flood; an enemy further than this can't path to that goal.")]
     [SerializeField, Min(1f)] private float _maxFlowDistance = 40f;
 
-    private const int OverlapBufferSize = 32;
+    private static readonly Collider[] OverlapHits = new Collider[32];
     private const float BelowFloorTolerance = 0.5f;
 
     /// <summary>The 8 moves between neighbouring cells: straights first, then diagonals.</summary>
@@ -68,8 +68,14 @@ public class PathGrid : MonoBehaviour
         return null;
     }
 
+    /// <summary>Whether point lies over this grid and inside its floor band. Works before baking,
+    /// so the editor can find the grid under a route point.</summary>
     public bool Covers(Vector3 point)
-        => point.y >= _origin.y - BelowFloorTolerance && point.y <= _origin.y + _height && WorldToCell(point, out _);
+    {
+        Vector3 local = point - transform.position;
+        return Mathf.Abs(local.x) <= _size.x * 0.5f && Mathf.Abs(local.z) <= _size.y * 0.5f
+            && local.y >= -BelowFloorTolerance && local.y <= _height;
+    }
 
     /// <summary>
     /// The field toward a moving target on this floor, shared by every agent that follows it.
@@ -98,30 +104,37 @@ public class PathGrid : MonoBehaviour
         // Transforms moved since the last physics step aren't in the physics scene yet.
         Physics.SyncTransforms();
 
-        var hits = new Collider[OverlapBufferSize];
-        float bottomY = _origin.y + _floorClearance + _agentRadius;
-        float topY = Mathf.Max(bottomY, _origin.y + _agentHeight - _agentRadius);
         int blocked = 0;
-
         for (int z = 0; z < _depth; z++)
         {
             for (int x = 0; x < _width; x++)
             {
-                Vector3 centre = CellToWorld(x, z);
-                int count = Physics.OverlapCapsuleNonAlloc(
-                    new Vector3(centre.x, bottomY, centre.z), new Vector3(centre.x, topY, centre.z),
-                    _agentRadius, hits, ~0, QueryTriggerInteraction.Ignore);
-
-                bool open = true;
-                for (int i = 0; i < count && open; i++)
-                    open = !IsStatic(hits[i]);
-
+                bool open = IsOpenSpot(CellToWorld(x, z));
                 _walkable[x + z * _width] = open;
                 if (!open) blocked++;
             }
         }
 
         Debug.Log($"{name}: baked {_width}x{_depth} cells ({_cellSize}m), {blocked} blocked.", this);
+    }
+
+    /// <summary>
+    /// The bake's clearance test for one spot: true when an agent-sized capsule standing there
+    /// overlaps nothing static. Only X/Z of position matter; the capsule stands on this grid's
+    /// floor. Works in edit mode, so route authoring sees exactly what the bake will.
+    /// </summary>
+    public bool IsOpenSpot(Vector3 position)
+    {
+        float floor = transform.position.y;
+        float bottomY = floor + _floorClearance + _agentRadius;
+        float topY = Mathf.Max(bottomY, floor + _agentHeight - _agentRadius);
+        int count = Physics.OverlapCapsuleNonAlloc(
+            new Vector3(position.x, bottomY, position.z), new Vector3(position.x, topY, position.z),
+            _agentRadius, OverlapHits, ~0, QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < count; i++)
+            if (IsStatic(OverlapHits[i])) return false;
+        return true;
     }
 
     // Same rule as GrappleNode.IsStaticWorld: no body, or a kinematic one, means it doesn't move.
