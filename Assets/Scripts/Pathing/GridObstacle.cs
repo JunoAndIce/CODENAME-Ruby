@@ -13,7 +13,7 @@ public class GridObstacle : MonoBehaviour
     [Tooltip("Below this speed the prop counts as resting.")]
     [SerializeField, Min(0.01f)] private float _restSpeed = 0.2f;
     [Tooltip("How long it must stay below Rest Speed before it blocks the grid.")]
-    [SerializeField, Min(0f)] private float _settleTime = 0.25f;
+    [SerializeField, Min(0f)] private float _settleTime = 0.01f;
 
     private readonly List<int> _cells = new();
     private Rigidbody _body;
