@@ -3,10 +3,11 @@ using UnityEngine;
 /// <summary>
 /// Small shared velocity helpers.
 ///
-/// The carried-velocity scheme lives HERE so every velocity-authoring character
-/// (player, enemy, future NPCs) uses one implementation: authored move velocity is
-/// re-written fresh each physics step, while anything the physics/solvers added
-/// beyond the last authored move is carried forward and decays on its own.
+/// The authored-movement scheme lives HERE so every velocity-authoring character uses one
+/// implementation: movement input is re-written fresh each physics step on top of the
+/// character's external velocity — pushes it was explicitly given (tether yanks, push recoil,
+/// knockback), which carry forward and fade on their own. Nothing is inferred from what the
+/// body actually did, so a wall that stops the body can never be mistaken for a push off it.
 /// </summary>
 public static class VelocityUtil
 {
@@ -21,22 +22,28 @@ public static class VelocityUtil
         return flat.normalized * speed;
     }
 
-    /// <summary>
-    /// Author a move velocity while preserving external physics (tether impulses,
-    /// knockback, flings): whatever the rigidbody gained beyond the last authored
-    /// move is carried forward with an explicit decay, instead of being erased each
-    /// step. Gravity is physics-authored and never treated as external. Pass this
-    /// script's own _lastAuthoredMove field by ref — each character owns its state.
-    /// </summary>
-    public static void ApplyAuthoredMove(Rigidbody body, Vector3 authoredMove,
-        float flingDamping, ref Vector3 lastAuthoredMove)
-    {
-        Vector3 carried = body.linearVelocity - lastAuthoredMove;
-        carried.y = 0f;   // gravity is not external
-        carried *= Mathf.Max(0f, 1f - flingDamping * Time.fixedDeltaTime);
+    /// <summary>Set the planar velocity, keeping the vertical: gravity is physics-authored.</summary>
+    public static void SetFlatVelocity(Rigidbody body, Vector3 flat)
+        => body.linearVelocity = new Vector3(flat.x, body.linearVelocity.y, flat.z);
 
-        Vector3 flat = new(authoredMove.x, 0f, authoredMove.z);
-        body.linearVelocity = new Vector3(flat.x, body.linearVelocity.y, flat.z) + carried;
-        lastAuthoredMove = flat;
+    /// <summary>
+    /// Author a move velocity on top of the character's external velocity, fading that by
+    /// flingDamping first. Pass the character's own external field by ref.
+    /// </summary>
+    public static void ApplyAuthoredMove(Rigidbody body, Vector3 authoredMove, ref Vector3 external, float flingDamping)
+    {
+        external *= Mathf.Max(0f, 1f - flingDamping * Time.fixedDeltaTime);
+        SetFlatVelocity(body, authoredMove + external);
+    }
+
+    /// <summary>
+    /// Give a character a push. It lands on the body now, whichever script runs first this
+    /// physics step, and its flat part joins the external velocity so the next authored move
+    /// carries it instead of erasing it.
+    /// </summary>
+    public static void AddExternal(Rigidbody body, Vector3 change, ref Vector3 external)
+    {
+        body.linearVelocity += change;
+        external += new Vector3(change.x, 0f, change.z);
     }
 }

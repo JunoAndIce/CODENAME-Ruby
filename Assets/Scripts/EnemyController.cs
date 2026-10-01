@@ -11,18 +11,20 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float _searchSpeed = 1.5f;
 
     [Header("Awareness")]
+    [Tooltip("Detects the player inside this radius, if in sight.")]
     [SerializeField] private float _alertRadius = 12f;
+    [Tooltip("Aggro keeps contact inside this radius, if in sight.")]
     [SerializeField] private float _giveUpRadius = 18f;
+    [Tooltip("Seconds out of contact (out of sight, or beyond Give Up Radius) before aggro turns to searching.")]
     [SerializeField] private float _aggroTime = 1.5f;
+    [Tooltip("Height above the enemy's centre that sight is cast from.")]
+    [SerializeField] private float _eyeHeight = 0.5f;
     [SerializeField] private float _searchDuration = 5f;
 
     [Header("Combat")]
     [SerializeField] private float _attackRange = 2f;
-
-    [Header("Physics")]
-    [Tooltip("Decay rate applied ONLY to external carried velocity (tether yanks, knockback, flings). Same carried-velocity scheme as the player: authored AI velocity is re-written every tick, so external impulses must be carried forward and decayed instead of being erased.")]
-    [SerializeField] private float _flingDamping = 3f;
-    Vector3 _lastAuthoredMove;
+    [Tooltip("Seconds between attacks. Moves to the weapon when weapons exist.")]
+    [SerializeField, Min(0.05f)] private float _attackCooldown = 1f;
 
     [Header("Patrol")]
     [Tooltip("Walked while unaware. Empty = idle in place. Edit with the Scene-view handles when this enemy is selected.")]
@@ -46,8 +48,7 @@ public class EnemyController : MonoBehaviour
     public IdleState Idle { get; private set; }
     public PatrolState Patrol { get; private set; }
     public SearchingState Searching { get; private set; }
-    public ChaseState Chase { get; private set; }
-    public AttackState Attack { get; private set; }
+    public AggroState Aggro { get; private set; }
     public GrabbedState Grabbed { get; private set; }
     public RagdollState Ragdoll { get; private set; }
     public DeadState Dead { get; private set; }
@@ -62,12 +63,26 @@ public class EnemyController : MonoBehaviour
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
     public float AttackRange => _attackRange;
+    public float AttackCooldown => _attackCooldown;
     public PatrolRoute SafeRoute => _safeRoute;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
     public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
+    /// <summary>
+    /// Where the hunt was leading when aggro ended. Aggro keeps tracking the player for Aggro
+    /// Time after losing contact, so this is where they actually went, not where they slipped
+    /// out of view. Search goes here.
+    /// </summary>
+    public Vector3 LastKnownPlayerPosition { get; private set; }
+    /// <summary>Set the first time the enemy aggros; never cleared. The Cautious state reads it.</summary>
+    public bool IsCautious { get; private set; }
+
+    private static readonly RaycastHit[] SightHits = new RaycastHit[16];
+    private int _sightFrame = -1;
+    private bool _canSeePlayer;
+    private Collider _sightBlocker;
 
     private void Awake()
     {
@@ -82,8 +97,7 @@ public class EnemyController : MonoBehaviour
         Idle = new IdleState(this);
         Patrol = new PatrolState(this);
         Searching = new SearchingState(this);
-        Chase = new ChaseState(this);
-        Attack = new AttackState(this);
+        Aggro = new AggroState(this);
         Grabbed = new GrabbedState(this);
         Ragdoll = new RagdollState(this);
         Dead = new DeadState(this);
@@ -94,20 +108,16 @@ public class EnemyController : MonoBehaviour
     // The whole transition graph, in one place. States never name each other.
     private void BuildTransitions()
     {
-        At(Idle, Chase, new FuncPredicate(() => DistanceToPlayer() <= _alertRadius));
-        At(Patrol, Chase, new FuncPredicate(() => DistanceToPlayer() <= _alertRadius));
+        At(Idle, Aggro, new FuncPredicate(DetectsPlayer));
+        At(Patrol, Aggro, new FuncPredicate(DetectsPlayer));
+        At(Searching, Aggro, new FuncPredicate(DetectsPlayer));
 
-        At(Chase, Attack, new FuncPredicate(() => DistanceToPlayer() <= _attackRange));
-        At(Attack, Chase, new FuncPredicate(() => DistanceToPlayer() > _attackRange));
-
-        At(Chase, Searching, new FuncPredicate(() => Chase.LostPlayer));
-        At(Searching, Chase, new FuncPredicate(() => DistanceToPlayer() <= _alertRadius));
-
+        At(Aggro, Searching, new FuncPredicate(() => Aggro.LostPlayer));
 
         At(Searching, Patrol, new FuncPredicate(() => Searching.SearchExpired && HasPatrolRoute));
         At(Searching, Idle, new FuncPredicate(() => Searching.SearchExpired && !HasPatrolRoute));
 
-        At(Ragdoll, Chase, new FuncPredicate(() => RagdollBody.IsSettled && !Health.IsDead));
+        At(Ragdoll, Aggro, new FuncPredicate(() => RagdollBody.IsSettled && !Health.IsDead));
 
         Any(Dead, new FuncPredicate(() => Health.IsDead));
     }
@@ -140,7 +150,7 @@ public class EnemyController : MonoBehaviour
     public void Alert()
     {
         if (_state.Current is GrabbedState or RagdollState or DeadState) return;
-        _state.SetState(Chase);
+        _state.SetState(Aggro);
     }
 
     public void EnterGrabbed() => _state.SetState(Grabbed);
@@ -149,7 +159,25 @@ public class EnemyController : MonoBehaviour
     public void EndGrab()
     {
         if (_state.Current != Grabbed) return;
-        _state.SetState(Chase);
+        _state.SetState(Aggro);
+    }
+
+    /// <summary>One-way: once an enemy has hunted the player it stays on edge for good.</summary>
+    public void MarkCautious() => IsCautious = true;
+
+    public void RecordTrailEnd()
+    {
+        if (_player != null) LastKnownPlayerPosition = _player.transform.position;
+    }
+
+    /// <summary>
+    /// Placeholder attack until weapons exist: a log line and a red flash toward the player.
+    /// Weapons replace this body; AggroState's call site and cadence stay as they are.
+    /// </summary>
+    public void Attack()
+    {
+        Debug.Log($"{name} attacks {_player.name}.", this);
+        Debug.DrawLine(EyePosition, _player.transform.position, Color.red, 0.15f);
     }
 
     public void Release(Vector3 velocity)
@@ -171,11 +199,10 @@ public class EnemyController : MonoBehaviour
         if (direction.sqrMagnitude > 0.01f)
             transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
 
-        Vector3 v = transform.forward * speed;
-        // Shared carried-velocity scheme (VelocityUtil): external impulses from the
-        // tether solver, push verb, and knockback survive the AI's velocity write
-        // and decay on their own — otherwise a grappled enemy reads as weightless.
-        VelocityUtil.ApplyAuthoredMove(Body, v, _flingDamping, ref _lastAuthoredMove);
+        // Plain authored velocity: nothing pushes an enemy while its AI steers (the rope only
+        // acts while grabbed, a state that doesn't steer), so there's no push to carry. When
+        // knockback arrives it gets the player's explicit external velocity (VelocityUtil).
+        VelocityUtil.SetFlatVelocity(Body, transform.forward * speed);
     }
 
     /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>
@@ -188,16 +215,69 @@ public class EnemyController : MonoBehaviour
         transform.LookAt(target);
     }
 
-    /// <summary>Pathfind toward target around walls. Returns true once arrived.</summary>
-    public bool PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
+    /// <summary>Pathfind to a fixed point around walls; stops on arrival.</summary>
+    public void PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
 
     /// <summary>Walk to a patrol point's area along an A* route.</summary>
     public NavResult PatrolTo(PatrolPoint point, float speed) => Navigator.MoveToArea(point.Position, point.Radius, speed);
 
-    /// <summary>Chase the player along this floor's shared flow field. Returns true when on top of them.</summary>
-    public bool PathToPlayer(float speed) => _player != null && Navigator.ChaseTo(_player.transform, speed);
+    /// <summary>Chase the player along this floor's shared flow field.</summary>
+    public void PathToPlayer(float speed)
+    {
+        if (_player != null) Navigator.ChaseTo(_player.transform, speed);
+    }
 
-    public void Stop() => VelocityUtil.ApplyAuthoredMove(Body, Vector3.zero, _flingDamping, ref _lastAuthoredMove);
+    public void Stop() => VelocityUtil.SetFlatVelocity(Body, Vector3.zero);
+
+    private Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
+
+    // Detection: close enough to notice, and in sight.
+    private bool DetectsPlayer() => DistanceToPlayer() <= _alertRadius && CanSeePlayer();
+
+    /// <summary>Aggro's contact test: still within the give-up radius, and in sight.</summary>
+    public bool InContactWithPlayer() => DistanceToPlayer() <= _giveUpRadius && CanSeePlayer();
+
+    /// <summary>What blocked the last sight check, or null when the player was in view.</summary>
+    public Collider SightBlocker => _sightBlocker;
+
+    /// <summary>
+    /// A line from eye height to the player crosses nothing solid except characters (the
+    /// player, enemies — this one's own eye cubes included). Unlike paths, sight is checked
+    /// fresh every frame, so moving props can block it: hiding behind a crate works, while a
+    /// prop lower than the eye line doesn't hide anyone. See-through windows arrive with the
+    /// Perception step. Cached per frame: several transitions and the aggro state all ask.
+    /// </summary>
+    public bool CanSeePlayer()
+    {
+        if (_player == null) return false;
+        if (_sightFrame == Time.frameCount) return _canSeePlayer;
+        _sightFrame = Time.frameCount;
+
+        Vector3 eye = EyePosition;
+        Vector3 toPlayer = _player.transform.position - eye;
+        float distance = toPlayer.magnitude;
+        _canSeePlayer = true;
+        _sightBlocker = null;
+        if (distance < 0.01f) return true;
+
+        int count = Physics.RaycastNonAlloc(eye, toPlayer / distance, SightHits, distance, ~0, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < count; i++)
+        {
+            if (IsCharacter(SightHits[i].collider)) continue;
+            _canSeePlayer = false;
+            _sightBlocker = SightHits[i].collider;
+            break;
+        }
+        return _canSeePlayer;
+    }
+
+    // Characters see past each other: the player's own colliders (gun included) and any enemy's.
+    private bool IsCharacter(Collider collider)
+    {
+        Rigidbody body = collider.attachedRigidbody;
+        if (body == null) return false;
+        return body.transform == _player.transform || body.TryGetComponent(out EnemyController _);
+    }
 
     public float DistanceToPlayer()
     {
@@ -229,14 +309,6 @@ public class EnemyController : MonoBehaviour
 
     private void OnDrawGizmosSelected()
     {
-        Vector3[] corners = Navigator?.Corners;
-        if (corners != null)
-        {
-            Gizmos.color = Color.yellow;
-            for (int i = 1; i < corners.Length; i++)
-                Gizmos.DrawLine(corners[i - 1], corners[i]);
-        }
-
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, _alertRadius);
 
@@ -245,6 +317,13 @@ public class EnemyController : MonoBehaviour
 
         Gizmos.color = Color.magenta;
         Gizmos.DrawWireSphere(transform.position, _attackRange);
+
+        // Sight line in play: green when the player is in view, red when something static is in the way.
+        if (Application.isPlaying && _player != null)
+        {
+            Gizmos.color = CanSeePlayer() ? Color.green : Color.red;
+            Gizmos.DrawLine(EyePosition, _player.transform.position);
+        }
     }
 
     // Every enemy's route, faintly, all the time: with many enemies you can see who walks what

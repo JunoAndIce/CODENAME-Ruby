@@ -15,9 +15,15 @@ Lifecycle" plans.
 - [x] **Patrol:** a Safe route of **area nodes** stored on each enemy, with Scene-view authoring
   (`6026559`), walked with A* (`GridPathfinder`). Unreachable points are skipped with a warning.
 - [ ] Cautious state and Cautious route (reuses the patrol code)
-- [ ] Aggro
+- [x] **Aggro:** one `AggroState` replaces Chase + Attack. It hunts along the shared flow field
+  (facing its direction of travel), and within Attack Range with a clear line it stops, faces the
+  player and fires a placeholder attack on Attack Cooldown. It loses the player after Aggro Time
+  out of sight or beyond Give Up Radius, and Search then goes to where the hunt was leading when
+  it gave up. Detection needs sight too.
 - [ ] Search v2
-- [ ] Perception (line of sight; **sound last**)
+- [~] Perception: **line of sight is done** (with Aggro). Anything solid blocks it except
+  characters, so props hide the player and low props under the eye line don't. Windows and
+  **sound (last)** remain.
 - [ ] Weapons
 - [ ] Controller housekeeping
 
@@ -200,7 +206,7 @@ waypoints. Each point is now an **area**, a centre plus a radius:
   `_cautiousSpeed`. If that route is empty, it walks the Safe route.
 - `IsCautious` is set when the enemy first chases (moving to `AggroState.Enter` later).
 
-### 5. Aggro: `AggroState` (replaces `ChaseState` + `AttackState`)
+### 5. Aggro (done): `AggroState` (replaces `ChaseState` + `AttackState`)
 
 - `Enter`: `_lostTimer = 0`; set `IsCautious`.
 - `Tick`:

@@ -344,7 +344,10 @@ public class PathGrid : MonoBehaviour
         int maxSteps = Mathf.Abs(end.x - cell.x) + Mathf.Abs(end.y - cell.y) + 1;
         for (int i = 0; i <= maxSteps; i++)
         {
-            if (!IsWalkable(cell)) return false;
+            // The starting cell is wherever the agent already stands, often one the clearance
+            // margin marks blocked because it's brushing a wall, so only cells it would move
+            // into count. A line back into the wall still fails on the next cell.
+            if (i > 0 && !IsWalkable(cell)) return false;
             if (cell == end) return true;
 
             if (Mathf.Approximately(nextX, nextZ))

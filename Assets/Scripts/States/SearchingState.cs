@@ -18,7 +18,7 @@ public class SearchingState : EnemyStateBase
     public override void Enter()
     {
         _searchTimer = 0f;
-        _lastKnownPosition = Enemy.Chase.LastSeen;
+        _lastKnownPosition = Enemy.LastKnownPlayerPosition;
     }
 
     public override void Tick() => _searchTimer += Time.deltaTime;

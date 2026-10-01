@@ -11,7 +11,7 @@ public class GrabbedState : EnemyStateBase
 
     public override EnemyState Id => EnemyState.Grabbed;
 
-    // Clear the AI's last authored move so leftover walk speed isn't carried into the grab;
-    // from here the rope and physics own the body.
+    // Stop the walk so leftover speed doesn't drift into the grab; from here the rope and
+    // physics own the body.
     public override void Enter() => Enemy.Stop();
 }

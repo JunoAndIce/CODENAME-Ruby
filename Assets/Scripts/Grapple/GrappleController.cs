@@ -305,7 +305,7 @@ public class GrappleController : MonoBehaviour
         // servo tugs you back instead); running toward shortens it — the whip lands
         // taut at whichever is shorter. Min = park radius, max = attach range.
         float len = Mathf.Clamp(Mathf.Min(dist, _pendingLength), _minChainLength, _maxChainLength);
-        _tether = new Tether(_body, node, len, _minChainLength, _maxChainLength);
+        _tether = new Tether(_body, _player.AddExternalVelocity, node, len, _minChainLength, _maxChainLength);
         _pendingNode = null;
 
         EnemyController enemy = node.EnemyTarget;
