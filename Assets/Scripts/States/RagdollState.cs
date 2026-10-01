@@ -11,7 +11,5 @@ public class RagdollState : EnemyStateBase
     public override void Exit()
     {
         if (!Enemy.Health.IsDead) Enemy.RagdollBody.Recover();
-        // A throw lands us far off the old path; re-plan from where we ended up.
-        Enemy.Navigator.Clear();
     }
 }

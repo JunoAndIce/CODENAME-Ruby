@@ -180,6 +180,9 @@ public class EnemyController : MonoBehaviour
     /// <summary>Pathfind toward target around walls. Returns true once arrived.</summary>
     public bool PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
 
+    /// <summary>Chase the player along this floor's shared flow field. Returns true when on top of them.</summary>
+    public bool PathToPlayer(float speed) => _player != null && Navigator.ChaseTo(_player.transform, speed);
+
     public void Stop() => VelocityUtil.ApplyAuthoredMove(Body, Vector3.zero, _flingDamping, ref _lastAuthoredMove);
 
     public float DistanceToPlayer()
