@@ -28,6 +28,12 @@ public class EnemyController : MonoBehaviour
     [Header("Patrol")]
     [Tooltip("Walked while unaware. Empty = idle in place. Edit with the Scene-view handles when this enemy is selected.")]
     [SerializeField] private PatrolRoute _safeRoute = new();
+    [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
+    [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
+    [Tooltip("Seconds without getting closer before a patrol move counts as blocked (another enemy on the spot, a prop, a jammed doorway).")]
+    [SerializeField, Min(0.1f)] private float _stuckTime = 1.5f;
+    [Tooltip("When every patrol point fails in a row, wait this long before trying the route again.")]
+    [SerializeField, Min(0f)] private float _routeRetryTime = 3f;
 
     [Header("References")]
     [SerializeField] private PlayerController _player;
@@ -59,6 +65,9 @@ public class EnemyController : MonoBehaviour
     public float AttackRange => _attackRange;
     public float GrabBreakoutTime => _grabBreakoutTime;
     public PatrolRoute SafeRoute => _safeRoute;
+    public float NodePauseTime => _nodePauseTime;
+    public float StuckTime => _stuckTime;
+    public float RouteRetryTime => _routeRetryTime;
     public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
 
@@ -182,6 +191,9 @@ public class EnemyController : MonoBehaviour
 
     /// <summary>Pathfind toward target around walls. Returns true once arrived.</summary>
     public bool PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
+
+    /// <summary>Walk to a patrol point's area along an A* route.</summary>
+    public NavResult PatrolTo(PatrolPoint point, float speed) => Navigator.MoveToArea(point.Position, point.Radius, speed);
 
     /// <summary>Chase the player along this floor's shared flow field. Returns true when on top of them.</summary>
     public bool PathToPlayer(float speed) => _player != null && Navigator.ChaseTo(_player.transform, speed);

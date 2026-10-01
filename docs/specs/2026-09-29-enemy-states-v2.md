@@ -12,8 +12,8 @@ Lifecycle" plans.
 - [~] **Grab.** Grapple side done: the enemy is retained for the whole tether, a push-throw calls
   `Release(enemy velocity)`, and any other detach calls `EndGrab()` (goes to Chase until Aggro
   exists). `GrabbedState` still sets `isKinematic`, so the rope can't move a grabbed enemy yet.
-- [~] **Patrol:** Safe route of **area nodes** stored on each enemy. Step 1 (data plus Scene-view
-  authoring) is done; step 2 (A* and the walker) is next.
+- [x] **Patrol:** a Safe route of **area nodes** stored on each enemy, with Scene-view authoring
+  (`6026559`), walked with A* (`GridPathfinder`). Unreachable points are skipped with a warning.
 - [ ] Cautious state and Cautious route (reuses the patrol code)
 - [ ] Aggro
 - [ ] Search v2
@@ -138,7 +138,7 @@ external reader is `GrappleController` (`EnemyState.Grabbed`).
 - Gizmos: sight radius, give-up radius, weapon range, and the vision line (green when clear, red
   when blocked).
 
-### 3. Patrol (in progress): area nodes on the enemy, walked with A*
+### 3. Patrol (done): area nodes on the enemy, walked with A*
 
 **Why areas.** A route point used to be an exact spot. When that spot sat at the centre of an
 object (a table, a door, a GrappleAnchor), the enemy could never reach it, kept walking into the
@@ -169,7 +169,7 @@ waypoints. Each point is now an **area**, a centre plus a radius:
     when the centre is blocked but part of the area is open, **red** when nothing in the area is
     open, and **grey** when there's no grid under it.
 
-**3b. A* and the patrol walker** (step 2):
+**3b. A* and the patrol walker** (step 2, done):
 
 - `GridPathfinder`, exposed as `PathGrid.FindPath(from, goalCell, path)`:
   - 8-directional, integer costs 10 and 14, no corner cutting.

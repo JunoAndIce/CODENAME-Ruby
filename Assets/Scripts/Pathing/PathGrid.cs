@@ -45,6 +45,7 @@ public class PathGrid : MonoBehaviour
     private int _depth;         // cells along Z (Vector2Int.y throughout)
     private Vector3 _origin;    // min corner of cell (0,0), at floor height
     private readonly Dictionary<Transform, FlowField> _targetFields = new();
+    private GridPathfinder _pathfinder;   // one per grid: searches run one at a time, so all agents share its scratch arrays
 
     public bool IsBaked => _walkable != null;
     public float CellSize => _cellSize;
@@ -90,6 +91,72 @@ public class PathGrid : MonoBehaviour
             _targetFields.Add(target, field);
         }
         return field;
+    }
+
+    /// <summary>A* from a point to a goal cell, as straight-line corners. See GridPathfinder.</summary>
+    public bool FindPath(Vector3 from, Vector2Int goal, List<Vector3> path)
+    {
+        _pathfinder ??= new GridPathfinder(this);
+        return _pathfinder.FindPath(from, goal, path);
+    }
+
+    /// <summary>
+    /// Where an agent should stand to have reached an area. An open centre is the answer
+    /// itself. An occupied centre (a table, an anchor) resolves to the open cell nearest it
+    /// within the radius, and among near-ties the one nearest the agent, so a table's centre
+    /// resolves to the agent's side rather than the far side. False when nothing in the area
+    /// is open.
+    /// </summary>
+    public bool ResolveArea(Vector3 centre, float radius, Vector3 approachFrom, out Vector2Int goalCell, out Vector3 goalPoint)
+    {
+        goalPoint = centre;
+        if (WorldToCell(centre, out goalCell) && IsWalkable(goalCell)) return true;
+
+        int minX = Mathf.Clamp(Mathf.FloorToInt((centre.x - radius - _origin.x) / _cellSize), 0, _width - 1);
+        int maxX = Mathf.Clamp(Mathf.FloorToInt((centre.x + radius - _origin.x) / _cellSize), 0, _width - 1);
+        int minZ = Mathf.Clamp(Mathf.FloorToInt((centre.z - radius - _origin.z) / _cellSize), 0, _depth - 1);
+        int maxZ = Mathf.Clamp(Mathf.FloorToInt((centre.z + radius - _origin.z) / _cellSize), 0, _depth - 1);
+
+        // Pass 1: how close to the centre can an agent get?
+        float nearest = float.MaxValue;
+        for (int z = minZ; z <= maxZ; z++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                if (!IsWalkable(new Vector2Int(x, z))) continue;
+                float distance = FlatDistance(CellToWorld(x, z), centre);
+                if (distance <= radius && distance < nearest) nearest = distance;
+            }
+        }
+        if (nearest == float.MaxValue) return false;
+
+        // Pass 2: of the cells about that close, the one on the agent's side.
+        float tieBand = nearest + _cellSize * 0.5f;
+        float bestApproach = float.MaxValue;
+        for (int z = minZ; z <= maxZ; z++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                var cell = new Vector2Int(x, z);
+                if (!IsWalkable(cell)) continue;
+                Vector3 world = CellToWorld(x, z);
+                float distance = FlatDistance(world, centre);
+                if (distance > radius || distance > tieBand) continue;
+
+                float approach = FlatDistance(world, approachFrom);
+                if (approach >= bestApproach) continue;
+                bestApproach = approach;
+                goalCell = cell;
+                goalPoint = world;
+            }
+        }
+        return true;
+    }
+
+    private static float FlatDistance(Vector3 a, Vector3 b)
+    {
+        float dx = a.x - b.x, dz = a.z - b.z;
+        return Mathf.Sqrt(dx * dx + dz * dz);
     }
 
     private void Bake()
