@@ -18,7 +18,6 @@ public class EnemyController : MonoBehaviour
 
     [Header("Combat")]
     [SerializeField] private float _attackRange = 2f;
-    [SerializeField] private float _grabBreakoutTime = 2.5f;
 
     [Header("Physics")]
     [Tooltip("Decay rate applied ONLY to external carried velocity (tether yanks, knockback, flings). Same carried-velocity scheme as the player: authored AI velocity is re-written every tick, so external impulses must be carried forward and decayed instead of being erased.")]
@@ -63,7 +62,6 @@ public class EnemyController : MonoBehaviour
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
     public float AttackRange => _attackRange;
-    public float GrabBreakoutTime => _grabBreakoutTime;
     public PatrolRoute SafeRoute => _safeRoute;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
@@ -158,7 +156,8 @@ public class EnemyController : MonoBehaviour
     {
         if (_state.Current != Grabbed) return;
 
-        // Grabbed.Exit clears isKinematic; a kinematic body ignores the launch velocity.
+        // Flattened, keeping speed: an upward throw redirects along the floor, so throw
+        // distance depends on the throw's strength, never its angle.
         Ragdoll.Launch(VelocityUtil.Flatten(velocity));
         _state.SetState(Ragdoll);
     }

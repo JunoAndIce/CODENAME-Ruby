@@ -9,9 +9,9 @@ Lifecycle" plans.
 - [x] **Navigation: grid + Dijkstra flow fields** (`1b33a6b`). `PathGrid` per floor, a shared
   chase field toward the player, a per-enemy field for Search, and resting props blocking paths
   through `GridObstacle`. This replaced the NavMesh navigator from `4ab1daf`.
-- [~] **Grab.** Grapple side done: the enemy is retained for the whole tether, a push-throw calls
-  `Release(enemy velocity)`, and any other detach calls `EndGrab()` (goes to Chase until Aggro
-  exists). `GrabbedState` still sets `isKinematic`, so the rope can't move a grabbed enemy yet.
+- [x] **Grab.** The enemy is retained for the whole tether. A push-throw calls
+  `Release(enemy velocity)`, and any other detach calls `EndGrab()` (which goes to Chase until Aggro
+  exists). `GrabbedState` keeps the body dynamic, so the rope drags it.
 - [x] **Patrol:** a Safe route of **area nodes** stored on each enemy, with Scene-view authoring
   (`6026559`), walked with A* (`GridPathfinder`). Unreachable points are skipped with a warning.
 - [ ] Cautious state and Cautious route (reuses the patrol code)
@@ -241,11 +241,10 @@ waypoints. Each point is now an **area**, a centre plus a radius:
   - `Detach(..., thrown)`: a push-throw calls `Release(enemy.Body.linearVelocity)`, because
     `Tether.Push` already split the impulse. Any other detach calls `EndGrab()`.
   - `GrappleNode.EnemyTarget` is cached in `Awake`.
-- To do:
-  - `GrabbedState`: **remove `isKinematic = true`** so `Tether.Solve` can move the body (it follows
-    at max chain length). Call `Stop()` on `Enter`.
-  - Remove the unused `_breakoutTimer` and `_grabBreakoutTime` (the spec has no break-out).
-  - Point `EndGrab()` at Aggro once Aggro exists.
+  - `GrabbedState` keeps the body **dynamic**, so `Tether.Solve` drags it at max chain length. It
+    calls `Stop()` on `Enter` so no leftover walk speed is carried into the grab.
+  - The unused break-out timer is removed (the spec has no break-out).
+- To do with Aggro: point `EndGrab()` at Aggro instead of Chase.
 
 ### 9. Controller housekeeping
 
