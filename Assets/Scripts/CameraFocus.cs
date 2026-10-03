@@ -1,6 +1,14 @@
 using UnityEngine;
 
-
+/// <summary>
+/// The top-down camera rig. A proxy point follows the player, leaning toward the cursor; the
+/// camera hangs above it. This script places both itself and the camera every LateUpdate, on
+/// purpose: two scripts would race over which moves first.
+///
+/// Normal play leans a little toward the cursor. Peek throws the view out to the frame's edge in
+/// the cursor's direction and zooms out to Peek Height. How far the view may lean is derived from
+/// the camera every frame, never serialized, so no zoom or aspect can push the player off screen.
+/// </summary>
 public class CameraFocus : MonoBehaviour
 {
     [SerializeField] private PlayerController _player;
@@ -9,13 +17,17 @@ public class CameraFocus : MonoBehaviour
     [Header("Lead")]
     [Tooltip("Normal play: how far the view leans toward the cursor, as a fraction of the cursor's distance.")]
     [SerializeField] private float _leadFraction = 0.08f;
+    [Tooltip("Follow smoothing in normal play, roughly the seconds the view takes to catch up.")]
     [SerializeField] private float _damping = 0.25f;
     [Tooltip("Smoothing while peeking. Lower than Damping, so Shift throws the view out fast.")]
     [SerializeField] private float _peekDamping = 0.08f;
 
     [Header("Height")]
+    [Tooltip("Camera height above the player. An orthographic camera shows its own Size at this height.")]
     [SerializeField] private float _camHeight = 20f;
+    [Tooltip("Height while peeking. Peek Height / Cam Height is the zoom-out, for either projection.")]
     [SerializeField] private float _peekHeight = 28f;
+    [Tooltip("Smoothing of the zoom in and out.")]
     [SerializeField] private float _heightDamping = 0.4f;
 
     [Header("Framing")]
@@ -23,44 +35,55 @@ public class CameraFocus : MonoBehaviour
     [Range(0f, 0.5f)]
     [SerializeField] private float _playerMargin = 0.25f;
 
-    private Vector3 _velocity;
+    private Vector3 _followVelocity;
     private float _currentHeight;
     private float _heightVelocity;
     // Kept while the cursor sits right on the player, so a peek never snaps to "no direction".
     private Vector3 _peekDirection = Vector3.forward;
-
-   // Current height of the camera after Awake, call this value to always get the current height
-    public float Height => _currentHeight;
+    // The orthographic Size authored on the camera, at Cam Height. Height scales it from here.
+    private float _baseOrthoSize;
 
     private void Awake()
     {
         if (_player == null) _player = FindAnyObjectByType<PlayerController>();
         if (_camera == null) _camera = FindAnyObjectByType<Camera>();
+        if (_player == null || _camera == null)
+        {
+            Debug.LogError($"{name} needs a player and a camera — camera rig disabled.", this);
+            enabled = false;
+            return;
+        }
 
+        _baseOrthoSize = _camera.orthographicSize;
         _currentHeight = _camHeight;
-
         transform.position = _player.transform.position;
     }
 
     private void LateUpdate()
     {
-        if (_player == null) return;
-
-        // Peeking is only allowed when the player is not holding onto another enemy or object and when the peek button is held.
+        // No peeking while holding something: the hold owns the camera.
         bool peeking = _player.PeekHeld && _player.ActionState != PlayerState.Holding;
 
-        // SmoothDamp to the current height depending on if the player is peeking.
         _currentHeight = Mathf.SmoothDamp(_currentHeight, peeking ? _peekHeight : _camHeight, ref _heightVelocity, _heightDamping);
 
+        Vector3 target = _player.transform.position + Lead(peeking);
+        transform.position = Vector3.SmoothDamp(transform.position, target, ref _followVelocity, peeking ? _peekDamping : _damping);
+
+        PlaceCamera();
+    }
+
+    private Vector3 Lead(bool peeking)
+    {
         Vector3 toAim = _player.AimPoint - _player.transform.position;
         toAim.y = 0f;
-        Vector3 lead = peeking ? PeekLead(toAim) : ClampToFrame(toAim * _leadFraction);
+        return peeking ? PeekLead(toAim) : ClampToFrame(toAim * _leadFraction);
+    }
 
-        transform.position = Vector3.SmoothDamp(transform.position, _player.transform.position + lead, ref _velocity,
-            peeking ? _peekDamping : _damping);
-
-        if (_camera != null)
-            _camera.transform.position = transform.position + Vector3.up * _currentHeight;
+    private void PlaceCamera()
+    {
+        _camera.transform.position = transform.position + Vector3.up * _currentHeight;
+        // Moving an orthographic camera up doesn't zoom it, so height drives its Size instead.
+        if (_camera.orthographic) _camera.orthographicSize = OrthoSizeAt(_currentHeight);
     }
 
     // Peek: always out to the frame's edge in the cursor's direction. Only the direction counts,
@@ -91,18 +114,22 @@ public class CameraFocus : MonoBehaviour
     }
 
     // Half the visible floor along screen right and up, less Player Margin: the furthest the view
-    // can lean each way while the player stays on screen. Derived from the FOV and height, never
-    // serialized, so a different height or aspect can't push the player off screen.
+    // can lean each way while the player stays on screen.
     private Vector2 LeadLimits(float height)
     {
-        if (_camera == null) return Vector2.zero;
-
-        // Orthographic: the view's size is set directly and height doesn't zoom.
         float halfHeight = _camera.orthographic
-            ? _camera.orthographicSize
+            ? OrthoSizeAt(height)
             : height * Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
         float keep = 1f - _playerMargin;
         return new Vector2(halfHeight * _camera.aspect * keep, halfHeight * keep);
+    }
+
+    // Orthographic Size (half the view's height) at a given camera height: the authored Size at
+    // Cam Height, scaled by height. Before Awake (editor gizmos) the camera's own Size is the base.
+    private float OrthoSizeAt(float height)
+    {
+        float baseSize = _baseOrthoSize > 0f ? _baseOrthoSize : _camera.orthographicSize;
+        return _camHeight > 0f ? baseSize * height / _camHeight : baseSize;
     }
 
     // The screen's right and up, laid flat on the floor. Read from the camera rather than assumed
