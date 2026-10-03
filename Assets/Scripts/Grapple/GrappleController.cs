@@ -34,7 +34,7 @@ using UnityEngine.InputSystem;
 /// The gun stands down while the chain is attached (and on the frame a push
 /// consumed the trigger): the chain owns the trigger.
 /// </summary>
-[RequireComponent(typeof(PlayerController))]
+[RequireComponent(typeof(Rigidbody), typeof(PlayerInput))]
 [DefaultExecutionOrder(-50)]   // solve the chain before the player re-authors its velocity
 public class GrappleController : MonoBehaviour
 {
@@ -65,13 +65,13 @@ public class GrappleController : MonoBehaviour
     /// also detaches) — lets the gun stand down on that same click.</summary>
     public bool ConsumedTriggerThisFrame => Time.frameCount == _triggerConsumedFrame;
 
-    PlayerController _player;
+    IGrappleUser _user;          // the wielder: aim, trigger, and a push channel its movement won't erase
     PlayerInput _input;
     Rigidbody _body;
     Tether _tether;
     WhipChain _whip;             // physical tendril: launches, lands, then rides the tether
     GrappleNode _pendingNode;    // node the flying whip will land on (tether starts on landing)
-    EnemyController _grabbedEnemy;   // held for the tether's lifetime: node destruction must not erase the release target
+    IGrabbable _grabbed;         // held for the tether's lifetime: node destruction must not erase the release target
     float _pendingLength;        // rope length locked at launch, used until the whip lands
     bool _triggerWasHeld;
     bool _throwReelArmed = true;   // hold-to-reel only engages from a press made AFTER the attach click
@@ -98,7 +98,13 @@ public class GrappleController : MonoBehaviour
 
     void Awake()
     {
-        _player = GetComponent<PlayerController>();
+        _user = GetComponent<IGrappleUser>();
+        if (_user == null)
+        {
+            Debug.LogError($"{name} has no IGrappleUser beside its GrappleController — grapple disabled.", this);
+            enabled = false;
+            return;
+        }
         _body = GetComponent<Rigidbody>();
         _input = GetComponent<PlayerInput>();
         if (_chain == null) _chain = GetComponentInChildren<LineRenderer>();
@@ -156,7 +162,7 @@ public class GrappleController : MonoBehaviour
             // q / left bumper held = continuous reel (movement tech).
             if (_input.actions["Pull"].IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
 
-            bool trigger = _player.TriggerPressed;
+            bool trigger = _user.TriggerPressed;
             if (trigger && !_triggerWasHeld) Push();
             _triggerWasHeld = trigger;
         }
@@ -222,7 +228,7 @@ public class GrappleController : MonoBehaviour
         UpdateWraps();
         _whip.Step(_body.worldCenterOfMass, _tether.Anchor, _tether.Length, _wraps);
 
-        _tether.Solve(_player.AimPoint, _wraps);
+        _tether.Solve(_user.AimPoint, _wraps);
         float tension = _tether.Tension;
         _tether.Node.ReportTension(tension);
 
@@ -264,7 +270,7 @@ public class GrappleController : MonoBehaviour
 
     Vector3 AimDirection()
     {
-        Vector3 aimDir = _player.AimPoint - transform.position;
+        Vector3 aimDir = _user.AimPoint - transform.position;
         aimDir.y = 0f;
         if (aimDir.sqrMagnitude < 0.0001f) aimDir = transform.forward;
         return aimDir.normalized;
@@ -305,14 +311,14 @@ public class GrappleController : MonoBehaviour
         // servo tugs you back instead); running toward shortens it — the whip lands
         // taut at whichever is shorter. Min = park radius, max = attach range.
         float len = Mathf.Clamp(Mathf.Min(dist, _pendingLength), _minChainLength, _maxChainLength);
-        _tether = new Tether(_body, _player.AddExternalVelocity, node, len, _minChainLength, _maxChainLength);
+        _tether = new Tether(_body, _user.AddExternalVelocity, node, len, _minChainLength, _maxChainLength);
         _pendingNode = null;
 
-        EnemyController enemy = node.EnemyTarget;
-        if (enemy != null && !enemy.Health.IsDead)
+        IGrabbable target = node.Grabbable;
+        if (target != null && target.CanBeGrabbed)
         {
-            _grabbedEnemy = enemy;
-            enemy.EnterGrabbed();
+            _grabbed = target;
+            target.EnterGrabbed();
         }
 
         TetherLog.Event($"ATTACH  whip landed {_tether.Describe()} dist={_tether.AttachDistance:F1}");
@@ -356,10 +362,10 @@ public class GrappleController : MonoBehaviour
         Vector3 dir = Vector3.zero;
         if (_tether.Node != null)
         {
-            dir = _player.AimPoint - _tether.Node.AnchorPoint;
+            dir = _user.AimPoint - _tether.Node.AnchorPoint;
             dir.y = 0f;
         }
-        if (dir.sqrMagnitude < 0.0001f) dir = _player.AimPoint - transform.position;   // fallback: aim from player
+        if (dir.sqrMagnitude < 0.0001f) dir = _user.AimPoint - transform.position;   // fallback: aim from player
         dir.y = 0f;
         if (dir.sqrMagnitude < 0.0001f) dir = transform.forward;
 
@@ -396,13 +402,13 @@ public class GrappleController : MonoBehaviour
         _pendingPullCrack = false;
         _crackTimer = 0f;
 
-        if (_grabbedEnemy != null)
+        if (_grabbed != null)
         {
-            // Tether.Push has already split the impulse onto the host, so the enemy's own
-            // velocity IS the throw. Anything else (node destroyed) is a drop, not a throw.
-            if (thrown) _grabbedEnemy.Release(_grabbedEnemy.Body.linearVelocity);
-            else _grabbedEnemy.EndGrab();
-            _grabbedEnemy = null;
+            // Tether.Push has already split the impulse onto the host, so its own velocity
+            // IS the throw. Anything else (node destroyed) is a drop, not a throw.
+            if (thrown) _grabbed.Release(_grabbed.Body.linearVelocity);
+            else _grabbed.EndGrab();
+            _grabbed = null;
         }
         if (_tether.Node != null) _tether.Node.IsOccupied = false;
 

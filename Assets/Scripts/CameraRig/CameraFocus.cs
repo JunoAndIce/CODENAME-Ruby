@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// The top-down camera rig. A proxy point follows the player, leaning toward the cursor; the
@@ -11,7 +12,9 @@ using UnityEngine;
 /// </summary>
 public class CameraFocus : MonoBehaviour
 {
-    [SerializeField] private PlayerController _player;
+    [Tooltip("What the camera follows: any component implementing ICameraTarget (the PlayerController). Empty = the first one found.")]
+    [FormerlySerializedAs("_player")]
+    [SerializeField] private MonoBehaviour _target;
     [SerializeField] private Camera _camera;
 
     [Header("Lead")]
@@ -35,6 +38,7 @@ public class CameraFocus : MonoBehaviour
     [Range(0f, 0.5f)]
     [SerializeField] private float _playerMargin = 0.25f;
 
+    private ICameraTarget _follow;
     private Vector3 _followVelocity;
     private float _currentHeight;
     private float _heightVelocity;
@@ -45,28 +49,43 @@ public class CameraFocus : MonoBehaviour
 
     private void Awake()
     {
-        if (_player == null) _player = FindAnyObjectByType<PlayerController>();
+        _follow = _target as ICameraTarget ?? FindTarget();
         if (_camera == null) _camera = FindAnyObjectByType<Camera>();
-        if (_player == null || _camera == null)
+        if (_follow == null || _camera == null)
         {
-            Debug.LogError($"{name} needs a player and a camera — camera rig disabled.", this);
+            Debug.LogError($"{name} needs an ICameraTarget and a camera — camera rig disabled.", this);
             enabled = false;
             return;
         }
 
         _baseOrthoSize = _camera.orthographicSize;
         _currentHeight = _camHeight;
-        transform.position = _player.transform.position;
+        transform.position = _follow.Position;
+    }
+
+    private void OnValidate()
+    {
+        if (_target != null && _target is not ICameraTarget)
+        {
+            Debug.LogWarning($"{_target.name}'s {_target.GetType().Name} isn't an ICameraTarget — cleared.", this);
+            _target = null;
+        }
+    }
+
+    private static ICameraTarget FindTarget()
+    {
+        foreach (MonoBehaviour behaviour in FindObjectsByType<MonoBehaviour>())
+            if (behaviour is ICameraTarget target) return target;
+        return null;
     }
 
     private void LateUpdate()
     {
-        // No peeking while holding something: the hold owns the camera.
-        bool peeking = _player.PeekHeld && _player.ActionState != PlayerState.Holding;
+        bool peeking = _follow.WantsPeek;
 
         _currentHeight = Mathf.SmoothDamp(_currentHeight, peeking ? _peekHeight : _camHeight, ref _heightVelocity, _heightDamping);
 
-        Vector3 target = _player.transform.position + Lead(peeking);
+        Vector3 target = _follow.Position + Lead(peeking);
         transform.position = Vector3.SmoothDamp(transform.position, target, ref _followVelocity, peeking ? _peekDamping : _damping);
 
         PlaceCamera();
@@ -74,7 +93,7 @@ public class CameraFocus : MonoBehaviour
 
     private Vector3 Lead(bool peeking)
     {
-        Vector3 toAim = _player.AimPoint - _player.transform.position;
+        Vector3 toAim = _follow.AimPoint - _follow.Position;
         toAim.y = 0f;
         return peeking ? PeekLead(toAim) : ClampToFrame(toAim * _leadFraction);
     }
@@ -142,16 +161,18 @@ public class CameraFocus : MonoBehaviour
 
     private void OnDrawGizmosSelected()
     {
-        if (_player == null || _camera == null) return;
+        // Before Awake (edit mode) the target is only the serialized reference.
+        ICameraTarget target = _follow ?? _target as ICameraTarget;
+        if (target == null || _camera == null) return;
 
         Gizmos.color = Color.green;
-        Gizmos.DrawLine(_player.transform.position, transform.position);
+        Gizmos.DrawLine(target.Position, transform.position);
         Gizmos.DrawWireSphere(transform.position, 0.3f);
 
         // The furthest the view can lean: a rectangle around the player.
         ScreenAxes(out Vector3 right, out Vector3 up);
         Vector2 limits = LeadLimits(_currentHeight > 0f ? _currentHeight : _camHeight);
-        Vector3 centre = _player.transform.position;
+        Vector3 centre = target.Position;
         Vector3 a = centre + right * limits.x + up * limits.y;
         Vector3 b = centre - right * limits.x + up * limits.y;
         Vector3 c = centre - right * limits.x - up * limits.y;

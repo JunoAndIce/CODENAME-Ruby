@@ -2,7 +2,7 @@ using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(Health))]
-public class EnemyController : MonoBehaviour
+public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
 {
     // CONFIGURABLE VALUES
     [Header("Movement")]
@@ -44,7 +44,7 @@ public class EnemyController : MonoBehaviour
     public Rigidbody Body { get; private set; }
     public Health Health { get; private set; }
     public IRagdollBody RagdollBody { get; private set; }
-    public EnemyNavigator Navigator { get; private set; }
+    public GridNavigator Navigator { get; private set; }
     public IdleState Idle { get; private set; }
     public PatrolState Patrol { get; private set; }
     public SearchingState Searching { get; private set; }
@@ -92,7 +92,7 @@ public class EnemyController : MonoBehaviour
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
         RagdollBody = ragdoll;
-        Navigator = new EnemyNavigator(this);
+        Navigator = new GridNavigator(this);
 
         Idle = new IdleState(this);
         Patrol = new PatrolState(this);
@@ -152,6 +152,8 @@ public class EnemyController : MonoBehaviour
         if (_state.Current is GrabbedState or RagdollState or DeadState) return;
         _state.SetState(Aggro);
     }
+
+    public bool CanBeGrabbed => !Health.IsDead;
 
     public void EnterGrabbed() => _state.SetState(Grabbed);
 

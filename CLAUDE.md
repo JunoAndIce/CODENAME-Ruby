@@ -26,32 +26,66 @@ The editor for this project version is at `E:\Unity\6000.5.10f1\Editor\Unity.exe
 & "E:\Unity\6000.5.10f1\Editor\Unity.exe" -runTests -batchmode -projectPath "E:\Unity\Projects\CODENAME-Ruby" -testPlatform PlayMode -testResults "$env:TEMP\results.xml"
 ```
 
-With the editor open, compile-check from Git Bash with Unity's bundled Roslyn instead (add the
-`UnityEditor.CoreModule` and `UnityEngine.IMGUIModule` references when checking `Assets/Scripts/Editor`):
+With the editor open (or closed), use the offline check instead. Use `python`, not `python3`, here:
+on this machine `python3` is the Windows Store stub.
 
 ```bash
-U="E:/Unity/6000.5.10f1/Editor/Data"; M="$U/MonoBleedingEdge/lib/mono/unityjit-win32"; E="$U/Managed/UnityEngine"
-DOTNET_ROOT="$U/NetCoreRuntime" "$U/NetCoreRuntime/dotnet.exe" "$U/DotNetSdk/sdk/8.0.318/Roslyn/bincore/csc.dll" \
-  -t:library -noconfig -nostdlib+ -nologo -out:"$TEMP/cc.dll" \
-  -r:"$M/mscorlib.dll" -r:"$M/Facades/netstandard.dll" -r:"$M/Facades/System.Runtime.dll" -r:"$M/System.Core.dll" \
-  -r:"$E/UnityEngine.CoreModule.dll" -r:"$E/UnityEngine.PhysicsModule.dll" -r:"$E/UnityEngine.InputLegacyModule.dll" \
-  -r:"$E/UnityEngine.AnimationModule.dll" -r:"Library/ScriptAssemblies/Unity.InputSystem.dll" \
-  $(find Assets/Scripts -name '*.cs' -not -path '*/Editor/*')
+python tools/compile_check.py
 ```
 
-(`tools/compile-check.sh` is the same idea with Linux editor paths.)
+It compiles each assembly (see **Assemblies** below) on its own, in dependency order, with only the
+references its `.asmdef` declares, using the editor's bundled Roslyn at C# 9 against .NET Standard
+2.1, as Unity does. It runs two passes:
 
-**There are no tests and no `.asmdef` files.** `com.unity.test-framework` is installed but nothing
-uses it; all scripts compile into the default `Assembly-CSharp`. Adding tests requires an asmdef
-restructure, which `docs/specs/2026-09-03-chain-grab-foundation.md` defers to slice 5. The pathing
-code (`Assets/Scripts/Pathing/`) is pure logic and the natural first candidate for EditMode tests.
-Don't claim a change is "tested" — verification here means compiling and playing the scene.
+- **editor**: every assembly, with `UnityEditor` and `UNITY_EDITOR`.
+- **player**: runtime assemblies without either, as a build compiles them.
+
+So a script that crosses an assembly boundary, or editor code left unguarded in a runtime assembly,
+fails here the way it would in Unity. It finds the editor through `ProjectVersion.txt` and Unity
+Hub, or `UNITY_EDITOR=/path/to/Editor/Data`. It reads package assemblies from
+`Library/ScriptAssemblies`, so the project must have been opened in Unity once. Exit 0 means
+everything compiles.
+
+**There are no tests yet.** `com.unity.test-framework` is installed but nothing uses it. Now that
+the code is split into assemblies, an EditMode test assembly can reference `Ruby.Pathing` directly.
+It's pure logic and the natural first candidate. Don't claim a change is "tested": verification
+here means compiling and playing the scene.
 
 Scene and prefab wiring lives in YAML that is impractical to hand-edit. When a change needs
 Inspector work (assigning a reference, adding a component, retuning a serialized value), say so and
 leave it to the user rather than patching `.unity`/`.prefab` files.
 
 ## Architecture
+
+### Assemblies
+
+The scripts are split into assembly definitions so the systems can be lifted into another game.
+**Dependencies point one way: the reusable systems know nothing about this game.**
+
+| Assembly | Folder (under `Assets/Scripts/`) | References | Holds |
+| --- | --- | --- | --- |
+| `Ruby.Core` | `Core/` | none | state machine, `Health`, `VelocityUtil`, ragdoll seam, pooling |
+| `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, patrol routes |
+| `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
+| `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
+| `Ruby.Game` | the root and `States/` | all of the above, Input System | player, enemy, gun, bullets, animator, every state |
+| `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor` |
+
+The systems reach the game only through interfaces declared in their own assembly, which the
+game implements:
+
+| Interface | Declared in | Implemented by | What the system needs from it |
+| --- | --- | --- | --- |
+| `IGrappleUser` | Grapple | `PlayerController` | aim, the trigger, a push channel |
+| `IGrabbable` | Grapple | `EnemyController` | grab, drag and throw it |
+| `IPathAgent` | Pathing | `EnemyController` | a body for `GridNavigator` to steer |
+| `ICameraTarget` | CameraRig | `PlayerController` | a position, an aim point, peek |
+
+**Never make a system reference `Ruby.Game`.** Unity refuses the cycle anyway. When a system needs
+something from the game, add it to the system's interface and implement it in the game. A new script
+goes in the folder of the assembly it belongs to; anything that needs game types belongs in
+`Ruby.Game`. Serialized references to the interfaces are typed as `MonoBehaviour` and checked in
+`OnValidate` (see `CameraFocus._target`), because Unity can't serialize an interface field.
 
 ### The two-axis rule
 
@@ -72,7 +106,7 @@ The player's chain-axis states are currently **disconnected scaffolding**: the r
 
 ### The state machine
 
-[StateMachine.cs](Assets/Scripts/States/StateMachine.cs) is generic and shared by player and enemy.
+[StateMachine.cs](Assets/Scripts/Core/StateMachine/StateMachine.cs) is generic and shared by player and enemy.
 It keys nodes **by `Type`**, so there is exactly one instance per state class per machine — state
 objects are constructed once in `Awake` and reused, never allocated per transition.
 
@@ -108,13 +142,15 @@ the gun. While the chain is attached the chain owns the trigger (`GrappleControl
 
 `PlayerController` computes `_aimPoint` in **both** control-scheme branches — mouse via a
 ground-plane raycast, gamepad synthesised as `position + forward * _gamepadAimDistance` — so
-consumers never branch on control scheme. `CameraFocus` and `GrappleController` both use it.
+consumers never branch on control scheme. `CameraFocus` and `GrappleController` both read it,
+through `ICameraTarget` and `IGrappleUser`.
 
 ### Camera
 
-[CameraFocus.cs](Assets/Scripts/CameraFocus.cs) is a proxy GameObject that, in `LateUpdate`,
-positions **both itself and the camera** (deliberately, to avoid undefined ordering between two
-scripts). The Main Camera is **orthographic**: Size 6.25 (a 12.5 m tall view) is Hotline Miami 2's
+[CameraFocus.cs](Assets/Scripts/CameraRig/CameraFocus.cs) is a proxy GameObject that, in
+`LateUpdate`, positions **both itself and the camera** (deliberately, to avoid undefined ordering
+between two scripts). It follows an `ICameraTarget`: its Target field, or the first one in the
+scene when that's empty. The Main Camera is **orthographic**: Size 6.25 (a 12.5 m tall view) is Hotline Miami 2's
 framing, measured from the Police Station, where a character fills about 1/12.5 of the screen.
 
 - Normal play leans slightly toward `AimPoint` (Lead Fraction), smoothed by `SmoothDamp` — that
@@ -143,17 +179,18 @@ and the input map live in `docs/design/grapple-ux.md`.
 `Tether` is a **velocity constraint, not a joint**: each physics step it enforces rope length by
 adding inverse-mass-weighted velocity to both ends, so tug-of-war falls out of plain Rigidbody mass
 and tension reads out as the corrective impulse. The rope catches on geometry (wrap pivots found by
-linecasts). Writes to the **player** go through a `pushPlayer` callback (`PlayerController.AddExternalVelocity`),
+linecasts). Writes to the **player** go through a `pushPlayer` callback (`IGrappleUser.AddExternalVelocity`),
 because the player's movement is re-authored every step and would erase a raw velocity write; writes
 to the host go straight onto its Rigidbody.
 
-Grabbing an enemy: `LandWhip` calls `EnterGrabbed()` (live enemies only) and the controller keeps the
-enemy for the whole tether. A push-throw calls `Release(enemy velocity)` — `Tether.Push` has already
-split the impulse onto it — and any other detach calls `EndGrab()`.
+Grabbing: a node grabs the `IGrabbable` on it or above it in the hierarchy (the enemy). `LandWhip` calls
+`EnterGrabbed()` when `CanBeGrabbed` (live enemies only), and the controller keeps it for the whole
+tether. A push-throw calls `Release(its velocity)`, because `Tether.Push` has already split the
+impulse onto it. Any other detach calls `EndGrab()`.
 
 ### Movement velocity
 
-The game is 2D feel on a 3D physics stack. [VelocityUtil.cs](Assets/Scripts/VelocityUtil.cs) owns
+The game is 2D feel on a 3D physics stack. [VelocityUtil.cs](Assets/Scripts/Core/VelocityUtil.cs) owns
 how characters author movement:
 
 - **The player** rewrites its velocity every physics step as **movement input + external velocity**.
@@ -204,7 +241,8 @@ A\* for individual ones**:
   a searcher floods its own field once.
 - **`GridPathfinder`** (A\*, octile heuristic, integer costs 10/14, no corner cutting): patrol legs,
   cached and re-planned when the grid changes or the enemy is knocked off its route.
-- **`EnemyNavigator`** ties them together. There are **no silent fallbacks**: chase and search stop
+- **`GridNavigator`** ties them together and moves any `IPathAgent`: it plans, and the agent steers
+  (facing, velocity scheme). There are **no silent fallbacks**: chase and search stop
   and log one warning saying why; area moves report Blocked/Unreachable, and patrol skips that point
   with a warning. Grid line of sight ignores the cell the agent already stands in, which near a wall
   is clearance-blocked.
@@ -241,9 +279,8 @@ the chain states.
 
 ## Conventions
 
-- **No namespaces**, anywhere. Flat `Assets/Scripts/` with state classes in `Assets/Scripts/States/`,
-  pathing in `Assets/Scripts/Pathing/`, the grapple in `Assets/Scripts/Grapple/`, and editor tooling
-  in `Assets/Scripts/Editor/`.
+- **No namespaces**, anywhere. Folders follow the assemblies (see **Assemblies**); state classes live
+  in `Assets/Scripts/States/`, and the generic machine they run on is in `Core/StateMachine/`.
 - Private serialized fields as `[SerializeField] private float _name`; expose read-only via
   expression-bodied properties (`public float ChaseSpeed => _chaseSpeed;`). A few older public fields
   (`PlayerController._moveSpeed`, `GunController._bulletSpeed`) predate this and haven't been migrated.

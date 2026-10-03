@@ -4,17 +4,17 @@ using UnityEngine;
 public enum NavResult { Moving, Arrived, Blocked, Unreachable }
 
 /// <summary>
-/// Moves an enemy over the PathGrid of the floor it stands on.
+/// Moves an IPathAgent over the PathGrid of the floor it stands on.
 /// Shared goals use Dijkstra flow fields: chasers read their floor's shared field toward the
-/// player, so chase cost doesn't grow with enemy count, and a fixed point (search) gets this
-/// enemy's own field, flooded once. Individual goals (patrol areas) use A*, one search per
-/// leg, cached. A clear straight line skips both. Steering goes through
-/// EnemyController.MoveToward, so the carried-velocity scheme holds.
+/// target, so chase cost doesn't grow with the number of chasers, and a fixed point (search)
+/// gets this agent's own field, flooded once. Individual goals (patrol areas) use A*, one search
+/// per leg, cached. A clear straight line skips both. The navigator only plans; the agent's own
+/// MoveToward does the moving, so each kind of character keeps its own movement rules.
 ///
 /// No silent fallbacks: chase and search stop with a warning saying why; area moves report
 /// Blocked or Unreachable with a FailureReason and let the caller decide (patrol skips).
 /// </summary>
-public class EnemyNavigator
+public class GridNavigator
 {
     private const float ArriveDistance = 0.5f;
     private const float RefloodShift = 0.25f;   // a point goal this close to the last flood reuses it
@@ -25,7 +25,7 @@ public class EnemyNavigator
     // What the last move followed, for the debug line.
     private enum Followed { Nothing, Line, Field, Route }
 
-    private readonly EnemyController _enemy;
+    private readonly IPathAgent _agent;
     private string _lastWarning;
 
     // Search: this enemy's own field, flooded from its point.
@@ -50,7 +50,7 @@ public class EnemyNavigator
     private FlowField _field;
     private readonly List<Vector3> _trace = new();
 
-    public EnemyNavigator(EnemyController enemy) => _enemy = enemy;
+    public GridNavigator(IPathAgent agent) => _agent = agent;
 
     /// <summary>Why the last area move came back Blocked or Unreachable.</summary>
     public string FailureReason { get; private set; }
@@ -60,7 +60,7 @@ public class EnemyNavigator
     {
         get
         {
-            Vector3 from = _enemy.Body.position;
+            Vector3 from = _agent.Body.position;
             switch (_followed)
             {
                 case Followed.Line:
@@ -124,7 +124,7 @@ public class EnemyNavigator
             return NavResult.Unreachable;
         }
 
-        Vector3 position = _enemy.Body.position;
+        Vector3 position = _agent.Body.position;
 
         // A gap of more than a physics step means the walk was interrupted (a pause, a chase, a
         // throw): the cached route starts from somewhere the enemy no longer is.
@@ -148,13 +148,13 @@ public class EnemyNavigator
         if (!_routeOk)
         {
             _followed = Followed.Nothing;
-            _enemy.Stop();
+            _agent.Stop();
             return NavResult.Unreachable;
         }
 
         if (FlatDistance(position, _goalPoint) <= ArriveDistance)
         {
-            _enemy.Stop();
+            _agent.Stop();
             return NavResult.Arrived;
         }
 
@@ -170,11 +170,11 @@ public class EnemyNavigator
 
         if (FlatDistance(position, centre) <= radius)
         {
-            _enemy.Stop();
+            _agent.Stop();
             return NavResult.Arrived;
         }
 
-        FailureReason = $"blocked: no progress for {_enemy.StuckTime:0.#}s, {remaining:0.0}m short of the area";
+        FailureReason = $"blocked: no progress for {_agent.StuckTime:0.#}s, {remaining:0.0}m short of the area";
         return NavResult.Blocked;
     }
 
@@ -237,16 +237,16 @@ public class EnemyNavigator
         }
 
         _stuckTimer += Time.fixedDeltaTime;
-        return _stuckTimer >= _enemy.StuckTime;
+        return _stuckTimer >= _agent.StuckTime;
     }
 
     private void Follow(PathGrid grid, FlowField field, Vector3 goal, float speed)
     {
-        Vector3 position = _enemy.Body.position;
+        Vector3 position = _agent.Body.position;
         if (FlatDistance(position, goal) <= ArriveDistance || field.IsAtGoal(position))
         {
             _followed = Followed.Nothing;
-            _enemy.Stop();
+            _agent.Stop();
             return;
         }
 
@@ -273,15 +273,15 @@ public class EnemyNavigator
     {
         _followed = followed;
         _lastWarning = null;
-        _enemy.MoveToward(target, speed);
+        _agent.MoveToward(target, speed);
     }
 
     private bool TryGetGrid(out PathGrid grid)
     {
-        grid = PathGrid.At(_enemy.Body.position);
+        grid = PathGrid.At(_agent.Body.position);
         if (grid != null) return true;
 
-        Fail($"is not on any PathGrid at {_enemy.Body.position} — standing still.");
+        Fail($"is not on any PathGrid at {_agent.Body.position} — standing still.");
         return false;
     }
 
@@ -289,8 +289,10 @@ public class EnemyNavigator
     private void Fail(string why)
     {
         _followed = Followed.Nothing;
-        _enemy.Stop();
-        if (why != _lastWarning) Debug.LogWarning($"{_enemy.name}: {why}", _enemy);
+        _agent.Stop();
+        // Agents are normally components: name them, and let a click on the log select them.
+        Object context = _agent as Object;
+        if (why != _lastWarning) Debug.LogWarning($"{(context != null ? context.name : "agent")}: {why}", context);
         _lastWarning = why;
     }
 

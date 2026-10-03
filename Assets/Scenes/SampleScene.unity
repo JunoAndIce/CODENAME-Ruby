@@ -3199,7 +3199,7 @@ MonoBehaviour:
   _agentRadius: 0.35
   _agentHeight: 2
   _floorClearance: 0.1
-  _maxFlowDistance: 40
+  _maxFlowDistance: 90
 --- !u!1 &597591781
 GameObject:
   m_ObjectHideFlags: 0
@@ -7001,7 +7001,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d3a0b177ac05fb745bc511bad64a4302, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraFocus
-  _player: {fileID: 597591786}
+  _target: {fileID: 597591786}
   _camera: {fileID: 330585545}
   _leadFraction: 0.15
   _damping: 0.15

@@ -43,8 +43,8 @@ public class GrappleNode : MonoBehaviour
     public Rigidbody Host { get; private set; }
     public bool IsStaticWorld => Host == null || Host.isKinematic;
     public bool IsOccupied { get; internal set; }
-    /// <summary>The enemy this node hangs off, if any. Null for world and props.</summary>
-    public EnemyController EnemyTarget { get; private set; }
+    /// <summary>What this node lets the grapple grab, if anything (an enemy). Null for world and props.</summary>
+    public IGrabbable Grabbable { get; private set; }
 
     public Vector3 AnchorPoint => transform.position;
 
@@ -58,7 +58,7 @@ public class GrappleNode : MonoBehaviour
     private void Awake()
     {
         Host = GetComponentInParent<Rigidbody>();
-        EnemyTarget = GetComponentInParent<EnemyController>();
+        Grabbable = GetComponentInParent<IGrabbable>();
     }
 
     public void ReportTension(float force) => OnTension?.Invoke(this, force);
