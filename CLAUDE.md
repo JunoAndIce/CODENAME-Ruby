@@ -82,7 +82,7 @@ game implements:
 
 | Interface | Declared in | Implemented by | What the system needs from it |
 | --- | --- | --- | --- |
-| `IGrappleUser` | Grapple | `PlayerController` | aim, the trigger, a push channel |
+| `IGrappleUser` | Grapple | `PlayerController` | aim, a push channel |
 | `IGrabbable` | Grapple | `EnemyController` | grab, drag and throw it |
 | `IPathAgent` | Pathing | `EnemyController` | a body for `GridNavigator` to steer |
 | `ICameraTarget` | CameraRig | `PlayerController` | a position, an aim point, peek |
@@ -180,13 +180,13 @@ Cinemachine 3 is in the manifest and a `CinemachineBrain` sits on Main Camera, b
 ### Grapple
 
 `GrappleController` (player side) launches a physical whip (`WhipChain`, a verlet tendril) at the
-best `GrappleNode` in the aim cone; node targeting scans the static `GrappleNode.All` registry with
-distance and cone math, no physics calls. When the whip lands, a `Tether` takes over. Design truths
+best `GrappleNode` in the aim cone (`GrappleNode.FindBest` scans the static `GrappleNode.All` registry
+with distance and cone math, no physics calls). When the whip lands, a `Tether` takes over. Design truths
 and the input map live in `docs/design/grapple-ux.md`.
 
 `Tether` is a **velocity constraint, not a joint**: each physics step it enforces rope length by
 adding inverse-mass-weighted velocity to both ends, so tug-of-war falls out of plain Rigidbody mass
-and tension reads out as the corrective impulse. The rope catches on geometry (wrap pivots found by
+and tension reads out as the corrective impulse. The rope catches on geometry (`RopeWraps`: pivots found by
 linecasts). Writes to the **player** go through a `pushPlayer` callback (`IGrappleUser.AddExternalVelocity`),
 because the player's movement is re-authored every step and would erase a raw velocity write; writes
 to the host go straight onto its Rigidbody.

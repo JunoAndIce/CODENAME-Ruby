@@ -1,41 +1,36 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// A grapple anchor on any host: static world, entity, or prop. Multiple nodes per
-/// object are expected. Carries break strength and tension events; resolves its own
-/// host body (a kinematic or missing body means the node counts as static world).
+/// A grapple anchor on any host: static world, entity, or prop. Multiple nodes per object are
+/// expected. Carries a break strength and resolves its own host body (a kinematic or missing
+/// body means the node counts as static world).
 /// </summary>
 public class GrappleNode : MonoBehaviour
 {
     [Header("Strength")]
-    [SerializeField, Min(1f)] private float _breakStrength = 800f;   // sustained force before tearing free
+    [Tooltip("Tension this node should take before tearing free. The chain itself never breaks: going over this only logs a warning, the tuning data for the later structural-break system (ripping a table apart along its nodes).")]
+    [SerializeField, Min(1f)] private float _breakStrength = 800f;
 
     [Header("Grabbing")]
-    [Tooltip("Stateful allow/deny for this node. Systems (health, timers, enemy AI) flip this at runtime to make a node grabbable or not — e.g. an enemy grabbable only below half health, or a terrain piece on a timer.")]
-    [SerializeField] private bool _grabable = true;
+    [Tooltip("Whether the grapple can attach here right now. Systems (health, timers, enemy AI) flip this at runtime — e.g. an enemy grabbable only below half health, or a terrain piece on a timer.")]
+    [SerializeField] private bool _grabable = true;   // the field keeps its old spelling: scene overrides name it
+
+    /// <summary>All live nodes. The grapple scans this instead of polling FindObjectsByType;
+    /// enable/disable keep it current, and it stays cheap at hundreds-to-thousands of nodes.</summary>
+    public static readonly List<GrappleNode> All = new();
 
     public float BreakStrength => _breakStrength;
 
-    /// <summary>Runtime configuration seam for spawners/systems — no reflection needed.</summary>
-    public void Configure(float breakStrength) => _breakStrength = Mathf.Max(1f, breakStrength);
-
-    /// <summary>All live nodes. Controllers iterate this instead of polling
-    /// FindObjectsByType; the list is maintained by enable/disable and stays cheap
-    /// at hundreds-to-thousands of nodes on a map.</summary>
-    public static readonly System.Collections.Generic.List<GrappleNode> All = new();
-
-    void OnEnable() => All.Add(this);
-    void OnDisable() => All.Remove(this);
-
-    /// <summary>External systems set this false to un-grab this node.</summary>
-    public bool Grabable
+    /// <summary>Whether the grapple can attach here right now (see the field's tooltip).</summary>
+    public bool Attachable
     {
         get => _grabable;
         set
         {
             if (_grabable == value) return;
             _grabable = value;
-            TetherLog.Event($"{name} grabable -> {value}");
+            TetherLog.Event($"{name} attachable -> {value}");
         }
     }
 
@@ -48,20 +43,46 @@ public class GrappleNode : MonoBehaviour
 
     public Vector3 AnchorPoint => transform.position;
 
-    /// <summary>Fires every physics step while tethered, with current tension force.</summary>
-    public event System.Action<GrappleNode, float> OnTension;
-    /// <summary>Future structural-break seam: when a node's tension exceeds its break
-    /// strength, a multi-part object (table = surface + legs) rips apart along its
-    /// nodes. NOT a tether release — the grapple chain always holds.</summary>
-    public event System.Action<GrappleNode, float> OnBreak;
-
-    private void Awake()
+    void Awake()
     {
         Host = GetComponentInParent<Rigidbody>();
         Grabbable = GetComponentInParent<IGrabbable>();
     }
 
-    public void ReportTension(float force) => OnTension?.Invoke(this, force);
+    void OnEnable() => All.Add(this);
+    void OnDisable() => All.Remove(this);
 
-    public void ReportBreak(float force) => OnBreak?.Invoke(this, force);
+    /// <summary>
+    /// The best free node to attach to: the closest one the aim points at, inside range and the
+    /// aim cone. Cheap math only (no physics calls), so scanning scales to hundreds-to-thousands
+    /// of live nodes. Occlusion is deliberately left out: it wasn't earning its cost.
+    /// </summary>
+    public static GrappleNode FindBest(Vector3 origin, Vector3 aimDir, float range, float cone)
+    {
+        GrappleNode best = null;
+        float bestScore = float.MaxValue;
+
+        foreach (GrappleNode node in All)
+        {
+            if (node == null || node.IsOccupied || !node.Attachable) continue;
+
+            Vector3 to = node.AnchorPoint - origin;
+            to.y = 0f;
+            float dist = to.magnitude;
+            if (dist > range || dist < 0.1f) continue;
+
+            float angle = Vector3.Angle(aimDir, to / dist);
+            if (angle > cone) continue;
+
+            // Closest node the player is pointing at: distance weighted by aim offset.
+            float score = dist + angle * (range / 90f);
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = node;
+            }
+        }
+
+        return best;
+    }
 }

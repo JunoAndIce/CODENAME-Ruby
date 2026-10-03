@@ -116,7 +116,7 @@ it never takes the gun either.
   is capped (MaxCorrectionSpeed = 20 m/s) — that cap is the yank ceiling.
 - j-quote: "when a tether is trying to be pulled apart instead of rejecting and keeping a minimum length what if we allow the tether length to grow if force was applied to it but we heavily dampen that force so that the growing feels the the increasing of the length of the tether feels severely limited almost as if the character is like holding back this chain with strength and then failing just a little bit. This is gonna solve a lot of problems that are physics oriented and will allow the players to let out a little more rope instead of having a recast."
 - One dial per verb: `_pullImpulse` (chain bite m/s — hold reels at this rate,
-  a tap is TapSeconds = 0.3 s of it at once) and `_pushImpulse`. Pull tap and
+  a tap is TapSeconds = 0.3 s of it at once) and `_throwImpulse`. Pull tap and
   hold are the same mechanic, just compressed.
 - Pull is two-way: yank a light enemy and it comes to you, a heavy one drags
   you. The throw is one-way since 2026-10-03: it never moves the player (no

@@ -18,9 +18,9 @@ using UnityEngine;
 /// - TAUT FIT: segment rest length is ropeLength / segments, so once both ends
 ///   are pinned the chain straightens into the taut line by itself; reeling
 ///   shrinks the rest length and the reel-in whip-crack emerges for free.
-/// - CORNERS: collision push-out makes the rope wrap obstacles without any
-///   special wrap-point code. (Wrap-aware FORCE redirection is a later Tether
-///   feature; today the wrap is physical/visual only.)
+/// - CORNERS: where the rope is caught (RopeWraps), chain nodes pin to the
+///   catch points so the tendril hugs the corner, while Tether redirects the
+///   pull through them. Collision push-out drapes the rest over obstacles.
 /// </summary>
 public class WhipChain
 {
@@ -36,8 +36,6 @@ public class WhipChain
     readonly Vector3[] _old = new Vector3[Segments + 1];
     readonly Rigidbody _excludeBody;   // the player: the rope passes through its holder
 
-    Vector3 _target;     // LIVE anchor we strike toward (updates every step: a moving
-                         // node redirects the whip mid-flight; a landed node drags the tail)
     Vector3 _tip;        // tail position while flying
     float _strikeSpeed;
     bool _arrived;
@@ -52,8 +50,9 @@ public class WhipChain
     /// passed to Step each step (a thrown host it trails, or a landed anchor).</summary>
     public void Ride() => _arrived = true;
 
-    // Push crack: a lateral wave forced through the chain, hand to tail. Direction
-    // and strength are randomized per crack so the flail never reads deterministic.
+    // Crack: a lateral wave forced through the chain, hand to tail, for a pull bite or a
+    // throw. Direction and strength are randomized per crack so the flail never reads
+    // deterministic.
     public const float CrackWaveSpeed = 80f;  // m/s the wavefront travels (sets crack duration)
     const float CrackPushSpeed = 45f;         // peak lateral push of the hump, m/s (2.5x the original 18: the crack should crack, not tease)
     const float CrackSigma = 0.1f;            // hump width, in chain-fraction sigma
@@ -62,12 +61,11 @@ public class WhipChain
     float _crackDur = 1f;
     Vector3 _crackSide;                       // randomized lateral direction of the hump
     float _crackJitter = 1f;                  // randomized strength
-    public bool CrackActive => _crack;
 
     /// <summary>Force a crack wave through the whip from hand to tail over `seconds`.
     /// The lateral direction and strength are randomized each crack so the snap is
-    /// never deterministic. Timing pairs with the controller: the push impulse lands
-    /// when the wavefront reaches the tail.</summary>
+    /// never deterministic. Timing pairs with the controller: the verb lands when the
+    /// wavefront reaches the tail.</summary>
     public void BeginCrack(float seconds)
     {
         _crack = true;
@@ -90,7 +88,6 @@ public class WhipChain
 
     public WhipChain(Vector3 head, Vector3 target, float ropeLength, Rigidbody excludeBody)
     {
-        _target = target;
         _ropeLength = ropeLength;
         _excludeBody = excludeBody;
         _tip = head;
@@ -107,31 +104,30 @@ public class WhipChain
     }
 
     /// <summary>One physics step. Call from FixedUpdate (fixed timestep is required
-    /// for verlet stability). head = player end; target = the LIVE node anchor (a
-    /// moving host redirects the flying whip and drags the landed tail); ropeLength
-    /// = the tether's current locked length (reel only shrinks it; sustained
-    /// overload can yield it slightly longer — Tether.YieldSpeed). wraps = ordered rope-pivot points the rope is caught on —
-    /// chain nodes pin to them so the tendril hugs corners under tension.</summary>
+    /// for verlet stability). head = player end; target = the LIVE node anchor,
+    /// read every step (a moving host redirects the flying whip and drags the landed
+    /// tail); ropeLength = the tether's current length, slack included; wraps =
+    /// ordered points the rope is caught on — chain nodes pin to them so the tendril
+    /// hugs corners under tension.</summary>
     public void Step(Vector3 head, Vector3 target, float ropeLength, IReadOnlyList<Vector3> wraps = null)
     {
         _ropeLength = ropeLength;
-        _target = target;
 
         // Tail: kinematic strike until it lands on the anchor, then hard-pinned —
         // but pinned to the anchor's LIVE position, so a moving host carries it.
         int last = Segments;
         if (!_arrived)
         {
-            Vector3 to = _target - _tip;
+            Vector3 to = target - _tip;
             float step = _strikeSpeed * Time.fixedDeltaTime;
             if (to.magnitude <= Mathf.Max(step, ArriveSnap))
             {
                 _arrived = true;
-                _tip = _target;
+                _tip = target;
             }
             else _tip += to / to.magnitude * step;
         }
-        _pos[last] = _arrived ? _target : _tip;
+        _pos[last] = _arrived ? target : _tip;
         _old[last] = _pos[last];
 
         // Head pinned to the player.
@@ -146,7 +142,7 @@ public class WhipChain
             _old[i] = temp;
         }
 
-        // Crack wave: a lateral hump sweeps hand->tail during a push crack; verlet
+        // Crack wave: a lateral hump sweeps hand->tail during a crack; verlet
         // turns the sweep into a real flail that whips the tail around on arrival.
         if (_crack)
         {

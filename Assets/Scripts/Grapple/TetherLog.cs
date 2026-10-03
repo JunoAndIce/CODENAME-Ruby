@@ -6,7 +6,7 @@ using UnityEngine;
 /// playtest without touching gameplay code. All lines carry a `[tether]` prefix.
 ///
 /// Where to read: Unity Console while playing, or the project log on disk
-/// (PROJECT RUBY/Logs/Editor.log when the editor is open). Grep for `[tether]`.
+/// (Logs/Editor.log in the project folder while the editor is open). Grep for `[tether]`.
 /// </summary>
 public static class TetherLog
 {
