@@ -10,18 +10,24 @@ not active.
 
 ## Inputs (context verbs — one button can mean two things)
 
-| verb   | input                     | unattached          | attached                     |
-|--------|---------------------------|---------------------|------------------------------|
-| attach | right click / right bumper| hooks a node        | — (n/a, already attached)    |
-| pull   | q / left bumper (+ right click / right bumper) | — (n/a) | reels chain in               |
-| fire   | left click / e / right trigger | gun fires      | PUSH: hurls the tethered node along aim |
+| verb   | input                          | unattached           | attached                                            |
+| ------ | ------------------------------ | -------------------- | --------------------------------------------------- |
+| attach | right click / right bumper     | hooks a node         | — (n/a, already attached)                           |
+| throw  | right click / right bumper     | — (attaches instead) | PUSH: hurls the tethered node along aim and lets go |
+| pull   | space / q / left bumper        | — (n/a)              | tap: one crack bite; hold: reels the chain in       |
+| fire   | left click / e / right trigger | gun fires            | gun fires                                           |
 
 Move (WASD / left stick) and aim (mouse / right stick / arrows) stay live in
-every mode. The chain never takes movement away from you.
+every mode. The chain never takes movement away from you, and since 2026-10-03
+it never takes the gun either.
 
-- j-quote: "attatch is abvailiblewhen nothing is attatched already. pull is availible when something is already attatched. push should shoot out only when its attatched. it overtakes the gun input."
-- j-quote: "gun inputs firte when the user does not have anythign in hand, and pushes / shoots forward an object via the tether. if the item is static and is shot forth / pulled, the character should be flung forward or backwards."
-- j-quote: "when i fire and im tethered on something it should fire the tether in that direciton like i threw it. arcade style kind of. very fast, speedrunner friendly."
+- j-quote (2026-10-03): "Allow the player to shoot while grabbed. Lets add space bar as the pull option and set right click to throw."
+  The push moved off the gun's trigger onto right click, and pull moved off right
+  click onto space. Where the quotes below have the push overtaking the gun, this
+  supersedes them.
+- j-quote: "attatch is abvailiblewhen nothing is attatched already. pull is availible when something is already attatched. push should shoot out only when its attatched. it overtakes the gun input." *(the gun part is superseded)*
+- j-quote: "gun inputs firte when the user does not have anythign in hand, and pushes / shoots forward an object via the tether. if the item is static and is shot forth / pulled, the character should be flung forward or backwards." *(superseded in part: the gun fires with something in hand, and the push is right click)*
+- j-quote: "when i fire and im tethered on something it should fire the tether in that direciton like i threw it. arcade style kind of. very fast, speedrunner friendly." *(the throw is now right click; the rest stands)*
 
 ## Whip (segmented tendril)
 
@@ -90,7 +96,7 @@ every mode. The chain never takes movement away from you.
 - j-quote: "when I click something that length is set and it can't get any longer but it shouldn't be reeling in all the time"
 - j-quote: "We need a minimum length as well as a maximum length and this minimum length when it's set I think the user should ideally position themselves this minimum length away from their object accounting for the node in the direction that their mouse / right joystick is."
 - j-quote: "tug of war via mass idedally ... there will be a max length of the chain. i coudl see this being changedd latyer maybe with an item or something. keep it simpole for now in a variable we can change."
-- j-quote: "the chain overrides the gun and IS a combat thing. it needs to feel reaally fluid. the low amount of buttons should all feel valubkle and meaningfull."
+- j-quote: "the chain overrides the gun and IS a combat thing. it needs to feel reaally fluid. the low amount of buttons should all feel valubkle and meaningfull." *(since 2026-10-03 the chain no longer overrides the gun)*
 
 ## Attach selection
 
@@ -101,8 +107,8 @@ every mode. The chain never takes movement away from you.
   nodes. Occlusion/line-of-sight is intentionally OUT of targeting (stripped by
   direction: it wasn't earning its cost); if it returns it comes back as a cheap
   area check, not per-candidate raycasts.
-- The connecting press never reels: attach is a pure connect. Hold-to-reel only
-  arms after the button is released and pressed again.
+- The connecting press never pulls or throws: attach is a pure connect. Pull has
+  its own button, and a throw needs a fresh right click after the whip lands.
 - j-quote: "the tether should attatch within range to the closest node that the player is pointing at. we should take into account the players vciewing direction / angle + where their mouse is i think."
 - j-quote: "Ideally when I click something it neither pulls or pushes away it lets that up to the user."
 

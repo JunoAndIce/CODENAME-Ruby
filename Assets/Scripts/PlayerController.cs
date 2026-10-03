@@ -91,8 +91,8 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
 
     public void OnThrow(InputAction.CallbackContext context)
     {
-        // Consumed by GrappleController (attach / reel). The old chain-grab throw
-        // state is dormant while the grapple system replaces it.
+        // GrappleController polls the Throw action itself (attach / throw). The old
+        // chain-grab throw state is dormant while the grapple system replaces it.
     }
 
     void Update()

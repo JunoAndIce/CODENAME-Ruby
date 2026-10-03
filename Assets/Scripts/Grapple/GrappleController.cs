@@ -3,7 +3,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Player-side grapple: two context verbs over one physical whip.
+/// Player-side grapple: two buttons over one physical whip. It never touches the
+/// gun's trigger, so the gun fires in every mode, tethered or not.
 ///
 /// Unattached, right click / right bumper: LAUNCH the whip — the tip strikes
 /// toward the closest node in range inside the aim cone while the tendril drags
@@ -14,11 +15,11 @@ using UnityEngine.InputSystem;
 /// + cone math, no physics calls, scales to hundreds of nodes per map.
 ///
 /// Attached:
-/// - right click tap: PULL — the same crack wave sweeps hand -> tail and the
+/// - space / q / left bumper tap: PULL — a crack wave sweeps hand -> tail and the
 ///   chain bite (TapSeconds of the pull dial at once) lands when the front
 ///   reaches the tail; the solver servo turns it into closing speed.
-/// - right click held (after release): continuous reel-in at the pull dial rate.
-/// - q / left bumper held: same reel (movement tech).
+/// - space / q / left bumper held: once the bite lands, continuous reel-in at
+///   the pull dial rate.
 /// - the rope CATCHES on geometry: linecasts find wrap pivots, the whip pins to
 ///   them, and the pull genuinely redirects — walk a tethered rope around a
 ///   pillar and it holds you (Tether.Solve solves each end-span to its wrap).
@@ -26,13 +27,10 @@ using UnityEngine.InputSystem;
 ///   gets dragged into the node's collider space) and the player AIM-PARKS:
 ///   servoed to the min-length point on the side of the node their aim points
 ///   to — aim orbits.
-/// - left click / right trigger: PUSH — hurl the two bodies apart along the
+/// - right click / right bumper: THROW — hurl the two bodies apart along the
 ///   mouse's offset from the held item (mouse left of the cube -> it shoots
 ///   left) and release the chain ("I threw it"). The whip TRAILS the thrown
 ///   host briefly before dying out — animate out, not vanish.
-///
-/// The gun stands down while the chain is attached (and on the frame a push
-/// consumed the trigger): the chain owns the trigger.
 /// </summary>
 [RequireComponent(typeof(Rigidbody), typeof(PlayerInput))]
 [DefaultExecutionOrder(-50)]   // solve the chain before the player re-authors its velocity
@@ -45,7 +43,7 @@ public class GrappleController : MonoBehaviour
     [SerializeField, Range(1f, 90f)] private float _attachCone = 35f;   // half-angle around aim
 
     [Header("Verbs")]
-    [SerializeField] private float _pushImpulse = 40f;      // left click: throw apart. One value, one verb
+    [SerializeField] private float _pushImpulse = 40f;      // right click while attached: throw apart. One value, one verb
     [Tooltip("Push = throw: the chain releases the node along the aim direction.")]
     [SerializeField] private bool _detachOnPush = true;
 
@@ -60,12 +58,7 @@ public class GrappleController : MonoBehaviour
     public bool IsAttached => _tether != null;
     public Tether Chain => _tether;
 
-    int _triggerConsumedFrame = -1;
-    /// <summary>True on the frame the chain consumed the gun trigger (a push that
-    /// also detaches) — lets the gun stand down on that same click.</summary>
-    public bool ConsumedTriggerThisFrame => Time.frameCount == _triggerConsumedFrame;
-
-    IGrappleUser _user;          // the wielder: aim, trigger, and a push channel its movement won't erase
+    IGrappleUser _user;          // the wielder: aim, and a push channel its movement won't erase
     PlayerInput _input;
     Rigidbody _body;
     Tether _tether;
@@ -73,9 +66,7 @@ public class GrappleController : MonoBehaviour
     GrappleNode _pendingNode;    // node the flying whip will land on (tether starts on landing)
     IGrabbable _grabbed;         // held for the tether's lifetime: node destruction must not erase the release target
     float _pendingLength;        // rope length locked at launch, used until the whip lands
-    bool _triggerWasHeld;
-    bool _throwReelArmed = true;   // hold-to-reel only engages from a press made AFTER the attach click
-    bool _wasOverBreak;            // edge-trigger for the over-threshold warning log
+    bool _wasOverBreak;          // edge-trigger for the over-threshold warning log
 
     // Rope catching: ordered wrap pivots (nearest the player first) the rope is
     // caught on; maintained by linecasts every landed physics step.
@@ -94,7 +85,7 @@ public class GrappleController : MonoBehaviour
     // reaches the whip's tail — the physics lands with the animation.
     float _crackTimer;
     Vector3 _pendingPushDir;
-    bool _pendingPullCrack;   // crack is a right-click pull bite, not a push throw
+    bool _pendingPullCrack;   // crack is a pull bite, not a push throw
 
     void Awake()
     {
@@ -128,43 +119,29 @@ public class GrappleController : MonoBehaviour
     {
         UpdateAimOrb();
 
+        // Throw is context: unattached it launches the whip, attached it throws what
+        // the chain holds. The launching press can't also throw: verbs wait for the
+        // whip to land, and a throw needs a fresh press after that.
+        InputAction throwAction = _input.actions["Throw"];
         if (_tether == null)
         {
-            if (_whip != null)
-            {
-                // Whip in flight: no verbs yet. Releasing the connect press still
-                // arms hold-to-reel so landing while held stays a pure connect.
-                if (_input.actions["Throw"].WasReleasedThisFrame()) _throwReelArmed = true;
-            }
-            else if (_input.actions["Throw"].WasPerformedThisFrame()) TryLaunch();
+            if (_whip == null && throwAction.WasPerformedThisFrame()) TryLaunch();
         }
         else
         {
-            // The press that CONNECTED never reels: hold-to-reel re-arms only when
-            // right click is released, so attaching is a pure connect — no pull, no
-            // push, the rope just sits at its locked length until the user acts.
-            if (_input.actions["Throw"].WasReleasedThisFrame()) _throwReelArmed = true;
-
-            // Right click tap = PULL, animated: the same crack wave sweeps hand ->
-            // tail and the chain bite lands when the front reaches the tail (the
-            // servo in Solve turns it into closing speed). Repeat presses while a
-            // crack is already traveling are ignored.
-            if (_input.actions["Throw"].WasPerformedThisFrame() && _crackTimer <= 0f)
+            // Pull tap, animated: a crack wave sweeps hand -> tail and the chain bite
+            // lands when the front reaches the tail (the servo in Solve turns it into
+            // closing speed). Held, it keeps reeling once the bite lands, so the reel
+            // stays synced to the wave. Presses while a crack travels are ignored.
+            InputAction pullAction = _input.actions["Pull"];
+            if (pullAction.WasPerformedThisFrame() && _crackTimer <= 0f)
             {
                 ArmCrack(pull: true, Vector3.zero);
                 TetherLog.Event($"PULL ARM  crack={_crackTimer:0.00}s {_tether.Describe()}");
             }
+            if (_crackTimer <= 0f && pullAction.IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
 
-            // Right click held (from a fresh press) = continuous reel-in, but the
-            // bite stays synced to the wave: no reel until the crack lands.
-            if (_throwReelArmed && _crackTimer <= 0f && _input.actions["Throw"].IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
-
-            // q / left bumper held = continuous reel (movement tech).
-            if (_input.actions["Pull"].IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
-
-            bool trigger = _user.TriggerPressed;
-            if (trigger && !_triggerWasHeld) Push();
-            _triggerWasHeld = trigger;
+            if (throwAction.WasPerformedThisFrame()) Push();
         }
 
         UpdateChainVisual();
@@ -298,7 +275,6 @@ public class GrappleController : MonoBehaviour
         _pendingLength = attachDist;
         _whip = new WhipChain(transform.position, best.AnchorPoint, attachDist, _body);
         best.IsOccupied = true;
-        _throwReelArmed = false;   // the connecting click must not reel — re-arms on release
 
         TetherLog.Event($"WHIP LAUNCH  -> {best.name} dist={attachDist:F1} hostMass={(best.IsStaticWorld ? 0 : best.Host.mass)}");
     }
@@ -371,7 +347,6 @@ public class GrappleController : MonoBehaviour
 
         if (_crackTimer > 0f) return;   // already cracking — ignore repeat presses
         dir.Normalize();
-        _triggerConsumedFrame = Time.frameCount;
 
         // Crack: a wave travels down the whip (randomized direction/strength) and
         // the impulse lands when it reaches the tail — the throw is animated, not
@@ -429,7 +404,6 @@ public class GrappleController : MonoBehaviour
         }
         _wraps.Clear();
         _tether = null;
-        _triggerWasHeld = true;   // don't fire the gun with the release click
     }
 
     // Maintain the wrap list while landed: new catches come from a blocked line

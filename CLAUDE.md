@@ -129,14 +129,16 @@ Two ways in:
 ### Input flows one way
 
 `PlayerInput` is set to **Invoke Unity Events**, wired in the scene to `PlayerController.OnMove`,
-`OnLook`, `OnFire`, `OnAim`, `OnThrow`. Renaming or re-signing those methods breaks input silently —
-the scene holds the binding by name, and nothing fails to compile.
+`OnLook`, `OnFire`, `OnAim`. Renaming or re-signing those methods breaks input silently —
+the scene holds the binding by name, and nothing fails to compile. The grapple instead polls its
+`Throw` and `Pull` actions straight from `PlayerInput`.
 
 Input callbacks **record intent only**; consumers own the behaviour. `OnFire` just sets
 `_triggerPressed`; `GunController` reads it and detects the rising edge itself, which is what makes
 the revolver semi-auto (holding does nothing until you release and pull again). Don't push events at
-the gun. While the chain is attached the chain owns the trigger (`GrappleController.IsAttached`,
-`ConsumedTriggerThisFrame`), and the gun stands down.
+the gun. **The gun fires in every mode, tethered or not**, because the chain has its own buttons:
+right click launches the whip and, once attached, throws what it holds; space / Q pulls. Nothing
+shares the trigger.
 
 ### `AimPoint` is the shared aim truth
 

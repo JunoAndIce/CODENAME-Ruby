@@ -571,21 +571,10 @@
         {
           "name": "",
           "id": "1d2974e5-76e8-49e7-90e4-03b7437184c5",
-          "path": "<Mouse>/rightButton",
+          "path": "<Keyboard>/space",
           "interactions": "",
           "processors": "",
           "groups": ";Keyboard&Mouse",
-          "action": "Pull",
-          "isComposite": false,
-          "isPartOfComposite": false
-        },
-        {
-          "name": "",
-          "id": "0df09eaa-14ba-4103-9be8-6108952ebe88",
-          "path": "<Gamepad>/rightShoulder",
-          "interactions": "",
-          "processors": "",
-          "groups": ";Gamepad",
           "action": "Pull",
           "isComposite": false,
           "isPartOfComposite": false
