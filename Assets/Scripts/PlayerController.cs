@@ -20,7 +20,7 @@ public class PlayerController : MonoBehaviour
     public bool TriggerPressed => _triggerPressed;
 
     [SerializeField] private float _gamepadAimDistance = 6f;
-    [Tooltip("Decay rate applied ONLY to external carried velocity (flings, yanks, tows). Kept out of rigidbody damping on purpose: real damping eats total velocity, and the carried-velocity scheme would misread that eaten chunk as external and cancel your move input with it.")]
+    [Tooltip("How fast pushes from outside (tether yanks, push recoil) fade. Kept out of rigidbody damping on purpose: real damping would eat your move input too.")]
     [SerializeField] private float _flingDamping = 3f;
     // Action axis only. Locomotion runs every frame regardless of which state is active.
     private readonly StateMachine _actions = new();
@@ -133,11 +133,13 @@ public class PlayerController : MonoBehaviour
 
     void FixedUpdate()
     {
-        // Author movement while preserving external physics (gravity, tether impulses,
-        // knockback). The scheme itself lives in VelocityUtil so the enemy shares it.
-        VelocityUtil.ApplyAuthoredMove(_myRigidbody, _moveVelocity, _flingDamping, ref _lastAuthoredMove);
+        // Movement input on top of explicit pushes (tether, push recoil); see VelocityUtil.
+        VelocityUtil.ApplyAuthoredMove(_myRigidbody, _moveVelocity, ref _external, _flingDamping);
         _actions.FixedTick();
     }
 
-    Vector3 _lastAuthoredMove;
+    /// <summary>A push from outside (tether, push verb, knockback): lands now, then carries and fades.</summary>
+    public void AddExternalVelocity(Vector3 change) => VelocityUtil.AddExternal(_myRigidbody, change, ref _external);
+
+    Vector3 _external;   // explicit pushes only, fading at _flingDamping
 }

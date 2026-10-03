@@ -14,6 +14,10 @@ using UnityEngine;
 public class Tether
 {
     readonly Rigidbody _player;
+    // The player's own push channel: its movement is re-authored every step, so a rope
+    // impulse written straight onto the body would be erased. Hosts take writes directly —
+    // a grabbed enemy's AI doesn't steer, and props don't author velocity at all.
+    readonly System.Action<Vector3> _pushPlayer;
     readonly Rigidbody _host;     // null for static-world nodes
     readonly GrappleNode _node;
 
@@ -49,9 +53,10 @@ public class Tether
     public float MinLength => _minLength;
     public bool IsFullyReeled => _length <= _minLength + 0.001f;
 
-    public Tether(Rigidbody player, GrappleNode node, float length, float minLength, float maxLength)
+    public Tether(Rigidbody player, System.Action<Vector3> pushPlayer, GrappleNode node, float length, float minLength, float maxLength)
     {
         _player = player;
+        _pushPlayer = pushPlayer;
         _node = node;
         _host = node.IsStaticWorld ? null : node.Host;
         _length = length;
@@ -88,7 +93,7 @@ public class Tether
         float invSum = invP + invT;
         if (invSum <= 0f) return;
 
-        _player.linearVelocity += -dir * (impulse * invP / invSum);
+        _pushPlayer(-dir * (impulse * invP / invSum));
         if (_host != null)
         {
             _host.WakeUp();
@@ -161,7 +166,7 @@ public class Tether
             float positional = (_length - dist) / Time.fixedDeltaTime;
             float drive = Mathf.Max(0f, Mathf.Min(positional, MaxCorrectionSpeed) - separating);
             float impulse = drive / invSum;
-            _player.linearVelocity += -dir * (impulse * invP);
+            _pushPlayer(-dir * (impulse * invP));
             if (_host != null) _host.linearVelocity += dir * (impulse * invT);
             Tension = impulse / Time.fixedDeltaTime;
             return;
@@ -173,7 +178,7 @@ public class Tether
             float positional = (dist - _length) / Time.fixedDeltaTime;
             float drive = Mathf.Max(0f, Mathf.Min(positional, MaxCorrectionSpeed) + separating);
             float impulse = drive / invSum;
-            _player.linearVelocity += dir * (impulse * invP);
+            _pushPlayer(dir * (impulse * invP));
             if (_host != null) _host.linearVelocity += -dir * (impulse * invT);
             Tension = impulse / Time.fixedDeltaTime;
         }
@@ -215,13 +220,17 @@ public class Tether
 
         // Player end: servo toward the first wrap when its span is overlong.
         float avail0 = _length - (pathLen2 - Vector3.Distance(playerPos, wraps[0]));
-        tension += SolveEnd(_player, wraps[0], avail0);
+        Vector3 playerPull = SolveEnd(_player, wraps[0], avail0);
+        _pushPlayer(playerPull);
+        tension += playerPull.magnitude / Time.fixedDeltaTime;
 
         // Host end: servo toward the last wrap (static hosts take none).
         if (_host != null)
         {
             float availN = _length - (pathLen2 - lastSpanLen);
-            tension += SolveEnd(_host, wraps[wraps.Count - 1], availN);
+            Vector3 hostPull = SolveEnd(_host, wraps[wraps.Count - 1], availN);
+            _host.linearVelocity += hostPull;
+            tension += hostPull.magnitude / Time.fixedDeltaTime;
         }
 
         Tension = tension;
@@ -231,21 +240,19 @@ public class Tether
 
     // One end vs a static wrap pivot: the pivot's inverse mass is zero, so the
     // moving end takes the full correction — same capped servo as the straight case.
-    float SolveEnd(Rigidbody body, Vector3 pivot, float spanLength)
+    // Returns that end's velocity change; the caller applies it (the player's through
+    // its push channel).
+    Vector3 SolveEnd(Rigidbody body, Vector3 pivot, float spanLength)
     {
         Vector3 to = pivot - body.worldCenterOfMass;
         float d = to.magnitude;
-        if (d <= spanLength + 0.0001f || d < 0.0001f) return 0f;
+        if (d <= spanLength + 0.0001f || d < 0.0001f) return Vector3.zero;
 
         Vector3 dir = to / d;
         float positional = (d - spanLength) / Time.fixedDeltaTime;
         float separating = -Vector3.Dot(body.linearVelocity, dir);   // + when moving away from the pivot
         float drive = Mathf.Max(0f, Mathf.Min(positional, MaxCorrectionSpeed) + separating);
-        if (drive <= 0f) return 0f;
-
-        body.WakeUp();
-        body.linearVelocity += dir * drive;
-        return drive / Time.fixedDeltaTime;
+        return dir * drive;
     }
 
     void AimPark(Vector3 aimPoint, Vector3 chainDir)
@@ -273,7 +280,7 @@ public class Tether
         Vector3 parkVelDir = correction / err;
         float desiredSpeed = Mathf.Min(err / Time.fixedDeltaTime, ParkSpeed);
         float currentSpeed = Vector3.Dot(_player.linearVelocity, parkVelDir);
-        _player.linearVelocity += parkVelDir * Mathf.Max(0f, desiredSpeed - currentSpeed);
+        _pushPlayer(parkVelDir * Mathf.Max(0f, desiredSpeed - currentSpeed));
     }
 
     /// <summary>One-line state summary for rate-limited logging.</summary>

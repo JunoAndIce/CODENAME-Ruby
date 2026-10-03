@@ -43,6 +43,8 @@ public class GrappleNode : MonoBehaviour
     public Rigidbody Host { get; private set; }
     public bool IsStaticWorld => Host == null || Host.isKinematic;
     public bool IsOccupied { get; internal set; }
+    /// <summary>The enemy this node hangs off, if any. Null for world and props.</summary>
+    public EnemyController EnemyTarget { get; private set; }
 
     public Vector3 AnchorPoint => transform.position;
 
@@ -53,7 +55,11 @@ public class GrappleNode : MonoBehaviour
     /// nodes. NOT a tether release — the grapple chain always holds.</summary>
     public event System.Action<GrappleNode, float> OnBreak;
 
-    private void Awake() => Host = GetComponentInParent<Rigidbody>();
+    private void Awake()
+    {
+        Host = GetComponentInParent<Rigidbody>();
+        EnemyTarget = GetComponentInParent<EnemyController>();
+    }
 
     public void ReportTension(float force) => OnTension?.Invoke(this, force);
 

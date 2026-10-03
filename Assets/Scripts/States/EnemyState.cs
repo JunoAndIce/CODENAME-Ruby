@@ -5,8 +5,7 @@ public enum EnemyState
     Idle,
     Patrol,
     Searching,
-    Alert,        // chasing; ChaseState.Id
-    Attacking,
+    Aggro,        // hunting and attacking the player; AggroState.Id
     // Overrides — things done TO the enemy. Handled by EnemyController, no state class.
     Grabbed,
     Ragdoll,

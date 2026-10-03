@@ -71,6 +71,7 @@ public class GrappleController : MonoBehaviour
     Tether _tether;
     WhipChain _whip;             // physical tendril: launches, lands, then rides the tether
     GrappleNode _pendingNode;    // node the flying whip will land on (tether starts on landing)
+    EnemyController _grabbedEnemy;   // held for the tether's lifetime: node destruction must not erase the release target
     float _pendingLength;        // rope length locked at launch, used until the whip lands
     bool _triggerWasHeld;
     bool _throwReelArmed = true;   // hold-to-reel only engages from a press made AFTER the attach click
@@ -211,7 +212,7 @@ public class GrappleController : MonoBehaviour
                 {
                     _tether.Push(_pendingPushDir, _pushImpulse);
                     TetherLog.Event($"PUSH  (crack landed) {_tether.Describe()}");
-                    if (_detachOnPush) Detach("push throw", trail: true);
+                    if (_detachOnPush) Detach("push throw", trail: true, thrown: true);
                     return;
                 }
             }
@@ -304,8 +305,16 @@ public class GrappleController : MonoBehaviour
         // servo tugs you back instead); running toward shortens it — the whip lands
         // taut at whichever is shorter. Min = park radius, max = attach range.
         float len = Mathf.Clamp(Mathf.Min(dist, _pendingLength), _minChainLength, _maxChainLength);
-        _tether = new Tether(_body, node, len, _minChainLength, _maxChainLength);
+        _tether = new Tether(_body, _player.AddExternalVelocity, node, len, _minChainLength, _maxChainLength);
         _pendingNode = null;
+
+        EnemyController enemy = node.EnemyTarget;
+        if (enemy != null && !enemy.Health.IsDead)
+        {
+            _grabbedEnemy = enemy;
+            enemy.EnterGrabbed();
+        }
+
         TetherLog.Event($"ATTACH  whip landed {_tether.Describe()} dist={_tether.AttachDistance:F1}");
     }
 
@@ -378,7 +387,7 @@ public class GrappleController : MonoBehaviour
         _pendingPushDir = pushDir;
     }
 
-    void Detach(string reason, bool trail = false)
+    void Detach(string reason, bool trail = false, bool thrown = false)
     {
         if (_tether == null) return;
         // A pending crack outlives nothing: without this reset, a mid-crack detach
@@ -386,7 +395,17 @@ public class GrappleController : MonoBehaviour
         // stale crack later fires a ghost PUSH on the NEXT chain the player lands.
         _pendingPullCrack = false;
         _crackTimer = 0f;
+
+        if (_grabbedEnemy != null)
+        {
+            // Tether.Push has already split the impulse onto the host, so the enemy's own
+            // velocity IS the throw. Anything else (node destroyed) is a drop, not a throw.
+            if (thrown) _grabbedEnemy.Release(_grabbedEnemy.Body.linearVelocity);
+            else _grabbedEnemy.EndGrab();
+            _grabbedEnemy = null;
+        }
         if (_tether.Node != null) _tether.Node.IsOccupied = false;
+
         TetherLog.Event($"DETACH  ({reason}) {_tether.Describe()}");
         if (trail)
         {

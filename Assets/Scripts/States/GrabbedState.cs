@@ -1,17 +1,17 @@
+/// <summary>
+/// Held by the player's rope. The AI is suspended (this state steers nothing), but the body
+/// stays dynamic: the tether solver moves its host by writing velocity, and a kinematic body
+/// silently ignores assigned velocity, so the enemy would hang frozen in place instead of being
+/// dragged when the player walks off at full chain length. Leaves on a throw (Release → Ragdoll),
+/// a drop (EndGrab), or death.
+/// </summary>
 public class GrabbedState : EnemyStateBase
 {
     public GrabbedState(EnemyController enemy) : base(enemy) { }
 
     public override EnemyState Id => EnemyState.Grabbed;
 
-    public override void Enter() => Enemy.Body.isKinematic = true;
-
-    // Runs on every exit: thrown, broke free, or killed. A kinematic body silently
-    // ignores assigned velocity, so skipping this freezes the enemy permanently.
-    public override void Exit() => Enemy.Body.isKinematic = false;
-
-    public override void Tick()
-    {
-        // TODO: break-out timer; expose it as a bool for a transition predicate to read.
-    }
+    // Stop the walk so leftover speed doesn't drift into the grab; from here the rope and
+    // physics own the body.
+    public override void Enter() => Enemy.Stop();
 }

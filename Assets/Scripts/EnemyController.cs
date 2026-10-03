@@ -11,37 +11,44 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float _searchSpeed = 1.5f;
 
     [Header("Awareness")]
+    [Tooltip("Detects the player inside this radius, if in sight.")]
     [SerializeField] private float _alertRadius = 12f;
+    [Tooltip("Aggro keeps contact inside this radius, if in sight.")]
     [SerializeField] private float _giveUpRadius = 18f;
+    [Tooltip("Seconds out of contact (out of sight, or beyond Give Up Radius) before aggro turns to searching.")]
     [SerializeField] private float _aggroTime = 1.5f;
+    [Tooltip("Height above the enemy's centre that sight is cast from.")]
+    [SerializeField] private float _eyeHeight = 0.5f;
     [SerializeField] private float _searchDuration = 5f;
 
     [Header("Combat")]
     [SerializeField] private float _attackRange = 2f;
-
-    [Header("Physics")]
-    [Tooltip("Decay rate applied ONLY to external carried velocity (tether yanks, knockback, flings). Same carried-velocity scheme as the player: authored AI velocity is re-written every tick, so external impulses must be carried forward and decayed instead of being erased.")]
-    [SerializeField] private float _flingDamping = 3f;
-    Vector3 _lastAuthoredMove;
+    [Tooltip("Seconds between attacks. Moves to the weapon when weapons exist.")]
+    [SerializeField, Min(0.05f)] private float _attackCooldown = 1f;
 
     [Header("Patrol")]
-    [SerializeField] private Transform[] _waypoints;
+    [Tooltip("Walked while unaware. Empty = idle in place. Edit with the Scene-view handles when this enemy is selected.")]
+    [SerializeField] private PatrolRoute _safeRoute = new();
+    [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
+    [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
+    [Tooltip("Seconds without getting closer before a patrol move counts as blocked (another enemy on the spot, a prop, a jammed doorway).")]
+    [SerializeField, Min(0.1f)] private float _stuckTime = 1.5f;
+    [Tooltip("When every patrol point fails in a row, wait this long before trying the route again.")]
+    [SerializeField, Min(0f)] private float _routeRetryTime = 3f;
+
+    [Header("References")]
     [SerializeField] private PlayerController _player;
-
-    [Header("Debug")]
-    [SerializeField] private bool _setToGrabState = false;
-
 
     // ENEMY STATES
     private readonly StateMachine _state = new();
     public Rigidbody Body { get; private set; }
     public Health Health { get; private set; }
     public IRagdollBody RagdollBody { get; private set; }
+    public EnemyNavigator Navigator { get; private set; }
     public IdleState Idle { get; private set; }
     public PatrolState Patrol { get; private set; }
     public SearchingState Searching { get; private set; }
-    public ChaseState Chase { get; private set; }
-    public AttackState Attack { get; private set; }
+    public AggroState Aggro { get; private set; }
     public GrabbedState Grabbed { get; private set; }
     public RagdollState Ragdoll { get; private set; }
     public DeadState Dead { get; private set; }
@@ -56,9 +63,26 @@ public class EnemyController : MonoBehaviour
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
     public float AttackRange => _attackRange;
-    public Transform[] Waypoints => _waypoints;
-    public bool HasPatrolRoute => _waypoints != null && _waypoints.Length > 0;
+    public float AttackCooldown => _attackCooldown;
+    public PatrolRoute SafeRoute => _safeRoute;
+    public float NodePauseTime => _nodePauseTime;
+    public float StuckTime => _stuckTime;
+    public float RouteRetryTime => _routeRetryTime;
+    public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
+    /// <summary>
+    /// Where the hunt was leading when aggro ended. Aggro keeps tracking the player for Aggro
+    /// Time after losing contact, so this is where they actually went, not where they slipped
+    /// out of view. Search goes here.
+    /// </summary>
+    public Vector3 LastKnownPlayerPosition { get; private set; }
+    /// <summary>Set the first time the enemy aggros; never cleared. The Cautious state reads it.</summary>
+    public bool IsCautious { get; private set; }
+
+    private static readonly RaycastHit[] SightHits = new RaycastHit[16];
+    private int _sightFrame = -1;
+    private bool _canSeePlayer;
+    private Collider _sightBlocker;
 
     private void Awake()
     {
@@ -68,12 +92,12 @@ public class EnemyController : MonoBehaviour
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
         RagdollBody = ragdoll;
+        Navigator = new EnemyNavigator(this);
 
         Idle = new IdleState(this);
         Patrol = new PatrolState(this);
         Searching = new SearchingState(this);
-        Chase = new ChaseState(this);
-        Attack = new AttackState(this);
+        Aggro = new AggroState(this);
         Grabbed = new GrabbedState(this);
         Ragdoll = new RagdollState(this);
         Dead = new DeadState(this);
@@ -84,20 +108,16 @@ public class EnemyController : MonoBehaviour
     // The whole transition graph, in one place. States never name each other.
     private void BuildTransitions()
     {
-        At(Idle, Chase, new FuncPredicate(() => DistanceToPlayer() <= _alertRadius));
-        At(Patrol, Chase, new FuncPredicate(() => DistanceToPlayer() <= _alertRadius));
+        At(Idle, Aggro, new FuncPredicate(DetectsPlayer));
+        At(Patrol, Aggro, new FuncPredicate(DetectsPlayer));
+        At(Searching, Aggro, new FuncPredicate(DetectsPlayer));
 
-        At(Chase, Attack, new FuncPredicate(() => DistanceToPlayer() <= _attackRange));
-        At(Attack, Chase, new FuncPredicate(() => DistanceToPlayer() > _attackRange));
-
-        At(Chase, Searching, new FuncPredicate(() => Chase.LostPlayer));
-        At(Searching, Chase, new FuncPredicate(() => DistanceToPlayer() <= _alertRadius));
-
+        At(Aggro, Searching, new FuncPredicate(() => Aggro.LostPlayer));
 
         At(Searching, Patrol, new FuncPredicate(() => Searching.SearchExpired && HasPatrolRoute));
         At(Searching, Idle, new FuncPredicate(() => Searching.SearchExpired && !HasPatrolRoute));
 
-        At(Ragdoll, Chase, new FuncPredicate(() => RagdollBody.IsSettled && !Health.IsDead));
+        At(Ragdoll, Aggro, new FuncPredicate(() => RagdollBody.IsSettled && !Health.IsDead));
 
         Any(Dead, new FuncPredicate(() => Health.IsDead));
     }
@@ -118,7 +138,11 @@ public class EnemyController : MonoBehaviour
 
     private void OnDisable() => Health.OnDamaged -= HandleDamaged;
 
-    private void Update() => _state.Tick();
+    private void Update()
+    {
+        _state.Tick();
+        DebugDrawPath();
+    }
 
     private void FixedUpdate() => _state.FixedTick();
 
@@ -126,16 +150,42 @@ public class EnemyController : MonoBehaviour
     public void Alert()
     {
         if (_state.Current is GrabbedState or RagdollState or DeadState) return;
-        _state.SetState(Chase);
+        _state.SetState(Aggro);
     }
 
     public void EnterGrabbed() => _state.SetState(Grabbed);
+
+    /// <summary>Rope let go without a throw (node destroyed): drop straight into pursuit.</summary>
+    public void EndGrab()
+    {
+        if (_state.Current != Grabbed) return;
+        _state.SetState(Aggro);
+    }
+
+    /// <summary>One-way: once an enemy has hunted the player it stays on edge for good.</summary>
+    public void MarkCautious() => IsCautious = true;
+
+    public void RecordTrailEnd()
+    {
+        if (_player != null) LastKnownPlayerPosition = _player.transform.position;
+    }
+
+    /// <summary>
+    /// Placeholder attack until weapons exist: a log line and a red flash toward the player.
+    /// Weapons replace this body; AggroState's call site and cadence stay as they are.
+    /// </summary>
+    public void Attack()
+    {
+        Debug.Log($"{name} attacks {_player.name}.", this);
+        Debug.DrawLine(EyePosition, _player.transform.position, Color.red, 0.15f);
+    }
 
     public void Release(Vector3 velocity)
     {
         if (_state.Current != Grabbed) return;
 
-        // Grabbed.Exit clears isKinematic; a kinematic body ignores the launch velocity.
+        // Flattened, keeping speed: an upward throw redirects along the floor, so throw
+        // distance depends on the throw's strength, never its angle.
         Ragdoll.Launch(VelocityUtil.Flatten(velocity));
         _state.SetState(Ragdoll);
     }
@@ -149,11 +199,10 @@ public class EnemyController : MonoBehaviour
         if (direction.sqrMagnitude > 0.01f)
             transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
 
-        Vector3 v = transform.forward * speed;
-        // Shared carried-velocity scheme (VelocityUtil): external impulses from the
-        // tether solver, push verb, and knockback survive the AI's velocity write
-        // and decay on their own — otherwise a grappled enemy reads as weightless.
-        VelocityUtil.ApplyAuthoredMove(Body, v, _flingDamping, ref _lastAuthoredMove);
+        // Plain authored velocity: nothing pushes an enemy while its AI steers (the rope only
+        // acts while grabbed, a state that doesn't steer), so there's no push to carry. When
+        // knockback arrives it gets the player's explicit external velocity (VelocityUtil).
+        VelocityUtil.SetFlatVelocity(Body, transform.forward * speed);
     }
 
     /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>
@@ -166,7 +215,69 @@ public class EnemyController : MonoBehaviour
         transform.LookAt(target);
     }
 
-    public void Stop() => VelocityUtil.ApplyAuthoredMove(Body, Vector3.zero, _flingDamping, ref _lastAuthoredMove);
+    /// <summary>Pathfind to a fixed point around walls; stops on arrival.</summary>
+    public void PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
+
+    /// <summary>Walk to a patrol point's area along an A* route.</summary>
+    public NavResult PatrolTo(PatrolPoint point, float speed) => Navigator.MoveToArea(point.Position, point.Radius, speed);
+
+    /// <summary>Chase the player along this floor's shared flow field.</summary>
+    public void PathToPlayer(float speed)
+    {
+        if (_player != null) Navigator.ChaseTo(_player.transform, speed);
+    }
+
+    public void Stop() => VelocityUtil.SetFlatVelocity(Body, Vector3.zero);
+
+    private Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
+
+    // Detection: close enough to notice, and in sight.
+    private bool DetectsPlayer() => DistanceToPlayer() <= _alertRadius && CanSeePlayer();
+
+    /// <summary>Aggro's contact test: still within the give-up radius, and in sight.</summary>
+    public bool InContactWithPlayer() => DistanceToPlayer() <= _giveUpRadius && CanSeePlayer();
+
+    /// <summary>What blocked the last sight check, or null when the player was in view.</summary>
+    public Collider SightBlocker => _sightBlocker;
+
+    /// <summary>
+    /// A line from eye height to the player crosses nothing solid except characters (the
+    /// player, enemies — this one's own eye cubes included). Unlike paths, sight is checked
+    /// fresh every frame, so moving props can block it: hiding behind a crate works, while a
+    /// prop lower than the eye line doesn't hide anyone. See-through windows arrive with the
+    /// Perception step. Cached per frame: several transitions and the aggro state all ask.
+    /// </summary>
+    public bool CanSeePlayer()
+    {
+        if (_player == null) return false;
+        if (_sightFrame == Time.frameCount) return _canSeePlayer;
+        _sightFrame = Time.frameCount;
+
+        Vector3 eye = EyePosition;
+        Vector3 toPlayer = _player.transform.position - eye;
+        float distance = toPlayer.magnitude;
+        _canSeePlayer = true;
+        _sightBlocker = null;
+        if (distance < 0.01f) return true;
+
+        int count = Physics.RaycastNonAlloc(eye, toPlayer / distance, SightHits, distance, ~0, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < count; i++)
+        {
+            if (IsCharacter(SightHits[i].collider)) continue;
+            _canSeePlayer = false;
+            _sightBlocker = SightHits[i].collider;
+            break;
+        }
+        return _canSeePlayer;
+    }
+
+    // Characters see past each other: the player's own colliders (gun included) and any enemy's.
+    private bool IsCharacter(Collider collider)
+    {
+        Rigidbody body = collider.attachedRigidbody;
+        if (body == null) return false;
+        return body.transform == _player.transform || body.TryGetComponent(out EnemyController _);
+    }
 
     public float DistanceToPlayer()
     {
@@ -186,6 +297,16 @@ public class EnemyController : MonoBehaviour
         _attackRange = Mathf.Min(_attackRange, _alertRadius);
     }
 
+    // Play-mode path overlay: visible in the Scene view without selecting the enemy.
+    private void DebugDrawPath()
+    {
+        Vector3[] corners = Navigator.Corners;
+        if (corners == null) return;
+
+        for (int i = 1; i < corners.Length; i++)
+            Debug.DrawLine(corners[i - 1], corners[i], Color.yellow);
+    }
+
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.yellow;
@@ -197,17 +318,44 @@ public class EnemyController : MonoBehaviour
         Gizmos.color = Color.magenta;
         Gizmos.DrawWireSphere(transform.position, _attackRange);
 
+        // Sight line in play: green when the player is in view, red when something static is in the way.
+        if (Application.isPlaying && _player != null)
+        {
+            Gizmos.color = CanSeePlayer() ? Color.green : Color.red;
+            Gizmos.DrawLine(EyePosition, _player.transform.position);
+        }
+    }
+
+    // Every enemy's route, faintly, all the time: with many enemies you can see who walks what
+    // without selecting each one. The selected enemy's areas get coloured handles on top
+    // (EnemyControllerEditor).
+    private void OnDrawGizmos()
+    {
         if (!HasPatrolRoute) return;
 
-        Gizmos.color = Color.cyan;
-        for (int i = 0; i < _waypoints.Length; i++)
+        Gizmos.color = new Color(0f, 1f, 1f, 0.35f);
+        int count = _safeRoute.Count;
+        for (int i = 0; i < count; i++)
         {
-            if (_waypoints[i] == null) continue;
+            PatrolPoint point = _safeRoute[i];
+            DrawFlatCircle(point.Position, point.Radius);
 
-            Gizmos.DrawWireCube(_waypoints[i].position, Vector3.one * 0.3f);
+            bool last = i == count - 1;
+            if (!last) Gizmos.DrawLine(point.Position, _safeRoute[i + 1].Position);
+            else if (_safeRoute.Mode == PatrolMode.Loop && count > 2) Gizmos.DrawLine(point.Position, _safeRoute[0].Position);
+        }
+    }
 
-            Transform next = _waypoints[(i + 1) % _waypoints.Length];
-            if (next != null) Gizmos.DrawLine(_waypoints[i].position, next.position);
+    private static void DrawFlatCircle(Vector3 centre, float radius)
+    {
+        const int segments = 24;
+        Vector3 previous = centre + new Vector3(radius, 0f, 0f);
+        for (int i = 1; i <= segments; i++)
+        {
+            float angle = i * Mathf.PI * 2f / segments;
+            Vector3 next = centre + new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
+            Gizmos.DrawLine(previous, next);
+            previous = next;
         }
     }
 }
