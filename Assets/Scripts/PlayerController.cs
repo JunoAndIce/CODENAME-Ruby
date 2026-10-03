@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerController : MonoBehaviour
+public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
 {
     public float _moveSpeed = 15f;
     public int _bulletCount = 6;
@@ -16,6 +16,9 @@ public class PlayerController : MonoBehaviour
     public Vector3 AimPoint => _aimPoint;
     private bool _peekHeld;
     public bool PeekHeld => _peekHeld;
+    Vector3 ICameraTarget.Position => transform.position;
+    // No peeking while holding something: the hold owns the camera.
+    bool ICameraTarget.WantsPeek => _peekHeld && ActionState != PlayerState.Holding;
     private bool _triggerPressed = false;
     public bool TriggerPressed => _triggerPressed;
 
