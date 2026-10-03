@@ -279,13 +279,9 @@ waypoints. Each point is now an **area**, a centre plus a radius:
 
 ### Follow-up
 
-`CLAUDE.md` exists only on `movement-camera`. When it's merged, update:
-
-- the enemy-state list,
-- the external `SetState` list (add `Investigate`, `EndGrab`),
-- the kinematic-pairing paragraph (Grabbed becomes dynamic),
-- a short section on `Pathing/` (grid per floor, flow fields for shared goals, A* for individual
-  ones, no fallbacks).
+Done: `movement-camera` is merged and `CLAUDE.md` now covers the enemy states, `EndGrab`, the
+dynamic Grabbed state, sight, pathing, explicit pushes and the orthographic camera. Add
+`Investigate` to its external `SetState` list when sound lands.
 
 ## Verification
 
