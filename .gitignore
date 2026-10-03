@@ -11,6 +11,10 @@
 [Mm]emoryCaptures/
 [Rr]ecordings/
 
+# Unity's crash-recovery scene backups: machine-local, written after an editor crash
+[Aa]ssets/_Recovery/
+[Aa]ssets/_Recovery.meta
+
 # Asset Store tools plugin
 [Aa]ssets/AssetStoreTools*
 
