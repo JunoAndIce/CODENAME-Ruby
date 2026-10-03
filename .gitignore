@@ -75,3 +75,8 @@ desktop.ini
 # Editor noise
 *.swp
 mono_crash*.blob
+
+# Source archives — the extracted contents are what Unity uses.
+# Keeping the zip out of LFS saves the quota and stops Unity importing it.
+Assets/Models/*.zip
+/RawAssets/
