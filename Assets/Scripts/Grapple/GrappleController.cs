@@ -9,12 +9,15 @@ using UnityEngine.InputSystem;
 /// Unattached, right click / right bumper: LAUNCH the whip — the tip strikes
 /// toward the closest node in range inside the aim cone while the tendril drags
 /// out of the coil behind it (WhipChain verlet sim). The tether becomes real
-/// when the whip LANDS on the anchor: the chain then locks TAUT at that distance
-/// (clamped between min and max chain length) and can only shrink, never pay
-/// out. Node targeting scans the cheap GrappleNode.All registry: pure distance
-/// + cone math, no physics calls, scales to hundreds of nodes per map.
+/// when the whip LANDS on the anchor, at that distance (clamped between min and
+/// max chain length). Node targeting scans the cheap GrappleNode.All registry:
+/// pure distance + cone math, no physics calls, scales to hundreds of nodes per map.
 ///
 /// Attached:
+/// - the pull button is the hand on the chain. Held, the rope keeps its length.
+///   Released, it is loose: it slides out as the ends separate (a spinning host
+///   fans out on its own momentum, walking away pays rope out) up to max chain
+///   length, and never takes slack back in by itself.
 /// - space / q / left bumper tap: PULL — a crack wave sweeps hand -> tail and the
 ///   chain bite (TapSeconds of the pull dial at once) lands when the front
 ///   reaches the tail; the solver servo turns it into closing speed.
@@ -23,28 +26,32 @@ using UnityEngine.InputSystem;
 /// - the rope CATCHES on geometry: linecasts find wrap pivots, the whip pins to
 ///   them, and the pull genuinely redirects — walk a tethered rope around a
 ///   pillar and it holds you (Tether.Solve solves each end-span to its wrap).
-/// - fully reeled (unwrapped): the chain becomes a ROD at min length (nothing
-///   gets dragged into the node's collider space) and the player AIM-PARKS:
-///   servoed to the min-length point on the side of the node their aim points
-///   to — aim orbits.
-/// - right click / right bumper: THROW — hurl the two bodies apart along the
-///   mouse's offset from the held item (mouse left of the cube -> it shoots
-///   left) and release the chain ("I threw it"). The whip TRAILS the thrown
-///   host briefly before dying out — animate out, not vanish.
+/// - held fully reeled (unwrapped) with a moving host no heavier than you in
+///   hand: PARKED. You are the pivot: the chain becomes a ROD at min length that
+///   moves only the host, and the host SPINS around you, fast, passing through
+///   you rather than hitting you. Aim plays no part. Letting go flings the spin
+///   out. Static nodes and heavier hosts don't
+///   park: the chain just holds you at min length, and weight decides who moves.
+///   A moving host's min length grows to clear its size, so it never touches you.
+/// - right click / right bumper: THROW — send the held thing at the point you
+///   clicked and let go ("I threw it"). It never moves you: grab and release
+///   are quick right clicks that leave you where you are, and on a static node
+///   the throw just lets go. The whip TRAILS the thrown host briefly before
+///   dying out — animate out, not vanish.
 /// </summary>
 [RequireComponent(typeof(Rigidbody), typeof(PlayerInput))]
 [DefaultExecutionOrder(-50)]   // solve the chain before the player re-authors its velocity
 public class GrappleController : MonoBehaviour
 {
     [Header("Chain (single source of truth)")]
-    [SerializeField] private float _maxChainLength = 30f;   // attach range (rope attaches taut at the attach distance, clamped to this)
+    [SerializeField] private float _maxChainLength = 30f;   // attach range, and the most chain a loose rope can pay out
     [SerializeField] private float _minChainLength = 1.2f;  // park distance: fully reeled the chain becomes a rod at this radius from the node
     [SerializeField] private float _pullImpulse = 8f;       // THE pull dial: chain bite m/s. Hold reels at this rate; a tap is TapSeconds (0.3 s) of it at once
     [SerializeField, Range(1f, 90f)] private float _attachCone = 35f;   // half-angle around aim
 
     [Header("Verbs")]
-    [SerializeField] private float _pushImpulse = 40f;      // right click while attached: throw apart. One value, one verb
-    [Tooltip("Push = throw: the chain releases the node along the aim direction.")]
+    [SerializeField] private float _pushImpulse = 40f;      // right click while attached: throw strength, split by mass (light things fly faster). One value, one verb
+    [Tooltip("The throw lets go of the chain as it lands.")]
     [SerializeField] private bool _detachOnPush = true;
 
     [Header("Visuals")]
@@ -84,8 +91,8 @@ public class GrappleController : MonoBehaviour
     // Crack: the impulse (push OR pull) is armed but held until the crack wave
     // reaches the whip's tail — the physics lands with the animation.
     float _crackTimer;
-    Vector3 _pendingPushDir;
-    bool _pendingPullCrack;   // crack is a pull bite, not a push throw
+    Vector3 _throwTarget;     // the point clicked: a throw flies at it
+    bool _pendingPullCrack;   // crack is a pull bite, not a throw
 
     void Awake()
     {
@@ -134,14 +141,17 @@ public class GrappleController : MonoBehaviour
             // closing speed). Held, it keeps reeling once the bite lands, so the reel
             // stays synced to the wave. Presses while a crack travels are ignored.
             InputAction pullAction = _input.actions["Pull"];
+            // Holding pull is the hand on the chain: let go and the rope slides out
+            // as the ends separate (Tether.Gripped).
+            _tether.Gripped = pullAction.IsPressed();
             if (pullAction.WasPerformedThisFrame() && _crackTimer <= 0f)
             {
-                ArmCrack(pull: true, Vector3.zero);
+                ArmCrack(pull: true);
                 TetherLog.Event($"PULL ARM  crack={_crackTimer:0.00}s {_tether.Describe()}");
             }
             if (_crackTimer <= 0f && pullAction.IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
 
-            if (throwAction.WasPerformedThisFrame()) Push();
+            if (throwAction.WasPerformedThisFrame()) Throw();
         }
 
         UpdateChainVisual();
@@ -167,7 +177,7 @@ public class GrappleController : MonoBehaviour
 
         if (_tether == null)
         {
-            // Trailing a push-throw: tail rides the thrown host (or its last anchor
+            // Trailing a throw: tail rides the thrown host (or its last anchor
             // point for static pushes) until the trail dies out.
             _trailTimer -= Time.fixedDeltaTime;
             Vector3 tail = _trailBody != null ? _trailBody.worldCenterOfMass : _trailAnchor;
@@ -193,9 +203,9 @@ public class GrappleController : MonoBehaviour
                 }
                 else
                 {
-                    _tether.Push(_pendingPushDir, _pushImpulse);
-                    TetherLog.Event($"PUSH  (crack landed) {_tether.Describe()}");
-                    if (_detachOnPush) Detach("push throw", trail: true, thrown: true);
+                    _tether.Throw(_throwTarget, _pushImpulse);
+                    TetherLog.Event($"THROW  (crack landed) {_tether.Describe()}");
+                    if (_detachOnPush) Detach("throw", trail: true, thrown: true);
                     return;
                 }
             }
@@ -205,7 +215,7 @@ public class GrappleController : MonoBehaviour
         UpdateWraps();
         _whip.Step(_body.worldCenterOfMass, _tether.Anchor, _tether.Length, _wraps);
 
-        _tether.Solve(_user.AimPoint, _wraps);
+        _tether.Solve(_wraps);
         float tension = _tether.Tension;
         _tether.Node.ReportTension(tension);
 
@@ -266,9 +276,9 @@ public class GrappleController : MonoBehaviour
             return;
         }
 
-        // The rope length is locked AT LAUNCH and can only shrink (reel). The whip
-        // flies out to the anchor; the tether becomes real when it lands — attach
-        // is the whip strike landing, not a teleport.
+        // The rope length is set AT LAUNCH. The whip flies out to the anchor; the
+        // tether becomes real when it lands — attach is the whip strike landing,
+        // not a teleport.
         float attachDist = Vector3.Distance(best.AnchorPoint, origin);
         attachDist = Mathf.Clamp(attachDist, _minChainLength, _maxChainLength);
         _pendingNode = best;
@@ -283,9 +293,10 @@ public class GrappleController : MonoBehaviour
     {
         GrappleNode node = _pendingNode;
         float dist = Vector3.Distance(node.AnchorPoint, _body.worldCenterOfMass);
-        // Rope locked at launch: running AWAY during flight never pays it out (the
-        // servo tugs you back instead); running toward shortens it — the whip lands
-        // taut at whichever is shorter. Min = park radius, max = attach range.
+        // Lands taut at whichever is shorter, the launch length or the distance now:
+        // running toward shortens it. Running away doesn't lengthen it here; a loose
+        // hand pays that out from the first solve, a held one tugs you back. Min =
+        // park radius, max = attach range.
         float len = Mathf.Clamp(Mathf.Min(dist, _pendingLength), _minChainLength, _maxChainLength);
         _tether = new Tether(_body, _user.AddExternalVelocity, node, len, _minChainLength, _maxChainLength);
         _pendingNode = null;
@@ -331,56 +342,45 @@ public class GrappleController : MonoBehaviour
         return best;
     }
 
-    void Push()
+    void Throw()
     {
-        // Throw direction comes from the mouse relative to the held item, not from
-        // the player: stand south of a crate, mouse to its left -> it shoots left.
-        Vector3 dir = Vector3.zero;
-        if (_tether.Node != null)
-        {
-            dir = _user.AimPoint - _tether.Node.AnchorPoint;
-            dir.y = 0f;
-        }
-        if (dir.sqrMagnitude < 0.0001f) dir = _user.AimPoint - transform.position;   // fallback: aim from player
-        dir.y = 0f;
-        if (dir.sqrMagnitude < 0.0001f) dir = transform.forward;
-
         if (_crackTimer > 0f) return;   // already cracking — ignore repeat presses
-        dir.Normalize();
 
-        // Crack: a wave travels down the whip (randomized direction/strength) and
-        // the impulse lands when it reaches the tail — the throw is animated, not
-        // instant. The tether stays taut while the wave travels.
-        ArmCrack(pull: false, dir);
-        TetherLog.Event($"PUSH ARM  dir={dir} crack={_crackTimer:0.00}s {_tether.Describe()}");
+        // The throw flies at the point clicked, not along a direction: the point is taken
+        // now, and the line to it from wherever the held thing has spun to when the crack
+        // lands. Crack: a wave travels down the whip (randomized direction/strength) and
+        // the throw lands when it reaches the tail — animated, not instant.
+        _throwTarget = _user.AimPoint;
+        ArmCrack(pull: false);
+        TetherLog.Event($"THROW ARM  target={_throwTarget} crack={_crackTimer:0.00}s {_tether.Describe()}");
     }
 
     // Shared crack-arming ceremony for both verbs: a wave travels down the whip
-    // (randomized per crack) and the verb's impulse lands when the front reaches
-    // the tail — the physics is animated, never instant. The tether stays taut
-    // while the wave travels.
-    void ArmCrack(bool pull, Vector3 pushDir)
+    // (randomized per crack) and the verb lands when the front reaches the tail —
+    // the physics is animated, never instant. The tether stays taut while the
+    // wave travels.
+    void ArmCrack(bool pull)
     {
         float crack = Mathf.Clamp(_tether.Length / WhipChain.CrackWaveSpeed, 0.1f, 0.3f);
         _whip.BeginCrack(crack);
         _crackTimer = crack;
         _pendingPullCrack = pull;
-        _pendingPushDir = pushDir;
     }
 
     void Detach(string reason, bool trail = false, bool thrown = false)
     {
         if (_tether == null) return;
+        _tether.End();
         // A pending crack outlives nothing: without this reset, a mid-crack detach
         // (node destroyed) freezes _crackTimer > 0 while the whip is null, and the
-        // stale crack later fires a ghost PUSH on the NEXT chain the player lands.
+        // stale crack later fires a ghost THROW on the NEXT chain the player lands.
         _pendingPullCrack = false;
         _crackTimer = 0f;
 
         if (_grabbed != null)
         {
-            // Tether.Push has already split the impulse onto the host, so its own velocity
-            // IS the throw. Anything else (node destroyed) is a drop, not a throw.
+            // Tether.Throw has already set the host's velocity, so its own velocity IS
+            // the throw. Anything else (node destroyed) is a drop, not a throw.
             if (thrown) _grabbed.Release(_grabbed.Body.linearVelocity);
             else _grabbed.EndGrab();
             _grabbed = null;

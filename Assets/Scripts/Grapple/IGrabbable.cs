@@ -10,7 +10,7 @@ public interface IGrabbable
     /// <summary>False when it mustn't be grabbed right now (dead, scripted, ...).</summary>
     bool CanBeGrabbed { get; }
 
-    /// <summary>The body the rope drags. Read on a throw: Tether.Push has already split the impulse onto it.</summary>
+    /// <summary>The body the rope drags. Read on a throw: Tether.Throw has already set its velocity.</summary>
     Rigidbody Body { get; }
 
     /// <summary>The whip landed on it: stop steering and let the rope own the body.</summary>

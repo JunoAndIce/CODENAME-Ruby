@@ -8,8 +8,14 @@ CODENAME-Ruby is a top-down twin-stick action prototype in **Unity 6000.5.10f1**
 System), aiming for a Hotline Miami feel: an orthographic camera looks straight down, the player
 strafes on the XZ plane while facing the cursor, and levels are floors of rooms and corridors full of
 enemies. The signature mechanic is a **whip grapple**: launch it at a node (world anchor, prop or
-enemy), pull and reel along the rope, and push-throw what you hold. A thrown enemy ragdolls.
-**Impact damage** (a thrown body hurting what it hits) is the planned payoff and is not built yet.
+enemy), pull and reel along the rope, and throw what you hold at the cursor. A thrown enemy
+ragdolls. **Impact damage** (a thrown body hurting what it hits) is the planned payoff and is not
+built yet.
+
+**The game aims for snappy, smooth movement and controls.** Verbs answer the press at once and
+never take the player's movement away. Grab and release are quick right clicks that leave the
+player where they are: no recoil dash, no lunge. Treat anything that slows a verb down, or moves the
+player when they didn't ask for it, as a regression.
 
 Some state classes are still deliberate stubs with `// TODO:` bodies that spell out the intended
 implementation — treat those comments as the spec, not as rot.
@@ -185,10 +191,25 @@ linecasts). Writes to the **player** go through a `pushPlayer` callback (`IGrapp
 because the player's movement is re-authored every step and would erase a raw velocity write; writes
 to the host go straight onto its Rigidbody.
 
+**The pull button is the hand on the chain** (`Tether.Gripped`). Held, the rope keeps its length:
+reel and tap shorten it, and it yields only under a pull the servo can't absorb. Released, it's
+loose: it slides out as the ends separate, up to max chain length, and never takes slack back in by
+itself. That's what lets a host spun up while reeling fan out when you let go. Held at min length
+with a moving host **no heavier than the player** in hand, it's **parked**: the player is the pivot,
+so the chain moves only the host, and the host spins around the player (`Tether.SpinSpeed`), which
+is what letting go flings out. **The spin ignores aim and never moves the player.** While parked,
+the host can't collide with the player (`Physics.IgnoreCollision`, given back the moment it stops
+being parked or the chain lets go): a spun body tumbles, and a bounce can carry it into the player
+between two steps of the rod. Heavier hosts
+don't park; their weight wins the tug-of-war. A moving host's min length grows to clear its size,
+because a pivot that lets the held body overlap the player turns every collision shove into flight.
+
 Grabbing: a node grabs the `IGrabbable` on it or above it in the hierarchy (the enemy). `LandWhip` calls
 `EnterGrabbed()` when `CanBeGrabbed` (live enemies only), and the controller keeps it for the whole
-tether. A push-throw calls `Release(its velocity)`, because `Tether.Push` has already split the
-impulse onto it. Any other detach calls `EndGrab()`.
+tether. A throw calls `Release(its velocity)`, because `Tether.Throw` has already set it: the
+throw **replaces** the held thing's velocity with one aimed at the point the player clicked (taken
+when the crack lands, so a spinning host still goes where you clicked), at a speed split by mass.
+**It never moves the player**; on a static node it just lets go. Any other detach calls `EndGrab()`.
 
 ### Movement velocity
 
@@ -196,8 +217,8 @@ The game is 2D feel on a 3D physics stack. [VelocityUtil.cs](Assets/Scripts/Core
 how characters author movement:
 
 - **The player** rewrites its velocity every physics step as **movement input + external velocity**.
-  External velocity comes **only from explicit pushes** (`AddExternalVelocity`: tether yanks, push
-  recoil, later knockback) and fades at Fling Damping. Nothing is inferred from what the body
+  External velocity comes **only from explicit pushes** (`AddExternalVelocity`: tether yanks, later
+  knockback) and fades at Fling Damping. Nothing is inferred from what the body
   actually did. That was the old scheme, and it read "a wall stopped me" as "something pushed me",
   bouncing the player off walls and crates and pinning enemies in corners. **Never write a
   character's Rigidbody velocity directly to push it; use `AddExternalVelocity`.**

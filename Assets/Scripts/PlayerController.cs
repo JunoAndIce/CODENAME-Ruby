@@ -23,7 +23,7 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
     public bool TriggerPressed => _triggerPressed;
 
     [SerializeField] private float _gamepadAimDistance = 6f;
-    [Tooltip("How fast pushes from outside (tether yanks, push recoil) fade. Kept out of rigidbody damping on purpose: real damping would eat your move input too.")]
+    [Tooltip("How fast pushes from outside (tether yanks, later knockback) fade. Kept out of rigidbody damping on purpose: real damping would eat your move input too.")]
     [SerializeField] private float _flingDamping = 3f;
     // Action axis only. Locomotion runs every frame regardless of which state is active.
     private readonly StateMachine _actions = new();
@@ -136,7 +136,7 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
 
     void FixedUpdate()
     {
-        // Movement input on top of explicit pushes (tether, push recoil); see VelocityUtil.
+        // Movement input on top of explicit pushes (tether yanks); see VelocityUtil.
         VelocityUtil.ApplyAuthoredMove(_myRigidbody, _moveVelocity, ref _external, _flingDamping);
         _actions.FixedTick();
     }

@@ -5,8 +5,8 @@ using UnityEngine;
 ///
 /// The authored-movement scheme lives HERE so every velocity-authoring character uses one
 /// implementation: movement input is re-written fresh each physics step on top of the
-/// character's external velocity — pushes it was explicitly given (tether yanks, push recoil,
-/// knockback), which carry forward and fade on their own. Nothing is inferred from what the
+/// character's external velocity — pushes it was explicitly given (tether yanks, knockback),
+/// which carry forward and fade on their own. Nothing is inferred from what the
 /// body actually did, so a wall that stops the body can never be mistaken for a push off it.
 /// </summary>
 public static class VelocityUtil
