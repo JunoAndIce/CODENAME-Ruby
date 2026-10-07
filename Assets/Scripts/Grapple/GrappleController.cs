@@ -217,10 +217,6 @@ public class GrappleController : MonoBehaviour
     {
         GrappleNode node = _pendingNode;
         float dist = Vector3.Distance(node.AnchorPoint, _body.worldCenterOfMass);
-        // Lands taut at whichever is shorter, the launch length or the distance now:
-        // running toward shortens it. Running away doesn't lengthen it here; a loose
-        // hand pays that out from the first solve, a held one tugs you back. Min =
-        // park radius, max = attach range.
         float len = Mathf.Clamp(Mathf.Min(dist, _pendingLength), _minChainLength, _maxChainLength);
         _tether = new Tether(_body, _user.AddExternalVelocity, node, len, _minChainLength, _maxChainLength);
         _pendingNode = null;

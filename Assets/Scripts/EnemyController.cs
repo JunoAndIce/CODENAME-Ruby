@@ -1,6 +1,7 @@
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(CapsuleCollider))]
 [RequireComponent(typeof(Health))]
 public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
 {
@@ -42,6 +43,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     // ENEMY STATES
     private readonly StateMachine _state = new();
     public Rigidbody Body { get; private set; }
+    private CapsuleCollider _capsule;
     public Health Health { get; private set; }
     public IRagdollBody RagdollBody { get; private set; }
     public GridNavigator Navigator { get; private set; }
@@ -87,6 +89,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     private void Awake()
     {
         Body = GetComponent<Rigidbody>();
+        _capsule = GetComponent<CapsuleCollider>();
         Health = GetComponent<Health>();
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
@@ -200,11 +203,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
 
         if (direction.sqrMagnitude > 0.01f)
             transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
-
-        // Plain authored velocity: nothing pushes an enemy while its AI steers (the rope only
-        // acts while grabbed, a state that doesn't steer), so there's no push to carry. When
-        // knockback arrives it gets the player's explicit external velocity (VelocityUtil).
-        VelocityUtil.SetFlatVelocity(Body, transform.forward * speed);
+        VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, transform.forward * speed));
     }
 
     /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>

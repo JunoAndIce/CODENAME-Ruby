@@ -70,7 +70,7 @@ The scripts are split into assembly definitions so the systems can be lifted int
 
 | Assembly | Folder (under `Assets/Scripts/`) | References | Holds |
 | --- | --- | --- | --- |
-| `Ruby.Core` | `Core/` | none | state machine, `Health`, `VelocityUtil`, ragdoll seam, pooling |
+| `Ruby.Core` | `Core/` | none | state machine, `Health`, `VelocityUtil`, weight classes, ragdoll seam, pooling |
 | `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, patrol routes |
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
@@ -230,6 +230,35 @@ how characters author movement:
 Anything that steers by `transform.forward` must flatten its look target first — see
 `EnemyController.FaceTarget()`. Aiming at a full 3D position tilts forward and drives the body
 vertically.
+
+### Weight
+
+Masses are **real kilograms** (Unity's physics assumes metres, kg and seconds), because impact
+damage will be computed from mass and speed. A body gets its mass from a **`Weight`** component
+(`Core/`): it picks a `WeightClass` (Tiny 10, Small 20, Medium 30, Large 40, Huge 50, Immovable 60, Player,
+Enemy, or Custom kg) and
+writes that class's kg from the shared **`WeightTable`** asset into `Rigidbody.mass` at Awake.
+`Rigidbody.mass` stays the runtime truth that everything reads. Retune the table, not individual
+Rigidbodies.
+`WeightClass` values are explicit and out of order on purpose: Unity saves the number, so a new
+class takes a new number rather than shifting the ones after it.
+
+The tether only reads **ratios** to the player's mass: a host's share of a pull is
+`mP / (mP + mT)`, a throw flies at `throwImpulse · mP / (mP + mT)`, and a host parks only when
+`mT ≤ mP`. So whether something feels heavy on the chain depends on its mass compared with the
+player's, and walking into it is judged against the walker's own mass. Tension is the one absolute
+quantity: it grows with the masses, so `GrappleNode` break strengths must be tuned on this scale.
+
+**Walking feels mass** through `PushLimit` (`Core/`). Authored velocity is an unlimited force:
+without it a character re-arrives at full speed every step and bulldozes anything. Before the move
+is written, a capsule cast one step ahead scales the part of the move heading into each movable
+body by `clamp01(1 − pushedMass / pusherMass)`, the pusher being the walker's own Rigidbody. Much
+lighter bodies are shoved almost at full speed, ones near your weight slowly, and anything as heavy
+as you or heavier blocks, so equal-weight characters block each other. There is deliberately no
+separate push-strength dial: it would drift out of step with the weight table. It looks
+ahead instead of reading collision callbacks, which arrive a step late, so the first step into a
+heavy crate would kick it. It skips pairs set to ignore each other, so a parked host spinning
+through the player never slows the walk. External velocity (tether yanks) is not limited.
 
 ### Enemy AI
 

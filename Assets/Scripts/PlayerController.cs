@@ -1,12 +1,14 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+[RequireComponent(typeof(CapsuleCollider))]
 public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
 {
     public float _moveSpeed = 15f;
     public int _bulletCount = 6;
     public GunController _gun;
     private Rigidbody _myRigidbody;
+    private CapsuleCollider _capsule;
     private Camera _mainCamera;
     private PlayerInput _playerInput;
     private Vector2 _moveInput;
@@ -45,6 +47,7 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
     void Start()
     {
         _myRigidbody = GetComponent<Rigidbody>();
+        _capsule = GetComponent<CapsuleCollider>();
         // NOTE: rigidbody linearDamping stays at 0. The carried-velocity scheme below
         // misreads damped-away move velocity as external, which cancels move input over
         // time (player crawls to a stop while holding W). External decay is done
@@ -136,8 +139,10 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
 
     void FixedUpdate()
     {
-        // Movement input on top of explicit pushes (tether yanks); see VelocityUtil.
-        VelocityUtil.ApplyAuthoredMove(_myRigidbody, _moveVelocity, ref _external, _flingDamping);
+        // Movement input, weighed against whatever it walks into, on top of explicit pushes
+        // (tether yanks); see PushLimit and VelocityUtil. Pushes aren't limited: the solver owns those.
+        Vector3 move = PushLimit.Limit(_capsule, _moveVelocity);
+        VelocityUtil.ApplyAuthoredMove(_myRigidbody, move, ref _external, _flingDamping);
         _actions.FixedTick();
     }
 
