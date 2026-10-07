@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce3df61c4839a7b4c8cb3c524741755a, type: 3}
+  m_Name: WeightTable
+  m_EditorClassIdentifier: Ruby.Core::WeightTable
+  _tiny: 10
+  _small: 20
+  _medium: 30
+  _large: 40
+  _huge: 50
+  _immovable: 60
+  _player: 60
+  _enemy: 60
