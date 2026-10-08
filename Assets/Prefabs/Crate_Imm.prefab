@@ -10,7 +10,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 8012345678901234501, guid: 7f3e9a2c5b8d4e01a6c9f3b2d8e41a57, type: 3}
       propertyPath: m_Name
-      value: Crate (4) Variant
+      value: Crate_Imm
       objectReference: {fileID: 0}
     - target: {fileID: 8012345678901234502, guid: 7f3e9a2c5b8d4e01a6c9f3b2d8e41a57, type: 3}
       propertyPath: m_LocalScale.x
@@ -71,6 +71,10 @@ PrefabInstance:
     - target: {fileID: 8012345678901234506, guid: 7f3e9a2c5b8d4e01a6c9f3b2d8e41a57, type: 3}
       propertyPath: m_Mass
       value: 60
+      objectReference: {fileID: 0}
+    - target: {fileID: 8012345678901234506, guid: 7f3e9a2c5b8d4e01a6c9f3b2d8e41a57, type: 3}
+      propertyPath: m_IsKinematic
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8980847214723297532, guid: 7f3e9a2c5b8d4e01a6c9f3b2d8e41a57, type: 3}
       propertyPath: _class

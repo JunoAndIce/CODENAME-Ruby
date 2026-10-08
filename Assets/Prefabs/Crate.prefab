@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 8012345678901234506}
   - component: {fileID: 8012345678901234507}
   - component: {fileID: 8980847214723297532}
+  - component: {fileID: 1476588104917454685}
   m_Layer: 0
   m_Name: Crate
   m_TagString: Untagged
@@ -171,3 +172,17 @@ MonoBehaviour:
   _table: {fileID: 11400000, guid: 3f88b0ea629a0c44593a2564456dd006, type: 2}
   _class: 0
   _customKg: 1
+--- !u!114 &1476588104917454685
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8012345678901234501}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d56ad7637815a7b4fbe7987542facf2c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ruby.Pathing::GridObstacle
+  _restSpeed: 0.2
+  _settleTime: 0.01

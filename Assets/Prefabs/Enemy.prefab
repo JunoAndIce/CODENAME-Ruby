@@ -311,7 +311,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3843596274935931329}
   serializedVersion: 5
-  m_Mass: 20
+  m_Mass: 50
   m_LinearDamping: 0
   m_AngularDamping: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -345,7 +345,6 @@ MonoBehaviour:
   _chaseSpeed: 10
   _patrolSpeed: 7
   _searchSpeed: 6
-  _pushStrength: 60
   _alertRadius: 12.5
   _giveUpRadius: 16.5
   _aggroTime: 5
@@ -353,6 +352,9 @@ MonoBehaviour:
   _searchDuration: 10
   _attackRange: 0
   _attackCooldown: 1
+  _dropFlingSpeed: 60
+  _dropSpinSpeed: 60
+  _dropSpinTime: 8
   _safeRoute:
     _mode: 0
     _points:

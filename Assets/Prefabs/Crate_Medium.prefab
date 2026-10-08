@@ -55,27 +55,5 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 8012345678901234501, guid: 7f3e9a2c5b8d4e01a6c9f3b2d8e41a57, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1557952487811128676}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 7f3e9a2c5b8d4e01a6c9f3b2d8e41a57, type: 3}
---- !u!1 &3908591631341553676 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 8012345678901234501, guid: 7f3e9a2c5b8d4e01a6c9f3b2d8e41a57, type: 3}
-  m_PrefabInstance: {fileID: 6417500348707423049}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &1557952487811128676
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3908591631341553676}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d56ad7637815a7b4fbe7987542facf2c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GridObstacle
-  _restSpeed: 0.2
-  _settleTime: 0.01

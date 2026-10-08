@@ -19,4 +19,4 @@ MonoBehaviour:
   _huge: 50
   _immovable: 60
   _player: 60
-  _enemy: 60
+  _enemy: 50
