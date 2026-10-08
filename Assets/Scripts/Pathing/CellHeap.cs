@@ -1,10 +1,9 @@
 using System;
 
 /// <summary>
-/// Binary min-heap of grid cell indices keyed by integer cost, for Dijkstra (and A* later).
-/// Duplicates are allowed: callers skip stale entries when they pop them (lazy deletion),
-/// which is simpler and faster than a decrease-key on an array heap. Unity's .NET profile
-/// has no PriorityQueue.
+/// Binary min-heap of grid cell indices keyed by integer cost, for Dijkstra and A*. Unity's .NET
+/// profile has no PriorityQueue. Duplicates are allowed: callers skip stale entries as they pop
+/// them, which is simpler and faster than decrease-key.
 /// </summary>
 public class CellHeap
 {

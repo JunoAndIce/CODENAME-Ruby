@@ -5,7 +5,6 @@ using UnityEngine;
 [RequireComponent(typeof(Health))]
 public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
 {
-    // CONFIGURABLE VALUES
     [Header("Movement")]
     [SerializeField] private float _chaseSpeed = 2f;
     [SerializeField] private float _patrolSpeed = 1f;
@@ -40,10 +39,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     [Header("References")]
     [SerializeField] private PlayerController _player;
 
-    // ENEMY STATES
     private readonly StateMachine _state = new();
-    public Rigidbody Body { get; private set; }
     private CapsuleCollider _capsule;
+
+    public Rigidbody Body { get; private set; }
     public Health Health { get; private set; }
     public IRagdollBody RagdollBody { get; private set; }
     public GridNavigator Navigator { get; private set; }
@@ -55,13 +54,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     public RagdollState Ragdoll { get; private set; }
     public DeadState Dead { get; private set; }
 
-    // GETTERS
-    public EnemyState State => _state.Current is EnemyStateBase s ? s.Id : EnemyState.Idle;
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
-    public float AlertRadius => _alertRadius;
-    public float GiveUpRadius => _giveUpRadius;
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
     public float AttackRange => _attackRange;
@@ -73,13 +68,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
     /// <summary>
-    /// Where the hunt was leading when aggro ended. Aggro keeps tracking the player for Aggro
-    /// Time after losing contact, so this is where they actually went, not where they slipped
-    /// out of view. Search goes here.
+    /// Where the hunt was leading when aggro ended, which is where search goes. Aggro keeps
+    /// tracking the player for Aggro Time after losing contact, so this is where they went, not
+    /// where they slipped out of view.
     /// </summary>
     public Vector3 LastKnownPlayerPosition { get; private set; }
-    /// <summary>Set the first time the enemy aggros; never cleared. The Cautious state reads it.</summary>
-    public bool IsCautious { get; private set; }
 
     private static readonly RaycastHit[] SightHits = new RaycastHit[16];
     private int _sightFrame = -1;
@@ -167,9 +160,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         _state.SetState(Aggro);
     }
 
-    /// <summary>One-way: once an enemy has hunted the player it stays on edge for good.</summary>
-    public void MarkCautious() => IsCautious = true;
-
     public void RecordTrailEnd()
     {
         if (_player != null) LastKnownPlayerPosition = _player.transform.position;
@@ -195,7 +185,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         _state.SetState(Ragdoll);
     }
 
-    // Will be used for patroling and searching
     public void MoveToward(Vector3 target, float speed)
     {
         Vector3 direction = target - transform.position;
@@ -242,11 +231,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     public Collider SightBlocker => _sightBlocker;
 
     /// <summary>
-    /// A line from eye height to the player crosses nothing solid except characters (the
-    /// player, enemies — this one's own eye cubes included). Unlike paths, sight is checked
-    /// fresh every frame, so moving props can block it: hiding behind a crate works, while a
-    /// prop lower than the eye line doesn't hide anyone. See-through windows arrive with the
-    /// Perception step. Cached per frame: several transitions and the aggro state all ask.
+    /// A line from eye height to the player that crosses nothing solid except characters. Checked
+    /// fresh, so a crate can hide the player while a prop below the eye line can't. Cached per
+    /// frame: several transitions and the aggro state all ask.
     /// </summary>
     public bool CanSeePlayer()
     {
@@ -272,7 +259,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         return _canSeePlayer;
     }
 
-    // Characters see past each other: the player's own colliders (gun included) and any enemy's.
+    // Characters see past each other.
     private bool IsCharacter(Collider collider)
     {
         Rigidbody body = collider.attachedRigidbody;
@@ -327,9 +314,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         }
     }
 
-    // Every enemy's route, faintly, all the time: with many enemies you can see who walks what
-    // without selecting each one. The selected enemy's areas get coloured handles on top
-    // (EnemyControllerEditor).
+    // Every enemy's route, faintly, so you can see who walks what without selecting each one.
     private void OnDrawGizmos()
     {
         if (!HasPatrolRoute) return;

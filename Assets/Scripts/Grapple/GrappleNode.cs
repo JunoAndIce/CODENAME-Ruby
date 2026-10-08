@@ -2,43 +2,29 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// A grapple anchor on any host: static world, entity, or prop. Multiple nodes per object are
-/// expected. Carries a break strength and resolves its own host body (a kinematic or missing
-/// body means the node counts as static world).
+/// A grapple anchor on any host: static world, entity or prop, several per object if wanted.
+/// A kinematic or missing body means the node counts as static world.
 /// </summary>
 public class GrappleNode : MonoBehaviour
 {
     [Header("Strength")]
-    [Tooltip("Tension this node should take before tearing free. The chain itself never breaks: going over this only logs a warning, the tuning data for the later structural-break system (ripping a table apart along its nodes).")]
+    [Tooltip("Tension this node should take before tearing free. The chain never breaks: going over this only logs a warning, as tuning data for the later structural-break system.")]
     [SerializeField, Min(1f)] private float _breakStrength = 800f;
 
     [Header("Grabbing")]
-    [Tooltip("Whether the grapple can attach here right now. Systems (health, timers, enemy AI) flip this at runtime — e.g. an enemy grabbable only below half health, or a terrain piece on a timer.")]
-    [SerializeField] private bool _grabable = true;   // the field keeps its old spelling: scene overrides name it
+    [Tooltip("Whether the grapple can attach here.")]
+    [SerializeField] private bool _grabable = true;   // keeps its old spelling: scene overrides name it
 
-    /// <summary>All live nodes. The grapple scans this instead of polling FindObjectsByType;
-    /// enable/disable keep it current, and it stays cheap at hundreds-to-thousands of nodes.</summary>
+    /// <summary>All live nodes, so the grapple scans a list instead of searching the scene.</summary>
     public static readonly List<GrappleNode> All = new();
 
     public float BreakStrength => _breakStrength;
+    public bool Attachable => _grabable;
 
-    /// <summary>Whether the grapple can attach here right now (see the field's tooltip).</summary>
-    public bool Attachable
-    {
-        get => _grabable;
-        set
-        {
-            if (_grabable == value) return;
-            _grabable = value;
-            TetherLog.Event($"{name} attachable -> {value}");
-        }
-    }
-
-    /// <summary>Null or kinematic for static-world nodes.</summary>
     public Rigidbody Host { get; private set; }
     public bool IsStaticWorld => Host == null || Host.isKinematic;
     public bool IsOccupied { get; internal set; }
-    /// <summary>What this node lets the grapple grab, if anything (an enemy). Null for world and props.</summary>
+    /// <summary>What this node lets the grapple grab (an enemy). Null for world and props.</summary>
     public IGrabbable Grabbable { get; private set; }
 
     public Vector3 AnchorPoint => transform.position;
@@ -53,9 +39,8 @@ public class GrappleNode : MonoBehaviour
     void OnDisable() => All.Remove(this);
 
     /// <summary>
-    /// The best free node to attach to: the closest one the aim points at, inside range and the
-    /// aim cone. Cheap math only (no physics calls), so scanning scales to hundreds-to-thousands
-    /// of live nodes. Occlusion is deliberately left out: it wasn't earning its cost.
+    /// The closest free node the aim points at, inside range and the aim cone. Distance and
+    /// angle math only, no physics calls, so it scales to thousands of nodes.
     /// </summary>
     public static GrappleNode FindBest(Vector3 origin, Vector3 aimDir, float range, float cone)
     {
@@ -74,7 +59,7 @@ public class GrappleNode : MonoBehaviour
             float angle = Vector3.Angle(aimDir, to / dist);
             if (angle > cone) continue;
 
-            // Closest node the player is pointing at: distance weighted by aim offset.
+            // Distance weighted by aim offset.
             float score = dist + angle * (range / 90f);
             if (score < bestScore)
             {

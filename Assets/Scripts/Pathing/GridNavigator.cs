@@ -4,15 +4,9 @@ using UnityEngine;
 public enum NavResult { Moving, Arrived, Blocked, Unreachable }
 
 /// <summary>
-/// Moves an IPathAgent over the PathGrid of the floor it stands on.
-/// Shared goals use Dijkstra flow fields: chasers read their floor's shared field toward the
-/// target, so chase cost doesn't grow with the number of chasers, and a fixed point (search)
-/// gets this agent's own field, flooded once. Individual goals (patrol areas) use A*, one search
-/// per leg, cached. A clear straight line skips both. The navigator only plans; the agent's own
-/// MoveToward does the moving, so each kind of character keeps its own movement rules.
-///
-/// No silent fallbacks: chase and search stop with a warning saying why; area moves report
-/// Blocked or Unreachable with a FailureReason and let the caller decide (patrol skips).
+/// Moves an IPathAgent over its floor's PathGrid: flow fields for chase and search, cached A* for
+/// patrol areas, and a straight line when one is clear. It only plans; the agent steers. No silent
+/// fallbacks: chase and search stop with a warning, area moves report Blocked or Unreachable.
 /// </summary>
 public class GridNavigator
 {
@@ -296,10 +290,5 @@ public class GridNavigator
         _lastWarning = why;
     }
 
-    private static float FlatDistance(Vector3 a, Vector3 b)
-    {
-        Vector3 delta = a - b;
-        delta.y = 0f;
-        return delta.magnitude;
-    }
+    private static float FlatDistance(Vector3 a, Vector3 b) => PathGrid.FlatDistance(a, b);
 }

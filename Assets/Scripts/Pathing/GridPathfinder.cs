@@ -2,15 +2,9 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// A* over a PathGrid, for goals only one agent wants (a patrol point). Shared goals (chase)
-/// use FlowField instead: one flood serves every chaser, where A* would search per enemy.
-///
-/// Heuristic: octile distance, 14·min(dx,dz) + 10·(max − min), in the same integer units as
-/// the step costs (10 straight, 14 diagonal). It is the exact cost of the best route on an
-/// empty grid — diagonal until lined up, then straight — so it never overestimates (paths
-/// stay shortest) and nothing tighter is safe, so the search stays narrow. Ties in f go to
-/// the lower heuristic: in open rooms that drives straight at the goal instead of spreading
-/// sideways, without changing the path's cost.
+/// A* over a PathGrid, for goals only one agent wants (a patrol point); shared goals use FlowField.
+/// The octile heuristic is the exact cost on an empty grid, so it never overestimates. Ties in f
+/// go to the lower heuristic, which drives straight at the goal in open rooms.
 /// </summary>
 public class GridPathfinder
 {
@@ -109,9 +103,8 @@ public class GridPathfinder
         _seen[index] = _generation;
     }
 
-    // Walk parents back to the start, then string-pull: from each corner, keep extending the
-    // straight line while the grid has sight of the next cell, and only add a corner where
-    // sight breaks. Agents walk straight segments instead of an 8-direction staircase.
+    // String-pull the cell path into straight segments, adding a corner only where sight breaks,
+    // so agents don't walk an 8-direction staircase.
     private void BuildPath(Vector3 from, int goalIndex, List<Vector3> path)
     {
         _cells.Clear();

@@ -1,35 +1,21 @@
 using UnityEngine;
 
 /// <summary>
-/// Makes walking feel mass. A character authors its velocity every step, so the solver can't
-/// resist it: each step it arrives at full speed again and shoves whatever it touches, however
-/// heavy. This scales the part of an authored move that heads INTO a movable body by
+/// Makes walking feel mass. Authored velocity is an unlimited force, so without this a character
+/// shoves anything it touches. The part of a move heading into a movable body is scaled by
+/// clamp01(1 - pushedMass / pusherMass): anything as heavy as the pusher blocks like a wall.
 ///
-///     f = clamp01(1 - pushedMass / pusherMass)
-///
-/// so a body much lighter than you is shoved at nearly full speed, one near your weight slowly,
-/// and anything as heavy as you or heavier is never pressed into at all: it gets no impulse and
-/// stays put, like a wall. Only the into-the-body part is scaled, so sliding along a heavy crate
-/// keeps full speed.
-///
-/// Strength is the pusher's own Rigidbody mass rather than a separate dial: a dial has to be kept
-/// in step with the weight table by hand, and drifts out of it the moment the table is retuned.
-/// It's the same comparison the tether parks by (a host no heavier than the player).
-///
-/// It looks AHEAD with a capsule cast rather than reading collision callbacks: those report a
-/// contact only after the step that made it, so the first step into a heavy crate would still
-/// land at full speed and kick it a metre or more every time you walked into it.
+/// It casts ahead instead of reading collision callbacks, which arrive a step late: the first
+/// step into a heavy crate would kick it.
 /// </summary>
 public static class PushLimit
 {
-    // The cast runs on a capsule this much slimmer than the body, and this much further, so a body
-    // already resting against a prop still hits it with a real face normal. A cast that starts
-    // overlapping reports no usable normal.
+    // A slimmer capsule cast a little further, so a body already touching a prop still hits it
+    // with a real face normal: a cast that starts overlapping reports none.
     const float Skin = 0.02f;
 
     static readonly RaycastHit[] Hits = new RaycastHit[16];
 
-    /// <summary>The move with its push into each movable body ahead scaled by that body's mass against the pusher's.</summary>
     public static Vector3 Limit(CapsuleCollider capsule, Vector3 move)
     {
         float speed = move.magnitude;
@@ -47,11 +33,11 @@ public static class PushLimit
             RaycastHit hit = Hits[i];
             Rigidbody other = hit.rigidbody;
 
-            // Walls and kinematic bodies already stop the solver; only bodies that can be shoved count.
+            // Walls and kinematic bodies already stop the solver.
             if (other == null || other == self || other.isKinematic) continue;
 
-            // Queries ignore IgnoreCollision, so respect it here: a parked host spins THROUGH the
-            // player, and limiting the walk whenever it swept past would take movement away.
+            // Queries ignore IgnoreCollision: a parked host spins through the player, and must
+            // not slow the walk as it sweeps past.
             if (Physics.GetIgnoreCollision(capsule, hit.collider)) continue;
             if (Physics.GetIgnoreLayerCollision(capsule.gameObject.layer, hit.collider.gameObject.layer)) continue;
 

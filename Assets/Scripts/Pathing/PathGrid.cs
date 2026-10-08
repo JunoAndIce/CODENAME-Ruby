@@ -2,14 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Walkability grid for enemy pathing, baked once from static geometry. Place the object at
-/// floor height; its position is the grid's centre and the grid is axis-aligned (rotation is
-/// ignored). A cell is blocked when an enemy-sized capsule standing on it would overlap
-/// anything static, so paths keep wall clearance, and the floor under the capsule never counts.
-/// Dynamic bodies (enemies, player, crates) are ignored: they move, and a grid baked once
-/// would go stale around them; physics props that should block paths carry a GridObstacle,
-/// which marks the grid while they rest. Each floor of a level gets its own grid (floors are
-/// independent); At() finds the grid whose floor band contains a point.
+/// Walkability grid for one floor, baked at Start from static geometry. Place it at floor height;
+/// it is axis-aligned around its position. A cell is blocked when an agent-sized capsule standing
+/// on it overlaps anything static, which keeps paths off walls. Dynamic bodies are skipped by the
+/// bake; props that should block carry a GridObstacle, which marks the grid while they rest.
 /// </summary>
 public class PathGrid : MonoBehaviour
 {
@@ -57,8 +53,8 @@ public class PathGrid : MonoBehaviour
     private void OnEnable() => All.Add(this);
     private void OnDisable() => All.Remove(this);
 
-    // Start, not Awake: every scene collider exists and has been placed by then, and all
-    // Starts run before the first physics step, so no enemy ever sees an unbaked grid.
+    // Start, not Awake: every collider is placed by then, and all Starts run before the first
+    // physics step, so no enemy sees an unbaked grid.
     private void Start() => Bake();
 
     /// <summary>The baked grid whose floor contains point, or null when no grid does.</summary>
@@ -153,7 +149,7 @@ public class PathGrid : MonoBehaviour
         return true;
     }
 
-    private static float FlatDistance(Vector3 a, Vector3 b)
+    public static float FlatDistance(Vector3 a, Vector3 b)
     {
         float dx = a.x - b.x, dz = a.z - b.z;
         return Mathf.Sqrt(dx * dx + dz * dz);

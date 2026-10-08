@@ -99,16 +99,17 @@ The single most important design decision, and the one most likely to be undone 
 
 **Movement and shooting are not states.** The player can move and fire in *every* state, so both run
 unconditionally every frame — `PlayerController.MovePlayer()` in `Update`, `GunController` polling on
-its own. The player's state machine owns only the **chain axis**: `Free → Throwing → Holding`. See
+its own. The player's state machine owns only the **chain axis**: Free (no state) or Holding. See
 [PlayerState.cs](Assets/Scripts/States/PlayerState.cs). Enemies follow the same rule: attacking is
 something `AggroState` does while hunting, not a separate Attack state.
 
 If you find yourself adding a state for something an actor does simultaneously with something
 else, it belongs outside the machine.
 
-The player's chain-axis states are currently **disconnected scaffolding**: the real grapple lives in
-`GrappleController`, and nothing calls `PlayerController.EnterHold()/ExitHold()`. Whether to wire them
-(Holding owning the charge for slice 4) or retire them is an open decision.
+`PlayerHoldingState` is **disconnected scaffolding**: the real grapple lives in `GrappleController`,
+and nothing calls `PlayerController.EnterHold()/ExitHold()` yet. It is kept for slice 4, whose
+charge it will own; its `// TODO:` body is the spec. The empty Free and Throwing state classes were
+removed.
 
 ### The state machine
 
@@ -314,8 +315,7 @@ kinematic body would silently ignore it and hang frozen instead of being dragged
 `ObjectPoolManager` is a static API backed by an instance that must exist in the scene (the "Pooler"
 object) — its `Awake` creates the dictionaries, so calling `SpawnObject` before it runs throws.
 Pooled objects **return themselves** (`BulletController` on lifetime expiry). Enemies are *not*
-pooled yet: `DeadState.Enter` destroys the GameObject, and `Health.ResetHealth()` exists for when
-they are.
+pooled yet: `DeadState.Enter` destroys the GameObject, so pooling them will need `Health` to reset.
 
 ### Animation
 

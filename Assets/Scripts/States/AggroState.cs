@@ -1,15 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// Hunting the player: close in along the floor's shared flow field, then, inside Attack Range
-/// with a clear line, stop, face them and attack on a cooldown. One state for both rather than
-/// Chase + Attack: attacking happens alongside the hunt, not instead of it (the two-axis rule),
-/// and a weapon later changes only what the attack does, not which state the enemy is in.
-///
-/// Contact holds while the player is in sight within the give-up radius. After Aggro Time
-/// without it, LostPlayer flips and the table sends the enemy to search. Until then it keeps
-/// tracking them, seen or not, so the search starts where that trail led when it went cold,
-/// not where the player first slipped out of view.
+/// Hunting the player along the shared flow field, and attacking on a cooldown inside Attack Range
+/// with a clear line. One state, not Chase + Attack: attacking happens alongside the hunt. After
+/// Aggro Time out of contact, LostPlayer flips and the table sends the enemy to search.
 /// </summary>
 public class AggroState : EnemyStateBase
 {
@@ -27,12 +21,10 @@ public class AggroState : EnemyStateBase
     {
         _lostTimer = 0f;
         _attackCooldown = 0f;   // the first attack lands as soon as it's in range
-        Enemy.MarkCautious();
         _hadSight = Enemy.CanSeePlayer();
     }
 
-    // The hunt tracks the player right up to here, so this is where it was leading — the end
-    // of the yellow path — and where a search should start.
+    // The hunt tracks the player right up to here, so this is where a search should start.
     public override void Exit() => Enemy.RecordTrailEnd();
 
     public override void Tick()
@@ -70,7 +62,6 @@ public class AggroState : EnemyStateBase
             return;
         }
 
-        // Steering faces the direction of travel, so it doesn't slide sideways round corners.
         Enemy.PathToPlayer(Enemy.ChaseSpeed);
     }
 }

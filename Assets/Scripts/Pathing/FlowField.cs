@@ -2,14 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Dijkstra distance field over a PathGrid. One flood out from a goal and every reachable
-/// cell knows its path cost to it; any number of agents then find their next step by
-/// looking at neighbouring cells, with no search of their own. That is why chase uses it:
-/// every chaser on a floor wants the same goal (the player), so one flood serves them all.
-///
-/// A field built with a target Transform follows it, re-flooding when the target enters a
-/// new cell. A field without one floods when Flood is called (a fixed point). Either re-floods
-/// when the grid itself changes (a prop settled or started moving). Re-floods are throttled.
+/// Dijkstra distance field over a PathGrid: one flood from a goal, and any number of agents find
+/// their next step from neighbouring costs with no search of their own. That is why chase uses it.
+/// A field with a target follows it, re-flooding when the target changes cell; either kind
+/// re-floods when the grid changes. Re-floods are throttled.
 /// </summary>
 public class FlowField
 {
@@ -135,8 +131,7 @@ public class FlowField
         bool targetMoved = _target != null
             && _grid.WorldToCell(_target.position, out Vector2Int cell) && cell != _floodedFrom;
         bool gridChanged = _floodedVersion != _grid.Version;
-        // At most every RefreshInterval: a sprinting target or a shower of settling props
-        // can't trigger a flood every physics step.
+        // Throttled, so a sprinting target or a shower of settling props can't flood every step.
         if ((!targetMoved && !gridChanged) || Time.time < _nextRefresh) return;
 
         _nextRefresh = Time.time + RefreshInterval;
