@@ -82,7 +82,7 @@ game implements:
 
 | Interface | Declared in | Implemented by | What the system needs from it |
 | --- | --- | --- | --- |
-| `IGrappleUser` | Grapple | `PlayerController` | aim, a push channel |
+| `IGrappleUser` | Grapple | `PlayerController` | aim, a push channel, a walk limit |
 | `IGrabbable` | Grapple | `EnemyController` | grab, drag and throw it |
 | `IPathAgent` | Pathing | `EnemyController` | a body for `GridNavigator` to steer |
 | `ICameraTarget` | CameraRig | `PlayerController` | a position, an aim point, peek |
@@ -212,6 +212,14 @@ throw **replaces** the held thing's velocity with one aimed at the point the pla
 when the crack lands, so a spinning host still goes where you clicked), at a speed split by mass.
 **It never moves the player**; on a static node it just lets go. Any other detach calls `EndGrab()`.
 
+**Fixed anchors stop the walk cleanly.** When the far end can't move (bare world, or an immovable
+object on a kinematic body), the rope's limit is passed to the player each step through
+`IGrappleUser.LimitMove`: the walk may head away from the anchor (or the first wrap) only as far as
+the rope reaches, which is max length when loose and the current length when held. The player
+circles at full speed and nothing snaps them back. Stopping them through external velocity
+instead builds up a push that yanks them toward the anchor as soon as they stop walking. On an
+**immovable object the pull button does nothing** (`Tether.CanPull`): no tap, no reel, no grip.
+
 ### Movement velocity
 
 The game is 2D feel on a 3D physics stack. [VelocityUtil.cs](Assets/Scripts/Core/VelocityUtil.cs) owns
@@ -241,6 +249,10 @@ Enemy, or Custom kg) and
 writes that class's kg from the shared **`WeightTable`** asset into `Rigidbody.mass` at Awake.
 `Rigidbody.mass` stays the runtime truth that everything reads. Retune the table, not individual
 Rigidbodies.
+**Immovable also makes the body kinematic** (`Weight` owns `isKinematic` on its body), because
+every system already treats kinematic as fixed: the tether anchors to it, walking and thrown bodies
+can't move it, and the PathGrid bakes it as static. Special interactions on immovable objects (a
+turret's gun pulled off) belong on nodes on their child parts.
 `WeightClass` values are explicit and out of order on purpose: Unity saves the number, so a new
 class takes a new number rather than shifting the ones after it.
 

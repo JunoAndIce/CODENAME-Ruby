@@ -19,6 +19,9 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
     private Vector2 _lookInput;
     private Vector3 _moveVelocity;
     private Vector3 _external;   // explicit pushes only, fading at Fling Damping
+    private bool _hasMoveLimit;  // set by the grapple each step it applies, used once
+    private Vector3 _limitOutward;
+    private float _limitSpeed;
     private Vector3 _aimPoint;
     private bool _peekHeld;
     private bool _triggerPressed;
@@ -101,8 +104,21 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
     {
         // Pushes aren't limited by what the player walks into: the solver owns those.
         Vector3 move = PushLimit.Limit(_capsule, _moveVelocity);
+        if (_hasMoveLimit)
+        {
+            float outward = Vector3.Dot(move, _limitOutward);
+            if (outward > _limitSpeed) move -= _limitOutward * (outward - _limitSpeed);
+            _hasMoveLimit = false;
+        }
         VelocityUtil.ApplyAuthoredMove(_myRigidbody, move, ref _external, _flingDamping);
         _actions.FixedTick();
+    }
+
+    public void LimitMove(Vector3 outward, float maxOutwardSpeed)
+    {
+        _hasMoveLimit = true;
+        _limitOutward = outward;
+        _limitSpeed = Mathf.Max(0f, maxOutwardSpeed);
     }
 
     /// <summary>A push from outside (the tether, later knockback): lands now, then carries and fades.</summary>

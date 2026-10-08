@@ -1,7 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Sets its body's Rigidbody.mass from a weight class. Everything else reads Rigidbody.mass, so
+/// Sets its body's Rigidbody.mass from a weight class, and owns its kinematic flag: Immovable
+/// bodies are kinematic, everything else dynamic. Everything else reads the Rigidbody, so
 /// nothing needs to know this component exists.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
@@ -21,6 +22,12 @@ public class Weight : MonoBehaviour
 
     private void Apply()
     {
+        Rigidbody body = GetComponent<Rigidbody>();
+        // Kinematic is what every system already treats as fixed: the tether anchors to it,
+        // walking and thrown bodies can't move it, and the PathGrid bakes it as static.
+        bool immovable = _class == WeightClass.Immovable;
+        if (body.isKinematic != immovable) body.isKinematic = immovable;
+
         if (_class != WeightClass.Custom && _table == null)
         {
             // No silent default: a guessed mass would quietly skew every tug-of-war and throw.
@@ -28,7 +35,6 @@ public class Weight : MonoBehaviour
             return;
         }
 
-        Rigidbody body = GetComponent<Rigidbody>();
         if (!Mathf.Approximately(body.mass, Kg)) body.mass = Kg;
     }
 }

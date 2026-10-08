@@ -102,21 +102,27 @@ public class GrappleController : MonoBehaviour
         }
         else if (_phase == Phase.Attached)
         {
-            InputAction pullAction = _input.actions["Pull"];
-            _tether.Gripped = pullAction.IsPressed();
-
-            // Presses while a crack travels are ignored; held, the reel starts once the bite lands.
-            if (pullAction.WasPerformedThisFrame() && _crackTimer <= 0f)
-            {
-                ArmCrack(pull: true);
-                TetherLog.Event($"PULL ARM  crack={_crackTimer:0.00}s {_tether.Describe()}");
-            }
-            if (_crackTimer <= 0f && pullAction.IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
-
+            // An immovable object can't be pulled, and gripping it would only stop the walk short
+            // of max length, so the pull button does nothing there.
+            if (_tether.CanPull) UpdatePull();
             if (throwAction.WasPerformedThisFrame()) Throw();
         }
 
         UpdateChainVisual();
+    }
+
+    void UpdatePull()
+    {
+        InputAction pullAction = _input.actions["Pull"];
+        _tether.Gripped = pullAction.IsPressed();
+
+        // Presses while a crack travels are ignored; held, the reel starts once the bite lands.
+        if (pullAction.WasPerformedThisFrame() && _crackTimer <= 0f)
+        {
+            ArmCrack(pull: true);
+            TetherLog.Event($"PULL ARM  crack={_crackTimer:0.00}s {_tether.Describe()}");
+        }
+        if (_crackTimer <= 0f && pullAction.IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
     }
 
     void FixedUpdate()
@@ -222,6 +228,9 @@ public class GrappleController : MonoBehaviour
         _wraps.Update(_tether.Anchor, _tether.Node.Host);
         _whip.Step(_body.worldCenterOfMass, _tether.Anchor, _tether.Length, _wraps.Points);
         _tether.Solve(_wraps.Points);
+        // This runs before the user writes its move this step (execution order), so the limit lands in time.
+        if (_tether.TryGetMoveLimit(out Vector3 outward, out float maxOutwardSpeed))
+            _user.LimitMove(outward, maxOutwardSpeed);
 
         if (TetherLog.SolveGate())
             TetherLog.Event($"SOLVE  {_tether.Describe()}");

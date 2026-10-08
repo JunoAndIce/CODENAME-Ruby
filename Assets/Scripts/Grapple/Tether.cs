@@ -64,6 +64,15 @@ public class Tether
     /// <summary>Corrective force applied by the last solve. Compare against node break strength.</summary>
     public float Tension { get; private set; }
 
+    /// <summary>False on an immovable object: the pull button does nothing there.</summary>
+    public bool CanPull { get; }
+
+    // Set by each solve when the far end can't move: the player may walk away from the anchor
+    // (or the first wrap) at most this fast, so the rope's limit stops the walk cleanly.
+    bool _hasMoveLimit;
+    Vector3 _limitOutward;
+    float _limitSpeed;
+
     bool IsFullyReeled => _length <= _minLength + 0.001f;
 
     public Tether(Rigidbody player, System.Action<Vector3> pushPlayer, GrappleNode node, float length, float minLength, float maxLength)
@@ -72,6 +81,7 @@ public class Tether
         _pushPlayer = pushPlayer;
         _node = node;
         _host = node.IsStaticWorld ? null : node.Host;
+        CanPull = !node.IsImmovable;
         _maxLength = maxLength;
         _spinnable = _host != null && _host.mass <= player.mass;
         _playerColliders = Footprint.SolidColliders(player);
@@ -131,6 +141,14 @@ public class Tether
     /// <summary>The chain is letting go: give back anything the tether switched off.</summary>
     public void End() => PassThrough(false);
 
+    /// <summary>The walk limit from the last solve, when the far end can't move.</summary>
+    public bool TryGetMoveLimit(out Vector3 outward, out float maxOutwardSpeed)
+    {
+        outward = _limitOutward;
+        maxOutwardSpeed = _limitSpeed;
+        return _hasMoveLimit;
+    }
+
     // ---- the physics step -----------------------------------------------------------
 
     /// <summary>
@@ -142,6 +160,7 @@ public class Tether
     public void Solve(IReadOnlyList<Vector3> wraps = null)
     {
         Tension = 0f;
+        _hasMoveLimit = false;
 
         if (wraps != null && wraps.Count > 0)
         {
@@ -156,6 +175,7 @@ public class Tether
 
         bool held = Holds(dist);
         PayOut(dist, held);
+        SetMoveLimit(-dir, dist, held);
 
         bool parked = held && IsFullyReeled && _spinnable
                       && dist - _length <= MaxCorrectionSpeed * Time.fixedDeltaTime;
@@ -191,6 +211,20 @@ public class Tether
         _pushPlayer(-push * (impulse * invP));
         if (_host != null) _host.linearVelocity += push * (impulse * invT);
         Tension = impulse / Time.fixedDeltaTime;
+    }
+
+    // A fixed far end can't be dragged, so the rope's limit stops the walk directly: the player
+    // may walk out only as far as the rope reaches this step. That is the max length when loose,
+    // the current length when held. Pulling in stays with the servo, so the cap never goes
+    // below zero.
+    void SetMoveLimit(Vector3 outward, float pathLength, bool held)
+    {
+        if (_host != null || outward.sqrMagnitude < 0.0001f) return;
+
+        float limit = held ? _length : _maxLength;
+        _hasMoveLimit = true;
+        _limitOutward = VelocityUtil.Flatten(outward).normalized;
+        _limitSpeed = Mathf.Max(0f, (limit - pathLength) / Time.fixedDeltaTime);
     }
 
     // A tap holds the rope until its bite is taken up, so it lands even when the button came up
@@ -256,7 +290,9 @@ public class Tether
         float lastSpanLen = Vector3.Distance(prev, anchor);
         float pathLen2 = pathLen + lastSpanLen;
 
-        PayOut(pathLen2, Holds(pathLen2));
+        bool held = Holds(pathLen2);
+        PayOut(pathLen2, held);
+        SetMoveLimit(playerPos - wraps[0], pathLen2, held);
 
         _player.WakeUp();
         if (_host != null) _host.WakeUp();
