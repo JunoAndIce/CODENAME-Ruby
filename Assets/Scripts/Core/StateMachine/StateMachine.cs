@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Generic state machine shared by player and enemy. Nodes are keyed by state Type, so each
+/// Generic state machine, run by the enemy. Nodes are keyed by state Type, so each
 /// state class has one instance per machine, built once and reused across transitions.
 /// </summary>
 public class StateMachine
@@ -30,13 +30,6 @@ public class StateMachine
         _current?.State.Exit();
         _current = GetOrAddNode(state);
         _current.State.Enter();
-    }
-
-    /// <summary>Leave the current state without entering another.</summary>
-    public void Clear()
-    {
-        _current?.State.Exit();
-        _current = null;
     }
 
     public void AddTransition(IState from, IState to, IPredicate condition)

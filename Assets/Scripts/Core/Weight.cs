@@ -30,7 +30,7 @@ public class Weight : MonoBehaviour
 
         if (_class != WeightClass.Custom && _table == null)
         {
-            // No silent default: a guessed mass would quietly skew every tug-of-war and throw.
+            // No silent default: a guessed mass would quietly skew every drag, pull and throw.
             Debug.LogWarning($"{name}: Weight is set to {_class} but has no Weight Table; its Rigidbody mass is left as is.", this);
             return;
         }

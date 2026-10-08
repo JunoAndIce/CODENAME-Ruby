@@ -19,13 +19,37 @@ public class GrappleController : MonoBehaviour
     [SerializeField] private float _minChainLength = 1.2f;
     [Tooltip("Reel speed in m/s while pull is held. A tap is Tether.TapSeconds of it at once.")]
     [SerializeField] private float _pullImpulse = 8f;
-    [Tooltip("Half-angle of the aim cone a node must sit in.")]
-    [SerializeField, Range(1f, 90f)] private float _attachCone = 35f;
+    [Tooltip("How near the cursor a node must be to be marked, in metres. Clicking further from every node hooks nothing.")]
+    [SerializeField, Min(0.1f)] private float _snapRadius = 3f;
+    [Tooltip("A parked host's full speed around the player, in m/s, and so how fast a dropped spin flings out.")]
+    [SerializeField, Min(0f)] private float _spinSpeed = 20f;
+    [Tooltip("Seconds a parked spin takes to rev up close to Spin Speed (about 95%). 0 snaps straight to it.")]
+    [SerializeField, Min(0f)] private float _spinUpTime = 0.6f;
+    [Tooltip("When a spinning host hits a wall (or anything that stops it), it bounces back the other way keeping this share of its speed, then revs up again.")]
+    [SerializeField, Range(0f, 1f)] private float _spinBounce = 0.7f;
 
-    [Header("Verbs")]
-    [Tooltip("Throw strength, split by mass: light things fly faster.")]
+    [Header("Throw")]
+    [Tooltip("Throw strength at full charge, split by mass: light things fly faster.")]
     [FormerlySerializedAs("_pushImpulse")]
     [SerializeField] private float _throwImpulse = 40f;
+    [Tooltip("A right click released sooner than this drops what the chain holds. Held longer, letting go cancels the charge instead.")]
+    [SerializeField, Min(0f)] private float _tapThreshold = 0.3f;   // a normal click lasts 0.1-0.25 s
+    [Tooltip("Seconds right click must be held, from the press, before left click throws at full power.")]
+    [SerializeField, Min(0.01f)] private float _fullChargeTime = 0.8f;
+    [Tooltip("Throw power just past the tap threshold, as a fraction of Throw Impulse, so the weakest throw still flies.")]
+    [SerializeField, Range(0f, 1f)] private float _minThrowFraction = 0.3f;
+    [Tooltip("Seconds after a throw that the thrown thing can't hit the player, so one thrown from behind (mid-spin) passes through them.")]
+    [SerializeField, Min(0f)] private float _throwPassThrough = 0.15f;
+
+    [Header("Charge Jiggle")]
+    [Tooltip("How far the held thing shakes sideways, in metres, just past the tap threshold.")]
+    [SerializeField, Min(0f)] private float _jiggleMinAmplitude = 0.03f;
+    [Tooltip("How far it shakes at full charge.")]
+    [SerializeField, Min(0f)] private float _jiggleMaxAmplitude = 0.1f;
+    [Tooltip("Shakes per second while the charge builds.")]
+    [SerializeField, Min(0f)] private float _jiggleFrequency = 12f;
+    [Tooltip("Shakes per second once the charge is full, so reaching max can be felt without a meter.")]
+    [SerializeField, Min(0f)] private float _jiggleFullFrequency = 22f;
 
     [Header("Visuals")]
     [SerializeField] private LineRenderer _chain;
@@ -37,6 +61,12 @@ public class GrappleController : MonoBehaviour
     // After a throw the whip's tail rides the flying host for a beat, so it animates out.
     const float ThrowTrailSeconds = 0.4f;
 
+    // Input actions are looked up by name, so a rename in the actions asset must be matched here:
+    // a stale name compiles, then throws on first use in play mode.
+    const string GrabAction = "Grab";
+    const string PullAction = "Pull";
+    const string FireAction = "Fire";
+
     enum Phase { Ready, Flying, Attached, Trailing }
     Phase _phase;
 
@@ -47,6 +77,7 @@ public class GrappleController : MonoBehaviour
     RopeWraps _wraps;
     WhipChain _whip;
     Tether _tether;              // Attached only
+    GrappleNode _marked;         // Ready: the node the aim orb shows, and so what a click hooks
     GrappleNode _pendingNode;    // Flying: the tether starts when the whip lands on it
     float _pendingLength;        // rope length locked at launch; the trail's length once thrown
     IGrabbable _grabbed;         // kept for the whole tether: a destroyed node must not lose the release target
@@ -54,11 +85,21 @@ public class GrappleController : MonoBehaviour
 
     Rigidbody _trailBody;        // Trailing: the thrown host the tail rides
     float _trailTimer;
+    readonly PassThrough _thrownPassThrough = new();   // the last thrown host vs the player, briefly
 
-    // A verb (throw or pull) lands when the crack wave reaches the whip's tail, not on the press.
+    bool _charging;
+    float _chargeHeld;           // seconds right click has been held this charge
+    bool _chargeBuffered;        // this charge began with the launching click still held
+    int _throwFrame = -1;        // the frame left click threw: that click was the throw, not a shot
+
+    // A pull bite lands when the crack wave reaches the whip's tail, not on the press.
     float _crackTimer;
-    bool _pendingPullCrack;
-    Vector3 _throwTarget;
+
+    /// <summary>
+    /// The gun must not fire: a throw is charging, or left click threw this frame. This runs before
+    /// the gun each frame (execution order), so the throwing click never also fires a bullet.
+    /// </summary>
+    public bool BlocksGun => _charging || _throwFrame == Time.frameCount;
 
     void Awake()
     {
@@ -91,42 +132,100 @@ public class GrappleController : MonoBehaviour
 
     void Update()
     {
-        _aimOrb.Mark(_phase == Phase.Ready ? FindTarget() : null);
+        // A throw's whip still trails the thrown host, but only as a visual: the next grab can go
+        // straight out, and cuts the trail short.
+        bool canLaunch = _phase is Phase.Ready or Phase.Trailing;
+        _marked = canLaunch ? FindTarget() : null;
+        _aimOrb.Mark(_marked);
 
-        // Throw is context: ready, it launches the whip; attached, it throws. The launching press
-        // can't also throw, because verbs wait for the whip to land.
-        InputAction throwAction = _input.actions["Throw"];
-        if (_phase == Phase.Ready)
+        // Grab is context: free, it launches the whip; attached, it charges a throw. The launching
+        // press can't also charge, because verbs wait for the whip to land.
+        InputAction grabAction = _input.actions[GrabAction];
+        if (canLaunch)
         {
-            if (throwAction.WasPerformedThisFrame()) TryLaunch();
+            if (grabAction.WasPerformedThisFrame()) TryLaunch();
         }
         else if (_phase == Phase.Attached)
         {
             // An immovable object can't be pulled, and gripping it would only stop the walk short
             // of max length, so the pull button does nothing there.
             if (_tether.CanPull) UpdatePull();
-            if (throwAction.WasPerformedThisFrame()) Throw();
+            UpdateThrow(grabAction, _input.actions[FireAction]);
         }
 
         UpdateChainVisual();
     }
 
+    void OnValidate() => _fullChargeTime = Mathf.Max(_fullChargeTime, _tapThreshold + 0.01f);
+
+    // Holding right click on a host charges, up to full at Full Charge Time; left click throws at
+    // the charge so far. Letting right click go first cancels the charge, or drops the host if it
+    // was only a tap. A fixed anchor has nothing to throw, so the press lets go at once.
+    void UpdateThrow(InputAction grabAction, InputAction fireAction)
+    {
+        if (grabAction.WasPerformedThisFrame())
+        {
+            if (!_tether.HasHost)
+            {
+                Detach("release");
+                return;
+            }
+            StartCharge(buffered: false);
+        }
+
+        if (!_charging) return;
+
+        _chargeHeld += Time.deltaTime;
+
+        if (fireAction.WasPerformedThisFrame())
+        {
+            _charging = false;
+            _throwFrame = Time.frameCount;
+            float charge = Mathf.InverseLerp(_tapThreshold, _fullChargeTime, _chargeHeld);
+            Throw(_throwImpulse * Mathf.Lerp(_minThrowFraction, 1f, charge));
+            return;
+        }
+
+        if (grabAction.IsPressed()) return;
+
+        _charging = false;
+        if (_chargeHeld < _tapThreshold && !_chargeBuffered)
+        {
+            TetherLog.Event($"DROP  held={_chargeHeld:0.00}s {_tether.Describe()}");
+            Detach("drop");
+        }
+        else TetherLog.Event($"CHARGE CANCELLED  held={_chargeHeld:0.00}s {_tether.Describe()}");
+    }
+
+    // A buffered charge is the launching click still held when the whip lands. Let go early, it
+    // only cancels: as a tap it would drop what was just grabbed, a misclick in a fast game.
+    void StartCharge(bool buffered)
+    {
+        _charging = true;
+        _chargeBuffered = buffered;
+        _chargeHeld = 0f;
+        TetherLog.Event($"CHARGE{(buffered ? " (buffered)" : "")}  {_tether.Describe()}");
+    }
+
     void UpdatePull()
     {
-        InputAction pullAction = _input.actions["Pull"];
+        InputAction pullAction = _input.actions[PullAction];
         _tether.Gripped = pullAction.IsPressed();
 
         // Presses while a crack travels are ignored; held, the reel starts once the bite lands.
         if (pullAction.WasPerformedThisFrame() && _crackTimer <= 0f)
         {
-            ArmCrack(pull: true);
+            ArmCrack();
             TetherLog.Event($"PULL ARM  crack={_crackTimer:0.00}s {_tether.Describe()}");
         }
         if (_crackTimer <= 0f && pullAction.IsPressed()) _tether.Reel(-_pullImpulse * Time.deltaTime);
     }
 
+    void OnDisable() => _thrownPassThrough.End();
+
     void FixedUpdate()
     {
+        _thrownPassThrough.Tick(Time.fixedDeltaTime);
         switch (_phase)
         {
             case Phase.Flying: StepFlight(); break;
@@ -137,22 +236,16 @@ public class GrappleController : MonoBehaviour
 
     // ---- launch and flight ----------------------------------------------------------
 
-    GrappleNode FindTarget() => GrappleNode.FindBest(transform.position, AimDirection(), _maxChainLength, _attachCone);
+    GrappleNode FindTarget()
+        => GrappleNode.FindBest(transform.position, _user.AimPoint, _maxChainLength, _snapRadius, _marked, _body);
 
-    Vector3 AimDirection()
-    {
-        Vector3 aimDir = _user.AimPoint - transform.position;
-        aimDir.y = 0f;
-        if (aimDir.sqrMagnitude < 0.0001f) aimDir = transform.forward;
-        return aimDir.normalized;
-    }
-
+    // Hooks the node the orb marked this frame, never a fresh search, so the click takes what you saw.
     void TryLaunch()
     {
-        GrappleNode target = FindTarget();
+        GrappleNode target = _marked;
         if (target == null)
         {
-            TetherLog.Event($"WHIP FAIL  no node in cone ({_attachCone}deg, <= {_maxChainLength}m); nodes known={GrappleNode.All.Count}");
+            TetherLog.Event($"WHIP FAIL  no node in sight within {_snapRadius}m of the cursor and {_maxChainLength}m of you; nodes known={GrappleNode.All.Count}");
             return;
         }
 
@@ -160,6 +253,7 @@ public class GrappleController : MonoBehaviour
         float attachDist = Mathf.Clamp(Vector3.Distance(target.AnchorPoint, transform.position), _minChainLength, _maxChainLength);
         _pendingNode = target;
         _pendingLength = attachDist;
+        _trailBody = null;   // a throw's trailing whip, if any, is replaced by this one
         _whip = new WhipChain(transform.position, target.AnchorPoint, attachDist, _body);
         target.IsOccupied = true;
         _phase = Phase.Flying;
@@ -184,7 +278,9 @@ public class GrappleController : MonoBehaviour
         GrappleNode node = _pendingNode;
         float dist = Vector3.Distance(node.AnchorPoint, _body.worldCenterOfMass);
         float len = Mathf.Clamp(Mathf.Min(dist, _pendingLength), _minChainLength, _maxChainLength);
-        _tether = new Tether(_body, _user.AddExternalVelocity, node, len, _minChainLength, _maxChainLength);
+        // The new tether manages collisions itself; a leftover throw window would fight it.
+        _thrownPassThrough.End();
+        _tether = new Tether(_body, node, len, _minChainLength, _maxChainLength, _spinSpeed, _spinUpTime, _spinBounce);
         _pendingNode = null;
         _phase = Phase.Attached;
 
@@ -196,6 +292,10 @@ public class GrappleController : MonoBehaviour
         }
 
         TetherLog.Event($"ATTACH  whip landed {_tether.Describe()} dist={_tether.AttachDistance:F1}");
+
+        // Right click held through the flight: charge from the moment of the grab, so a throw can
+        // follow it at once.
+        if (_tether.HasHost && _input.actions[GrabAction].IsPressed()) StartCharge(buffered: true);
     }
 
     // ---- attached ---------------------------------------------------------------------
@@ -209,28 +309,18 @@ public class GrappleController : MonoBehaviour
             _crackTimer -= Time.fixedDeltaTime;
             if (_crackTimer <= 0f)
             {
-                if (_pendingPullCrack)
-                {
-                    _pendingPullCrack = false;
-                    _tether.Tap(_pullImpulse);
-                    TetherLog.Event($"PULL  (crack landed) {_tether.Describe()}");
-                }
-                else
-                {
-                    _tether.Throw(_throwTarget, _throwImpulse);
-                    TetherLog.Event($"THROW  (crack landed) {_tether.Describe()}");
-                    Detach("throw", trail: true, thrown: true);
-                    return;
-                }
+                _tether.Tap(_pullImpulse);
+                TetherLog.Event($"PULL  (crack landed) {_tether.Describe()}");
             }
         }
 
         _wraps.Update(_tether.Anchor, _tether.Node.Host);
         _whip.Step(_body.worldCenterOfMass, _tether.Anchor, _tether.Length, _wraps.Points);
         _tether.Solve(_wraps.Points);
+        UpdateJiggle();
         // This runs before the user writes its move this step (execution order), so the limit lands in time.
-        if (_tether.TryGetMoveLimit(out Vector3 outward, out float maxOutwardSpeed))
-            _user.LimitMove(outward, maxOutwardSpeed);
+        if (_tether.TryGetMoveLimit(out Vector3 outward, out float slackSpeed, out float dragFraction))
+            _user.LimitMove(outward, slackSpeed, dragFraction);
 
         if (TetherLog.SolveGate())
             TetherLog.Event($"SOLVE  {_tether.Describe()}");
@@ -244,37 +334,70 @@ public class GrappleController : MonoBehaviour
         _wasOverBreak = overBreak;
     }
 
-    void Throw()
+    // The held thing shakes while a charge builds, growing with it and quickening at full. Not
+    // during the tap window, so a quick drop doesn't flicker.
+    void UpdateJiggle()
     {
-        if (_crackTimer > 0f) return;
+        if (!_charging || _chargeHeld < _tapThreshold)
+        {
+            _tether.StopJiggle();
+            return;
+        }
 
-        // The target point is taken now and the line to it when the crack lands, so a spinning
-        // host still goes where you clicked.
-        _throwTarget = _user.AimPoint;
-        ArmCrack(pull: false);
-        TetherLog.Event($"THROW ARM  target={_throwTarget} crack={_crackTimer:0.00}s {_tether.Describe()}");
+        float charge = Mathf.InverseLerp(_tapThreshold, _fullChargeTime, _chargeHeld);
+        _tether.Jiggle(Mathf.Lerp(_jiggleMinAmplitude, _jiggleMaxAmplitude, charge),
+                       charge >= 1f ? _jiggleFullFrequency : _jiggleFrequency);
     }
 
-    void ArmCrack(bool pull)
+    // The throw lands on the click and the chain lets go at once, so the next grab can follow
+    // without waiting. The whip still cracks and rides the thrown host for a beat, as a visual only.
+    void Throw(float power)
     {
-        float crack = Mathf.Clamp(_tether.Length / WhipChain.CrackWaveSpeed, 0.1f, 0.3f);
-        _whip.BeginCrack(crack);
-        _crackTimer = crack;
-        _pendingPullCrack = pull;
+        Vector3 aim = AimDirection();
+        _tether.Throw(aim, power);
+        TetherLog.Event($"THROW  power={power:F1} aim={aim} {_tether.Describe()}");
+        _whip.BeginCrack(CrackSeconds());
+        Detach("throw", trail: true, thrown: true);
     }
+
+    // Along the line from the player through the cursor: the same direction for the same cursor
+    // wherever the held thing is in its swing, so throws and releases go where she points.
+    Vector3 AimDirection()
+    {
+        Vector3 aim = _user.AimPoint - _body.position;
+        aim.y = 0f;
+        return aim.sqrMagnitude > 0.0001f ? aim.normalized : transform.forward;
+    }
+
+    void ArmCrack()
+    {
+        _crackTimer = CrackSeconds();
+        _whip.BeginCrack(_crackTimer);
+    }
+
+    // How long the crack wave takes down the whip: longer rope, longer crack.
+    float CrackSeconds() => Mathf.Clamp(_tether.Length / WhipChain.CrackWaveSpeed, 0.1f, 0.3f);
 
     void Detach(string reason, bool trail = false, bool thrown = false)
     {
         _tether.End();
-        // Without this, a crack pending at detach would fire a ghost throw on the next chain.
-        _pendingPullCrack = false;
+        if (thrown) _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
+        else if (_tether.IsParked)
+        {
+            // Letting go of a spin sends the host along the aim, as a throw would, and like a throw
+            // it may start behind her, so it passes through her for a moment too.
+            _tether.AimRelease(AimDirection());
+            _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
+        }
+        // Without this, a pull crack pending at detach would bite the next chain.
         _crackTimer = 0f;
+        _charging = false;
 
         if (_grabbed != null)
         {
             // Tether.Throw has already set the host's velocity, so that velocity is the throw.
             if (thrown) _grabbed.Release(_grabbed.Body.linearVelocity);
-            else _grabbed.EndGrab();
+            else _grabbed.EndGrab(_tether.IsParked);
             _grabbed = null;
         }
         if (_tether.Node != null) _tether.Node.IsOccupied = false;

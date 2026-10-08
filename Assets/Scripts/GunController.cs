@@ -20,7 +20,8 @@ public class GunController : MonoBehaviour
         bool pulled = _player.TriggerPressed && !_triggerWasPressed;
         _triggerWasPressed = _player.TriggerPressed;
 
-        if (!pulled || _shotsCounter > 0f || _player._bulletCount <= 0) return;
+        // A pull during a charge is dropped, not queued: semi-auto means pulling again after.
+        if (!pulled || _shotsCounter > 0f || _player._bulletCount <= 0 || !_player.CanShoot) return;
 
         Fire();
     }

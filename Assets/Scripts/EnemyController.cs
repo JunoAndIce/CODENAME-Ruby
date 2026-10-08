@@ -26,6 +26,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     [Tooltip("Seconds between attacks. Moves to the weapon when weapons exist.")]
     [SerializeField, Min(0.05f)] private float _attackCooldown = 1f;
 
+    [Header("Dropped")]
+    [Tooltip("An enemy let go while being spun always flings out. One that wasn't (being dragged, say) flings if it's moving at least this fast across the floor, and otherwise spins in place.")]
+    [SerializeField, Min(0f)] private float _dropFlingSpeed = 3f;
+    [Tooltip("How fast a dropped enemy starts spinning, upright, in radians per second.")]
+    [SerializeField, Min(0f)] private float _dropSpinSpeed = 12f;
+    [Tooltip("Seconds the spin takes to wind down to a stop, after which the enemy is back in Aggro.")]
+    [SerializeField, Min(0f)] private float _dropSpinTime = 3f;
+    [Tooltip("How bouncy a spinning enemy's hit on another enemy is: 0 stops dead along the hit, 1 keeps all the speed.")]
+    [SerializeField, Range(0f, 1f)] private float _topBounce = 0.6f;
+
     [Header("Patrol")]
     [Tooltip("Walked while unaware. Empty = idle in place. Edit with the Scene-view handles when this enemy is selected.")]
     [SerializeField] private PatrolRoute _safeRoute = new();
@@ -41,6 +51,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
 
     private readonly StateMachine _state = new();
     private CapsuleCollider _capsule;
+    // Velocity going into this physics step. Collision callbacks arrive after the solver has
+    // already spent the speed, so a hit is worked out from this, not from the body.
+    private Vector3 _preStepVelocity;
+    // Creation order, so exactly one of two colliding tops handles their hit.
+    private static int _created;
+    private int _order;
 
     public Rigidbody Body { get; private set; }
     public Health Health { get; private set; }
@@ -61,12 +77,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     public float SearchDuration => _searchDuration;
     public float AttackRange => _attackRange;
     public float AttackCooldown => _attackCooldown;
+    public float DropSpinSpeed => _dropSpinSpeed;
+    public float DropSpinTime => _dropSpinTime;
     public PatrolRoute SafeRoute => _safeRoute;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
     public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
+    /// <summary>Ragdolling in an upright spin: a spinning top that knocks other enemies away.</summary>
+    public bool IsTop => _state.Current == Ragdoll && RagdollBody.IsSpinning;
     /// <summary>
     /// Where the hunt was leading when aggro ended, which is where search goes. Aggro keeps
     /// tracking the player for Aggro Time after losing contact, so this is where they went, not
@@ -83,6 +103,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     {
         Body = GetComponent<Rigidbody>();
         _capsule = GetComponent<CapsuleCollider>();
+        _order = ++_created;
         Health = GetComponent<Health>();
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
@@ -140,7 +161,58 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         DebugDrawPath();
     }
 
-    private void FixedUpdate() => _state.FixedTick();
+    private void FixedUpdate()
+    {
+        _state.FixedTick();
+        _preStepVelocity = Body.linearVelocity;
+    }
+
+    // A spinning top that hits another enemy trades momentum with it along the line between them,
+    // by weight, at Top Bounce: it bounces off and keeps spinning, and the one it hit is knocked
+    // back tumbling (or, already ragdolling, just sent off). Each pair is handled once: the top,
+    // or of two tops, the one created first.
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (!IsTop || collision.rigidbody == null) return;
+        if (!collision.rigidbody.TryGetComponent(out EnemyController other)) return;
+        if (other.Health.IsDead || other._state.Current == other.Grabbed) return;
+        if (other.IsTop && other._order < _order) return;
+
+        Vector3 n = other.Body.position - Body.position;
+        n.y = 0f;
+        if (n.sqrMagnitude < 0.0001f) return;
+        n.Normalize();
+
+        Vector3 vTop = _preStepVelocity;
+        Vector3 vOther = other._preStepVelocity;
+        float approach = Vector3.Dot(vTop - vOther, n);
+        if (approach <= 0f) return;
+
+        float mTop = Body.mass;
+        float mOther = other.Body.mass;
+        float exchange = (1f + _topBounce) * approach / (mTop + mOther);
+        Vector3 topAfter = vTop - n * (exchange * mOther);
+        Vector3 otherAfter = vOther + n * (exchange * mTop);
+
+        RagdollBody.Push(new Vector3(topAfter.x, Body.linearVelocity.y, topAfter.z));
+        other.TakeHit(new Vector3(otherAfter.x, other.Body.linearVelocity.y, otherAfter.z));
+    }
+
+    // Already ragdolling (a top or a tumble), it keeps doing that at the new velocity; otherwise
+    // it's knocked off its feet.
+    private void TakeHit(Vector3 velocity)
+    {
+        if (_state.Current == Ragdoll) RagdollBody.Push(velocity);
+        else KnockBack(velocity);
+    }
+
+    /// <summary>Knocked off its feet: ragdolls tumbling at this velocity, then gets up into Aggro.</summary>
+    public void KnockBack(Vector3 velocity)
+    {
+        if (_state.Current is GrabbedState or RagdollState or DeadState) return;
+        Ragdoll.Launch(VelocityUtil.Flatten(velocity));
+        _state.SetState(Ragdoll);
+    }
 
     // Externally driven transitions. Nothing can poll for these, so they bypass the table.
     public void Alert()
@@ -153,11 +225,29 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
 
     public void EnterGrabbed() => _state.SetState(Grabbed);
 
-    /// <summary>Rope let go without a throw (node destroyed): drop straight into pursuit.</summary>
-    public void EndGrab()
+    /// <summary>
+    /// Rope let go without a throw (dropped, or the node destroyed): the enemy spins upright until
+    /// the spin winds down, then is back in Aggro. A spun enemy flings out on its momentum while it
+    /// spins, turning the way it orbited; a slower one spins where it stands.
+    /// </summary>
+    public void EndGrab(bool wasSpun)
     {
         if (_state.Current != Grabbed) return;
-        _state.SetState(Aggro);
+
+        // Being spun always flings: a speed test alone would be a coin flip whenever Drop Fling
+        // Speed sits near Spin Speed, since the spin's measured speed wobbles each step.
+        Vector3 velocity = VelocityUtil.Flatten(Body.linearVelocity);
+        bool flung = wasSpun || velocity.magnitude >= _dropFlingSpeed;
+        float direction = 1f;
+        if (flung && _player != null)
+        {
+            // For a body orbiting a point, (offset × velocity).y has the sign of its turn.
+            Vector3 offset = transform.position - _player.transform.position;
+            direction = Vector3.Cross(offset, velocity).y >= 0f ? 1f : -1f;
+        }
+
+        Ragdoll.Spin(flung ? velocity : Vector3.zero, direction);
+        _state.SetState(Ragdoll);
     }
 
     public void RecordTrailEnd()

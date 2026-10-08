@@ -18,6 +18,9 @@ public interface IGrabbable
     /// <summary>Thrown, at this velocity.</summary>
     void Release(Vector3 velocity);
 
-    /// <summary>The rope let go without a throw (its node was destroyed).</summary>
-    void EndGrab();
+    /// <summary>
+    /// The rope let go without a throw (dropped, or its node was destroyed). `wasSpun` is true when
+    /// it was parked and spinning around the player at that moment.
+    /// </summary>
+    void EndGrab(bool wasSpun);
 }

@@ -1,19 +1,18 @@
 using UnityEngine;
 
 /// <summary>
-/// What the grapple needs from whoever wields it: where they aim, a way to push them that their
-/// own movement won't erase the next physics step, and a limit on how far they may walk out.
+/// What the grapple needs from whoever wields it: where they aim, and a limit on how far they may
+/// walk out. The rope never moves its user; it can only stop them walking away.
 /// </summary>
 public interface IGrappleUser
 {
     Vector3 AimPoint { get; }
 
-    void AddExternalVelocity(Vector3 change);
-
     /// <summary>
-    /// For the next physics step only, cap the walk's speed along `outward` at `maxOutwardSpeed`
-    /// (at least 0). A taut rope on a fixed anchor uses it to stop the walk cleanly, instead of
-    /// pushing back through external velocity that would snap the user back when they stop.
+    /// For the next physics step only, limit the walk along `outward` (away from the far end) to
+    /// max(0, slackSpeed + dragFraction x outward walking speed). slackSpeed is how fast the rope
+    /// still has room to pay out (negative once it's stretched); dragFraction is how much of the
+    /// walk survives dragging the host (0 for anything fixed or as heavy as the user).
     /// </summary>
-    void LimitMove(Vector3 outward, float maxOutwardSpeed);
+    void LimitMove(Vector3 outward, float slackSpeed, float dragFraction);
 }
