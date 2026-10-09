@@ -197,6 +197,7 @@ GameObject:
   - component: {fileID: -7499668176266741108}
   - component: {fileID: 7030440927340036939}
   - component: {fileID: 3879969139217057545}
+  - component: {fileID: -5388707325153722506}
   m_Layer: 0
   m_Name: Enemy
   m_TagString: Enemy
@@ -355,6 +356,8 @@ MonoBehaviour:
   _dropFlingSpeed: 60
   _dropSpinSpeed: 60
   _dropSpinTime: 8
+  _topBounce: 0.6
+  _corpseBrightness: 0.35
   _safeRoute:
     _mode: 0
     _points:
@@ -380,7 +383,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2838331bfc7d36341b1b4e5501f2c03d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Health
-  _maxHealth: 100
+  _maxHealth: 20
 --- !u!114 &7030440927340036939
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -411,6 +414,19 @@ MonoBehaviour:
   _table: {fileID: 11400000, guid: 3f88b0ea629a0c44593a2564456dd006, type: 2}
   _class: 5
   _customKg: 1
+--- !u!114 &-5388707325153722506
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3843596274935931329}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f9652bd5739cb043ae94a4a189e9827, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ruby.Core::ImpactDamage
+  _rules: {fileID: 11400000, guid: da1308e32c44e0541b92d14e65cf4d38, type: 2}
 --- !u!1 &5263035708004306392
 GameObject:
   m_ObjectHideFlags: 0
