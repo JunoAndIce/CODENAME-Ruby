@@ -1,6 +1,6 @@
 # Impact damage (slice 5)
 
-Status: approved 2026-10-08, building. Supersedes nothing; this is the slice the weight system
+Status: approved and built 2026-10-08 (all three pieces). Supersedes nothing; this is the slice the weight system
 (real kilograms) was built for.
 
 ## Intent
@@ -78,6 +78,9 @@ Swings only hurt once Spin Speed exceeds Knockdown Speed.
 1. Core pieces, enemy damage and knockdown.
 2. Ruby's knockdown and death.
 3. Corpses (dead enemies stay as dimmed, grabbable bodies that can be walked over once settled).
+   Built: a death mid-swing stays on the chain; a settled corpse is frozen with trigger colliders,
+   so nothing collides with it; grabbing wakes it; a corpse takes no more damage.
+   - j-quote: "A dead enemy darkens but is still grabbable. If enemies die while being spun by the player, they stay grabbed, but turned darkened. Darkened enemies have no collision while settled on the floor, but can be grabbed."
 
 ## Inspector work
 

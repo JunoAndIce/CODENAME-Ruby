@@ -9,8 +9,8 @@ System), aiming for a Hotline Miami feel: an orthographic camera looks straight 
 strafes on the XZ plane while facing the cursor, and levels are floors of rooms and corridors full of
 enemies. The signature mechanic is a **whip grapple**: launch it at a node (world anchor, prop or
 enemy), pull and reel along the rope, and throw what you hold at the cursor. A thrown enemy
-ragdolls. **Impact damage** (a thrown body hurting what it hits) is the planned payoff and is not
-built yet.
+ragdolls. **Impact damage** (anything that hits fast enough hurting and knocking down what it
+hits) is the payoff (see **Impact damage**).
 
 **The game aims for snappy, smooth movement and controls.** Verbs answer the press at once and
 never take the player's movement away. Grab and release are quick right clicks that leave the
@@ -70,7 +70,7 @@ The scripts are split into assembly definitions so the systems can be lifted int
 
 | Assembly | Folder (under `Assets/Scripts/`) | References | Holds |
 | --- | --- | --- | --- |
-| `Ruby.Core` | `Core/` | none | state machine, `Health`, `VelocityUtil`, weight classes, ragdoll seam, pooling |
+| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdoll seam, pooling |
 | `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, patrol routes |
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
@@ -82,7 +82,7 @@ game implements:
 
 | Interface | Declared in | Implemented by | What the system needs from it |
 | --- | --- | --- | --- |
-| `IGrappleUser` | Grapple | `PlayerController` | aim, a walk limit |
+| `IGrappleUser` | Grapple | `PlayerController` | aim, a walk limit, whether she can act |
 | `IGrabbable` | Grapple | `EnemyController` | grab, drag and throw it |
 | `IPathAgent` | Pathing | `EnemyController` | a body for `GridNavigator` to steer |
 | `ICameraTarget` | CameraRig | `PlayerController` | a position, an aim point, peek |
@@ -122,7 +122,7 @@ Two ways in:
   table reads it.
 - **External `SetState`.** Things done *to* an actor can't be polled for, so they bypass the table:
   `EnemyController.Alert()` (damaged), `EnterGrabbed()`, `EndGrab()` (rope let go without a throw: flings or spins in place),
-  `Release()` (thrown), `KnockBack()` (hit by a spinning top). These guard on current state
+  `Release()` (thrown), `KnockDown()` (a hit at Knockdown Speed). These guard on current state
   themselves.
 
 `EnemyState` distinguishes AI states (Idle/Patrol/Searching/Aggro) from **overrides**
@@ -214,11 +214,15 @@ rather than sweeps, so higher Spin Speeds don't read as faster.
 
 **A spun host bounces off what stops it.** The tether remembers which way the host goes round
 (`_spinDirection`). If a step leaves the host with less than half the sideways speed an
-unobstructed one keeps (`ExpectedAfterStep`, which allows for the rod's own loss at speed), something
-stopped it: the spin reverses and keeps Spin Bounce of its speed, then revs back up, so it keeps
-swinging. Before, the spin re-added full speed in the same direction every step and ground the host
-into the wall, the first half of the old wall lock. The tether can't see what it hit, so it bounces
-off crates and enemies too. Damage on the hit comes later. **The spin ignores aim and never moves the
+unobstructed one keeps (`ExpectedAfterStep`, which allows for the rod's own loss at speed) **and** it
+touched something wall-like that step, it hit something: the spin reverses and keeps Spin Bounce of
+its speed, then revs back up, so it keeps swinging. Wall-like means a contact facing sideways,
+recorded by a `HostContacts` component the tether adds to the host for its life: lost speed alone
+isn't enough, because a tumbling box snags its corners on the floor (contacts facing up), and
+reversing on every snag kept a big box from ever building speed. Walls, crate sides and enemies all
+count; Ruby doesn't (a parked host passes through her). Each bounce logs `SPIN BOUNCE off <name>`.
+Before any of this, the spin re-added full speed in the same direction every step and ground the
+host into the wall, the first half of the old wall lock. **The spin ignores aim and never moves the
 player.** Holding a host on its circle takes an inward pull of spin² / radius each step, so while
 parked the servo's cap grows by exactly that: under the plain 20 m/s cap a spin above about 35 m/s
 can't be held, the rope stretches and the host unparks. Parked, she walks freely and carries the
@@ -229,7 +233,7 @@ between two steps of the rod. Heavier hosts don't park. A moving host's min leng
 because a pivot that lets the held body overlap the player turns every collision shove into flight.
 
 Grabbing: a node grabs the `IGrabbable` on it or above it in the hierarchy (the enemy). `LandWhip` calls
-`EnterGrabbed()` when `CanBeGrabbed` (live enemies only), and the controller keeps it for the whole
+`EnterGrabbed()` when `CanBeGrabbed` (always, corpses included), and the controller keeps it for the whole
 tether. **Holding right click on a host charges a throw**, reaching full at Full Charge Time and
 holding there. **Left click throws** at `Throw Impulse × lerp(Min Throw Fraction, 1, charge)`.
 Letting right click go first cancels the charge and keeps hold, unless it was a tap shorter than
@@ -260,12 +264,12 @@ whenever Drop Fling Speed sat near Spin Speed. A throw still tumbles.
 **A spinning enemy is a top** (`EnemyController.IsTop`: in Ragdoll, `IRagdollBody.IsSpinning`). When
 it hits another enemy (`OnCollisionEnter`) the two trade momentum along the line between them, by
 weight, at Top Bounce: the top bounces off and keeps spinning (`IRagdollBody.Push`, which also frees
-a spin held in place), and the enemy it hit is knocked back tumbling (`KnockBack`) and gets up into
-Aggro, or, if it was already ragdolling, is just sent off at its share. The exchange uses each
+a spin held in place), and the enemy it hit is sent off at its share. Whether that knocks it down
+is decided by impact damage's Knockdown Speed, like every other hit (see **Impact damage**), so a
+slow graze only shoves an enemy on its feet. The exchange uses each
 enemy's velocity recorded at the end of its `FixedUpdate`, because collision callbacks arrive after
 the solver has already spent the speed. Of two colliding tops, the one created first handles the
-pair, so a hit is never applied twice. Grabbed and dead enemies aren't hit. Walls and Ruby aren't
-handled yet, and damage comes later.
+pair, so a hit is never applied twice. Grabbed and dead enemies aren't hit.
 
 **The rope stops the walk.** Each step (except while parked) the tether passes Ruby a walk limit
 through `IGrappleUser.LimitMove`: away from the far end (or the first wrap, when caught on
@@ -382,6 +386,48 @@ A\* for individual ones**:
   with a warning. Grid line of sight ignores the cell the agent already stands in, which near a wall
   is clearance-blocked.
 
+### Impact damage
+
+One formula for every hit (spec: `docs/specs/2026-10-08-impact-damage.md`). **`ImpactDamage`**
+(`Core/`, on anything that can be hurt; needs Health) measures each contact's closing speed
+(`collision.relativeVelocity` along the contact normal, taken before the solver absorbs it). Below
+the shared **`ImpactRules`** asset's Knockdown Speed nothing happens, for any weight. At or above
+it, the body takes `Damage Scale × speed × √(hitter mass / Reference Mass)`, the hitter being the
+other body, or its own mass against anything fixed, and is knocked down through **`IKnockdown`**,
+whose owner decides what that means. Each body in a hit carries its own `ImpactDamage`, so both
+sides are hurt; walls and props have none, so they only deal. Once per contact
+(`OnCollisionEnter`): pinned against a wall isn't a hit every step, but each bounce is.
+
+**A hit has to happen to count.** A host is switched to continuous collision detection the moment
+the tether attaches, and left that way: a thrown 20 kg crate leaves at about 90 m/s, almost a metre
+per physics step even at 100 Hz, and discrete detection lets it skip clean through a 0.7 m enemy.
+
+**Any fast hit counts, walking included**, so Knockdown Speed must stay above walking plus chasing
+speed (Ruby 15 + an enemy's chase, about 25), and a swing only hurts once Spin Speed passes it.
+Damage is big from the threshold on purpose: fast enough to knock a character down usually kills.
+
+`EnemyController.KnockDown` ragdolls the enemy at the velocity the hit left it with; held on the
+chain or already down, the hit only hurts, so a swung enemy keeps swinging.
+
+**Dead enemies are corpses, never destroyed.** `DeadState` darkens the enemy (`EnemyController.Darken`,
+Corpse Brightness through MaterialPropertyBlocks, so shared materials are untouched) and keeps its
+body, which the chain can still grab, swing and throw (`CanBeGrabbed` is always true). The state
+tracks the body: **held** while the rope has it (a death mid-swing stays on the chain, read from
+`EnemyController.IsHeld`), **loose** while it tumbles, and **at rest** once settled, frozen with
+trigger colliders (`IRagdollBody.Rest`), so Ruby and enemies walk over it and nothing collides with
+it. Grabbing wakes it (`Hold`); a throw or drop tumbles it again (`DeadState.LetGo`), and it hits
+like any body. A corpse takes no more damage and is never a spinning top. `GrappleController.LandWhip`
+calls `EnterGrabbed` before building the tether, because a body at rest has trigger colliders until
+then and the tether sizes the park distance from solid ones.
+
+`PlayerController.KnockDown` ragdolls Ruby (her `CapsuleRagdollBody`) and takes her control away,
+the one deliberate exception to "never take movement away": `_downed` stops movement, aim and the
+gun (`CanShoot`), and `IGrappleUser.CanAct` makes the grapple stand down (`StandDown`: lets go of
+whatever it holds, calls back a whip in flight, clears the trail and any charge). The grapple checks
+it in `FixedUpdate` too, because a knockdown lands in a collision callback that can fall between a
+physics step and the next `Update`. Alive, she gets up once the ragdoll settles; dead, she stays
+down, with no restart yet.
+
 ### Ragdoll seam
 
 `IRagdollBody` exists because the enemy is currently a capsule with no rig; joint ragdolls aren't
@@ -389,7 +435,9 @@ buildable yet. `CapsuleRagdollBody` is the physics-handoff implementation, swapp
 arrive. It reports `IsSettled` after velocity stays below a threshold for a sustained period, or,
 for an in-place `Spin`, once the spin's time is up, and the transition table uses that to hand
 control back to `Aggro`. The spin raises the body's `maxAngularVelocity`, because Unity's default
-cap of 7 rad/s would silently slow it.
+cap of 7 rad/s would silently slow it. `Rest` lays a body to rest (frozen, its solid colliders made
+triggers) and every other call (`Ragdoll`, `Spin`, `Hold`, `Recover`) wakes it first, so a body
+can't be left frozen by accident.
 
 `GrabbedState` keeps the body **dynamic**: the tether moves its host by writing velocity, and a
 kinematic body would silently ignore it and hang frozen instead of being dragged.
@@ -399,7 +447,8 @@ kinematic body would silently ignore it and hang frozen instead of being dragged
 `ObjectPoolManager` is a static API backed by an instance that must exist in the scene (the "Pooler"
 object) — its `Awake` creates the dictionaries, so calling `SpawnObject` before it runs throws.
 Pooled objects **return themselves** (`BulletController` on lifetime expiry). Enemies are *not*
-pooled yet: `DeadState.Enter` destroys the GameObject, so pooling them will need `Health` to reset.
+pooled: a dead one stays as a corpse, so pooling them would need `Health` to reset and a corpse to
+be cleared.
 
 ### Animation
 
@@ -444,7 +493,8 @@ The original slice plan: 0 enemy foundation → 1 camera rig → 2 targeting ind
 4 charge and swing → 5 impact damage. Slices 0–3 are built (the grab as the whip grapple). Slice 4's
 charge is built as the charged throw in `GrappleController`, its swing as the parked spin; the old
 `PlayerHoldingState` scaffold and its spec (quantised swing directions, a break-out timer) were
-retired. Slice 5 is not started.
+retired. Slice 5, impact damage, is built: enemies and Ruby take it, and dead enemies stay as
+corpses.
 
 ## Unity/git
 

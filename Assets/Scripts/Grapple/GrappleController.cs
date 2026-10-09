@@ -132,6 +132,13 @@ public class GrappleController : MonoBehaviour
 
     void Update()
     {
+        if (!_user.CanAct)
+        {
+            StandDown();
+            UpdateChainVisual();
+            return;
+        }
+
         // A throw's whip still trails the thrown host, but only as a visual: the next grab can go
         // straight out, and cuts the trail short.
         bool canLaunch = _phase is Phase.Ready or Phase.Trailing;
@@ -223,9 +230,35 @@ public class GrappleController : MonoBehaviour
 
     void OnDisable() => _thrownPassThrough.End();
 
+    // The user can't act (knocked down): whatever the chain holds is let go, a whip in flight is
+    // called back, and nothing is marked or charged until they can act again.
+    void StandDown()
+    {
+        _marked = null;
+        _aimOrb.Mark(null);
+        _charging = false;
+
+        if (_phase == Phase.Attached) Detach("user knocked down");
+        else if (_phase is Phase.Flying or Phase.Trailing)
+        {
+            if (_pendingNode != null) _pendingNode.IsOccupied = false;
+            _pendingNode = null;
+            _trailBody = null;
+            _whip = null;
+            _phase = Phase.Ready;
+        }
+    }
+
     void FixedUpdate()
     {
         _thrownPassThrough.Tick(Time.fixedDeltaTime);
+        // A knockdown lands in a collision callback, which can fall between this step and the
+        // next Update: stand down here too, so a downed user is never solved against.
+        if (!_user.CanAct)
+        {
+            StandDown();
+            return;
+        }
         switch (_phase)
         {
             case Phase.Flying: StepFlight(); break;
@@ -280,16 +313,19 @@ public class GrappleController : MonoBehaviour
         float len = Mathf.Clamp(Mathf.Min(dist, _pendingLength), _minChainLength, _maxChainLength);
         // The new tether manages collisions itself; a leftover throw window would fight it.
         _thrownPassThrough.End();
-        _tether = new Tether(_body, node, len, _minChainLength, _maxChainLength, _spinSpeed, _spinUpTime, _spinBounce);
-        _pendingNode = null;
-        _phase = Phase.Attached;
 
+        // Grabbed before the tether is built: a body at rest (a settled corpse) has trigger
+        // colliders until it's grabbed, and the tether sizes the park distance from solid ones.
         IGrabbable target = node.Grabbable;
         if (target != null && target.CanBeGrabbed)
         {
             _grabbed = target;
             target.EnterGrabbed();
         }
+
+        _tether = new Tether(_body, node, len, _minChainLength, _maxChainLength, _spinSpeed, _spinUpTime, _spinBounce);
+        _pendingNode = null;
+        _phase = Phase.Attached;
 
         TetherLog.Event($"ATTACH  whip landed {_tether.Describe()} dist={_tether.AttachDistance:F1}");
 
@@ -393,6 +429,9 @@ public class GrappleController : MonoBehaviour
         _crackTimer = 0f;
         _charging = false;
 
+        // A destroyed host passes a C# null check on the interface but throws on use; that throw
+        // would abort the detach and leave the grapple stuck attached, unable to grab again.
+        if (_grabbed is Object grabbedObject && grabbedObject == null) _grabbed = null;
         if (_grabbed != null)
         {
             // Tether.Throw has already set the host's velocity, so that velocity is the throw.

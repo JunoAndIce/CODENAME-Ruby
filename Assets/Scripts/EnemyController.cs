@@ -3,7 +3,7 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(CapsuleCollider))]
 [RequireComponent(typeof(Health))]
-public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
+public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 {
     [Header("Movement")]
     [SerializeField] private float _chaseSpeed = 2f;
@@ -35,6 +35,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     [SerializeField, Min(0f)] private float _dropSpinTime = 3f;
     [Tooltip("How bouncy a spinning enemy's hit on another enemy is: 0 stops dead along the hit, 1 keeps all the speed.")]
     [SerializeField, Range(0f, 1f)] private float _topBounce = 0.6f;
+
+    [Header("Dead")]
+    [Tooltip("How bright a corpse's colours are, as a share of the living enemy's, so the dead read at a glance.")]
+    [SerializeField, Range(0f, 1f)] private float _corpseBrightness = 0.35f;
 
     [Header("Patrol")]
     [Tooltip("Walked while unaware. Empty = idle in place. Edit with the Scene-view handles when this enemy is selected.")]
@@ -95,6 +99,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     public Vector3 LastKnownPlayerPosition { get; private set; }
 
     private static readonly RaycastHit[] SightHits = new RaycastHit[16];
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
     private int _sightFrame = -1;
     private bool _canSeePlayer;
     private Collider _sightBlocker;
@@ -168,9 +174,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     }
 
     // A spinning top that hits another enemy trades momentum with it along the line between them,
-    // by weight, at Top Bounce: it bounces off and keeps spinning, and the one it hit is knocked
-    // back tumbling (or, already ragdolling, just sent off). Each pair is handled once: the top,
-    // or of two tops, the one created first.
+    // by weight, at Top Bounce: it bounces off and keeps spinning, and the one it hit is sent off
+    // at its share. Whether that knocks it down is ImpactDamage's call, by the shared Knockdown
+    // Speed, so a slow graze only shoves. Each pair is handled once: the top, or of two tops, the
+    // one created first.
     private void OnCollisionEnter(Collision collision)
     {
         if (!IsTop || collision.rigidbody == null) return;
@@ -198,19 +205,24 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         other.TakeHit(new Vector3(otherAfter.x, other.Body.linearVelocity.y, otherAfter.z));
     }
 
-    // Already ragdolling (a top or a tumble), it keeps doing that at the new velocity; otherwise
-    // it's knocked off its feet.
+    // Already ragdolling (a top or a tumble), it keeps doing that at the new velocity. On its feet
+    // it's shoved: its AI takes the body back next step, unless the hit also knocked it down, in
+    // which case the knockdown launches it at this velocity, whichever callback runs first.
     private void TakeHit(Vector3 velocity)
     {
         if (_state.Current == Ragdoll) RagdollBody.Push(velocity);
-        else KnockBack(velocity);
+        else Body.linearVelocity = velocity;
     }
 
-    /// <summary>Knocked off its feet: ragdolls tumbling at this velocity, then gets up into Aggro.</summary>
-    public void KnockBack(Vector3 velocity)
+    /// <summary>
+    /// Knocked off its feet by a hit (ImpactDamage): ragdolls tumbling at the velocity the hit left
+    /// it with, then gets up into Aggro. Held on the chain or already down, the hit only hurts, so
+    /// a swung enemy keeps swinging.
+    /// </summary>
+    public void KnockDown()
     {
-        if (_state.Current is GrabbedState or RagdollState or DeadState) return;
-        Ragdoll.Launch(VelocityUtil.Flatten(velocity));
+        if (Health.IsDead || _state.Current is GrabbedState or RagdollState or DeadState) return;
+        Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity));
         _state.SetState(Ragdoll);
     }
 
@@ -221,17 +233,32 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         _state.SetState(Aggro);
     }
 
-    public bool CanBeGrabbed => !Health.IsDead;
+    // Corpses too: a dead enemy stays a body the chain can swing and throw.
+    public bool CanBeGrabbed => true;
 
-    public void EnterGrabbed() => _state.SetState(Grabbed);
+    /// <summary>On the chain right now. A death mid-swing reads this to stay held.</summary>
+    public bool IsHeld { get; private set; }
+
+    public void EnterGrabbed()
+    {
+        IsHeld = true;
+        if (Health.IsDead) Dead.Grab();
+        else _state.SetState(Grabbed);
+    }
 
     /// <summary>
     /// Rope let go without a throw (dropped, or the node destroyed): the enemy spins upright until
     /// the spin winds down, then is back in Aggro. A spun enemy flings out on its momentum while it
-    /// spins, turning the way it orbited; a slower one spins where it stands.
+    /// spins, turning the way it orbited; a slower one spins where it stands. A corpse just tumbles.
     /// </summary>
     public void EndGrab(bool wasSpun)
     {
+        IsHeld = false;
+        if (Health.IsDead)
+        {
+            Dead.LetGo(Body.linearVelocity);
+            return;
+        }
         if (_state.Current != Grabbed) return;
 
         // Being spun always flings: a speed test alone would be a coin flip whenever Drop Fling
@@ -248,6 +275,28 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
 
         Ragdoll.Spin(flung ? velocity : Vector3.zero, direction);
         _state.SetState(Ragdoll);
+    }
+
+    /// <summary>
+    /// Darkens every renderer on the enemy to Corpse Brightness, through property blocks so the
+    /// shared materials (and every other enemy using them) are untouched.
+    /// </summary>
+    public void Darken()
+    {
+        var block = new MaterialPropertyBlock();
+        foreach (Renderer rendered in GetComponentsInChildren<Renderer>())
+        {
+            Material material = rendered.sharedMaterial;
+            if (material == null) continue;
+
+            Color colour = material.HasProperty(BaseColorId) ? material.GetColor(BaseColorId) : material.color;
+            colour = new Color(colour.r * _corpseBrightness, colour.g * _corpseBrightness, colour.b * _corpseBrightness, colour.a);
+
+            rendered.GetPropertyBlock(block);
+            block.SetColor(BaseColorId, colour);   // URP Lit
+            block.SetColor(ColorId, colour);       // built-in and sprite shaders
+            rendered.SetPropertyBlock(block);
+        }
     }
 
     public void RecordTrailEnd()
@@ -267,6 +316,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
 
     public void Release(Vector3 velocity)
     {
+        IsHeld = false;
+        if (Health.IsDead)
+        {
+            Dead.LetGo(velocity);
+            return;
+        }
         if (_state.Current != Grabbed) return;
 
         // Flattened, keeping speed: an upward throw redirects along the floor, so throw

@@ -8,6 +8,9 @@ public interface IRagdollBody
     /// <summary>Ragdolling in an upright spin (see Spin), as opposed to tumbling.</summary>
     bool IsSpinning { get; }
 
+    /// <summary>Tumbling or spinning under physics, not standing, held or at rest.</summary>
+    bool IsRagdolling { get; }
+
     void Ragdoll(Vector3 launchVelocity);
 
     /// <summary>
@@ -18,6 +21,15 @@ public interface IRagdollBody
 
     /// <summary>Set a ragdolling body's velocity, for a hit. Frees a spin held in place.</summary>
     void Push(Vector3 velocity);
+
+    /// <summary>Limp and solid, for something else to move (a corpse on the chain).</summary>
+    void Hold();
+
+    /// <summary>
+    /// Laid to rest (a settled corpse): frozen where it lies, colliders made triggers so nothing
+    /// collides with it. Ragdoll, Spin, Hold and Recover all bring it back.
+    /// </summary>
+    void Rest();
 
     void Recover();
 }

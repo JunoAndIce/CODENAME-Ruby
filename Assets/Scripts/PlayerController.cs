@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(CapsuleCollider))]
-public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
+public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKnockdown
 {
     public float _moveSpeed = 15f;
     public int _bulletCount = 6;
@@ -27,11 +27,16 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
     private bool _peekHeld;
     private bool _triggerPressed;
     private GrappleController _grapple;
+    private Health _health;
+    private IRagdollBody _ragdoll;
+    private bool _downed;        // knocked down: physics owns the body until she gets up, or for good if dead
 
     public Vector3 AimPoint => _aimPoint;
     public bool TriggerPressed => _triggerPressed;
-    /// <summary>False while a throw charges, when left click is the throw rather than a shot.</summary>
-    public bool CanShoot => _grapple == null || !_grapple.BlocksGun;
+    /// <summary>False while knocked down, or while a throw charges, when left click is the throw rather than a shot.</summary>
+    public bool CanShoot => !_downed && (_grapple == null || !_grapple.BlocksGun);
+    /// <summary>False while knocked down: she can't move, aim, shoot or use the chain.</summary>
+    public bool CanAct => !_downed;
 
     Vector3 ICameraTarget.Position => transform.position;
     bool ICameraTarget.WantsPeek => _peekHeld;
@@ -44,6 +49,33 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
         _mainCamera = FindAnyObjectByType<Camera>();
         _playerInput = GetComponent<PlayerInput>();
         _grapple = GetComponent<GrappleController>();
+        TryGetComponent(out _health);
+        if (!TryGetComponent(out _ragdoll))
+            Debug.LogError($"{name} has no IRagdollBody (CapsuleRagdollBody) — a knockdown can't ragdoll her.", this);
+    }
+
+    /// <summary>
+    /// Knocked down by a hit (ImpactDamage): she ragdolls at the velocity the hit left her with and
+    /// loses control. Alive, she gets up once settled; dead, she stays down.
+    /// </summary>
+    public void KnockDown()
+    {
+        if (_downed || _ragdoll == null) return;
+
+        _downed = true;
+        _moveVelocity = Vector3.zero;
+        _external = Vector3.zero;
+        _ragdoll.Ragdoll(_myRigidbody.linearVelocity);
+        if (_health != null && _health.IsDead) Debug.Log($"{name} is dead.", this);
+    }
+
+    // Gets her up once the ragdoll settles, unless the hit (or a later one while down) killed her.
+    private void UpdateDowned()
+    {
+        if (_health != null && _health.IsDead || !_ragdoll.IsSettled) return;
+
+        _ragdoll.Recover();
+        _downed = false;
     }
 
     // Input callbacks only record intent; the scene binds them by name, so don't rename them.
@@ -63,7 +95,11 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
         if (context.canceled) _peekHeld = false;
     }
 
-    void Update() => MovePlayer();
+    void Update()
+    {
+        if (_downed) UpdateDowned();
+        else MovePlayer();
+    }
 
     void MovePlayer()
     {
@@ -91,6 +127,13 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
 
     void FixedUpdate()
     {
+        // Knocked down, the ragdoll owns the body: writing a move would stand her up mid-fall.
+        if (_downed)
+        {
+            _hasMoveLimit = false;
+            return;
+        }
+
         // Pushes aren't limited by what the player walks into: the solver owns those.
         Vector3 move = PushLimit.Limit(_capsule, _moveVelocity);
         if (_hasMoveLimit)

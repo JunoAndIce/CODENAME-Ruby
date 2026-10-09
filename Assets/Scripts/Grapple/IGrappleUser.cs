@@ -8,6 +8,9 @@ public interface IGrappleUser
 {
     Vector3 AimPoint { get; }
 
+    /// <summary>False while the user can't use the chain (knocked down): the grapple lets go and stands down.</summary>
+    bool CanAct { get; }
+
     /// <summary>
     /// For the next physics step only, limit the walk along `outward` (away from the far end) to
     /// max(0, slackSpeed + dragFraction x outward walking speed). slackSpeed is how fast the rope

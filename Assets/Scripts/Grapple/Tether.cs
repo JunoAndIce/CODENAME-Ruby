@@ -61,6 +61,10 @@ public class Tether
     readonly float _maxLength;
     bool _biting;                // a tap's bite is still being taken up; the hand holds until it is
     readonly PassThrough _passThrough = new();   // player/host collisions, off while parked
+    // What the host touches, for telling a spin's real hits from floor snags. Added to the host for
+    // the tether's life (null for static-world nodes) and removed at End.
+    readonly HostContacts _contacts;
+    readonly bool _addedContacts;
 
     /// <summary>
     /// The player's hand on the chain. Held, the rope keeps its length, shrinking only by reel
@@ -118,6 +122,17 @@ public class Tether
         _pullSpeed = MaxCorrectionSpeed * Mathf.Sqrt(_dragFraction);
         _playerColliders = Footprint.SolidColliders(player);
         _hostColliders = _host != null ? Footprint.SolidColliders(_host) : System.Array.Empty<Collider>();
+        if (_host != null)
+        {
+            // Anything on the chain can end up fast: spun, thrown (a 20 kg crate leaves at about
+            // 90 m/s) or flung. Discrete detection only checks positions at each step, so a fast
+            // prop skips clean through a 0.7 m enemy and the hit never happens. Left on after the
+            // tether ends, since the thrown body is still flying.
+            _host.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            _addedContacts = !_host.TryGetComponent(out _contacts);
+            if (_addedContacts) _contacts = _host.gameObject.AddComponent<HostContacts>();
+            _contacts.Ignore(player);
+        }
 
         // A moving body can't be reeled closer than its size allows. Parked inside its own size,
         // it overlaps the player, and the rod and the collision fight every step.
@@ -185,6 +200,7 @@ public class Tether
     /// <summary>The chain is letting go: give back anything the tether switched off.</summary>
     public void End()
     {
+        if (_addedContacts && _contacts != null) Object.Destroy(_contacts);   // a dead host's is already gone
         StopJiggle();
         SetPassThrough(false);
     }
@@ -359,11 +375,21 @@ public class Tether
             // The rev-up starts from however fast, and whichever way, it arrived.
             _spinDirection = along < 0f ? -1f : 1f;
             _spinNow = Mathf.Abs(along);
+            _contacts.TakeWall();   // a wall touched before the spin began isn't a hit on it
         }
-        else if (_spinNow > MinBounceSpeed && along * _spinDirection < ExpectedAfterStep(offset.magnitude) * StoppedShare)
+        else
         {
-            _spinDirection = -_spinDirection;
-            _spinNow *= _spinBounce;
+            // Lost speed alone isn't a hit: a tumbling box snags its corners on the floor, and
+            // reversing on every snag kept the spin from ever building. A bounce also needs the
+            // host to have touched something wall-like this step.
+            Collider wall = _contacts.TakeWall();
+            if (wall != null && _spinNow > MinBounceSpeed
+                && along * _spinDirection < ExpectedAfterStep(offset.magnitude) * StoppedShare)
+            {
+                TetherLog.Event($"SPIN BOUNCE off {wall.name} at {_spinNow:0.0} m/s");
+                _spinDirection = -_spinDirection;
+                _spinNow *= _spinBounce;
+            }
         }
 
         Vector3 tangent = counterClockwise * _spinDirection;
@@ -435,8 +461,10 @@ public class Tether
     public string Describe()
     {
         float speed = _player.linearVelocity.magnitude;
-        string host = _host == null ? "static" : $"{_host.name} m={_host.mass}";
+        // The node and host may be destroyed by now (detaching because they were): don't read them then.
+        string node = _node != null ? _node.name : "(destroyed)";
+        string host = _host == null ? "static or gone" : $"{_host.name} m={_host.mass}";
         string hand = Gripped ? "held" : _biting ? "bite" : "loose";
-        return $"node={_node.name} len={_length:F1} hand={hand} tension={Tension:F0} playerSpeed={speed:F1} host=({host})";
+        return $"node={node} len={_length:F1} hand={hand} tension={Tension:F0} playerSpeed={speed:F1} host=({host})";
     }
 }

@@ -2,7 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// Ragdoll for a rigless capsule: a plain physics handoff. Settled once its speed stays under
-/// Settle Speed for Settle Time, or, for an upright spin, once the spin has wound down.
+/// Settle Speed for Settle Time, or, for an upright spin, once the spin has wound down. A body laid
+/// to rest (a corpse) is frozen with trigger colliders, so nothing collides with it, until it's
+/// ragdolled, spun, held or recovered again.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class CapsuleRagdollBody : MonoBehaviour, IRagdollBody
@@ -21,9 +23,12 @@ public class CapsuleRagdollBody : MonoBehaviour, IRagdollBody
     private bool _spinInPlace;
     private float _spinSpeed;          // signed: its sign is the direction
     private float _spinDeceleration;
+    private Collider[] _solidColliders;  // the colliders that collide normally, made triggers at rest
+    private bool _resting;
 
     public bool IsSettled => _isRagdolling && (_spinning ? _spinSpeed == 0f : _slowTimer >= _settleTime);
     public bool IsSpinning => _isRagdolling && _spinning;
+    public bool IsRagdolling => _isRagdolling;
 
     private void Awake()
     {
@@ -31,10 +36,16 @@ public class CapsuleRagdollBody : MonoBehaviour, IRagdollBody
         _defaultConstraints = _rb.constraints;
         _normalCollisionMode = _rb.collisionDetectionMode;
         _defaultMaxAngularVelocity = _rb.maxAngularVelocity;
+
+        var solid = new System.Collections.Generic.List<Collider>();
+        foreach (Collider collider in GetComponentsInChildren<Collider>())
+            if (!collider.isTrigger && collider.attachedRigidbody == _rb) solid.Add(collider);
+        _solidColliders = solid.ToArray();
     }
 
     public void Ragdoll(Vector3 launchVelocity)
     {
+        Wake();
         _isRagdolling = true;
         _spinning = false;
         _slowTimer = 0f;
@@ -51,6 +62,7 @@ public class CapsuleRagdollBody : MonoBehaviour, IRagdollBody
 
     public void Spin(float angularSpeed, float duration, Vector3 launchVelocity)
     {
+        Wake();
         _isRagdolling = true;
         _spinning = true;
         _spinInPlace = launchVelocity.sqrMagnitude < 0.0001f;
@@ -78,8 +90,43 @@ public class CapsuleRagdollBody : MonoBehaviour, IRagdollBody
         _rb.linearVelocity = velocity;
     }
 
+    public void Hold()
+    {
+        Wake();
+        _isRagdolling = false;
+        _spinning = false;
+
+        _rb.isKinematic = false;
+        _rb.useGravity = true;
+        // Held and swung, it's as fast as anything thrown.
+        _rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        _rb.constraints = RigidbodyConstraints.None;
+        _rb.maxAngularVelocity = _defaultMaxAngularVelocity;
+    }
+
+    public void Rest()
+    {
+        _resting = true;
+        _isRagdolling = false;
+        _spinning = false;
+
+        _rb.linearVelocity = Vector3.zero;
+        _rb.angularVelocity = Vector3.zero;
+        _rb.constraints = RigidbodyConstraints.FreezeAll;
+        foreach (Collider collider in _solidColliders) collider.isTrigger = true;
+    }
+
+    // Back from rest: solid again, free to move. Every way of moving the body starts here.
+    private void Wake()
+    {
+        if (!_resting) return;
+        _resting = false;
+        foreach (Collider collider in _solidColliders) collider.isTrigger = false;
+    }
+
     public void Recover()
     {
+        Wake();
         _isRagdolling = false;
         _spinning = false;
         _slowTimer = 0f;
