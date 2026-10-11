@@ -29,9 +29,13 @@ The user chose each of these:
   Ruby's walk) a sidestep can dodge it.
   - Rejected: an aim wind-up with a tell, and an instant hit after a wind-up.
   - If playtests find first-sight shots unfair, the lever is a reaction delay, not a wind-up.
-- **Shooting on the move.** Armed officers keep chasing and fire whenever they can, which follows the
+- **Shooting on the move.** Armed officers keep moving and fire whenever they can, which follows the
   two-axis rule: attacking happens alongside the hunt, not as a state. Rejected: stopping to shoot
-  (today's placeholder) and holding a preferred distance.
+  (today's placeholder).
+- **Armed officers keep a minimum distance from Ruby** (added after design review). While she's in
+  sight they close in only to the gun's Min Distance, and back away if she comes closer, still
+  firing. So rushing a gunman means chasing him. Unarmed officers close all the way.
+  - j-quote: "enemies with a gun in hand maintain a minimum distance from ruby"
 - **Officers drop their pistol** when the chain grabs them, when knocked down (any knockdown,
   including from spinning tops), and when they die. Not chosen: whipping the gun out of a hand, so a
   held gun has no grab point.
@@ -58,8 +62,9 @@ The user chose each of these:
 It knows nothing about officers, the chain or Ruby.
 
 - **`Gun`** (MonoBehaviour on the pistol prefab):
-  - **Tuning:** Damage, Bullet Speed, Fire Cooldown, Range, Spread (± degrees), Bullet Lifetime, the
-    bullet prefab, and a Muzzle transform.
+  - **Tuning:** Damage, Bullet Speed, Fire Cooldown, Range, Min Distance, Spread (± degrees), Bullet
+    Lifetime, the bullet prefab, and a Muzzle transform. Min Distance lives on the gun, beside Range,
+    because the two make up the weapon's engagement band. A later melee weapon would set it to 0.
   - **Two modes.** Held: parented to a hand, Rigidbody kinematic, colliders off. Dropped: unparented,
     Rigidbody dynamic, colliders on, carrying the velocity it was dropped with.
   - **Dropped-only objects:** a list it switches on when dropped and off when held. This is how the
@@ -71,6 +76,7 @@ It knows nothing about officers, the chain or Ruby.
 - **`GunHolder`** (MonoBehaviour on a character), a hand that can hold one gun:
   - **Hand transform** and a starting gun.
   - **`IsArmed`**, **`PickUp(gun)`** and **`Drop(velocity)`**.
+  - The held gun, so callers can read its Range and Min Distance.
   - **`TryFireAt(point)`:** checks range and cooldown, turns the held gun to face the point (flat),
     and fires.
   - **`FindLooseGun(radius, isFree)`:** the nearest dropped, resting gun within the radius that
@@ -98,11 +104,23 @@ It knows nothing about officers, the chain or Ruby.
     drops it if the officer is still armed.
   - **The placeholder goes:** `Attack()`, `_attackRange` and `_attackCooldown`, with their gizmo.
     The gun owns range and cooldown. Range moves to a gizmo drawn from the held gun.
-- **`AggroState`:**
-  - Always chases along the shared field, as now.
-  - Each physics step it also calls `GunHolder.TryFireAt(player)` when armed, Ruby is in sight, and
-    she isn't down (`PlayerController.CanAct`). Nobody shoots a body.
-  - The body faces its direction of travel, and the held gun turns toward Ruby: officers run and gun.
+- **`AggroState`** moves one of three ways each physics step:
+  - **Chase**, along the shared field as now. This applies when unarmed, when Ruby is out of sight
+    (they still have to find her), or when she's farther than Min Distance + 1 m. The body faces its
+    direction of travel.
+  - **Hold**, when armed, Ruby is in sight, and she's between Min Distance and Min Distance + 1 m:
+    stop and face her. The 1 m band keeps an officer from jittering between advancing and backing
+    off.
+  - **Back away**, when armed, Ruby is in sight, and she's closer than Min Distance:
+    - Of eight directions 2 m out, it takes the open spot with a clear grid line that's farthest
+      from Ruby.
+    - It walks there at Chase Speed **facing her**, moving backwards rather than turning its back. A
+      new `EnemyController.StepAway(target, speed)` sets the velocity without turning.
+    - Cornered, with no spot that gains distance, it holds its ground.
+  - **Firing** happens alongside whichever of these applies. Each physics step it calls
+    `GunHolder.TryFireAt(player)` when armed, Ruby is in sight, and she isn't down
+    (`PlayerController.CanAct`). Nobody shoots a body. The held gun turns toward Ruby, so chasing
+    officers run and gun.
 - **`RearmState`** (new AI state, `EnemyState.Rearm`). It *is* a state, because fetching a gun
   replaces the hunt:
   - **Enter:** chooses the nearest **free** gun within Rearm Radius. Free means dropped, resting,
@@ -141,11 +159,12 @@ Prefabs and scenes are YAML, so the user builds these:
 ## Defaults
 
 | Setting | Where | Default | Why |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Damage | Gun | 30 | Ruby has 30 health: one shot kills. |
 | Bullet Speed | Gun | 30 m/s | Twice Ruby's 15 m/s walk, so it's dodgeable from mid-range. |
 | Fire Cooldown | Gun | 0.8 s | Steady pressure without a wall of bullets. |
 | Range | Gun | 10 m | Inside the 12.5 m Alert Radius: officers spot Ruby, then close in while firing. |
+| Min Distance | Gun | 5 m | Armed officers hold between 5 and 6 m, so a bullet takes about 0.2 s to arrive. They stay inside the chain's 8 m reach, so Ruby can still hook a gunman. |
 | Spread | Gun | ±2° | Enough that a moving Ruby isn't always hit. |
 | Bullet Lifetime | Gun | 2 s | Strays return to the pool after 60 m. |
 | Dropped weight | Pistol's Weight | Custom 1 kg | A full throw (about 118 m/s) does about 15 damage: it knocks an officer down, and so disarms them, but doesn't kill one at 20 health. |
@@ -158,6 +177,7 @@ One step at a time, with a check-in after each:
 1. **`Ruby.Weapons`** (Gun, Bullet, GunHolder, IBulletTarget, and the assembly file referenced by
    `Ruby.Game`), plus armed officers shooting on the move in Aggro. The placeholder attack goes.
    *Play-test:* officers shoot while chasing, walls and crates block shots, and one hit drops Ruby.
+   Armed officers stop about 5 m away and back off, still facing and firing, when she rushes them.
 2. **Drops,** and the dropped gun as a grabbable, throwable prop. *Play-test:* grabbing, knocking
    down or killing an officer drops the gun, and a held officer soaks a bullet.
 3. **`RearmState`.** *Play-test:* a disarmed officer fetches the nearest gun and gives up if Ruby
