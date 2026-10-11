@@ -70,7 +70,7 @@ The scripts are split into assembly definitions so the systems can be lifted int
 
 | Assembly | Folder (under `Assets/Scripts/`) | References | Holds |
 | --- | --- | --- | --- |
-| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdoll seam, pooling |
+| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdoll seam, pooling, `DebugLog` |
 | `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, patrol routes |
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
@@ -175,9 +175,9 @@ framing, measured from the Police Station, where a character fills about 1/12.5 
   (less Player Margin), read from the camera's Size or FOV each frame. No zoom or aspect can push the
   player off screen. Keep it derived.
 
-Cinemachine 3 is in the manifest and a `CinemachineBrain` sits on Main Camera, but there is no
-`CinemachineCamera` in the scene — `CameraFocus` superseded the rig described in
-`docs/specs/2026-09-05-camera-aim-and-peek.md`. The brain is vestigial.
+`CameraFocus` superseded the Cinemachine rig described in
+`docs/specs/2026-09-05-camera-aim-and-peek.md`, and the Cinemachine package has been removed. Don't
+bring it back for the follow camera: `CameraFocus` owns the camera's position.
 
 ### Grapple
 
@@ -220,7 +220,8 @@ its speed, then revs back up, so it keeps swinging. Wall-like means a contact fa
 recorded by a `HostContacts` component the tether adds to the host for its life: lost speed alone
 isn't enough, because a tumbling box snags its corners on the floor (contacts facing up), and
 reversing on every snag kept a big box from ever building speed. Walls, crate sides and enemies all
-count; Ruby doesn't (a parked host passes through her). Each bounce logs `SPIN BOUNCE off <name>`.
+count; Ruby doesn't (a parked host passes through her). With debug logs on, each bounce logs
+`SPIN BOUNCE off <name>`.
 Before any of this, the spin re-added full speed in the same direction every step and ground the
 host into the wall, the first half of the old wall lock. **The spin ignores aim and never moves the
 player.** Holding a host on its circle takes an inward pull of spin² / radius each step, so while
@@ -299,12 +300,14 @@ fraction: a gentler weight curve than walking drag, so heavier still comes in sl
 The game is 2D feel on a 3D physics stack. [VelocityUtil.cs](Assets/Scripts/Core/VelocityUtil.cs) owns
 how characters author movement:
 
-- **The player** rewrites its velocity every physics step as **movement input + external velocity**.
-  External velocity comes **only from explicit pushes** (`AddExternalVelocity`: later knockback;
-  the tether never pushes her) and fades at Fling Damping. Nothing is inferred from what the body
-  actually did. That was the old scheme, and it read "a wall stopped me" as "something pushed me",
-  bouncing the player off walls and crates and pinning enemies in corners. **Never write a
-  character's Rigidbody velocity directly to push it; use `AddExternalVelocity`.**
+- **The player** writes her velocity fresh every physics step from movement input alone
+  (`SetFlatVelocity`). Nothing pushes her: the tether never does, and a hit at Knockdown Speed
+  ragdolls her instead. An older scheme inferred pushes from what the body actually did, read "a
+  wall stopped me" as "something pushed me", and bounced the player off walls and crates and pinned
+  enemies in corners. The explicit-push path that replaced it (`AddExternalVelocity`, faded by Fling
+  Damping) was never called, so it was removed. **When knockback arrives, bring it back as an
+  explicit push carried on top of the move and faded on its own: never inferred from the body, and
+  never by writing a character's Rigidbody velocity directly.**
 - **Enemies** set their velocity directly (`SetFlatVelocity`): nothing pushes them while their AI
   steers, because the rope only acts while grabbed, and `GrabbedState` doesn't steer.
 - `Flatten()` redirects an upward launch into XZ **preserving magnitude**, so throw distance depends
@@ -345,7 +348,7 @@ as you or heavier blocks, so equal-weight characters block each other. There is 
 separate push-strength dial: it would drift out of step with the weight table. It looks
 ahead instead of reading collision callbacks, which arrive a step late, so the first step into a
 heavy crate would kick it. It skips pairs set to ignore each other, so a parked host spinning
-through the player never slows the walk. External velocity is not limited.
+through the player never slows the walk.
 
 ### Enemy AI
 
@@ -489,6 +492,12 @@ the chain states.
 - `OnDrawGizmosSelected` visualises radii, routes, paths and camera lead. Add gizmos for anything
   spatial you introduce.
 - Comments explain **why**, not what, and often name the failure mode being avoided. Match that.
+- **Playtest logging is off by default.** Chatter (hits, lost sight, the tether's events) goes
+  through `DebugLog.Info` or `TetherLog`, both `[Conditional("RUBY_DEBUG_LOGS")]`. Turn it on by
+  adding `RUBY_DEBUG_LOGS` under Project Settings > Player > Scripting Define Symbols. Without
+  the define the calls compile away, message and all. Pathing can't reference Core, so it gates
+  its one bake line with `#if RUBY_DEBUG_LOGS`. Real problems (a skipped patrol point, a missing
+  component) stay `Debug.LogWarning` / `LogError`, always on.
 - Commit messages: imperative subject, body in prose paragraphs explaining reasoning and trade-offs.
   See `git log` — this repo's messages are unusually substantial and worth matching.
 

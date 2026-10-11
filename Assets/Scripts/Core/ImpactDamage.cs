@@ -40,7 +40,7 @@ public class ImpactDamage : MonoBehaviour
         float hitterMass = other != null && !other.isKinematic ? other.mass : _body.mass;
         float damage = _rules.Damage(speed, hitterMass);
 
-        Debug.Log($"{name} hit by {collision.collider.name} at {speed:0.0} m/s: {damage:0.0} damage.", this);
+        DebugLog.Info($"{name} hit by {collision.collider.name} at {speed:0.0} m/s: {damage:0.0} damage.", this);
         _health.ApplyDamage(damage);
         _knockdown?.KnockDown();
     }

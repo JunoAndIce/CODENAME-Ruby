@@ -8,8 +8,6 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
     public int _bulletCount = 6;
 
     [SerializeField] private float _gamepadAimDistance = 6f;
-    [Tooltip("How fast pushes from outside (later knockback) fade. Kept out of Rigidbody damping, which would eat move input too.")]
-    [SerializeField] private float _flingDamping = 3f;
 
     private Rigidbody _myRigidbody;
     private CapsuleCollider _capsule;
@@ -18,7 +16,6 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
     private Vector2 _moveInput;
     private Vector2 _lookInput;
     private Vector3 _moveVelocity;
-    private Vector3 _external;   // explicit pushes only, fading at Fling Damping
     private bool _hasMoveLimit;  // set by the grapple each step it applies, used once
     private Vector3 _limitOutward;
     private float _limitSlackSpeed;
@@ -45,7 +42,7 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
     {
         _myRigidbody = GetComponent<Rigidbody>();
         _capsule = GetComponent<CapsuleCollider>();
-        _myRigidbody.linearDamping = 0f;   // see Fling Damping
+        _myRigidbody.linearDamping = 0f;   // damping would eat the move, which is written fresh every step
         _mainCamera = FindAnyObjectByType<Camera>();
         _playerInput = GetComponent<PlayerInput>();
         _grapple = GetComponent<GrappleController>();
@@ -64,9 +61,8 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
 
         _downed = true;
         _moveVelocity = Vector3.zero;
-        _external = Vector3.zero;
         _ragdoll.Ragdoll(_myRigidbody.linearVelocity);
-        if (_health != null && _health.IsDead) Debug.Log($"{name} is dead.", this);
+        if (_health != null && _health.IsDead) DebugLog.Info($"{name} is dead.", this);
     }
 
     // Gets her up once the ragdoll settles, unless the hit (or a later one while down) killed her.
@@ -138,7 +134,6 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
             return;
         }
 
-        // Pushes aren't limited by what the player walks into: the solver owns those.
         Vector3 move = PushLimit.Limit(_capsule, _moveVelocity);
         if (_hasMoveLimit)
         {
@@ -147,7 +142,7 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
             if (outward > allowed) move -= _limitOutward * (outward - allowed);
             _hasMoveLimit = false;
         }
-        VelocityUtil.ApplyAuthoredMove(_myRigidbody, move, ref _external, _flingDamping);
+        VelocityUtil.SetFlatVelocity(_myRigidbody, move);
     }
 
     public void LimitMove(Vector3 outward, float slackSpeed, float dragFraction)
@@ -157,7 +152,4 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
         _limitSlackSpeed = slackSpeed;
         _limitDragFraction = dragFraction;
     }
-
-    /// <summary>A push from outside (later knockback): lands now, then carries and fades. The grapple never pushes her.</summary>
-    public void AddExternalVelocity(Vector3 change) => VelocityUtil.AddExternal(_myRigidbody, change, ref _external);
 }

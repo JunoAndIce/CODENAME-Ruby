@@ -227,7 +227,10 @@ public class PathGrid : MonoBehaviour
             }
         }
 
+        // The same playtest switch as Core's DebugLog, which Pathing can't reference.
+#if RUBY_DEBUG_LOGS
         Debug.Log($"{name}: baked {_width}x{_depth} cells ({_cellSize}m), {blocked} blocked.", this);
+#endif
     }
 
     /// <summary>

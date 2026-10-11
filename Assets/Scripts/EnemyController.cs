@@ -311,7 +311,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public void Attack()
     {
-        Debug.Log($"{name} attacks {_player.name}.", this);
+        DebugLog.Info($"{name} attacks {_player.name}.", this);
         Debug.DrawLine(EyePosition, _player.transform.position, Color.red, 0.15f);
     }
 

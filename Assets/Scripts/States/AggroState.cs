@@ -33,10 +33,7 @@ public class AggroState : EnemyStateBase
 
         bool hasSight = Enemy.CanSeePlayer();
         if (_hadSight && !hasSight)
-        {
-            string blocker = Enemy.SightBlocker != null ? Enemy.SightBlocker.name : "something";
-            Debug.Log($"{Enemy.name} lost sight of {Enemy.PlayerTransform.name} — blocked by {blocker}.", Enemy);
-        }
+            DebugLog.Info($"{Enemy.name} lost sight of {Enemy.PlayerTransform.name} — blocked by {(Enemy.SightBlocker != null ? Enemy.SightBlocker.name : "something")}.", Enemy);
         _hadSight = hasSight;
 
         if (Enemy.InContactWithPlayer()) _lostTimer = 0f;
