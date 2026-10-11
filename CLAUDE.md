@@ -359,10 +359,21 @@ through the player never slows the walk. External velocity is not limited.
   (placeholder attack until weapons). Contact holds while the player is in sight within Give Up
   Radius. After Aggro Time without it the enemy searches **where the hunt was leading when it gave
   up** (recorded on Aggro's exit), not where the player slipped out of view.
-- **Patrol** walks a route of **area nodes** stored on the enemy (`PatrolRoute`): it heads for an
-  area's centre, and when the centre is occupied the nearest open spot inside the radius counts as
-  reached. Routes are edited with Scene-view handles (`EnemyControllerEditor`), which colour each area
-  by the bake's own clearance test. No route means Idle in place.
+- **Patrol** walks a route of **area nodes** stored on the enemy (`PatrolRoute`). Each area is a
+  circle or a rectangle lined up with X and Z (`GridArea`), so it can fill a room or run along a
+  corridor. The enemy heads for an area's centre, and when the centre is occupied the nearest open
+  spot inside the area counts as reached. Mode is Loop, Ping Pong or **Random**, which picks any
+  point but the one it's on and the one it just came from (so with three points it can only go
+  round, and with two it goes back). A route of **one point 4 m or more across**
+  (`GridArea.Span`: a circle's diameter, a rectangle's longer side; `PatrolRoute.Wanders`) is
+  wandered instead: random open spots inside it, each at least a quarter of the way across from
+  where it stands, pausing at each. Spots come only from ground joined to the centre within the
+  area (`PathGrid.RandomSpotInArea`), so an area drawn across a wall is wandered on its centre's
+  side. Routes are edited with Scene-view handles (`EnemyControllerEditor`): a rim dot sizes a
+  circle, and edge handles size a rectangle, as on a Box Collider. Each area is coloured by the
+  bake's own clearance test, and a wandered point is labelled "0 · wander". In the Inspector,
+  `PatrolPointDrawer` shows only the size field a point's shape uses. No route means Idle in
+  place.
 
 ### Pathing
 

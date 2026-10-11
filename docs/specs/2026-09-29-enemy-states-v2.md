@@ -14,6 +14,7 @@ Lifecycle" plans.
   exists). `GrabbedState` keeps the body dynamic, so the rope drags it.
 - [x] **Patrol:** a Safe route of **area nodes** stored on each enemy, with Scene-view authoring
   (`6026559`), walked with A* (`GridPathfinder`). Unreachable points are skipped with a warning.
+  A Random mode joins Loop and Ping Pong, and a lone wide point is wandered (section 3c).
 - [ ] Cautious state and Cautious route (reuses the patrol code)
 - [x] **Aggro:** one `AggroState` replaces Chase + Attack. It hunts along the shared flow field
   (facing its direction of travel), and within Attack Range with a clear line it stops, faces the
@@ -199,6 +200,81 @@ waypoints. Each point is now an **area**, a centre plus a radius:
   - Blocked or Unreachable: warns once per point (until it next succeeds) and skips to the next.
   - If every point fails in a row, it holds, warns, and retries after Route Retry Time.
   - New tuning: `_nodePauseTime`, `_stuckTime`, `_routeRetryTime`.
+
+**3c. Random mode and single-area wander** (2026-10-10):
+
+- **Random mode** (built): `PatrolMode.Random = 2`, after Loop and Ping Pong, with the values
+  written out because Unity saves the number.
+  - `PatrolRoute.Next(index, cameFrom, ref direction)` picks uniformly among every point except
+    the one the enemy is on and the one it reached before that. So the walk never doubles
+    straight back.
+  - With two points there's nowhere else to go, so it goes back. With three it can only go round,
+    in whichever direction it starts.
+  - `PatrolState` keeps `_cameFrom`, the last point actually reached:
+    - A rejoin after a chase clears it.
+    - A skipped point never becomes it, since the enemy still stands where it last arrived.
+  - The route gizmo draws no lines between points in Random, since the order means nothing.
+- **Single-area wander** (built):
+  - A route with one point of radius 2 m or more (`PatrolRoute.Wanders`) is wandered instead of
+    stood on, so the default 1 m area still means "stand here". 3d restates this as 4 m across,
+    so it covers rectangles too.
+  - The enemy walks to random open spots, each at least half the radius from where it stands,
+    so a walk reads as roaming, and pauses at each for the point's Pause Time.
+  - `PathGrid.RandomSpotInArea` picks the spot:
+    - It floods from the area's resolved centre (`ResolveArea`) over walkable cells with `CanStep`,
+      never leaving the circle, and draws one far-enough cell uniformly in the same pass
+      (reservoir sampling).
+    - Only ground connected to the centre inside the circle counts, so a circle across a wall
+      wanders the centre's side, and a walk never detours through the next room.
+    - Its scratch arrays are generation-stamped like `GridPathfinder`'s, so a pick allocates
+      nothing.
+  - `GridNavigator.PickSpotInArea` wraps it with a `FailureReason`.
+  - `EnemyController.WanderTo` walks there with `MoveToArea` and a 0.5 m area, so another enemy
+    standing on the spot reads as Blocked rather than arrived.
+  - A spot that's blocked or unreachable, or no spot at all, means pick again. After 3 in a row
+    the enemy holds for Route Retry Time with one warning, sharing the route's hold.
+  - The Scene view labels a wandered point "0 · wander".
+
+**3d. Rectangle areas** (2026-10-11):
+
+- **Why.** Rooms and corridors are rectangles, so a circle either misses a room's corners or pokes
+  through its walls.
+- **Shape.** An area is a circle or a rectangle lined up with X and Z, like the PathGrid and every
+  wall in the scene.
+  - Rotation was left out: no wall needs it, and it would add a rotation handle and a rotated
+    inside test.
+  - Squares alone were rejected, since a square can't fit a corridor.
+- **`GridArea`** (`Pathing/`) is the one description of an area:
+  - It holds a centre, an `AreaShape` (`Circle = 0`, `Rectangle = 1`) and `HalfSize`.
+  - `Contains(point)` tests whether a point is inside.
+  - `Span` is the longest straight walk across it.
+  - `PathGrid.ResolveArea`, `PathGrid.RandomSpotInArea`, `GridNavigator.MoveToArea` and
+    `PickSpotInArea` take a `GridArea` instead of a centre and radius, so the circle is assumed
+    nowhere else.
+  - `ResolveArea` scans the area's bounding box and keeps the cells `Contains` accepts. The
+    wander's flood stops at `Contains`. "Stuck but inside counts as arrived" asks `Contains`.
+- **`PatrolPoint`** gains `_shape` and `_size` (width × depth). `_radius` stays for circles, so
+  existing routes are unchanged. `Area` builds the `GridArea`.
+- **Wander rule.** A lone point is wandered when its `Span` is **4 m or more**
+  (`PatrolRoute.WanderSpan`), which is a circle's diameter or a rectangle's longer side.
+  - This is the old 2 m-radius rule for circles.
+  - It lets a 2 × 10 m corridor be paced along.
+  - Each walk is at least a quarter of the span: half a circle's radius, as before, or 2.5 m along
+    a 10 m corridor. A rule needing both sides at 4 m was rejected, because corridors would never
+    wander.
+- **Editor.**
+  - The selected enemy's rectangles draw as outlines in the clearance colour.
+  - The colour test samples a 5 × 5 lattice trimmed by `Contains`, for both shapes, instead of
+    two rings.
+  - Circles keep the radius dot.
+  - Rectangles get Unity's `BoxBoundsHandle` on X and Z, the Box Collider's edge handles.
+    Dragging an edge moves only that edge, so a rectangle can be fitted to a room wall by wall.
+    One handle instance serves every rectangle, since it takes fresh control IDs on each draw.
+  - `PatrolPointDrawer` shows only the size field the shape uses. Switching shape keeps the
+    footprint: a circle becomes the square around it, and a rectangle becomes the circle across
+    its longer side.
+  - Add Patrol Point gives the first point a 2 × 2 size, since a new first element gets zeros.
+    Later points copy the previous one, shape and size included.
 
 ### 4. Cautious state and Cautious route
 

@@ -41,7 +41,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Range(0f, 1f)] private float _corpseBrightness = 0.35f;
 
     [Header("Patrol")]
-    [Tooltip("Walked while unaware. Empty = idle in place. Edit with the Scene-view handles when this enemy is selected.")]
+    [Tooltip("Walked while unaware. Empty = idle in place. One point 4 m or more across (a circle's diameter, a rectangle's longer side) is wandered rather than stood on. Edit with the Scene-view handles when this enemy is selected.")]
     [SerializeField] private PatrolRoute _safeRoute = new();
     [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
     [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
@@ -98,6 +98,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public Vector3 LastKnownPlayerPosition { get; private set; }
 
+    private const float WanderSpotRadius = 0.5f;
     private static readonly RaycastHit[] SightHits = new RaycastHit[16];
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
@@ -354,7 +355,23 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public void PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
 
     /// <summary>Walk to a patrol point's area along an A* route.</summary>
-    public NavResult PatrolTo(PatrolPoint point, float speed) => Navigator.MoveToArea(point.Position, point.Radius, speed);
+    public NavResult PatrolTo(PatrolPoint point, float speed) => Navigator.MoveToArea(point.Area, speed);
+
+    /// <summary>
+    /// A random spot in a wandered area, at least a quarter of the way across it from here (half a
+    /// circle's radius), so each walk reads as roaming rather than shuffling.
+    /// </summary>
+    public bool TryPickWanderSpot(PatrolPoint point, out Vector3 spot)
+    {
+        GridArea area = point.Area;
+        return Navigator.PickSpotInArea(area, area.Span * 0.25f, out spot);
+    }
+
+    /// <summary>
+    /// Walk to a wander spot, as an area just big enough to arrive in: with a wider one, another
+    /// enemy standing on the spot would count as arrived instead of blocked.
+    /// </summary>
+    public NavResult WanderTo(Vector3 spot, float speed) => Navigator.MoveToArea(GridArea.Circle(spot, WanderSpotRadius), speed);
 
     /// <summary>Chase the player along this floor's shared flow field.</summary>
     public void PathToPlayer(float speed)
@@ -469,12 +486,23 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         for (int i = 0; i < count; i++)
         {
             PatrolPoint point = _safeRoute[i];
-            DrawFlatCircle(point.Position, point.Radius);
+            DrawFlatArea(point.Area);
+
+            // A random route has no order, so lines between its points would only mislead.
+            if (_safeRoute.Mode == PatrolMode.Random) continue;
 
             bool last = i == count - 1;
             if (!last) Gizmos.DrawLine(point.Position, _safeRoute[i + 1].Position);
             else if (_safeRoute.Mode == PatrolMode.Loop && count > 2) Gizmos.DrawLine(point.Position, _safeRoute[0].Position);
         }
+    }
+
+    private static void DrawFlatArea(GridArea area)
+    {
+        if (area.Shape == AreaShape.Rectangle)
+            Gizmos.DrawWireCube(area.Centre, new Vector3(area.HalfSize.x * 2f, 0f, area.HalfSize.y * 2f));
+        else
+            DrawFlatCircle(area.Centre, area.HalfSize.x);
     }
 
     private static void DrawFlatCircle(Vector3 centre, float radius)
