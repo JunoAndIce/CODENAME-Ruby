@@ -116,7 +116,11 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
             return;
         }
 
-        Ray cameraRay = _mainCamera.ScreenPointToRay(Input.mousePosition);
+        // Read through the Input System: the legacy Input class throws once Active Input Handling
+        // is set to the Input System alone.
+        Mouse mouse = Mouse.current;
+        if (mouse == null) return;
+        Ray cameraRay = _mainCamera.ScreenPointToRay(mouse.position.ReadValue());
         Plane groundPlane = new(Vector3.up, Vector3.zero);
         if (!groundPlane.Raycast(cameraRay, out float rayLength)) return;
 

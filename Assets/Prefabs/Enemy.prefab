@@ -362,12 +362,16 @@ MonoBehaviour:
     _mode: 0
     _points:
     - _position: {x: -15.188435, y: -0.27581, z: -18.51728}
+      _shape: 0
       _radius: 1.7232742
+      _size: {x: 2, y: 2}
       _pauseTime: -1
     - _position: {x: -27.381302, y: -0.27581, z: -10.143349}
+      _shape: 0
       _radius: 3.069481
+      _size: {x: 2, y: 2}
       _pauseTime: -1
-  _nodePauseTime: 1.5
+  _nodePauseTime: 2.5
   _stuckTime: 1.5
   _routeRetryTime: 3
   _player: {fileID: 0}
