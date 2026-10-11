@@ -4,15 +4,9 @@ using UnityEngine;
 public enum NavResult { Moving, Arrived, Blocked, Unreachable }
 
 /// <summary>
-/// Moves an IPathAgent over the PathGrid of the floor it stands on.
-/// Shared goals use Dijkstra flow fields: chasers read their floor's shared field toward the
-/// target, so chase cost doesn't grow with the number of chasers, and a fixed point (search)
-/// gets this agent's own field, flooded once. Individual goals (patrol areas) use A*, one search
-/// per leg, cached. A clear straight line skips both. The navigator only plans; the agent's own
-/// MoveToward does the moving, so each kind of character keeps its own movement rules.
-///
-/// No silent fallbacks: chase and search stop with a warning saying why; area moves report
-/// Blocked or Unreachable with a FailureReason and let the caller decide (patrol skips).
+/// Moves an IPathAgent over its floor's PathGrid: flow fields for chase and search, cached A* for
+/// patrol areas, and a straight line when one is clear. It only plans; the agent steers. No silent
+/// fallbacks: chase and search stop with a warning, area moves report Blocked or Unreachable.
 /// </summary>
 public class GridNavigator
 {
@@ -116,7 +110,7 @@ public class GridNavigator
     /// the enemy stands: the area exists so an occupied centre can't stall it. Blocked and
     /// Unreachable only report, with FailureReason; the caller decides what to do.
     /// </summary>
-    public NavResult MoveToArea(Vector3 centre, float radius, float speed)
+    public NavResult MoveToArea(GridArea area, float speed)
     {
         if (!TryGetGrid(out PathGrid grid))
         {
@@ -130,18 +124,18 @@ public class GridNavigator
         // throw): the cached route starts from somewhere the enemy no longer is.
         bool resumed = Time.fixedTime - _lastAreaMove > Time.fixedDeltaTime * 1.5f;
         _lastAreaMove = Time.fixedTime;
-        bool newArea = resumed || grid != _routeGrid || FlatDistance(centre, _areaCentre) > 0.01f;
+        bool newArea = resumed || grid != _routeGrid || FlatDistance(area.Centre, _areaCentre) > 0.01f;
         bool gridChanged = grid.Version != _planVersion && Time.fixedTime >= _nextReplan;
         if (newArea || gridChanged)
         {
-            Plan(grid, centre, radius, position, resetWatchdog: true);
+            Plan(grid, area, position, resetWatchdog: true);
         }
         else if (_routeOk && Time.fixedTime >= _nextReplan && !grid.HasLineOfSight(position, _route[_routeIndex]))
         {
             // Knocked off the route (a collision, an overshoot, a slide along a wall): its next
             // corner is out of sight, and steering straight at it walks into the wall. Re-plan
             // from here, keeping the stuck timer running so a genuinely blocked enemy still gives up.
-            Plan(grid, centre, radius, position, resetWatchdog: false);
+            Plan(grid, area, position, resetWatchdog: false);
             if (_routeOk) _bestRemaining = RemainingRoute(position);
         }
 
@@ -168,7 +162,7 @@ public class GridNavigator
         float remaining = RemainingRoute(position);
         if (!MadeNoProgress(remaining)) return NavResult.Moving;
 
-        if (FlatDistance(position, centre) <= radius)
+        if (area.Contains(position))
         {
             _agent.Stop();
             return NavResult.Arrived;
@@ -178,10 +172,29 @@ public class GridNavigator
         return NavResult.Blocked;
     }
 
-    private void Plan(PathGrid grid, Vector3 centre, float radius, Vector3 position, bool resetWatchdog)
+    /// <summary>
+    /// A random open spot in an area for the agent to wander to, at least minDistance from where
+    /// it stands (see PathGrid.RandomSpotInArea). False, with FailureReason, when there is none.
+    /// </summary>
+    public bool PickSpotInArea(GridArea area, float minDistance, out Vector3 spot)
+    {
+        spot = area.Centre;
+        PathGrid grid = PathGrid.At(area.Centre);
+        if (grid == null)
+        {
+            FailureReason = "the area is not on any PathGrid";
+            return false;
+        }
+        if (grid.RandomSpotInArea(area, _agent.Body.position, minDistance, out spot)) return true;
+
+        FailureReason = $"no open ground in the area {minDistance:0.#}m or more from where it stands";
+        return false;
+    }
+
+    private void Plan(PathGrid grid, GridArea area, Vector3 position, bool resetWatchdog)
     {
         _routeGrid = grid;
-        _areaCentre = centre;
+        _areaCentre = area.Centre;
         _planVersion = grid.Version;
         // Jittered, so a crowd doesn't all re-plan on the same step when a crate lands.
         _nextReplan = Time.fixedTime + ReplanInterval * Random.Range(0.75f, 1.25f);
@@ -193,7 +206,7 @@ public class GridNavigator
         _route.Clear();
         _routeIndex = 0;
 
-        if (!grid.ResolveArea(centre, radius, position, out Vector2Int goalCell, out _goalPoint))
+        if (!grid.ResolveArea(area, position, out Vector2Int goalCell, out _goalPoint))
         {
             _routeOk = false;
             FailureReason = "no open ground inside the area";
@@ -296,10 +309,5 @@ public class GridNavigator
         _lastWarning = why;
     }
 
-    private static float FlatDistance(Vector3 a, Vector3 b)
-    {
-        Vector3 delta = a - b;
-        delta.y = 0f;
-        return delta.magnitude;
-    }
+    private static float FlatDistance(Vector3 a, Vector3 b) => PathGrid.FlatDistance(a, b);
 }

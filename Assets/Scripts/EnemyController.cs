@@ -1,10 +1,10 @@
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(CapsuleCollider))]
 [RequireComponent(typeof(Health))]
-public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
+public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 {
-    // CONFIGURABLE VALUES
     [Header("Movement")]
     [SerializeField] private float _chaseSpeed = 2f;
     [SerializeField] private float _patrolSpeed = 1f;
@@ -26,8 +26,22 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     [Tooltip("Seconds between attacks. Moves to the weapon when weapons exist.")]
     [SerializeField, Min(0.05f)] private float _attackCooldown = 1f;
 
+    [Header("Dropped")]
+    [Tooltip("An enemy let go while being spun always flings out. One that wasn't (being dragged, say) flings if it's moving at least this fast across the floor, and otherwise spins in place.")]
+    [SerializeField, Min(0f)] private float _dropFlingSpeed = 3f;
+    [Tooltip("How fast a dropped enemy starts spinning, upright, in radians per second.")]
+    [SerializeField, Min(0f)] private float _dropSpinSpeed = 12f;
+    [Tooltip("Seconds the spin takes to wind down to a stop, after which the enemy is back in Aggro.")]
+    [SerializeField, Min(0f)] private float _dropSpinTime = 3f;
+    [Tooltip("How bouncy a spinning enemy's hit on another enemy is: 0 stops dead along the hit, 1 keeps all the speed.")]
+    [SerializeField, Range(0f, 1f)] private float _topBounce = 0.6f;
+
+    [Header("Dead")]
+    [Tooltip("How bright a corpse's colours are, as a share of the living enemy's, so the dead read at a glance.")]
+    [SerializeField, Range(0f, 1f)] private float _corpseBrightness = 0.35f;
+
     [Header("Patrol")]
-    [Tooltip("Walked while unaware. Empty = idle in place. Edit with the Scene-view handles when this enemy is selected.")]
+    [Tooltip("Walked while unaware. Empty = idle in place. One point 4 m or more across (a circle's diameter, a rectangle's longer side) is wandered rather than stood on. Edit with the Scene-view handles when this enemy is selected.")]
     [SerializeField] private PatrolRoute _safeRoute = new();
     [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
     [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
@@ -39,8 +53,15 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     [Header("References")]
     [SerializeField] private PlayerController _player;
 
-    // ENEMY STATES
     private readonly StateMachine _state = new();
+    private CapsuleCollider _capsule;
+    // Velocity going into this physics step. Collision callbacks arrive after the solver has
+    // already spent the speed, so a hit is worked out from this, not from the body.
+    private Vector3 _preStepVelocity;
+    // Creation order, so exactly one of two colliding tops handles their hit.
+    private static int _created;
+    private int _order;
+
     public Rigidbody Body { get; private set; }
     public Health Health { get; private set; }
     public IRagdollBody RagdollBody { get; private set; }
@@ -53,33 +74,34 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     public RagdollState Ragdoll { get; private set; }
     public DeadState Dead { get; private set; }
 
-    // GETTERS
-    public EnemyState State => _state.Current is EnemyStateBase s ? s.Id : EnemyState.Idle;
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
-    public float AlertRadius => _alertRadius;
-    public float GiveUpRadius => _giveUpRadius;
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
     public float AttackRange => _attackRange;
     public float AttackCooldown => _attackCooldown;
+    public float DropSpinSpeed => _dropSpinSpeed;
+    public float DropSpinTime => _dropSpinTime;
     public PatrolRoute SafeRoute => _safeRoute;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
     public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
+    /// <summary>Ragdolling in an upright spin: a spinning top that knocks other enemies away.</summary>
+    public bool IsTop => _state.Current == Ragdoll && RagdollBody.IsSpinning;
     /// <summary>
-    /// Where the hunt was leading when aggro ended. Aggro keeps tracking the player for Aggro
-    /// Time after losing contact, so this is where they actually went, not where they slipped
-    /// out of view. Search goes here.
+    /// Where the hunt was leading when aggro ended, which is where search goes. Aggro keeps
+    /// tracking the player for Aggro Time after losing contact, so this is where they went, not
+    /// where they slipped out of view.
     /// </summary>
     public Vector3 LastKnownPlayerPosition { get; private set; }
-    /// <summary>Set the first time the enemy aggros; never cleared. The Cautious state reads it.</summary>
-    public bool IsCautious { get; private set; }
 
+    private const float WanderSpotRadius = 0.5f;
     private static readonly RaycastHit[] SightHits = new RaycastHit[16];
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
     private int _sightFrame = -1;
     private bool _canSeePlayer;
     private Collider _sightBlocker;
@@ -87,6 +109,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     private void Awake()
     {
         Body = GetComponent<Rigidbody>();
+        _capsule = GetComponent<CapsuleCollider>();
+        _order = ++_created;
         Health = GetComponent<Health>();
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
@@ -144,7 +168,64 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         DebugDrawPath();
     }
 
-    private void FixedUpdate() => _state.FixedTick();
+    private void FixedUpdate()
+    {
+        _state.FixedTick();
+        _preStepVelocity = Body.linearVelocity;
+    }
+
+    // A spinning top that hits another enemy trades momentum with it along the line between them,
+    // by weight, at Top Bounce: it bounces off and keeps spinning, and the one it hit is sent off
+    // at its share. Whether that knocks it down is ImpactDamage's call, by the shared Knockdown
+    // Speed, so a slow graze only shoves. Each pair is handled once: the top, or of two tops, the
+    // one created first.
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (!IsTop || collision.rigidbody == null) return;
+        if (!collision.rigidbody.TryGetComponent(out EnemyController other)) return;
+        if (other.Health.IsDead || other._state.Current == other.Grabbed) return;
+        if (other.IsTop && other._order < _order) return;
+
+        Vector3 n = other.Body.position - Body.position;
+        n.y = 0f;
+        if (n.sqrMagnitude < 0.0001f) return;
+        n.Normalize();
+
+        Vector3 vTop = _preStepVelocity;
+        Vector3 vOther = other._preStepVelocity;
+        float approach = Vector3.Dot(vTop - vOther, n);
+        if (approach <= 0f) return;
+
+        float mTop = Body.mass;
+        float mOther = other.Body.mass;
+        float exchange = (1f + _topBounce) * approach / (mTop + mOther);
+        Vector3 topAfter = vTop - n * (exchange * mOther);
+        Vector3 otherAfter = vOther + n * (exchange * mTop);
+
+        RagdollBody.Push(new Vector3(topAfter.x, Body.linearVelocity.y, topAfter.z));
+        other.TakeHit(new Vector3(otherAfter.x, other.Body.linearVelocity.y, otherAfter.z));
+    }
+
+    // Already ragdolling (a top or a tumble), it keeps doing that at the new velocity. On its feet
+    // it's shoved: its AI takes the body back next step, unless the hit also knocked it down, in
+    // which case the knockdown launches it at this velocity, whichever callback runs first.
+    private void TakeHit(Vector3 velocity)
+    {
+        if (_state.Current == Ragdoll) RagdollBody.Push(velocity);
+        else Body.linearVelocity = velocity;
+    }
+
+    /// <summary>
+    /// Knocked off its feet by a hit (ImpactDamage): ragdolls tumbling at the velocity the hit left
+    /// it with, then gets up into Aggro. Held on the chain or already down, the hit only hurts, so
+    /// a swung enemy keeps swinging.
+    /// </summary>
+    public void KnockDown()
+    {
+        if (Health.IsDead || _state.Current is GrabbedState or RagdollState or DeadState) return;
+        Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity));
+        _state.SetState(Ragdoll);
+    }
 
     // Externally driven transitions. Nothing can poll for these, so they bypass the table.
     public void Alert()
@@ -153,19 +234,71 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         _state.SetState(Aggro);
     }
 
-    public bool CanBeGrabbed => !Health.IsDead;
+    // Corpses too: a dead enemy stays a body the chain can swing and throw.
+    public bool CanBeGrabbed => true;
 
-    public void EnterGrabbed() => _state.SetState(Grabbed);
+    /// <summary>On the chain right now. A death mid-swing reads this to stay held.</summary>
+    public bool IsHeld { get; private set; }
 
-    /// <summary>Rope let go without a throw (node destroyed): drop straight into pursuit.</summary>
-    public void EndGrab()
+    public void EnterGrabbed()
     {
-        if (_state.Current != Grabbed) return;
-        _state.SetState(Aggro);
+        IsHeld = true;
+        if (Health.IsDead) Dead.Grab();
+        else _state.SetState(Grabbed);
     }
 
-    /// <summary>One-way: once an enemy has hunted the player it stays on edge for good.</summary>
-    public void MarkCautious() => IsCautious = true;
+    /// <summary>
+    /// Rope let go without a throw (dropped, or the node destroyed): the enemy spins upright until
+    /// the spin winds down, then is back in Aggro. A spun enemy flings out on its momentum while it
+    /// spins, turning the way it orbited; a slower one spins where it stands. A corpse just tumbles.
+    /// </summary>
+    public void EndGrab(bool wasSpun)
+    {
+        IsHeld = false;
+        if (Health.IsDead)
+        {
+            Dead.LetGo(Body.linearVelocity);
+            return;
+        }
+        if (_state.Current != Grabbed) return;
+
+        // Being spun always flings: a speed test alone would be a coin flip whenever Drop Fling
+        // Speed sits near Spin Speed, since the spin's measured speed wobbles each step.
+        Vector3 velocity = VelocityUtil.Flatten(Body.linearVelocity);
+        bool flung = wasSpun || velocity.magnitude >= _dropFlingSpeed;
+        float direction = 1f;
+        if (flung && _player != null)
+        {
+            // For a body orbiting a point, (offset × velocity).y has the sign of its turn.
+            Vector3 offset = transform.position - _player.transform.position;
+            direction = Vector3.Cross(offset, velocity).y >= 0f ? 1f : -1f;
+        }
+
+        Ragdoll.Spin(flung ? velocity : Vector3.zero, direction);
+        _state.SetState(Ragdoll);
+    }
+
+    /// <summary>
+    /// Darkens every renderer on the enemy to Corpse Brightness, through property blocks so the
+    /// shared materials (and every other enemy using them) are untouched.
+    /// </summary>
+    public void Darken()
+    {
+        var block = new MaterialPropertyBlock();
+        foreach (Renderer rendered in GetComponentsInChildren<Renderer>())
+        {
+            Material material = rendered.sharedMaterial;
+            if (material == null) continue;
+
+            Color colour = material.HasProperty(BaseColorId) ? material.GetColor(BaseColorId) : material.color;
+            colour = new Color(colour.r * _corpseBrightness, colour.g * _corpseBrightness, colour.b * _corpseBrightness, colour.a);
+
+            rendered.GetPropertyBlock(block);
+            block.SetColor(BaseColorId, colour);   // URP Lit
+            block.SetColor(ColorId, colour);       // built-in and sprite shaders
+            rendered.SetPropertyBlock(block);
+        }
+    }
 
     public void RecordTrailEnd()
     {
@@ -178,12 +311,18 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     /// </summary>
     public void Attack()
     {
-        Debug.Log($"{name} attacks {_player.name}.", this);
+        DebugLog.Info($"{name} attacks {_player.name}.", this);
         Debug.DrawLine(EyePosition, _player.transform.position, Color.red, 0.15f);
     }
 
     public void Release(Vector3 velocity)
     {
+        IsHeld = false;
+        if (Health.IsDead)
+        {
+            Dead.LetGo(velocity);
+            return;
+        }
         if (_state.Current != Grabbed) return;
 
         // Flattened, keeping speed: an upward throw redirects along the floor, so throw
@@ -192,7 +331,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         _state.SetState(Ragdoll);
     }
 
-    // Will be used for patroling and searching
     public void MoveToward(Vector3 target, float speed)
     {
         Vector3 direction = target - transform.position;
@@ -200,11 +338,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
 
         if (direction.sqrMagnitude > 0.01f)
             transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
-
-        // Plain authored velocity: nothing pushes an enemy while its AI steers (the rope only
-        // acts while grabbed, a state that doesn't steer), so there's no push to carry. When
-        // knockback arrives it gets the player's explicit external velocity (VelocityUtil).
-        VelocityUtil.SetFlatVelocity(Body, transform.forward * speed);
+        VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, transform.forward * speed));
     }
 
     /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>
@@ -221,7 +355,23 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     public void PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
 
     /// <summary>Walk to a patrol point's area along an A* route.</summary>
-    public NavResult PatrolTo(PatrolPoint point, float speed) => Navigator.MoveToArea(point.Position, point.Radius, speed);
+    public NavResult PatrolTo(PatrolPoint point, float speed) => Navigator.MoveToArea(point.Area, speed);
+
+    /// <summary>
+    /// A random spot in a wandered area, at least a quarter of the way across it from here (half a
+    /// circle's radius), so each walk reads as roaming rather than shuffling.
+    /// </summary>
+    public bool TryPickWanderSpot(PatrolPoint point, out Vector3 spot)
+    {
+        GridArea area = point.Area;
+        return Navigator.PickSpotInArea(area, area.Span * 0.25f, out spot);
+    }
+
+    /// <summary>
+    /// Walk to a wander spot, as an area just big enough to arrive in: with a wider one, another
+    /// enemy standing on the spot would count as arrived instead of blocked.
+    /// </summary>
+    public NavResult WanderTo(Vector3 spot, float speed) => Navigator.MoveToArea(GridArea.Circle(spot, WanderSpotRadius), speed);
 
     /// <summary>Chase the player along this floor's shared flow field.</summary>
     public void PathToPlayer(float speed)
@@ -243,11 +393,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
     public Collider SightBlocker => _sightBlocker;
 
     /// <summary>
-    /// A line from eye height to the player crosses nothing solid except characters (the
-    /// player, enemies — this one's own eye cubes included). Unlike paths, sight is checked
-    /// fresh every frame, so moving props can block it: hiding behind a crate works, while a
-    /// prop lower than the eye line doesn't hide anyone. See-through windows arrive with the
-    /// Perception step. Cached per frame: several transitions and the aggro state all ask.
+    /// A line from eye height to the player that crosses nothing solid except characters. Checked
+    /// fresh, so a crate can hide the player while a prop below the eye line can't. Cached per
+    /// frame: several transitions and the aggro state all ask.
     /// </summary>
     public bool CanSeePlayer()
     {
@@ -273,7 +421,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         return _canSeePlayer;
     }
 
-    // Characters see past each other: the player's own colliders (gun included) and any enemy's.
+    // Characters see past each other.
     private bool IsCharacter(Collider collider)
     {
         Rigidbody body = collider.attachedRigidbody;
@@ -328,9 +476,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         }
     }
 
-    // Every enemy's route, faintly, all the time: with many enemies you can see who walks what
-    // without selecting each one. The selected enemy's areas get coloured handles on top
-    // (EnemyControllerEditor).
+    // Every enemy's route, faintly, so you can see who walks what without selecting each one.
     private void OnDrawGizmos()
     {
         if (!HasPatrolRoute) return;
@@ -340,12 +486,23 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent
         for (int i = 0; i < count; i++)
         {
             PatrolPoint point = _safeRoute[i];
-            DrawFlatCircle(point.Position, point.Radius);
+            DrawFlatArea(point.Area);
+
+            // A random route has no order, so lines between its points would only mislead.
+            if (_safeRoute.Mode == PatrolMode.Random) continue;
 
             bool last = i == count - 1;
             if (!last) Gizmos.DrawLine(point.Position, _safeRoute[i + 1].Position);
             else if (_safeRoute.Mode == PatrolMode.Loop && count > 2) Gizmos.DrawLine(point.Position, _safeRoute[0].Position);
         }
+    }
+
+    private static void DrawFlatArea(GridArea area)
+    {
+        if (area.Shape == AreaShape.Rectangle)
+            Gizmos.DrawWireCube(area.Centre, new Vector3(area.HalfSize.x * 2f, 0f, area.HalfSize.y * 2f));
+        else
+            DrawFlatCircle(area.Centre, area.HalfSize.x);
     }
 
     private static void DrawFlatCircle(Vector3 centre, float radius)

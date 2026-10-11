@@ -2,132 +2,265 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Two-way velocity-constraint tether between a player body and a node's host body.
-/// No Unity joints: rope length is enforced by velocity projection each physics step,
-/// so tension reads out directly as the corrective impulse and break thresholds are exact.
-///
-/// Every correction is an inverse-mass-weighted impulse pair, so tug-of-war falls out
-/// of plain rigidbody mass — nothing about "tiers" is encoded here. A light host takes
-/// more of any correction than a heavy one; a static host takes none. Weight classes
-/// are just mass values on the objects; outcomes emerge from the math.
+/// Rope between the player and a node's host, as a velocity constraint rather than a joint. It
+/// never moves the player: every correction goes to the host, and where the host can't follow
+/// (a fixed anchor, a stuck or heavy host, the rope at its length) the rope stops the player's
+/// walk instead, through IGrappleUser.LimitMove. Tension reads out as the corrective impulse.
 /// </summary>
 public class Tether
 {
+    // ---- tuning ---------------------------------------------------------------
+
+    // The fastest the servo moves a host to close a gap, in m/s, before its weight scales it down.
+    const float MaxCorrectionSpeed = 20f;
+
+    // How fast a held rope pays out under a pull the servo can't absorb, in m/s: the hand
+    // failing a little instead of a hard wall.
+    const float YieldSpeed = 2.5f;
+
+    // Gap kept between the player and a held host's body at the park distance.
+    const float Clearance = 0.1f;
+
+    /// <summary>A pull tap is this many seconds of the reel, landed at once.</summary>
+    public const float TapSeconds = 0.3f;
+
+    // ---- the two ends -----------------------------------------------------------
+
     readonly Rigidbody _player;
-    // The player's own push channel: its movement is re-authored every step, so a rope
-    // impulse written straight onto the body would be erased. Hosts take writes directly —
-    // a grabbed enemy's AI doesn't steer, and props don't author velocity at all.
-    readonly System.Action<Vector3> _pushPlayer;
     readonly Rigidbody _host;     // null for static-world nodes
     readonly GrappleNode _node;
 
+    // A moving host no heavier than the player: one that can be parked and spun.
+    readonly bool _spinnable;
+    // How much of her walk the player keeps while dragging the host, by the walking push rule:
+    // clamp01(1 - host mass / player mass). Zero for anything fixed or as heavy as her.
+    readonly float _dragFraction;
+    // The servo's cap on this host: MaxCorrectionSpeed x the square root of the drag fraction. A
+    // gentler weight curve than walking drag, so heavier still comes in slower, but an enemy
+    // (fraction 0.17) comes at 8 m/s rather than a sluggish 3. It always covers her drag speed,
+    // since the root of a fraction is never smaller than the fraction.
+    readonly float _pullSpeed;
+    readonly float _spinSpeed;              // a parked host's full speed around the player, m/s
+    readonly float _spinUpTime;             // seconds the spin takes to get close to full speed
+    readonly float _spinBounce;             // share of its spin speed a parked host keeps when it bounces off something
+    readonly float _parkedCorrectionSpeed;  // the servo's cap while parked (see the constructor)
+
+    readonly Collider[] _playerColliders;
+    readonly Collider[] _hostColliders;   // empty for static-world nodes
+
+    // A parked host that keeps less than this share of the sideways speed it should have kept
+    // through a step was stopped by something (a wall, a crate, an enemy), and bounces.
+    const float StoppedShare = 0.5f;
+    // Below this spin speed (m/s), noise in a slow orbit could read as a stop.
+    const float MinBounceSpeed = 2f;
+
+    // ---- the rope -----------------------------------------------------------------
+
     float _length;
+    readonly float _minLength;   // fully reeled, the chain becomes a rod at this length
+    readonly float _maxLength;
+    bool _biting;                // a tap's bite is still being taken up; the hand holds until it is
+    readonly PassThrough _passThrough = new();   // player/host collisions, off while parked
+    // What the host touches, for telling a spin's real hits from floor snags. Added to the host for
+    // the tether's life (null for static-world nodes) and removed at End.
+    readonly HostContacts _contacts;
+    readonly bool _addedContacts;
+
+    /// <summary>
+    /// The player's hand on the chain. Held, the rope keeps its length, shrinking only by reel
+    /// and tap. Loose, it slides out as the ends separate, up to max length, and never takes
+    /// slack back in by itself.
+    /// </summary>
+    public bool Gripped { get; set; }
 
     public GrappleNode Node => _node;
     public Vector3 Anchor => _node.AnchorPoint;
     public float Length => _length;
-    public float AttachDistance { get; private set; }
+    public float AttachDistance { get; }
 
     /// <summary>Corrective force applied by the last solve. Compare against node break strength.</summary>
     public float Tension { get; private set; }
-    /// <summary>Chain direction player -> anchor, from the last solve.</summary>
-    public Vector3 ChainDir { get; private set; }
 
-    // Max closing speed the chain servo will drive, in either direction's favor.
-    // Every positional error converts to closing speed through this cap, so it is
-    // THE ceiling on pull/yank force: a chain bite of any size yanks at most this
-    // fast, toward whatever end can move. 20 reads as a strong yank, not a launch.
-    const float MaxCorrectionSpeed = 20f;
+    /// <summary>False when the far end can't be moved (world, immovable, or as heavy as the player): pull does nothing.</summary>
+    public bool CanPull => _dragFraction > 0f;
 
-    // Yield: how fast the rope pays out under sustained overload, in m/s. This is
-    // the "holding back the chain with strength and failing a little" dial — the
-    // servo still pulls while yielding, so the pair never snaps apart; the rope
-    // just gives a little instead of being a hard wall. Paid-out rope stays out
-    // (reel/tap shorten it); growth caps at the attach-range max.
-    const float YieldSpeed = 2.5f;
-    // Park distance floor: the chain clamps here on reel/tap, and once fully reeled
-    // it becomes a ROD — enforced both ways — so the tether never drags a body into
-    // the node's collider space. Configurable per-chain via the controller.
-    readonly float _minLength;
-    readonly float _maxLength;   // yield ceiling: overload can pay rope out, never past this
-    public float MinLength => _minLength;
-    public bool IsFullyReeled => _length <= _minLength + 0.001f;
+    /// <summary>Whether the far end can move, and so can be thrown.</summary>
+    public bool HasHost => _host != null;
 
-    public Tether(Rigidbody player, System.Action<Vector3> pushPlayer, GrappleNode node, float length, float minLength, float maxLength)
+    /// <summary>The last solve had the host parked: held at min length, spinning around the player.</summary>
+    public bool IsParked { get; private set; }
+
+    // Set by each solve: how the rope limits the player's walk away from the far end (or the
+    // first wrap). See SetMoveLimit.
+    bool _hasMoveLimit;
+    Vector3 _limitOutward;
+    float _limitSlackSpeed;
+
+    float _jigglePhase;
+    Vector3 _jiggleOffset;   // how far the jiggle has the host off its own path right now
+
+    // The parked spin's own speed, revving toward Spin Speed. Kept here rather than read back off
+    // the host: each step the rod takes some of the host's sideways speed (it moves in straight
+    // steps around a circle), and a rev-up measured after that loss stalls far below Spin Speed.
+    float _spinNow;
+    float _spinDirection = 1f;   // +1 counter-clockwise from above, -1 clockwise
+
+    bool IsFullyReeled => _length <= _minLength + 0.001f;
+
+    public Tether(Rigidbody player, GrappleNode node, float length, float minLength, float maxLength,
+                  float spinSpeed, float spinUpTime, float spinBounce)
     {
+        _spinSpeed = spinSpeed;
+        _spinUpTime = spinUpTime;
+        _spinBounce = spinBounce;
         _player = player;
-        _pushPlayer = pushPlayer;
         _node = node;
         _host = node.IsStaticWorld ? null : node.Host;
-        _length = length;
-        _minLength = minLength;
         _maxLength = maxLength;
+        _spinnable = _host != null && _host.mass <= player.mass;
+        _dragFraction = _host != null ? Mathf.Clamp01(1f - _host.mass / player.mass) : 0f;
+        _pullSpeed = MaxCorrectionSpeed * Mathf.Sqrt(_dragFraction);
+        _playerColliders = Footprint.SolidColliders(player);
+        _hostColliders = _host != null ? Footprint.SolidColliders(_host) : System.Array.Empty<Collider>();
+        if (_host != null)
+        {
+            // Anything on the chain can end up fast: spun, thrown (a 20 kg crate leaves at about
+            // 90 m/s) or flung. Discrete detection only checks positions at each step, so a fast
+            // prop skips clean through a 0.7 m enemy and the hit never happens. Left on after the
+            // tether ends, since the thrown body is still flying.
+            _host.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            _addedContacts = !_host.TryGetComponent(out _contacts);
+            if (_addedContacts) _contacts = _host.gameObject.AddComponent<HostContacts>();
+            _contacts.Ignore(player);
+        }
+
+        // A moving body can't be reeled closer than its size allows. Parked inside its own size,
+        // it overlaps the player, and the rod and the collision fight every step.
+        _minLength = _host == null
+            ? minLength
+            : Mathf.Max(minLength, Footprint.Reach(_playerColliders, player.worldCenterOfMass)
+                                   + Footprint.Reach(_hostColliders, node.AnchorPoint) + Clearance);
+        _length = Mathf.Clamp(length, _minLength, _maxLength);
         AttachDistance = Vector3.Distance(node.AnchorPoint, player.worldCenterOfMass);
+
+        // Holding a host on a circle takes an inward pull of spin² / radius each step on top of any
+        // ordinary correction. Under the plain cap a fast spin can't be held: the rope stretches
+        // and the host unparks.
+        _parkedCorrectionSpeed = MaxCorrectionSpeed + _spinSpeed * _spinSpeed / _minLength * Time.fixedDeltaTime;
     }
 
-    /// <summary>Shorten the rope (negative meters). Reel NEVER pays out: the rope
-    /// only shrinks through the dials — and yields slightly under sustained overload
-    /// (YieldSpeed), which is the character failing to hold the chain, not spooling.</summary>
+    // ---- verbs ------------------------------------------------------------------------
+
+    /// <summary>Shorten the rope by -delta metres. Reeling never pays out.</summary>
     public void Reel(float delta) => _length = Mathf.Max(_minLength, _length + delta);
 
     /// <summary>
-    /// PULL tap: consume a fixed slice of reel time as one chain bite. There is no
-    /// second force path here — the bite becomes closing speed through Solve's servo
-    /// (capped at MaxCorrectionSpeed), split by inverse mass so a light host flies to
-    /// you, a heavy host drags you to it, and a static host reels you in. Tap and
-    /// hold are the same mechanic: a tap is just TapSeconds of the reel at once.
+    /// A pull tap: TapSeconds of the reel at once. The bite becomes closing speed through the
+    /// servo, scaled by the host's weight, so a light host flies to you and a heavy one crawls.
     /// </summary>
-    public const float TapSeconds = 0.3f;
-
-    public void Tap(float pullRate) => _length = Mathf.Max(_minLength, _length - pullRate * TapSeconds);
-
-    /// <summary>
-    /// PUSH verb: hurl the connected node along dir. Equal-and-opposite impulse split
-    /// by inverse mass: pushing a static node flings the player backward, pushing a
-    /// light enemy hurls the enemy. This is the arcade "I threw it" verb.
-    /// </summary>
-    public void Push(Vector3 dir, float impulse)
+    public void Tap(float pullRate)
     {
-        float invP = 1f / _player.mass;
-        float invT = _host != null ? 1f / _host.mass : 0f;
-        float invSum = invP + invT;
-        if (invSum <= 0f) return;
-
-        _pushPlayer(-dir * (impulse * invP / invSum));
-        if (_host != null)
-        {
-            _host.WakeUp();
-            _host.linearVelocity += dir * (impulse * invT / invSum);
-        }
+        _length = Mathf.Max(_minLength, _length - pullRate * TapSeconds);
+        _biting = true;
     }
 
     /// <summary>
-    /// Enforce rope length for this physics step; Tension becomes the cost.
-    ///
-    /// One force path, three regimes (unwrapped):
-    /// - stretched (dist > length): PULL servo — drives the pair together at the
-    ///   capped correction speed, split by inverse mass. While it pulls, the rope
-    ///   YIELDS: sustained stretch pays rope out at a heavily damped rate (the
-    ///   character gripping the chain and failing a little), so overload softens
-    ///   into extra rope instead of a hard reject.
-/// - fully reeled and compressed (dist < length): ROD — the park distance is
-    ///   enforced both ways, so a fully reeled chain never drags a body into the
-    ///   node's collider space.
-    /// - fully reeled: AIM-PARK — the player is servoed to the min-length point on
-    ///   the side of the node their aim points to. Radius belongs to the rod/pull;
-    ///   the park corrects only the angular offset, so aiming orbits you around
-    ///   the node while the chain stays locked.
-    ///
-    /// Wrapped (the rope caught on geometry — wraps = ordered pivot points between
-    /// player and anchor): the wrap pivots are static, so the pull genuinely
-    /// redirects — walking a tethered rope around a pillar catches and holds. Each
-    /// END span (player to first wrap, last wrap to host) servos along its own
-    /// direction when the wrapped path exceeds the rope length. Rod/park are
-    /// skipped while wrapped: a caught rope is not a rod.
+    /// Send the host along `direction` (the player's aim). Its velocity is replaced, not added to,
+    /// so a spinning host leaves on the aim instead of curving off. Speed is split by mass; the
+    /// player takes none of it.
     /// </summary>
-    public void Solve(Vector3 aimPoint, IReadOnlyList<Vector3> wraps = null)
+    public void Throw(Vector3 direction, float impulse)
+    {
+        if (_host == null) return;
+
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.0001f) return;
+
+        float invP = 1f / _player.mass;
+        float invT = 1f / _host.mass;
+        _host.WakeUp();
+        VelocityUtil.SetFlatVelocity(_host, direction.normalized * (impulse * invT / (invP + invT)));
+    }
+
+    /// <summary>
+    /// Letting go of a spin: the host keeps its speed but turns onto `direction` (the player's
+    /// aim), so a release goes where she points instead of off along the swing.
+    /// </summary>
+    public void AimRelease(Vector3 direction)
+    {
+        if (_host == null || !IsParked) return;
+
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.0001f) return;
+
+        float speed = VelocityUtil.Flatten(_host.linearVelocity).magnitude;
+        VelocityUtil.SetFlatVelocity(_host, direction.normalized * speed);
+    }
+
+    /// <summary>The chain is letting go: give back anything the tether switched off.</summary>
+    public void End()
+    {
+        if (_addedContacts && _contacts != null) Object.Destroy(_contacts);   // a dead host's is already gone
+        StopJiggle();
+        SetPassThrough(false);
+    }
+
+    /// <summary>Switch off collisions between the player and the host for `seconds`, outliving the tether.</summary>
+    internal void PassThroughAfterEnd(PassThrough passThrough, float seconds)
+    {
+        if (_host != null) passThrough.Begin(_playerColliders, _hostColliders, seconds);
+    }
+
+    /// <summary>
+    /// One physics step of shaking the host sideways across the rope, `amplitude` metres at
+    /// `frequency` Hz. It moves the body's position rather than its velocity: a parked host's
+    /// sideways speed is reset to the spin every step, which would erase a velocity shake. Each
+    /// step moves only by the change in offset, so the host never drifts off its path.
+    /// </summary>
+    public void Jiggle(float amplitude, float frequency)
+    {
+        if (_host == null) return;
+
+        Vector3 side = Vector3.Cross(VelocityUtil.Flatten(_node.AnchorPoint - _player.worldCenterOfMass), Vector3.up);
+        if (side.sqrMagnitude < 0.0001f) return;
+
+        _jigglePhase += 2f * Mathf.PI * frequency * Time.fixedDeltaTime;
+        Vector3 offset = side.normalized * (amplitude * Mathf.Sin(_jigglePhase));
+        _host.position += offset - _jiggleOffset;
+        _jiggleOffset = offset;
+    }
+
+    /// <summary>Settle the host back onto its path.</summary>
+    public void StopJiggle()
+    {
+        if (_host != null && _jiggleOffset != Vector3.zero) _host.position -= _jiggleOffset;
+        _jiggleOffset = Vector3.zero;
+        _jigglePhase = 0f;
+    }
+
+    /// <summary>The walk limit from the last solve. See IGrappleUser.LimitMove.</summary>
+    public bool TryGetMoveLimit(out Vector3 outward, out float slackSpeed, out float dragFraction)
+    {
+        outward = _limitOutward;
+        slackSpeed = _limitSlackSpeed;
+        dragFraction = _dragFraction;
+        return _hasMoveLimit;
+    }
+
+    // ---- the physics step -----------------------------------------------------------
+
+    /// <summary>
+    /// Enforce rope length for this step, on the host alone. Stretched, the servo pulls the host
+    /// in. Held at min length, the rope is a rod both ways. Parked (held at min length with a
+    /// spinnable host), the host spins around the player, who walks freely and carries it. A
+    /// rope caught on geometry solves the host's end against its last wrap instead.
+    /// </summary>
+    public void Solve(IReadOnlyList<Vector3> wraps = null)
     {
         Tension = 0f;
+        _hasMoveLimit = false;
+        bool wasParked = IsParked;
+        IsParked = false;
 
         if (wraps != null && wraps.Count > 0)
         {
@@ -137,67 +270,155 @@ public class Tether
 
         Vector3 delta = _node.AnchorPoint - _player.worldCenterOfMass;
         float dist = delta.magnitude;
-        if (dist <= 0.0001f) { ChainDir = Vector3.zero; return; }
-        Vector3 dir = delta / dist;
-        ChainDir = dir;
+        if (dist <= 0.0001f) return;
+        Vector3 dir = delta / dist;   // player -> anchor
 
-        float invP = 1f / _player.mass;
-        float invT = _host != null ? 1f / _host.mass : 0f;
-        float invSum = invP + invT;
-        if (invSum <= 0f) return;
+        bool held = Holds(dist);
+        // A host that can park gets the parked cap already here, so the spin's own stretch
+        // neither counts as overload (which pays rope out) nor rules out parking.
+        bool parkable = held && IsFullyReeled && _spinnable;
+        PayOut(dist, held, parkable ? _parkedCorrectionSpeed : MaxCorrectionSpeed);
 
-        _player.WakeUp();
-        _host?.WakeUp();   // sleeping tethered bodies ignore solver impulses
+        bool parked = parkable && IsFullyReeled && dist - _length <= _parkedCorrectionSpeed * Time.fixedDeltaTime;
+        IsParked = parked;
+        SetPassThrough(parked);
+        // Spinning, she carries the host wherever she walks, so the rope doesn't hold her back.
+        if (!parked) SetMoveLimit(-dir, dist, held);
 
-        // Yield: sustained stretch pays the rope out at a heavily damped rate.
-        // Paid-out rope stays out (only reel/tap shorten it); growth caps at the
-        // attach-range max, past which the servo walls again.
-        if (dist > _length && _length < _maxLength)
-            _length = Mathf.Min(Mathf.Min(dist, _length + YieldSpeed * Time.fixedDeltaTime), _maxLength);
+        if (_host == null) return;   // nothing the rope can move
 
-        Vector3 vA = _player.linearVelocity;
-        Vector3 vB = _host != null ? _host.linearVelocity : Vector3.zero;
-        float separating = Vector3.Dot(vB - vA, dir);
+        _host.WakeUp();   // a sleeping body ignores velocity writes
+        Vector3 relative = _host.linearVelocity - _player.linearVelocity;
+        float cap = parked ? _parkedCorrectionSpeed : _pullSpeed;
 
-        // ROD: fully reeled and too close -> push the pair apart to park distance.
-        // Mirrors the pull servo (separating subtracted so it never oscillates).
-        if (IsFullyReeled && dist < _length - 0.0001f)
+        if (held && IsFullyReeled && dist < _length - 0.0001f)
         {
-            float positional = (_length - dist) / Time.fixedDeltaTime;
-            float drive = Mathf.Max(0f, Mathf.Min(positional, MaxCorrectionSpeed) - separating);
-            float impulse = drive / invSum;
-            _pushPlayer(-dir * (impulse * invP));
-            if (_host != null) _host.linearVelocity += dir * (impulse * invT);
-            Tension = impulse / Time.fixedDeltaTime;
+            CorrectHost(dir, _length - dist, relative, cap);   // rod: push out to park distance
             return;
         }
 
-        // PULL servo: chain stretched.
-        if (dist > _length + 0.0001f)
-        {
-            float positional = (dist - _length) / Time.fixedDeltaTime;
-            float drive = Mathf.Max(0f, Mathf.Min(positional, MaxCorrectionSpeed) + separating);
-            float impulse = drive / invSum;
-            _pushPlayer(dir * (impulse * invP));
-            if (_host != null) _host.linearVelocity += -dir * (impulse * invT);
-            Tension = impulse / Time.fixedDeltaTime;
-        }
+        if (dist > _length + 0.0001f) CorrectHost(-dir, dist - _length, relative, cap);   // pull
 
-        if (IsFullyReeled) AimPark(aimPoint, dir);
+        if (parked) Spin(wasParked);
     }
 
-    // Aim-park orbital speed ceiling. Orbiting a ~1 m radius any faster reads as
-    // teleporting; deliberately gentler than the yank cap.
-    const float ParkSpeed = 6f;
+    // Fix `error` metres by moving the host along `push`, at up to `cap` less however fast it
+    // already closes the gap (so it never oscillates).
+    void CorrectHost(Vector3 push, float error, Vector3 relative, float cap)
+    {
+        float closing = Vector3.Dot(relative, push);
+        float drive = Mathf.Max(0f, Mathf.Min(error / Time.fixedDeltaTime, cap) - closing);
+        _host.linearVelocity += push * drive;
+        Tension = drive * _host.mass / Time.fixedDeltaTime;
+    }
 
-    // ---- wrapped solve -------------------------------------------------------
+    // The rope stops the walk rather than pulling her back: through LimitMove the player may walk
+    // away from the far end at most (limit - distance) / dt + drag fraction x her outward speed.
+    // The limit is the current length when held, max length when loose. With slack she walks
+    // freely; at the limit she drags the host at her drag fraction; and a host that doesn't
+    // follow (fixed, stuck, as heavy as her) leaves the rope stretched, so the negative slack
+    // eats the drag and she stops.
+    void SetMoveLimit(Vector3 outward, float pathLength, bool held)
+    {
+        outward = VelocityUtil.Flatten(outward);
+        if (outward.sqrMagnitude < 0.0001f) return;
 
+        float limit = held ? _length : _maxLength;
+        _hasMoveLimit = true;
+        _limitOutward = outward.normalized;
+        _limitSlackSpeed = (limit - pathLength) / Time.fixedDeltaTime;
+    }
+
+    // A tap holds the rope until its bite is taken up, so it lands even when the button came up
+    // before the crack did.
+    bool Holds(float pathLength)
+    {
+        if (_biting && pathLength <= _length + 0.0001f) _biting = false;
+        return Gripped || _biting;
+    }
+
+    // Loose, the rope slides out to wherever the ends are. Held, it yields only to a stretch the
+    // servo can't close in one step at `cap`: yielding to the small outward drift of circling
+    // would creep the rope longer forever.
+    void PayOut(float pathLength, bool held, float cap)
+    {
+        if (pathLength <= _length || _length >= _maxLength) return;
+        if (!held)
+            _length = Mathf.Min(pathLength, _maxLength);
+        else if (pathLength - _length > cap * Time.fixedDeltaTime)
+            _length = Mathf.Min(Mathf.Min(pathLength, _length + YieldSpeed * Time.fixedDeltaTime), _maxLength);
+    }
+
+    // While parked, the host can't collide with the player: a spun body tumbles, and a bounce
+    // can carry it into the player between two steps of the rod.
+    void SetPassThrough(bool on)
+    {
+        if (on == _passThrough.IsOn) return;
+        if (on) _passThrough.Begin(_playerColliders, _hostColliders);
+        else _passThrough.End();
+    }
+
+    // The host orbits the player and revs up toward the spin speed like an arm winding up: each
+    // step closes a share of the gap, sized so it is about 95% there after Spin Up Time (three
+    // time constants). It keeps going round the way it started, and something that stops it
+    // bounces it back the other way instead of letting the spin grind it into a wall.
+    void Spin(bool wasParked)
+    {
+        Vector3 offset = VelocityUtil.Flatten(_node.AnchorPoint - _player.worldCenterOfMass);
+        if (offset.sqrMagnitude < 0.0001f) return;
+
+        Vector3 counterClockwise = Vector3.Cross(offset.normalized, Vector3.up);
+        float along = Vector3.Dot(_host.linearVelocity - _player.linearVelocity, counterClockwise);
+
+        if (!wasParked)
+        {
+            // The rev-up starts from however fast, and whichever way, it arrived.
+            _spinDirection = along < 0f ? -1f : 1f;
+            _spinNow = Mathf.Abs(along);
+            _contacts.TakeWall();   // a wall touched before the spin began isn't a hit on it
+        }
+        else
+        {
+            // Lost speed alone isn't a hit: a tumbling box snags its corners on the floor, and
+            // reversing on every snag kept the spin from ever building. A bounce also needs the
+            // host to have touched something wall-like this step.
+            Collider wall = _contacts.TakeWall();
+            if (wall != null && _spinNow > MinBounceSpeed
+                && along * _spinDirection < ExpectedAfterStep(offset.magnitude) * StoppedShare)
+            {
+                TetherLog.Event($"SPIN BOUNCE off {wall.name} at {_spinNow:0.0} m/s");
+                _spinDirection = -_spinDirection;
+                _spinNow *= _spinBounce;
+            }
+        }
+
+        Vector3 tangent = counterClockwise * _spinDirection;
+        float current = along * _spinDirection;
+        float share = _spinUpTime > 0f ? 1f - Mathf.Exp(-3f * Time.fixedDeltaTime / _spinUpTime) : 1f;
+        _spinNow += (_spinSpeed - _spinNow) * share;
+        _host.linearVelocity += tangent * (_spinNow - current);
+    }
+
+    // The sideways speed an unobstructed host keeps through one step: it moves in a straight line
+    // and the rod turns it back onto the circle, which costs more the further round it gets in a
+    // step. A bounce is judged against this, not the full spin speed, so a fast spin never reads
+    // its own geometry as a hit.
+    float ExpectedAfterStep(float radius)
+    {
+        float step = _spinNow * Time.fixedDeltaTime / Mathf.Max(radius, 0.01f);
+        return _spinNow / Mathf.Sqrt(1f + step * step);
+    }
+
+    // ---- wrapped solve ----------------------------------------------------------------
+
+    // Wrap pivots are static, so the rope genuinely redirects: the host's end servos toward the
+    // last pivot, and the walk is limited along the player's own span, away from the first.
     void SolveWrapped(IReadOnlyList<Vector3> wraps)
     {
+        SetPassThrough(false);   // a caught rope never parks
         Vector3 playerPos = _player.worldCenterOfMass;
         Vector3 anchor = _node.AnchorPoint;
 
-        // Path length along the wrap polyline vs the rope's material length.
         float pathLen = 0f;
         Vector3 prev = playerPos;
         foreach (Vector3 w in wraps)
@@ -208,41 +429,21 @@ public class Tether
         float lastSpanLen = Vector3.Distance(prev, anchor);
         float pathLen2 = pathLen + lastSpanLen;
 
-        // Wrapped rope yields too: a caught rope under overload lets out a little
-        // along the wrap path instead of hard-rejecting.
-        if (pathLen2 > _length && _length < _maxLength)
-            _length = Mathf.Min(Mathf.Min(pathLen2, _length + YieldSpeed * Time.fixedDeltaTime), _maxLength);
+        bool held = Holds(pathLen2);
+        PayOut(pathLen2, held, MaxCorrectionSpeed);
+        SetMoveLimit(playerPos - wraps[0], pathLen2, held);
 
-        _player.WakeUp();
-        _host?.WakeUp();
+        if (_host == null) return;
 
-        float tension = 0f;
-
-        // Player end: servo toward the first wrap when its span is overlong.
-        float avail0 = _length - (pathLen2 - Vector3.Distance(playerPos, wraps[0]));
-        Vector3 playerPull = SolveEnd(_player, wraps[0], avail0);
-        _pushPlayer(playerPull);
-        tension += playerPull.magnitude / Time.fixedDeltaTime;
-
-        // Host end: servo toward the last wrap (static hosts take none).
-        if (_host != null)
-        {
-            float availN = _length - (pathLen2 - lastSpanLen);
-            Vector3 hostPull = SolveEnd(_host, wraps[wraps.Count - 1], availN);
-            _host.linearVelocity += hostPull;
-            tension += hostPull.magnitude / Time.fixedDeltaTime;
-        }
-
-        Tension = tension;
-        Vector3 to0 = wraps[0] - playerPos;
-        ChainDir = to0.sqrMagnitude > 0.0001f ? to0.normalized : (anchor - playerPos).normalized;
+        _host.WakeUp();
+        float availN = _length - (pathLen2 - lastSpanLen);
+        Vector3 hostPull = SolveEnd(_host, wraps[wraps.Count - 1], availN, _pullSpeed);
+        _host.linearVelocity += hostPull;
+        Tension = hostPull.magnitude * _host.mass / Time.fixedDeltaTime;
     }
 
-    // One end vs a static wrap pivot: the pivot's inverse mass is zero, so the
-    // moving end takes the full correction — same capped servo as the straight case.
-    // Returns that end's velocity change; the caller applies it (the player's through
-    // its push channel).
-    Vector3 SolveEnd(Rigidbody body, Vector3 pivot, float spanLength)
+    // The host's end against a static pivot. Returns the velocity change for the caller to apply.
+    static Vector3 SolveEnd(Rigidbody body, Vector3 pivot, float spanLength, float cap)
     {
         Vector3 to = pivot - body.worldCenterOfMass;
         float d = to.magnitude;
@@ -251,43 +452,19 @@ public class Tether
         Vector3 dir = to / d;
         float positional = (d - spanLength) / Time.fixedDeltaTime;
         float separating = -Vector3.Dot(body.linearVelocity, dir);   // + when moving away from the pivot
-        float drive = Mathf.Max(0f, Mathf.Min(positional, MaxCorrectionSpeed) + separating);
+        float drive = Mathf.Max(0f, Mathf.Min(positional, cap) + separating);
         return dir * drive;
     }
 
-    void AimPark(Vector3 aimPoint, Vector3 chainDir)
-    {
-        // Park side = where the aim sits relative to the node (flattened: the mouse
-        // steers the orbit, it never launches you vertically).
-        Vector3 aimOffset = VelocityUtil.Flatten(aimPoint - _node.AnchorPoint);
-        Vector3 parkDir = aimOffset.sqrMagnitude > 0.0001f
-            ? aimOffset.normalized
-            : -chainDir;   // aiming at the node itself: keep the current side
+    // ---- logging ------------------------------------------------------------------------
 
-        Vector3 playerOffset = VelocityUtil.Flatten(_player.worldCenterOfMass - _node.AnchorPoint);
-        if (playerOffset.sqrMagnitude < 0.0001f) playerOffset = parkDir * _minLength;
-
-        Vector3 correction = VelocityUtil.Flatten(_node.AnchorPoint + parkDir * _minLength - _player.worldCenterOfMass);
-
-        // The rod/pull owns the radius; the park owns only the angle — strip the
-        // radial component so the two servos never fight along the chain axis.
-        Vector3 radialDir = playerOffset.normalized;
-        correction -= Vector3.Dot(correction, radialDir) * radialDir;
-
-        float err = correction.magnitude;
-        if (err < 0.01f) return;
-
-        Vector3 parkVelDir = correction / err;
-        float desiredSpeed = Mathf.Min(err / Time.fixedDeltaTime, ParkSpeed);
-        float currentSpeed = Vector3.Dot(_player.linearVelocity, parkVelDir);
-        _pushPlayer(parkVelDir * Mathf.Max(0f, desiredSpeed - currentSpeed));
-    }
-
-    /// <summary>One-line state summary for rate-limited logging.</summary>
     public string Describe()
     {
         float speed = _player.linearVelocity.magnitude;
-        string host = _host == null ? "static" : $"{_host.name} m={_host.mass}";
-        return $"node={_node.name} len={_length:F1} tension={Tension:F0} playerSpeed={speed:F1} host=({host})";
+        // The node and host may be destroyed by now (detaching because they were): don't read them then.
+        string node = _node != null ? _node.name : "(destroyed)";
+        string host = _host == null ? "static or gone" : $"{_host.name} m={_host.mass}";
+        string hand = Gripped ? "held" : _biting ? "bite" : "loose";
+        return $"node={node} len={_length:F1} hand={hand} tension={Tension:F0} playerSpeed={speed:F1} host=({host})";
     }
 }

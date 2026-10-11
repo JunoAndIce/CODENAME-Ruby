@@ -2,14 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Walkability grid for enemy pathing, baked once from static geometry. Place the object at
-/// floor height; its position is the grid's centre and the grid is axis-aligned (rotation is
-/// ignored). A cell is blocked when an enemy-sized capsule standing on it would overlap
-/// anything static, so paths keep wall clearance, and the floor under the capsule never counts.
-/// Dynamic bodies (enemies, player, crates) are ignored: they move, and a grid baked once
-/// would go stale around them; physics props that should block paths carry a GridObstacle,
-/// which marks the grid while they rest. Each floor of a level gets its own grid (floors are
-/// independent); At() finds the grid whose floor band contains a point.
+/// Walkability grid for one floor, baked at Start from static geometry. Place it at floor height;
+/// it is axis-aligned around its position. A cell is blocked when an agent-sized capsule standing
+/// on it overlaps anything static, which keeps paths off walls. Dynamic bodies are skipped by the
+/// bake; props that should block carry a GridObstacle, which marks the grid while they rest.
 /// </summary>
 public class PathGrid : MonoBehaviour
 {
@@ -47,6 +43,11 @@ public class PathGrid : MonoBehaviour
     private readonly Dictionary<Transform, FlowField> _targetFields = new();
     private GridPathfinder _pathfinder;   // one per grid: searches run one at a time, so all agents share its scratch arrays
 
+    // RandomSpotInArea's flood: visited when _areaMark[i] == _areaGeneration, so no clearing.
+    private readonly List<int> _areaCells = new();
+    private int[] _areaMark;
+    private int _areaGeneration;
+
     public bool IsBaked => _walkable != null;
     public float CellSize => _cellSize;
     public int CellCount => _width * _depth;
@@ -57,8 +58,8 @@ public class PathGrid : MonoBehaviour
     private void OnEnable() => All.Add(this);
     private void OnDisable() => All.Remove(this);
 
-    // Start, not Awake: every scene collider exists and has been placed by then, and all
-    // Starts run before the first physics step, so no enemy ever sees an unbaked grid.
+    // Start, not Awake: every collider is placed by then, and all Starts run before the first
+    // physics step, so no enemy sees an unbaked grid.
     private void Start() => Bake();
 
     /// <summary>The baked grid whose floor contains point, or null when no grid does.</summary>
@@ -103,19 +104,21 @@ public class PathGrid : MonoBehaviour
     /// <summary>
     /// Where an agent should stand to have reached an area. An open centre is the answer
     /// itself. An occupied centre (a table, an anchor) resolves to the open cell nearest it
-    /// within the radius, and among near-ties the one nearest the agent, so a table's centre
+    /// inside the area, and among near-ties the one nearest the agent, so a table's centre
     /// resolves to the agent's side rather than the far side. False when nothing in the area
     /// is open.
     /// </summary>
-    public bool ResolveArea(Vector3 centre, float radius, Vector3 approachFrom, out Vector2Int goalCell, out Vector3 goalPoint)
+    public bool ResolveArea(GridArea area, Vector3 approachFrom, out Vector2Int goalCell, out Vector3 goalPoint)
     {
+        Vector3 centre = area.Centre;
         goalPoint = centre;
         if (WorldToCell(centre, out goalCell) && IsWalkable(goalCell)) return true;
 
-        int minX = Mathf.Clamp(Mathf.FloorToInt((centre.x - radius - _origin.x) / _cellSize), 0, _width - 1);
-        int maxX = Mathf.Clamp(Mathf.FloorToInt((centre.x + radius - _origin.x) / _cellSize), 0, _width - 1);
-        int minZ = Mathf.Clamp(Mathf.FloorToInt((centre.z - radius - _origin.z) / _cellSize), 0, _depth - 1);
-        int maxZ = Mathf.Clamp(Mathf.FloorToInt((centre.z + radius - _origin.z) / _cellSize), 0, _depth - 1);
+        // The cells under the area's bounding box; Contains trims a circle's corners.
+        int minX = Mathf.Clamp(Mathf.FloorToInt((centre.x - area.HalfSize.x - _origin.x) / _cellSize), 0, _width - 1);
+        int maxX = Mathf.Clamp(Mathf.FloorToInt((centre.x + area.HalfSize.x - _origin.x) / _cellSize), 0, _width - 1);
+        int minZ = Mathf.Clamp(Mathf.FloorToInt((centre.z - area.HalfSize.y - _origin.z) / _cellSize), 0, _depth - 1);
+        int maxZ = Mathf.Clamp(Mathf.FloorToInt((centre.z + area.HalfSize.y - _origin.z) / _cellSize), 0, _depth - 1);
 
         // Pass 1: how close to the centre can an agent get?
         float nearest = float.MaxValue;
@@ -124,8 +127,9 @@ public class PathGrid : MonoBehaviour
             for (int x = minX; x <= maxX; x++)
             {
                 if (!IsWalkable(new Vector2Int(x, z))) continue;
-                float distance = FlatDistance(CellToWorld(x, z), centre);
-                if (distance <= radius && distance < nearest) nearest = distance;
+                Vector3 world = CellToWorld(x, z);
+                float distance = FlatDistance(world, centre);
+                if (distance < nearest && area.Contains(world)) nearest = distance;
             }
         }
         if (nearest == float.MaxValue) return false;
@@ -140,8 +144,7 @@ public class PathGrid : MonoBehaviour
                 var cell = new Vector2Int(x, z);
                 if (!IsWalkable(cell)) continue;
                 Vector3 world = CellToWorld(x, z);
-                float distance = FlatDistance(world, centre);
-                if (distance > radius || distance > tieBand) continue;
+                if (FlatDistance(world, centre) > tieBand || !area.Contains(world)) continue;
 
                 float approach = FlatDistance(world, approachFrom);
                 if (approach >= bestApproach) continue;
@@ -153,7 +156,49 @@ public class PathGrid : MonoBehaviour
         return true;
     }
 
-    private static float FlatDistance(Vector3 a, Vector3 b)
+    /// <summary>
+    /// A random open spot in an area, at least minDistance from `from`, for an agent wandering it.
+    /// Only ground joined to the area's resolved centre without leaving the area counts, so an
+    /// area drawn across a wall is wandered on its centre's side, and a walk never detours through
+    /// the next room. False when no spot qualifies.
+    /// </summary>
+    public bool RandomSpotInArea(GridArea area, Vector3 from, float minDistance, out Vector3 spot)
+    {
+        spot = area.Centre;
+        if (!ResolveArea(area, from, out Vector2Int start, out _)) return false;
+
+        if (_areaMark == null || _areaMark.Length != CellCount) _areaMark = new int[CellCount];
+        _areaGeneration++;
+        _areaCells.Clear();
+        MarkAreaCell(Index(start));
+
+        // One pass: the flood keeps each far-enough cell with chance 1/n of those seen so far,
+        // which leaves every one of them equally likely to be the pick.
+        int candidates = 0;
+        for (int head = 0; head < _areaCells.Count; head++)
+        {
+            Vector2Int cell = CellOf(_areaCells[head]);
+            Vector3 world = CellToWorld(cell);
+            if (FlatDistance(world, from) >= minDistance && Random.Range(0, ++candidates) == 0) spot = world;
+
+            foreach (Vector2Int step in Steps)
+            {
+                Vector2Int next = cell + step;
+                if (!CanStep(cell, step) || _areaMark[Index(next)] == _areaGeneration) continue;
+                if (!area.Contains(CellToWorld(next))) continue;
+                MarkAreaCell(Index(next));
+            }
+        }
+        return candidates > 0;
+    }
+
+    private void MarkAreaCell(int index)
+    {
+        _areaMark[index] = _areaGeneration;
+        _areaCells.Add(index);
+    }
+
+    public static float FlatDistance(Vector3 a, Vector3 b)
     {
         float dx = a.x - b.x, dz = a.z - b.z;
         return Mathf.Sqrt(dx * dx + dz * dz);
@@ -182,7 +227,10 @@ public class PathGrid : MonoBehaviour
             }
         }
 
+        // The same playtest switch as Core's DebugLog, which Pathing can't reference.
+#if RUBY_DEBUG_LOGS
         Debug.Log($"{name}: baked {_width}x{_depth} cells ({_cellSize}m), {blocked} blocked.", this);
+#endif
     }
 
     /// <summary>

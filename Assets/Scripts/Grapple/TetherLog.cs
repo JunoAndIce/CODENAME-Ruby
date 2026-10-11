@@ -1,41 +1,27 @@
 using UnityEngine;
 
 /// <summary>
-/// The single logging seam for the tether system. Everything the grapple does
-/// funnels through here so a console/Editor.log read tells the full story of a
-/// playtest without touching gameplay code. All lines carry a `[tether]` prefix.
-///
-/// Where to read: Unity Console while playing, or the project log on disk
-/// (PROJECT RUBY/Logs/Editor.log when the editor is open). Grep for `[tether]`.
+/// The grapple's one logging seam: every line carries a [tether] prefix, so a playtest can be
+/// read back from the Console or Logs/Editor.log. Like DebugLog, it's compiled in only with the
+/// RUBY_DEBUG_LOGS define, so a normal session isn't flooded by every grab, pull and solve.
 /// </summary>
 public static class TetherLog
 {
-    /// <summary>Flip to false to silence the system entirely.</summary>
-    public static bool Enabled = true;
-
-    /// <summary>Minimum seconds between per-step solve summaries, so a live
-    /// tether doesn't flood the log at 50 lines/second.</summary>
-    public static float SolveIntervalSeconds = 0.5f;
+    /// <summary>Minimum seconds between solve summaries, so a live tether doesn't log every step.</summary>
+    const float SolveIntervalSeconds = 0.5f;
 
     static float _nextSolveLine;
 
-    public static void Event(string message)
-    {
-        if (!Enabled) return;
-        Debug.Log($"[tether] {message}");
-    }
+    [System.Diagnostics.Conditional(DebugLog.Define)]
+    public static void Event(string message) => Debug.Log($"[tether] {message}");
 
-    public static void Warn(string message)
-    {
-        if (!Enabled) return;
-        Debug.LogWarning($"[tether] {message}");
-    }
+    [System.Diagnostics.Conditional(DebugLog.Define)]
+    public static void Warn(string message) => Debug.LogWarning($"[tether] {message}");
 
-    /// <summary>Rate-limited line for continuous state (solve summaries). Returns
-    /// true when this call was allowed to print, so callers can format lazily.</summary>
+    /// <summary>True when a rate-limited solve line may print now, so callers format lazily.</summary>
     public static bool SolveGate()
     {
-        if (!Enabled || Time.time < _nextSolveLine) return false;
+        if (Time.time < _nextSolveLine) return false;
         _nextSolveLine = Time.time + SolveIntervalSeconds;
         return true;
     }

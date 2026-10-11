@@ -1,84 +1,86 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
+[RequireComponent(typeof(CapsuleCollider))]
+public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKnockdown
 {
     public float _moveSpeed = 15f;
     public int _bulletCount = 6;
-    public GunController _gun;
+
+    [SerializeField] private float _gamepadAimDistance = 6f;
+
     private Rigidbody _myRigidbody;
+    private CapsuleCollider _capsule;
     private Camera _mainCamera;
     private PlayerInput _playerInput;
     private Vector2 _moveInput;
     private Vector2 _lookInput;
     private Vector3 _moveVelocity;
+    private bool _hasMoveLimit;  // set by the grapple each step it applies, used once
+    private Vector3 _limitOutward;
+    private float _limitSlackSpeed;
+    private float _limitDragFraction;
     private Vector3 _aimPoint;
-    public Vector3 AimPoint => _aimPoint;
     private bool _peekHeld;
-    public bool PeekHeld => _peekHeld;
-    Vector3 ICameraTarget.Position => transform.position;
-    // No peeking while holding something: the hold owns the camera.
-    bool ICameraTarget.WantsPeek => _peekHeld && ActionState != PlayerState.Holding;
-    private bool _triggerPressed = false;
+    private bool _triggerPressed;
+    private GrappleController _grapple;
+    private Health _health;
+    private IRagdollBody _ragdoll;
+    private bool _downed;        // knocked down: physics owns the body until she gets up, or for good if dead
+
+    public Vector3 AimPoint => _aimPoint;
     public bool TriggerPressed => _triggerPressed;
+    /// <summary>False while knocked down, or while a throw charges, when left click is the throw rather than a shot.</summary>
+    public bool CanShoot => !_downed && (_grapple == null || !_grapple.BlocksGun);
+    /// <summary>False while knocked down: she can't move, aim, shoot or use the chain.</summary>
+    public bool CanAct => !_downed;
 
-    [SerializeField] private float _gamepadAimDistance = 6f;
-    [Tooltip("How fast pushes from outside (tether yanks, push recoil) fade. Kept out of rigidbody damping on purpose: real damping would eat your move input too.")]
-    [SerializeField] private float _flingDamping = 3f;
-    // Action axis only. Locomotion runs every frame regardless of which state is active.
-    private readonly StateMachine _actions = new();
-
-    public PlayerFreeState Free { get; private set; }
-    public PlayerThrowingState Throwing { get; private set; }
-    public PlayerHoldingState Holding { get; private set; }
-
-    public PlayerState ActionState =>
-        _actions.Current is PlayerStateBase s ? s.Id : PlayerState.Free;
-
-    void Awake()
-    {
-        Free = new PlayerFreeState(this);
-        Throwing = new PlayerThrowingState(this);
-        Holding = new PlayerHoldingState(this);
-    }
+    Vector3 ICameraTarget.Position => transform.position;
+    bool ICameraTarget.WantsPeek => _peekHeld;
 
     void Start()
     {
         _myRigidbody = GetComponent<Rigidbody>();
-        // NOTE: rigidbody linearDamping stays at 0. The carried-velocity scheme below
-        // misreads damped-away move velocity as external, which cancels move input over
-        // time (player crawls to a stop while holding W). External decay is done
-        // explicitly on the carried term in FixedUpdate instead.
-        _myRigidbody.linearDamping = 0f;
+        _capsule = GetComponent<CapsuleCollider>();
+        _myRigidbody.linearDamping = 0f;   // damping would eat the move, which is written fresh every step
         _mainCamera = FindAnyObjectByType<Camera>();
         _playerInput = GetComponent<PlayerInput>();
-
-        _actions.SetState(Free);
+        _grapple = GetComponent<GrappleController>();
+        TryGetComponent(out _health);
+        if (!TryGetComponent(out _ragdoll))
+            Debug.LogError($"{name} has no IRagdollBody (CapsuleRagdollBody) — a knockdown can't ragdoll her.", this);
     }
 
-    void At(IState from, IState to, IPredicate condition)
-        => _actions.AddTransition(from, to, condition);
-
-    void AnyTo(PlayerStateBase to, IPredicate condition)
-        => _actions.AddAnyTransition(to, condition);
-
-    public void EnterHold() => _actions.SetState(Holding);
-
-    public void ExitHold() => _actions.SetState(Free);
-
-    public void OnMove(InputAction.CallbackContext context)
+    /// <summary>
+    /// Knocked down by a hit (ImpactDamage): she ragdolls at the velocity the hit left her with and
+    /// loses control. Alive, she gets up once settled; dead, she stays down.
+    /// </summary>
+    public void KnockDown()
     {
-        _moveInput = context.ReadValue<Vector2>();
+        if (_downed || _ragdoll == null) return;
+
+        _downed = true;
+        _moveVelocity = Vector3.zero;
+        _ragdoll.Ragdoll(_myRigidbody.linearVelocity);
+        if (_health != null && _health.IsDead) DebugLog.Info($"{name} is dead.", this);
     }
 
-    public void OnLook(InputAction.CallbackContext context)
+    // Gets her up once the ragdoll settles, unless the hit (or a later one while down) killed her.
+    private void UpdateDowned()
     {
-        _lookInput = context.ReadValue<Vector2>();
+        if (_health != null && _health.IsDead || !_ragdoll.IsSettled) return;
+
+        _ragdoll.Recover();
+        _downed = false;
     }
+
+    // Input callbacks only record intent; the scene binds them by name, so don't rename them.
+    public void OnMove(InputAction.CallbackContext context) => _moveInput = context.ReadValue<Vector2>();
+
+    public void OnLook(InputAction.CallbackContext context) => _lookInput = context.ReadValue<Vector2>();
 
     public void OnFire(InputAction.CallbackContext context)
     {
-        // Input only records trigger position; GunController reads it and owns the cadence.
         if (context.performed) _triggerPressed = true;
         if (context.canceled) _triggerPressed = false;
     }
@@ -89,24 +91,15 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
         if (context.canceled) _peekHeld = false;
     }
 
-    public void OnThrow(InputAction.CallbackContext context)
-    {
-        // Consumed by GrappleController (attach / reel). The old chain-grab throw
-        // state is dormant while the grapple system replaces it.
-    }
-
     void Update()
     {
-        MovePlayer();
-        _actions.Tick();
+        if (_downed) UpdateDowned();
+        else MovePlayer();
     }
 
     void MovePlayer()
     {
-        // Handle Movement
-        Vector3 moveDirection = new(_moveInput.x, 0f, _moveInput.y);
-        _moveVelocity = moveDirection * _moveSpeed;
-
+        _moveVelocity = new Vector3(_moveInput.x, 0f, _moveInput.y) * _moveSpeed;
 
         if (_playerInput.currentControlScheme == "Gamepad")
         {
@@ -116,33 +109,47 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget
                 transform.rotation = Quaternion.Euler(0f, angle, 0f);
             }
             _aimPoint = transform.position + transform.forward * _gamepadAimDistance;
+            return;
         }
-        else
-        {
-            Ray cameraRay = _mainCamera.ScreenPointToRay(Input.mousePosition);
-            Plane groundPlane = new(Vector3.up, Vector3.zero);
 
-            if (groundPlane.Raycast(cameraRay, out float rayLength))
-            {
-                Vector3 pointToLook = cameraRay.GetPoint(rayLength);
-                Debug.DrawLine(cameraRay.origin, pointToLook, Color.red);
+        // Read through the Input System: the legacy Input class throws once Active Input Handling
+        // is set to the Input System alone.
+        Mouse mouse = Mouse.current;
+        if (mouse == null) return;
+        Ray cameraRay = _mainCamera.ScreenPointToRay(mouse.position.ReadValue());
+        Plane groundPlane = new(Vector3.up, Vector3.zero);
+        if (!groundPlane.Raycast(cameraRay, out float rayLength)) return;
 
-                _aimPoint = new Vector3(pointToLook.x, transform.position.y, pointToLook.z);
-                transform.LookAt(_aimPoint);
-            }
-        }
+        Vector3 pointToLook = cameraRay.GetPoint(rayLength);
+        _aimPoint = new Vector3(pointToLook.x, transform.position.y, pointToLook.z);
+        transform.LookAt(_aimPoint);
     }
-
 
     void FixedUpdate()
     {
-        // Movement input on top of explicit pushes (tether, push recoil); see VelocityUtil.
-        VelocityUtil.ApplyAuthoredMove(_myRigidbody, _moveVelocity, ref _external, _flingDamping);
-        _actions.FixedTick();
+        // Knocked down, the ragdoll owns the body: writing a move would stand her up mid-fall.
+        if (_downed)
+        {
+            _hasMoveLimit = false;
+            return;
+        }
+
+        Vector3 move = PushLimit.Limit(_capsule, _moveVelocity);
+        if (_hasMoveLimit)
+        {
+            float outward = Vector3.Dot(move, _limitOutward);
+            float allowed = Mathf.Max(0f, _limitSlackSpeed + _limitDragFraction * outward);
+            if (outward > allowed) move -= _limitOutward * (outward - allowed);
+            _hasMoveLimit = false;
+        }
+        VelocityUtil.SetFlatVelocity(_myRigidbody, move);
     }
 
-    /// <summary>A push from outside (tether, push verb, knockback): lands now, then carries and fades.</summary>
-    public void AddExternalVelocity(Vector3 change) => VelocityUtil.AddExternal(_myRigidbody, change, ref _external);
-
-    Vector3 _external;   // explicit pushes only, fading at _flingDamping
+    public void LimitMove(Vector3 outward, float slackSpeed, float dragFraction)
+    {
+        _hasMoveLimit = true;
+        _limitOutward = outward;
+        _limitSlackSpeed = slackSpeed;
+        _limitDragFraction = dragFraction;
+    }
 }

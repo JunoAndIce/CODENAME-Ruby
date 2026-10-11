@@ -1,12 +1,11 @@
-
 public enum EnemyState
 {
-    // AI states — decisions the enemy makes for itself, one EnemyStateBase class each.
+    // AI states: decisions the enemy makes for itself.
     Idle,
     Patrol,
     Searching,
-    Aggro,        // hunting and attacking the player; AggroState.Id
-    // Overrides — things done TO the enemy. Handled by EnemyController, no state class.
+    Aggro,
+    // Overrides: things done to the enemy, entered from outside rather than by the table.
     Grabbed,
     Ragdoll,
     Dead
