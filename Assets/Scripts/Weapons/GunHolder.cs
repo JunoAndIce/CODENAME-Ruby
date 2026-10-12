@@ -11,6 +11,12 @@ public class GunHolder : MonoBehaviour
     [Tooltip("Where a held gun sits. Keep it outside the character's capsule, so a dropped gun doesn't start inside it.")]
     [SerializeField] private Transform _hand;
 
+    // The starting gun's pose in the hand, as placed in the prefab. A gun picked up later takes the
+    // same pose, and Lower returns to it, so a re-armed officer holds its gun exactly as it started.
+    private Vector3 _gripPosition;
+    private Quaternion _gripRotation = Quaternion.identity;
+    private Vector3 _gripScale = Vector3.one;
+
     public Gun Held { get; private set; }
     public bool IsArmed => Held != null;
 
@@ -28,6 +34,7 @@ public class GunHolder : MonoBehaviour
         }
         if (Held != null && !Held.transform.IsChildOf(_hand))
             Debug.LogWarning($"{name}: the starting gun isn't under the Hand. It still fires, but a gun picked up later sits at the Hand, so put the starting gun there too.", this);
+        if (Held != null) RecordGrip(Held.transform);
 
         // Only a Gun makes its body kinematic in a hand. A body without one falls out at start, silently.
         if (Held == null && _hand.GetComponentInChildren<Rigidbody>() != null)
@@ -38,8 +45,17 @@ public class GunHolder : MonoBehaviour
     {
         if (IsArmed || gun == null || gun.IsHeld || _hand == null) return false;
         Held = gun;
-        gun.Hold(_hand);
+        gun.Hold(_hand, _gripPosition, _gripRotation, _gripScale);
         return true;
+    }
+
+    // Measured relative to the hand, so it holds even for a starting gun placed elsewhere under the character.
+    private void RecordGrip(Transform gun)
+    {
+        _gripPosition = _hand.InverseTransformPoint(gun.position);
+        _gripRotation = Quaternion.Inverse(_hand.rotation) * gun.rotation;
+        Vector3 hand = _hand.lossyScale, held = gun.lossyScale;
+        _gripScale = new Vector3(held.x / hand.x, held.y / hand.y, held.z / hand.z);
     }
 
     public void Drop(Vector3 velocity)
@@ -59,10 +75,10 @@ public class GunHolder : MonoBehaviour
         if (direction.sqrMagnitude > 0.0001f) Held.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
     }
 
-    /// <summary>Back to the hand's resting pose.</summary>
+    /// <summary>Back to the grip's resting pose.</summary>
     public void Lower()
     {
-        if (IsArmed) Held.transform.localRotation = Quaternion.identity;
+        if (IsArmed) Held.transform.localRotation = _gripRotation;
     }
 
     public bool InRange(Vector3 point) => IsArmed && FlatDistance(transform.position, point) <= Held.Range;

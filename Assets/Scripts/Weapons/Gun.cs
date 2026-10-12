@@ -76,13 +76,13 @@ public class Gun : MonoBehaviour
 
     private void OnDisable() => Loose.Remove(this);
 
-    /// <summary>Into a hand: snapped to it, kinematic, colliders and grab point off.</summary>
-    public void Hold(Transform hand)
+    /// <summary>Into a hand at the holder's grip pose: kinematic, colliders and grab point off.</summary>
+    public void Hold(Transform hand, Vector3 localPosition, Quaternion localRotation, Vector3 localScale)
     {
         IsHeld = true;
         transform.SetParent(hand, false);
-        transform.localPosition = Vector3.zero;
-        transform.localRotation = Quaternion.identity;
+        transform.SetLocalPositionAndRotation(localPosition, localRotation);
+        transform.localScale = localScale;
         ApplyMode();
     }
 

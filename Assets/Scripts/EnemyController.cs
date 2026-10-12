@@ -45,6 +45,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("When every patrol point fails in a row, wait this long before trying the route again.")]
     [SerializeField, Min(0f)] private float _routeRetryTime = 3f;
 
+    [Header("Gun")]
+    [Tooltip("Unarmed, an enemy goes for a free dropped gun within this radius. 0 = never re-arms.")]
+    [SerializeField, Min(0f)] private float _rearmRadius = 10f;
+
     [Header("References")]
     [SerializeField] private PlayerController _player;
 
@@ -53,6 +57,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // Velocity going into this physics step. Collision callbacks arrive after the solver has
     // already spent the speed, so a hit is worked out from this, not from the body.
     private Vector3 _preStepVelocity;
+    private float _nextRearm;   // after giving up on a gun, no new attempt before this time
     // Creation order, so exactly one of two colliding tops handles their hit.
     private static int _created;
     private int _order;
@@ -65,6 +70,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public PatrolState Patrol { get; private set; }
     public SearchingState Searching { get; private set; }
     public AggroState Aggro { get; private set; }
+    public RearmState Rearm { get; private set; }
     public GrabbedState Grabbed { get; private set; }
     public RagdollState Ragdoll { get; private set; }
     public DeadState Dead { get; private set; }
@@ -82,6 +88,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (Arms != null) Arms.Drop(Body.linearVelocity);
     }
 
+    /// <summary>
+    /// After giving up on every gun in reach, wait Route Retry Time before looking again. Without
+    /// it, an enemy with only unreachable guns around would flicker between hunting and re-arming.
+    /// </summary>
+    public void WaitBeforeRearming() => _nextRearm = Time.time + _routeRetryTime;
+
+    private bool WantsGun() => Arms != null && !Arms.IsArmed && _rearmRadius > 0f && Time.time >= _nextRearm && Rearm.CanFindGun();
+
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
@@ -93,6 +107,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
+    public float RearmRadius => _rearmRadius;
     public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
     /// <summary>Ragdolling in an upright spin: a spinning top that knocks other enemies away.</summary>
@@ -129,6 +144,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Patrol = new PatrolState(this);
         Searching = new SearchingState(this);
         Aggro = new AggroState(this);
+        Rearm = new RearmState(this);
         Grabbed = new GrabbedState(this);
         Ragdoll = new RagdollState(this);
         Dead = new DeadState(this);
@@ -144,6 +160,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         At(Searching, Aggro, new FuncPredicate(DetectsPlayer));
 
         At(Aggro, Searching, new FuncPredicate(() => Aggro.LostPlayer));
+
+        // Unarmed with a free gun in reach: fetching it comes before anything else the AI wants.
+        At(Idle, Rearm, new FuncPredicate(WantsGun));
+        At(Patrol, Rearm, new FuncPredicate(WantsGun));
+        At(Searching, Rearm, new FuncPredicate(WantsGun));
+        At(Aggro, Rearm, new FuncPredicate(WantsGun));
+        // Always back to the hunt: an enemy only loses its gun to Ruby, so it knows she's around.
+        At(Rearm, Aggro, new FuncPredicate(() => Rearm.Armed || Rearm.GaveUp));
 
         At(Searching, Patrol, new FuncPredicate(() => Searching.SearchExpired && HasPatrolRoute));
         At(Searching, Idle, new FuncPredicate(() => Searching.SearchExpired && !HasPatrolRoute));
@@ -387,7 +411,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// Walk to a wander spot, as an area just big enough to arrive in: with a wider one, another
     /// enemy standing on the spot would count as arrived instead of blocked.
     /// </summary>
-    public NavResult WanderTo(Vector3 spot, float speed) => Navigator.MoveToArea(GridArea.Circle(spot, WanderSpotRadius), speed);
+    public NavResult WanderTo(Vector3 spot, float speed) => WalkTo(spot, WanderSpotRadius, speed);
+
+    /// <summary>Walk until within reach of a point, along an A* route.</summary>
+    public NavResult WalkTo(Vector3 point, float reach, float speed) => Navigator.MoveToArea(GridArea.Circle(point, reach), speed);
 
     /// <summary>Chase the player along this floor's shared flow field.</summary>
     public void PathToPlayer(float speed)

@@ -354,8 +354,8 @@ MonoBehaviour:
   _eyeHeight: 0.5
   _searchDuration: 10
   _dropFlingSpeed: 60
-  _dropSpinSpeed: 60
-  _dropSpinTime: 8
+  _dropSpinSpeed: 10
+  _dropSpinTime: 2.5
   _topBounce: 0.6
   _corpseBrightness: 0.35
   _safeRoute:
@@ -374,6 +374,7 @@ MonoBehaviour:
   _nodePauseTime: 2.5
   _stuckTime: 1.5
   _routeRetryTime: 3
+  _rearmRadius: 10
   _player: {fileID: 0}
 --- !u!114 &-7499668176266741108
 MonoBehaviour:
