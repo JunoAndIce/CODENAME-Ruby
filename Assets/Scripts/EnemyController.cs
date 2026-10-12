@@ -332,6 +332,23 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, transform.forward * speed));
     }
 
+    /// <summary>
+    /// Backs toward a spot while facing the player: an armed enemy giving ground keeps its gun on
+    /// her instead of turning its back, which MoveToward would do.
+    /// </summary>
+    public void StepAway(Vector3 spot, float speed)
+    {
+        FaceTarget();
+        Vector3 direction = spot - transform.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.0001f)
+        {
+            Stop();
+            return;
+        }
+        VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, direction.normalized * speed));
+    }
+
     /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>
     public void FaceTarget()
     {

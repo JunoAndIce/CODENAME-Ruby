@@ -191,6 +191,34 @@ public class GridNavigator
         return false;
     }
 
+    /// <summary>
+    /// For giving ground: of the spots step metres away in the grid's eight directions, the one
+    /// with a clear straight line from the agent that's farthest from awayFrom. False when none
+    /// gets farther than where the agent stands (a wall behind, the grid's edge): it's cornered.
+    /// </summary>
+    public bool TryFindSpotAway(Vector3 awayFrom, float step, out Vector3 spot)
+    {
+        Vector3 position = _agent.Body.position;
+        spot = position;
+        PathGrid grid = PathGrid.At(position);
+        if (grid == null) return false;
+
+        float farthest = FlatDistance(position, awayFrom);
+        bool found = false;
+        foreach (Vector2Int direction in PathGrid.Steps)
+        {
+            Vector3 candidate = position + new Vector3(direction.x, 0f, direction.y).normalized * step;
+            if (!grid.HasLineOfSight(position, candidate)) continue;
+
+            float distance = FlatDistance(candidate, awayFrom);
+            if (distance <= farthest) continue;
+            farthest = distance;
+            spot = candidate;
+            found = true;
+        }
+        return found;
+    }
+
     private void Plan(PathGrid grid, GridArea area, Vector3 position, bool resetWatchdog)
     {
         _routeGrid = grid;
