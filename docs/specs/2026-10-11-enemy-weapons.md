@@ -1,7 +1,9 @@
 # Enemy weapons: officers' pistols
 
-Status: approved design 2026-10-11, not built. It supersedes section 7 (Weapons) of
-`2026-09-29-enemy-states-v2.md`. Melee from that section is deferred to a later pass.
+Status: approved 2026-10-11, built 2026-10-12 (plan `docs/plans/2026-10-11-enemy-weapons.md`). It
+supersedes section 7 (Weapons) of `2026-09-29-enemy-states-v2.md`. Melee from that section is
+deferred to a later pass. **Changed in play-testing** at the end records where the build differs
+from this design.
 
 ## Intent
 
@@ -144,9 +146,9 @@ Prefabs and scenes are YAML, so the user builds these:
    - `pistol.fbx`, scaled to an officer's hand.
    - A Rigidbody, a Box Collider, a `Weight` (Custom, 1 kg) and `Gun`.
    - A **Muzzle** child.
-   - A **GrappleNode** child, **left inactive** and listed in the Gun's dropped-only objects. A node
-     caches its body and grabbable the first time it wakes, so one that woke under an officer would
-     make grabbing the dropped gun grab the officer.
+   - A **GrappleNode** child, listed in the Gun's dropped-only objects. (This originally had to
+     start inactive. Since play-testing, `GrappleNode` resolves its owner on every enable, so it
+     doesn't matter; see the end.)
 2. **EnemyBullet prefab:** a small visible mesh plus `Bullet`. No collider or Rigidbody, since it
    sweeps.
 3. **Enemy prefab:**
@@ -196,3 +198,25 @@ on its own) plus playing the scene. There are no automated tests.
 - Ammo and reloading for officers.
 - Muzzle flash and other visual polish.
 - The police boss.
+
+## Changed in play-testing
+
+Each of these was a setup trap that play-testing hit. The fix went into code, so the setup can't
+be got wrong.
+
+- **A held gun drifted off the hand.** Rigidbody interpolation writes a body's own physics history
+  over its transform every frame, so a kinematic gun parented to a moving officer lagged and
+  drifted. `Gun` now turns interpolation off while held and restores the prefab's setting when the
+  gun is loose.
+- **Officers held guns but never fired.** `Gun` counted itself held whenever a `GunHolder` was
+  above it, but `GunHolder` only searched under its Hand. A pistol parented to the officer's root
+  was held, kinematic and silent. `GunHolder` now finds its starting gun anywhere under the
+  character. It warns if that gun isn't under the Hand, and if the Hand holds a Rigidbody with no
+  `Gun`.
+- **Grabbing a dropped gun grabbed its old officer.** `GrappleNode` cached its Host and Grabbable
+  on wake, and a gun's grab point wakes in an officer's hand. The prefab step "keep it inactive"
+  was missed twice, so `GrappleNode` now resolves both on every enable instead.
+- **A picked-up gun sat in the wrong place.** `Gun.Hold` snapped to the Hand's origin. The prefab's
+  gun sits at an offset, rotation and compensating scale under a non-uniformly scaled Hand.
+  `GunHolder` now records the starting gun's pose relative to the Hand. `Gun.Hold` takes that pose,
+  and `Lower` returns to its rotation.

@@ -25,7 +25,7 @@ Lifecycle" plans.
 - [~] Perception: **line of sight is done** (with Aggro). Anything solid blocks it except
   characters, so props hide the player and low props under the eye line don't. Windows and
   **sound (last)** remain.
-- [ ] Weapons: pistols designed in `2026-10-11-enemy-weapons.md`, which supersedes section 7.
+- [x] **Weapons:** pistols, built to `2026-10-11-enemy-weapons.md`, which supersedes section 7.
   Melee is deferred.
 - [ ] Controller housekeeping
 
