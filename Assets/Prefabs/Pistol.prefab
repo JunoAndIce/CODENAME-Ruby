@@ -31,6 +31,52 @@ Transform:
   m_Children: []
   m_Father: {fileID: 7148668589302486008}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &3387325438042766178
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6615440247622857146}
+  - component: {fileID: 3025502624033467183}
+  m_Layer: 0
+  m_Name: Grapple
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6615440247622857146
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3387325438042766178}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7148668589302486008}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3025502624033467183
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3387325438042766178}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a9cc6c94a501a81199bfc06faf1f912e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ruby.Grapple::GrappleNode
+  _breakStrength: 800
+  _grabable: 1
 --- !u!1 &4006947282758649360
 GameObject:
   m_ObjectHideFlags: 0
@@ -66,6 +112,7 @@ Transform:
   m_Children:
   - {fileID: 6551856979550653786}
   - {fileID: 3412596131734603948}
+  - {fileID: 6615440247622857146}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &100423863140039554
@@ -147,12 +194,13 @@ MonoBehaviour:
   _muzzle: {fileID: 3412596131734603948}
   _damage: 30
   _bulletSpeed: 30
-  _fireCooldown: 0.8
+  _fireCooldown: 0.6
   _spread: 2
   _bulletLifetime: 2
   _range: 12.5
   _minDistance: 5
-  _droppedOnly: []
+  _droppedOnly:
+  - {fileID: 3387325438042766178}
 --- !u!1 &5883688588926228448
 GameObject:
   m_ObjectHideFlags: 0

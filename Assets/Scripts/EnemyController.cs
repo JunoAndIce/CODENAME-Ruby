@@ -76,6 +76,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>Only on the chain does an enemy, alive or dead, stop bullets: a shield. Free, it lets them through.</summary>
     public bool StopsBullets => IsHeld;
 
+    /// <summary>Lets the gun go with the body's velocity, so it skids on the way the enemy was moving.</summary>
+    public void DropGun()
+    {
+        if (Arms != null) Arms.Drop(Body.linearVelocity);
+    }
+
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
@@ -224,6 +230,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public void KnockDown()
     {
         if (Health.IsDead || _state.Current is GrabbedState or RagdollState or DeadState) return;
+        DropGun();
         Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity));
         _state.SetState(Ragdoll);
     }
@@ -243,6 +250,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     public void EnterGrabbed()
     {
+        DropGun();
         IsHeld = true;
         if (Health.IsDead) Dead.Grab();
         else _state.SetState(Grabbed);
