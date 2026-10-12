@@ -3,7 +3,7 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(CapsuleCollider))]
 [RequireComponent(typeof(Health))]
-public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
+public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown, IBulletTarget
 {
     [Header("Movement")]
     [SerializeField] private float _chaseSpeed = 2f;
@@ -20,11 +20,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("Height above the enemy's centre that sight is cast from.")]
     [SerializeField] private float _eyeHeight = 0.5f;
     [SerializeField] private float _searchDuration = 5f;
-
-    [Header("Combat")]
-    [SerializeField] private float _attackRange = 2f;
-    [Tooltip("Seconds between attacks. Moves to the weapon when weapons exist.")]
-    [SerializeField, Min(0.05f)] private float _attackCooldown = 1f;
 
     [Header("Dropped")]
     [Tooltip("An enemy let go while being spun always flings out. One that wasn't (being dragged, say) flings if it's moving at least this fast across the floor, and otherwise spins in place.")]
@@ -73,14 +68,19 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public GrabbedState Grabbed { get; private set; }
     public RagdollState Ragdoll { get; private set; }
     public DeadState Dead { get; private set; }
+    /// <summary>The enemy's gun hand, or null on an enemy built without one.</summary>
+    public GunHolder Arms { get; private set; }
+    public bool IsArmed => Arms != null && Arms.IsArmed;
+    /// <summary>The player is on her feet. Nobody shoots a body.</summary>
+    public bool PlayerIsUp => _player != null && _player.CanAct;
+    /// <summary>Only on the chain does an enemy, alive or dead, stop bullets: a shield. Free, it lets them through.</summary>
+    public bool StopsBullets => IsHeld;
 
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
-    public float AttackRange => _attackRange;
-    public float AttackCooldown => _attackCooldown;
     public float DropSpinSpeed => _dropSpinSpeed;
     public float DropSpinTime => _dropSpinTime;
     public PatrolRoute SafeRoute => _safeRoute;
@@ -117,6 +117,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
         RagdollBody = ragdoll;
         Navigator = new GridNavigator(this);
+        Arms = GetComponent<GunHolder>();
 
         Idle = new IdleState(this);
         Patrol = new PatrolState(this);
@@ -305,16 +306,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (_player != null) LastKnownPlayerPosition = _player.transform.position;
     }
 
-    /// <summary>
-    /// Placeholder attack until weapons exist: a log line and a red flash toward the player.
-    /// Weapons replace this body; AggroState's call site and cadence stay as they are.
-    /// </summary>
-    public void Attack()
-    {
-        DebugLog.Info($"{name} attacks {_player.name}.", this);
-        Debug.DrawLine(EyePosition, _player.transform.position, Color.red, 0.15f);
-    }
-
     public void Release(Vector3 velocity)
     {
         IsHeld = false;
@@ -444,7 +435,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     {
         // Give-up must sit outside alert, or the enemy aggros and de-aggros in the same frame.
         _giveUpRadius = Mathf.Max(_giveUpRadius, _alertRadius + 1f);
-        _attackRange = Mathf.Min(_attackRange, _alertRadius);
     }
 
     // Play-mode path overlay: visible in the Scene view without selecting the enemy.
@@ -465,8 +455,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, _giveUpRadius);
 
-        Gizmos.color = Color.magenta;
-        Gizmos.DrawWireSphere(transform.position, _attackRange);
+        // The gun's engagement band: fires out to Range, closes in only to Min Distance. In edit
+        // mode Arms isn't set yet, so read the gun under the hand directly.
+        Gun gun = Arms != null ? Arms.Held : GetComponentInChildren<Gun>();
+        if (gun != null)
+        {
+            Gizmos.color = Color.magenta;
+            Gizmos.DrawWireSphere(transform.position, gun.Range);
+            Gizmos.color = new Color(1f, 0.5f, 0f);
+            Gizmos.DrawWireSphere(transform.position, gun.MinDistance);
+        }
 
         // Sight line in play: green when the player is in view, red when something static is in the way.
         if (Application.isPlaying && _player != null)

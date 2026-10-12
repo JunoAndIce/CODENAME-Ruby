@@ -6,6 +6,7 @@
         "Ruby.Pathing",
         "Ruby.CameraRig",
         "Ruby.Grapple",
+        "Ruby.Weapons",
         "Unity.InputSystem"
     ],
     "includePlatforms": [],

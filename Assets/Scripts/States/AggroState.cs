@@ -1,14 +1,13 @@
 using UnityEngine;
 
 /// <summary>
-/// Hunting the player along the shared flow field, and attacking on a cooldown inside Attack Range
-/// with a clear line. One state, not Chase + Attack: attacking happens alongside the hunt. After
-/// Aggro Time out of contact, LostPlayer flips and the table sends the enemy to search.
+/// Hunting the player along the shared flow field. An armed enemy fires alongside the hunt, not as
+/// its own state: whenever she's in sight, in range and on her feet, and the gun's cooldown allows.
+/// After Aggro Time out of contact, LostPlayer flips and the table sends the enemy to search.
 /// </summary>
 public class AggroState : EnemyStateBase
 {
     private float _lostTimer;
-    private float _attackCooldown;
     private bool _hadSight;
 
     public AggroState(EnemyController enemy) : base(enemy) { }
@@ -20,17 +19,18 @@ public class AggroState : EnemyStateBase
     public override void Enter()
     {
         _lostTimer = 0f;
-        _attackCooldown = 0f;   // the first attack lands as soon as it's in range
         _hadSight = Enemy.CanSeePlayer();
     }
 
     // The hunt tracks the player right up to here, so this is where a search should start.
-    public override void Exit() => Enemy.RecordTrailEnd();
+    public override void Exit()
+    {
+        Enemy.RecordTrailEnd();
+        if (Enemy.IsArmed) Enemy.Arms.Lower();
+    }
 
     public override void Tick()
     {
-        _attackCooldown -= Time.deltaTime;
-
         bool hasSight = Enemy.CanSeePlayer();
         if (_hadSight && !hasSight)
             DebugLog.Info($"{Enemy.name} lost sight of {Enemy.PlayerTransform.name} — blocked by {(Enemy.SightBlocker != null ? Enemy.SightBlocker.name : "something")}.", Enemy);
@@ -48,17 +48,22 @@ public class AggroState : EnemyStateBase
             return;
         }
 
-        if (Enemy.DistanceToPlayer() <= Enemy.AttackRange && Enemy.CanSeePlayer())
-        {
-            Enemy.Stop();
-            Enemy.FaceTarget();
-            if (_attackCooldown > 0f) return;
+        Enemy.PathToPlayer(Enemy.ChaseSpeed);
+        Shoot();
+    }
 
-            _attackCooldown = Enemy.AttackCooldown;
-            Enemy.Attack();
+    private void Shoot()
+    {
+        if (!Enemy.IsArmed) return;
+
+        if (!Enemy.CanSeePlayer() || !Enemy.PlayerIsUp)
+        {
+            Enemy.Arms.Lower();
             return;
         }
 
-        Enemy.PathToPlayer(Enemy.ChaseSpeed);
+        Vector3 player = Enemy.PlayerTransform.position;
+        Enemy.Arms.AimAt(player);
+        Enemy.Arms.TryFireAt(player);
     }
 }
