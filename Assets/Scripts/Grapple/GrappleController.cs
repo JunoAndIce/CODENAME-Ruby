@@ -230,13 +230,19 @@ public class GrappleController : MonoBehaviour
 
     void OnDisable() => _thrownPassThrough.End();
 
-    // The user can't act (knocked down): whatever the chain holds is let go, a whip in flight is
-    // called back, and nothing is marked or charged until they can act again.
-    void StandDown()
+    /// <summary>
+    /// The user can't act (knocked down): whatever the chain holds is let go, a whip in flight is
+    /// called back, and nothing is marked or charged until they can act again. The grapple calls it
+    /// itself once CanAct goes false; a user whose knockdown switches its colliders off calls it
+    /// first, because letting go gives collisions back to those colliders, and Unity refuses that
+    /// on a disabled one.
+    /// </summary>
+    public void StandDown()
     {
         _marked = null;
         _aimOrb.Mark(null);
         _charging = false;
+        _thrownPassThrough.End();
 
         if (_phase == Phase.Attached) Detach("user knocked down");
         else if (_phase is Phase.Flying or Phase.Trailing)
@@ -291,7 +297,7 @@ public class GrappleController : MonoBehaviour
         target.IsOccupied = true;
         _phase = Phase.Flying;
 
-        TetherLog.Event($"WHIP LAUNCH  -> {target.name} dist={attachDist:F1} hostMass={(target.IsStaticWorld ? 0 : target.Host.mass)}");
+        TetherLog.Event($"WHIP LAUNCH  -> {target.name} dist={attachDist:F1} hostMass={(target.IsStaticWorld ? 0 : Weight.MassOf(target.Host))}");
     }
 
     void StepFlight()
@@ -417,13 +423,18 @@ public class GrappleController : MonoBehaviour
     void Detach(string reason, bool trail = false, bool thrown = false)
     {
         _tether.End();
-        if (thrown) _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
+        // Knocked down, she's about to lie on her limbs, not the capsule a pass-through would cover.
+        bool passThrough = _user.CanAct;
+        if (thrown)
+        {
+            if (passThrough) _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
+        }
         else if (_tether.IsParked)
         {
             // Letting go of a spin sends the host along the aim, as a throw would, and like a throw
             // it may start behind her, so it passes through her for a moment too.
             _tether.AimRelease(AimDirection());
-            _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
+            if (passThrough) _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
         }
         // Without this, a pull crack pending at detach would bite the next chain.
         _crackTimer = 0f;

@@ -22,6 +22,9 @@ public interface IRagdollBody
     /// <summary>Set a ragdolling body's velocity, for a hit. Frees a spin held in place.</summary>
     void Push(Vector3 velocity);
 
+    /// <summary>An impulse (kg·m/s) landing at a world point on a ragdolling body, such as a bullet's. Ignored otherwise.</summary>
+    void ApplyHit(Vector3 impulse, Vector3 point);
+
     /// <summary>Limp and solid, for something else to move (a corpse on the chain).</summary>
     void Hold();
 

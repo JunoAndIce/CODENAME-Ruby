@@ -145,7 +145,7 @@ a { color: var(--accent); }
     <tr><td>Enemy</td><td>Police officer</td><td>Built</td></tr>
     <tr><td>Enemy</td><td>Police boss</td><td><span class="planned">Planned</span></td></tr>
     <tr><td>Level</td><td>Police Station (one floor)</td><td>Test floor built; final layout <span class="planned">Planned</span></td></tr>
-    <tr><td>Art direction</td><td>Not decided. Characters are placeholder capsules.</td><td><span class="planned">Planned</span></td></tr>
+    <tr><td>Art direction</td><td>Not decided. Ruby uses a placeholder humanoid model; officers are placeholder capsules.</td><td><span class="planned">Planned</span></td></tr>
   </tbody>
 </table>
 </div>
@@ -178,6 +178,9 @@ a { color: var(--accent); }
     <tr><td>Health</td><td class="where">Player · Health</td><td class="num">30</td></tr>
     <tr><td>Move Speed</td><td class="where">PlayerController</td><td class="num">15 m/s</td></tr>
     <tr><td>Gamepad Aim Distance</td><td class="where">PlayerController</td><td class="num">6 m</td></tr>
+    <tr><td>Knockback Deceleration (how fast a push fades)</td><td class="where">PlayerController</td><td class="num">20 m/s²</td></tr>
+    <tr><td>Settle Speed / Settle Angular Speed / Settle Time (getting up)</td><td class="where">SkeletonRagdollBody</td><td class="num">0.4 m/s / 0.5 rad/s / 0.75 s</td></tr>
+    <tr><td>Hit Local Share (share of a shot on the limb it hits)</td><td class="where">SkeletonRagdollBody</td><td class="num">0.3</td></tr>
     <tr class="group"><td colspan="3">Revolver</td></tr>
     <tr><td>Bullet Count</td><td class="where">PlayerController</td><td class="num">6</td></tr>
     <tr><td>Bullet Speed</td><td class="where">GunController</td><td class="num">18 m/s</td></tr>
@@ -202,6 +205,7 @@ a { color: var(--accent); }
     <tr><td>Reference Mass</td><td class="where">ImpactRules asset</td><td class="num">60 kg</td></tr>
     <tr class="group"><td colspan="3">Officers' pistol</td></tr>
     <tr><td>Damage</td><td class="where">Pistol · Gun</td><td class="num">30</td></tr>
+    <tr><td>Knockback (the push a bullet lands)</td><td class="where">Pistol · Gun</td><td class="num">240 kg·m/s</td></tr>
     <tr><td>Bullet Speed / Bullet Lifetime</td><td class="where">Pistol · Gun</td><td class="num">30 m/s / 2 s</td></tr>
     <tr><td>Fire Cooldown</td><td class="where">Pistol · Gun</td><td class="num">0.6 s</td></tr>
     <tr><td>Range / Min Distance</td><td class="where">Pistol · Gun</td><td class="num">12.5 m / 5 m</td></tr>
@@ -242,7 +246,16 @@ a { color: var(--accent); }
   <li><strong>Movement and shooting are always on.</strong> Ruby can walk and fire while grabbing, pulling, spinning or charging a throw.</li>
   <li><strong>Nothing she does moves her.</strong> The chain never pulls or drags her. When a held object can't follow her, the chain stops her walk instead.</li>
   <li><strong>She feels weight when she walks into things.</strong> She pushes an object at her drag fraction (see <a href="#drag">Drag fraction</a>), so light crates slide away, heavy ones barely move, and anything 60 kg or heavier blocks her.</li>
-  <li><strong>She can be knocked down.</strong> Any hit at Knockdown Speed or faster ragdolls her and takes away her control until she gets back up. If the hit kills her, she stays down.</li>
+  <li><strong>She can be knocked down.</strong> Any hit at Knockdown Speed or faster ragdolls her: her whole body goes limp and tumbles, and she loses control. Once every part of her has come to rest, she gets up where she lies. If the hit kills her, she stays down.</li>
+  <li><strong>Bullets push her.</strong> An officer's shot shoves her away from the shooter. A shot she survives pushes her back about 4 m/s, fading within a fifth of a second, and she keeps full control; a wall or the chain stops the push like a step. A killing shot lands the push on the part of her body it hit, so a chest shot knocks her over backward and a shoulder shot twists her as she falls. Today every pistol shot kills her, so only the second case shows.</li>
+</ul>
+
+<h3 id="ruby-ragdoll">Ruby's ragdoll</h3>
+<p>Ruby falls on her model's own skeleton, not a capsule. Standing, she's a slim capsule driven by her animation. Knocked down, her limbs take over: they share her 60 kg in proportion to their size, so she still weighs 60 kg in every rule, and the capsule follows her hips, so the camera and officers keep track of her.</p>
+<ul>
+  <li><strong>Any humanoid model works.</strong> Import it with a Humanoid rig, run Unity's Ragdoll Wizard on the model prefab, and give each bone an Impact Damage. <code>SkeletonRagdollBody</code>, on Ruby's root beside her capsule, finds the rest itself; there's nothing to wire.</li>
+  <li><strong>Her limbs take hits.</strong> While she's down, each limb is hurt by impacts like any body, once per contact. Her own limbs striking each other as she falls don't count.</li>
+  <li>Officers still ragdoll as capsules, because a spinning top isn't a limp body. Giving them skeletons is a separate piece of work.</li>
 </ul>
 
 <h3 id="drag">Drag fraction</h3>
@@ -454,7 +467,7 @@ a { color: var(--accent); }
 
 <h3>Pistol</h3>
 <ul>
-  <li><strong>One shot kills Ruby.</strong> A bullet does 30 damage against her 30 health. Bullets are visible and fly at 30 m/s, twice her walking speed, so a sidestep can dodge one.</li>
+  <li><strong>One shot kills Ruby.</strong> A bullet does 30 damage against her 30 health, and knocks her body away from the shooter (see <a href="#ruby">Ruby</a>). Bullets are visible and fly at 30 m/s, twice her walking speed, so a sidestep can dodge one. Officers take no push from bullets, so a held shield doesn't budge.</li>
   <li><strong>Fires on the move.</strong> An armed officer keeps hunting and fires every 0.6 s whenever Ruby is in sight within 12.5 m and on her feet. There's no wind-up. Once she's down, officers lower their guns.</li>
   <li><strong>Keeps its distance.</strong> With Ruby in sight, an armed officer closes in only to 5 m and holds between 5 and 6 m. If she comes closer it backs away, still facing her and firing. Cornered, it holds its ground. Ruby walks faster than it backs off, so she can still run a gunman down.</li>
   <li><strong>What stops a bullet:</strong> walls, crates and props, Ruby, and anything Ruby holds on the chain. A held officer or corpse is a shield. Free officers and resting corpses let bullets through, so there's no friendly fire.</li>

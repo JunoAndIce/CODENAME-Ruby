@@ -3,9 +3,11 @@ using UnityEngine;
 /// <summary>
 /// A pooled projectile. Each physics step it sweeps a thin sphere from where it is to where it
 /// will be, so a fast bullet can't skip through a thin wall. It stops at the nearest thing that
-/// stops bullets (IBulletTarget, or anything solid without it), damages the Health there, and
-/// knocks down what that kills. It never pushes anything: a bullet's rule is fixed damage, not the
-/// impact-damage formula, under which a light, 30 m/s bullet would do almost nothing.
+/// stops bullets (IBulletTarget, or anything solid without it), damages the Health there, knocks
+/// down what that kills, then lands the gun's Knockback on it (IKnockback), after the knockdown so a
+/// killing shot hits the ragdoll rather than the standing body. Only what takes knockback is pushed
+/// (Ruby). A bullet's rule is fixed damage, not the impact-damage formula, under which a light,
+/// 30 m/s bullet would do almost nothing; its push is a set impulse for the same reason.
 /// </summary>
 public class Bullet : MonoBehaviour
 {
@@ -17,15 +19,17 @@ public class Bullet : MonoBehaviour
     private Vector3 _direction;
     private float _speed;
     private float _damage;
+    private float _knockback;
     private float _lifeLeft;
     private Transform _shooter;
 
     /// <summary>Sends a bullet just taken from the pool on its way. The shooter's own colliders never stop it.</summary>
-    public void Launch(Vector3 direction, float speed, float damage, float lifetime, Transform shooter)
+    public void Launch(Vector3 direction, float speed, float damage, float knockback, float lifetime, Transform shooter)
     {
         _direction = direction.normalized;
         _speed = speed;
         _damage = damage;
+        _knockback = knockback;
         _lifeLeft = lifetime;
         _shooter = shooter;
         transform.rotation = Quaternion.LookRotation(_direction);
@@ -39,7 +43,7 @@ public class Bullet : MonoBehaviour
         if (TryFindStop(from, step, out RaycastHit stop))
         {
             transform.position = from + _direction * stop.distance;
-            Strike(stop.collider);
+            Strike(stop, from);
             ObjectPoolManager.ReturnObjectToPool(gameObject);
             return;
         }
@@ -75,12 +79,21 @@ public class Bullet : MonoBehaviour
         return target == null || target.StopsBullets;
     }
 
-    private void Strike(Collider collider)
+    private void Strike(RaycastHit stop, Vector3 from)
     {
+        Collider collider = stop.collider;
         Health health = collider.GetComponentInParent<Health>();
         if (health == null || health.IsDead) return;
 
+        // A sweep that starts inside a collider reports its point as the world origin: a muzzle in
+        // the target would land the push there. Found past the Health check, because ClosestPoint
+        // warns on a concave wall mesh, but before the knockdown, which can switch this collider off.
+        Vector3 point = stop.distance > 0f ? stop.point : collider.ClosestPoint(from);
+
         health.ApplyDamage(_damage);
         if (health.IsDead) collider.GetComponentInParent<IKnockdown>()?.KnockDown();
+        // After the knockdown, so a killing shot lands on the ragdoll: pushed onto the standing
+        // body, the knockdown would clear it.
+        collider.GetComponentInParent<IKnockback>()?.Knockback(_direction * _knockback, point);
     }
 }

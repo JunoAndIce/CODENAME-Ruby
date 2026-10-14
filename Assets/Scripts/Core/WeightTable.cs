@@ -37,7 +37,7 @@ public class WeightTable : ScriptableObject
     [SerializeField, Min(0.01f)] private float _immovable = 60f;
     [FormerlySerializedAs("_character")]
     [SerializeField, Min(0.01f)] private float _player = 60f;
-    [SerializeField, Min(0.01f)] private float _enemy = 60f;
+    [SerializeField, Min(0.01f)] private float _enemy = 50f;
 
     public float KgFor(WeightClass weightClass) => weightClass switch
     {

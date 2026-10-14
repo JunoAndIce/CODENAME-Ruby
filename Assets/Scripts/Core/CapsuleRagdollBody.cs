@@ -90,6 +90,13 @@ public class CapsuleRagdollBody : MonoBehaviour, IRagdollBody
         _rb.linearVelocity = velocity;
     }
 
+    // Off centre it turns the capsule as well as pushing it.
+    public void ApplyHit(Vector3 impulse, Vector3 point)
+    {
+        if (!_isRagdolling) return;
+        _rb.AddForceAtPosition(impulse, point, ForceMode.Impulse);
+    }
+
     public void Hold()
     {
         Wake();
