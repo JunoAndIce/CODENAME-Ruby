@@ -55,8 +55,11 @@ public class GunHolder : MonoBehaviour
         _gripPosition = _hand.InverseTransformPoint(gun.position);
         _gripRotation = Quaternion.Inverse(_hand.rotation) * gun.rotation;
         Vector3 hand = _hand.lossyScale, held = gun.lossyScale;
-        _gripScale = new Vector3(held.x / hand.x, held.y / hand.y, held.z / hand.z);
+        _gripScale = new Vector3(Ratio(held.x, hand.x), Ratio(held.y, hand.y), Ratio(held.z, hand.z));
     }
+
+    // A Hand scaled to zero on an axis would make the grip scale infinite; keep that axis as is.
+    private static float Ratio(float held, float hand) => Mathf.Abs(hand) > 0.0001f ? held / hand : 1f;
 
     public void Drop(Vector3 velocity)
     {

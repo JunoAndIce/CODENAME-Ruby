@@ -144,7 +144,7 @@ Prefabs and scenes are YAML, so the user builds these:
 
 1. **Pistol prefab:**
    - `pistol.fbx`, scaled to an officer's hand.
-   - A Rigidbody, a Box Collider, a `Weight` (Custom, 1 kg) and `Gun`.
+   - A Rigidbody, a Box Collider, a `Weight` (class Small, 20 kg; see Defaults) and `Gun`.
    - A **Muzzle** child.
    - A **GrappleNode** child, listed in the Gun's dropped-only objects. (This originally had to
      start inactive. Since play-testing, `GrappleNode` resolves its owner on every enable, so it
@@ -169,7 +169,7 @@ Prefabs and scenes are YAML, so the user builds these:
 | Min Distance | Gun | 5 m | Armed officers hold between 5 and 6 m, so a bullet takes about 0.2 s to arrive. They stay inside the chain's 8 m reach, so Ruby can still hook a gunman. |
 | Spread | Gun | ±2° | Enough that a moving Ruby isn't always hit. |
 | Bullet Lifetime | Gun | 2 s | Strays return to the pool after 60 m. |
-| Dropped weight | Pistol's Weight | Custom 1 kg | A full throw (about 118 m/s) does about 15 damage: it knocks an officer down, and so disarms them, but doesn't kill one at 20 health. |
+| Dropped weight | Pistol's Weight | Small, 20 kg | Chosen in play-testing over the original Custom 1 kg. A fully charged throw (about 90 m/s) does about 52 damage, so a thrown gun kills an officer like a Small crate does. At 1 kg it only knocked an officer down. |
 | Rearm Radius | EnemyController | 10 m | Officers go for nearby guns, not ones across the map. |
 
 ## Build order

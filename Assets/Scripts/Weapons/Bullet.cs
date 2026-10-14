@@ -10,7 +10,9 @@ using UnityEngine;
 public class Bullet : MonoBehaviour
 {
     private const float Radius = 0.05f;
-    private static readonly RaycastHit[] Hits = new RaycastHit[16];
+    // Room for a crowd: hits come back unsorted, and a buffer that fills drops some at random,
+    // which could be the nearest one, letting a bullet pass something it should have stopped on.
+    private static readonly RaycastHit[] Hits = new RaycastHit[64];
 
     private Vector3 _direction;
     private float _speed;

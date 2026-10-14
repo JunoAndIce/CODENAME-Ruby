@@ -467,7 +467,7 @@ part of this system.
   - A held gun is kinematic with its colliders off (characters collide with their root capsule
     only), and its **interpolation off**. Interpolation writes the body's own physics history over
     its transform each frame, so a held gun drifted off the hand.
-  - A loose gun is a 1 kg prop. Its grab point is a child listed in Dropped Only, switched on only
+  - A loose gun is a prop (class Small, 20 kg, so a full throw kills an officer). Its grab point is a child listed in Dropped Only, switched on only
     while loose, so the chain takes guns off the floor but never out of a hand.
   - `GrappleNode` resolves its Host and Grabbable on every enable, not once on wake. A gun's grab
     point first wakes in an officer's hand, and resolving it there made grabbing the dropped gun
