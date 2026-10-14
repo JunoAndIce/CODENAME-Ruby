@@ -155,7 +155,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // The whole transition graph, in one place. States never name each other.
     private void BuildTransitions()
     {
-        At(Idle, Aggro, new FuncPredicate(DetectsPlayer));
         At(Patrol, Aggro, new FuncPredicate(DetectsPlayer));
         At(Searching, Aggro, new FuncPredicate(DetectsPlayer));
 
