@@ -70,7 +70,7 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
         Transform hips = _animator != null && _animator.isHuman ? _animator.GetBoneTransform(HumanBodyBones.Hips) : null;
         if (hips == null)
         {
-            Debug.LogError($"{name}: SkeletonRagdollBody needs a model with a Humanoid Animator in its children. Set the model's Rig to Humanoid.", this);
+            Debug.LogError($"{name}: SkeletonRagdollBody can't find the model's Hips bone. It needs a model in its children imported with Rig: Humanoid and Optimize Game Objects off, so its bones exist as GameObjects.", this);
             return;
         }
         if (!hips.TryGetComponent(out _pelvis))
@@ -154,7 +154,7 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
         if (!_ready) return;
         Ragdoll(launchVelocity);
         _spinLeft = duration;
-        // Unity caps bodies at 7 rad/s by default, which would quietly slow the spin.
+        // Unity caps a body's spin (Default Max Angular Speed, 50 rad/s here), which would quietly slow a faster one.
         _pelvis.maxAngularVelocity = Mathf.Max(_pelvisMaxAngular, Mathf.Abs(angularSpeed) * 2f);
         _pelvis.angularVelocity = Vector3.up * angularSpeed;
     }

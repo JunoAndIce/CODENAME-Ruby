@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// <summary>The seam between a thrown body and how it ragdolls, so a rigged ragdoll can replace the capsule later.</summary>
+/// <summary>The seam between a character and how its body ragdolls: a capsule (CapsuleRagdollBody) or a rigged skeleton (SkeletonRagdollBody).</summary>
 public interface IRagdollBody
 {
     bool IsSettled { get; }

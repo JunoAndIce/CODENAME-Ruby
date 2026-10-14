@@ -465,7 +465,12 @@ down, with no restart yet.
 
 Spec: `docs/specs/2026-10-11-enemy-weapons.md`. Officers carry pistols (`Gun`, held by a
 `GunHolder`). Ruby's revolver (`GunController`, `BulletController`) is a different gun and isn't
-part of this system.
+part of this system. For now it wears the officers' pistol model: a bare mesh (`EnemyPistol`, with
+no `Gun`, Rigidbody or collider, which would make it a loose prop and drop it) under her left hand
+bone, `Wrist_L`, so it follows her animation standing and her forearm when she's down. Its `Muzzle`
+child is the Fire Point and carries the `GunController`, which finds the `PlayerController` above
+it. Shots fly flat from the muzzle toward `AimPoint`, never along the muzzle's own facing: that
+swings and tilts with her animated hand, and a bullet flown along it would hit the floor.
 
 - **Bullets** (`Bullet`, pooled) sweep a 0.05 m sphere along each physics step, so a fast bullet
   can't skip through a thin wall. They stop at the nearest thing that stops bullets: anything
@@ -475,7 +480,7 @@ part of this system.
   takes it (`IKnockback`, only Ruby): after the knockdown, so a killing shot hits her ragdoll, at
   the limb it struck (`IRagdollBody.ApplyHit`), and a shot she survives shoves her about 4 m/s.
   Enemies take no push, so a held shield doesn't budge. It isn't impact damage: under that formula
-  a light, 30 m/s bullet would do almost nothing.
+  a light bullet at the pistol's 40 m/s would do almost nothing.
 - **Held vs loose:**
   - A held gun is kinematic with its colliders off (characters collide with their root capsule
     only), and its **interpolation off**. Interpolation writes the body's own physics history over
@@ -506,7 +511,8 @@ knockback) and does nothing otherwise.
 
 **`CapsuleRagdollBody`** (enemies) is the physics handoff on a capsule with no rig. The
 transition table uses `IsSettled` to hand control back to `Aggro`. The spin raises the body's
-`maxAngularVelocity`, because Unity's default cap of 7 rad/s would silently slow it. Enemies stay
+`maxAngularVelocity` to twice its speed, because the cap (Default Max Angular Speed, 50 rad/s in
+this project's physics settings) would silently slow a faster spin. Enemies stay
 on it: a spinning top isn't a knockdown ragdoll. What converting them needs is listed in the
 completion gate of `docs/plans/2026-10-12-ruby-ragdoll.md`.
 
@@ -514,8 +520,9 @@ completion gate of `docs/plans/2026-10-12-ruby-ragdoll.md`.
 capsule, not on the model, and it's model-agnostic with nothing to wire. It finds the pelvis
 through the Humanoid Avatar (`Animator.GetBoneTransform(HumanBodyBones.Hips)`), and takes as bones
 the pelvis and every *jointed* Rigidbody under it, so a gun held under a hand bone isn't one. A new
-model needs a Humanoid import, the Ragdoll Wizard on its prefab, and `ImpactDamage` on each bone.
-The wizard's masses only set proportions.
+model needs a Humanoid import with **Optimize Game Objects off** (on, its bones don't exist as
+GameObjects and the Hips lookup fails), the Ragdoll Wizard on its prefab, and `ImpactDamage` on each
+bone. The wizard's masses only set proportions.
 
 - **Standing:** the Animator runs, the bones are kinematic with their colliders off, and the root
   capsule collides and carries her whole weight. The bones are forced to this in `Start`, whatever
@@ -529,6 +536,10 @@ The wizard's masses only set proportions.
     metre under the pelvis, under the floor once she lay down.
   - Jointed neighbours don't collide with each other, which is Unity's joint default, but other
     limbs do (a forearm against the chest), so the body reads as solid.
+  - Whatever meets her body meets one bone at its own mass. Impact damage reads that mass, and one
+    body touching several limbs is several contacts, so a crate across two limbs hurts her twice
+    (the per-contact rule, applied per limb). `PushLimit` reads it too, so an officer walking into
+    her shoves her limbs aside rather than being blocked by her 60 kg.
 - **Settled:** every bone stays below Settle Speed and Settle Angular Speed for Settle Time. Only
   the pelvis being still isn't enough, because a limb still swinging means she hasn't landed.
 - **`Recover`** stands the root up on the ground under the pelvis, facing as before, restores the
@@ -538,6 +549,9 @@ The wizard's masses only set proportions.
   shoulder shot twists her. The rest is the same velocity change on every body, so no single joint
   takes the whole push and tears.
 - Her model sits at local Y −1 under the root, so its feet meet the capsule's bottom.
+- Ruby is `Assets/Prefabs/Red.prefab`. Its model is an unpacked copy of the School Girl rig, not a
+  nested `Player.prefab`, so her bones, ragdoll and gun are edited on `Red` itself; changes to
+  `Player.prefab` don't reach her.
 
 `GrabbedState` keeps the body **dynamic**: the tether moves its host by writing velocity, and a
 kinematic body would silently ignore it and hang frozen instead of being dragged.
@@ -552,7 +566,7 @@ be cleared.
 
 ### Animation
 
-`PlayerAnimator` (on the Player root, driving the Animator on the `All` model child) converts
+`PlayerAnimator` (on Ruby's root, driving the Animator on her model child) converts
 Rigidbody velocity to **local space** before writing `MoveX`/`MoveZ`, because the player faces the
 cursor while moving independently — in world space, running north while aiming east would play the
 forward clip instead of a strafe. It reads the Rigidbody rather than input, so pushing into a wall

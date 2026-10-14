@@ -2,8 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// Sets its body's Rigidbody.mass from a weight class, and owns its kinematic flag: Immovable
-/// bodies are kinematic, everything else dynamic. Everything else reads the Rigidbody, so
-/// nothing needs to know this component exists.
+/// bodies are kinematic, everything else dynamic. Collisions read the Rigidbody; anything that
+/// weighs a character as a whole reads TotalMassKg through MassOf, because a ragdoll spreads
+/// Rigidbody.mass over its bones.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class Weight : MonoBehaviour

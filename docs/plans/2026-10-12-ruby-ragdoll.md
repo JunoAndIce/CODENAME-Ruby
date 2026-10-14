@@ -319,6 +319,8 @@ All Unity Editor work; no code. The rig goes on the model prefab, so the player 
 
 Not part of this plan; start it once Task 7 is done. Ruby's revolver (`GunController`) is a placeholder with no physics body, and its bullets (`BulletController`) don't damage anything yet.
 
+**Done on 2026-10-14, as a stopgap:** she wears the officers' pistol mesh under `Wrist_L` in her new prefab, `Red.prefab`, with no `Gun`, Rigidbody or collider. `GunController` sits on its `Muzzle` and fires flat toward her aim. Holding, dropping and her own model remain open, as below.
+
 - **Shape:** her model-tailored gun sits under the right-hand bone, so it follows her animation standing and her ragdoll down. It uses `Gun` and `GunHolder` for holding and dropping only (held: kinematic, colliders off; dropped: a prop carrying its speed); her firing stays her own, on the trigger, six bullets, no reload. `SkeletonRagdollBody` already ignores a Rigidbody under a hand bone, because it has no joint.
 - **Drop:** on death only, from `PlayerController.KnockDown`, as officers drop theirs. Knocked down alive, she keeps it: she never swaps weapons.
 - **Open questions:**

@@ -85,9 +85,6 @@ public class Bullet : MonoBehaviour
         Health health = collider.GetComponentInParent<Health>();
         if (health == null || health.IsDead) return;
 
-        // A sweep that starts inside a collider reports its point as the world origin: a muzzle in
-        // the target would land the push there. Found past the Health check, because ClosestPoint
-        // warns on a concave wall mesh, but before the knockdown, which can switch this collider off.
         Vector3 point = stop.distance > 0f ? stop.point : collider.ClosestPoint(from);
 
         health.ApplyDamage(_damage);
