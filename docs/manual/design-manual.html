@@ -216,7 +216,7 @@ a { color: var(--accent); }
     <tr><td>Health</td><td class="where">Enemy prefab · Health</td><td class="num">20</td></tr>
     <tr><td>Chase / Patrol / Search Speed</td><td class="where">EnemyController</td><td class="num">10 / 7 / 6 m/s</td></tr>
     <tr><td>Alert Radius / Give Up Radius</td><td class="where">EnemyController</td><td class="num">12.5 m / 16.5 m</td></tr>
-    <tr><td>Aggro Time / Search Duration</td><td class="where">EnemyController</td><td class="num">5 s / 10 s</td></tr>
+    <tr><td>Aggro Time / Search Duration</td><td class="where">EnemyController</td><td class="num">1.5 s / 10 s</td></tr>
     <tr><td>Eye Height</td><td class="where">EnemyController</td><td class="num">0.5 m</td></tr>
     <tr><td>Rearm Radius</td><td class="where">EnemyController</td><td class="num">10 m</td></tr>
     <tr><td>Node Pause Time / Route Retry Time</td><td class="where">EnemyController</td><td class="num">2.5 s / 3 s</td></tr>
@@ -483,9 +483,9 @@ a { color: var(--accent); }
 <table>
   <thead><tr><th>State</th><th>Kind</th><th>Enters when</th><th>Leaves when</th></tr></thead>
   <tbody>
-    <tr><td>Idle</td><td>AI</td><td>No patrol route</td><td>Sees Ruby → Aggro</td></tr>
+    <tr><td>Idle</td><td>AI</td><td>No patrol route</td><td>Is hurt → Aggro</td></tr>
     <tr><td>Patrol</td><td>AI</td><td>Has a patrol route</td><td>Sees Ruby → Aggro</td></tr>
-    <tr><td>Aggro</td><td>AI</td><td>Sees Ruby, is hurt, or gets up</td><td>Loses Ruby for 5 s → Searching</td></tr>
+    <tr><td>Aggro</td><td>AI</td><td>Sees Ruby, is hurt, or gets up</td><td>Loses Ruby for 1.5 s → Searching</td></tr>
     <tr><td>Searching</td><td>AI</td><td>Lost Ruby</td><td>Sees Ruby → Aggro; 10 s pass → Idle or Patrol</td></tr>
     <tr><td>Rearm</td><td>AI</td><td>Unarmed, with a free gun within 10 m</td><td>Picks one up, or none left → Aggro</td></tr>
     <tr><td>Grabbed</td><td>Imposed</td><td>The whip lands on it</td><td>Thrown or dropped → Ragdoll</td></tr>
@@ -496,7 +496,7 @@ a { color: var(--accent); }
 </div>
 
 <h4>Idle</h4>
-<p>Stands in place. Sees Ruby within the 12.5 m Alert Radius if nothing blocks its sight, and enters Aggro.</p>
+<p>Holds its post. Seeing Ruby doesn't move it: only being hurt sends it into Aggro, and an unarmed officer still goes for a free gun nearby. That includes an officer with no route that went back to Idle after a search.</p>
 
 <h4>Patrol</h4>
 <ul>
@@ -513,7 +513,7 @@ a { color: var(--accent); }
 <ul>
   <li>Entered on seeing Ruby, on taking damage, or on getting up after being knocked down.</li>
   <li>Chases Ruby at 10 m/s along the floor's shared chase paths. Armed, with her in sight, it keeps the pistol's 5–6 m band instead, and fires as it moves (see <strong>Pistol</strong>).</li>
-  <li>Stays in contact while Ruby is in sight within the 16.5 m Give Up Radius. After <strong>5 seconds</strong> without contact, it starts Searching.</li>
+  <li>Stays in contact while Ruby is in sight within the 16.5 m Give Up Radius. After <strong>1.5 seconds</strong> without contact, it starts Searching.</li>
 </ul>
 
 <h4>Searching</h4>

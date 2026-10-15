@@ -303,13 +303,13 @@ All Unity Editor work; no code. The rig goes on the model prefab, so the player 
 
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, and only code files exposed by the play-test.
 
-- [ ] **Step 1: Test movement and combat.** Confirm normal 15 m/s movement, aim, firing, push limits, and standing capsule behavior are unchanged, and that officers' shots knock her back per Task 6.
-- [ ] **Step 2: Test chain interactions.** While Ruby is up, test grab, pull, swing, throw, and pass-through. While Ruby is down, verify grapple standdown detaches and cannot fight the ragdoll. Confirm actor mass and throw/pull feel match the 60 kg manual value.
-- [ ] **Step 3: Test physics edge cases.** Test a fast wall impact, floor bounce, slow settling, ragdoll at a wall/corner, and a limb contacting multiple props. Check there is no tunneling, self-collision explosion, root/rig separation, or premature recovery.
-- [ ] **Step 4: Compile and inspect.** Run `python tools/compile_check.py`; review Unity Console for missing references and warnings. There are no automated tests, so do not call the Play Mode checks automated tests.
+- [x] **Step 1: Test movement and combat.** Confirm normal 15 m/s movement, aim, firing, push limits, and standing capsule behavior are unchanged, and that officers' shots knock her back per Task 6.
+- [x] **Step 2: Test chain interactions.** While Ruby is up, test grab, pull, swing, throw, and pass-through. While Ruby is down, verify grapple standdown detaches and cannot fight the ragdoll. Confirm actor mass and throw/pull feel match the 60 kg manual value.
+- [x] **Step 3: Test physics edge cases.** Test a fast wall impact, floor bounce, slow settling, ragdoll at a wall/corner, and a limb contacting multiple props. Check there is no tunneling, self-collision explosion, root/rig separation, or premature recovery.
+- [x] **Step 4: Compile and inspect.** Run `python tools/compile_check.py`; review Unity Console for missing references and warnings. There are no automated tests, so do not call the Play Mode checks automated tests.
 - [x] **Step 4b: Remove the test menu.** Delete the `Test:` context-menu methods from `SkeletonRagdollBody`.
 - [x] **Step 5: Update docs.** Document the new Ruby backend, the Inspector-authored rig, the actor-total mass rule, bullet knockback and its three tuning values, and the fact enemies still use the capsule backend. Keep the manual's tuning values accurate.
-- [ ] **Completion gate:** All checks pass in Unity Play mode and the offline compile check exits 0. Enemy conversion remains a separate plan because its upright spinning-top contract is not equivalent to Ruby's knockdown ragdoll. Known enemy work for that plan:
+- [x] **Completion gate:** All checks pass in Unity Play mode and the offline compile check exits 0. Enemy conversion remains a separate plan because its upright spinning-top contract is not equivalent to Ruby's knockdown ragdoll. Known enemy work for that plan:
   - `EnemyController`'s spinning-top exchange reads `Body.mass`; switch it to `Weight.MassOf`.
   - `Tether` sizes the park distance and the pass-through from the host's own colliders (`Footprint.SolidColliders`); a ragdolled host's colliders are on its bones.
   - Decide what the upright drop spin (`Spin`) means for a limp body.
