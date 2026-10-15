@@ -49,6 +49,27 @@ public class Gun : MonoBehaviour
     public float MinDistance => _minDistance;
     public bool IsResting => !IsHeld && _body.linearVelocity.sqrMagnitude < RestSpeed * RestSpeed;
 
+    /// <summary>
+    /// The point on the loose gun's solid colliders nearest a point: how far away it really is. Its
+    /// pivot can sit well inside a long collider, and reach measured to the pivot let a holder walk
+    /// into the gun's far end first and kick it away. A held gun's colliders are off: its pivot.
+    /// </summary>
+    public Vector3 ClosestPoint(Vector3 point)
+    {
+        Vector3 best = transform.position;
+        float bestDistance = float.MaxValue;
+        foreach (Collider solid in _solids)
+        {
+            if (!solid.enabled) continue;
+            Vector3 candidate = solid.ClosestPoint(point);
+            float distance = (candidate - point).sqrMagnitude;
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            best = candidate;
+        }
+        return best;
+    }
+
     private void Awake()
     {
         _body = GetComponent<Rigidbody>();

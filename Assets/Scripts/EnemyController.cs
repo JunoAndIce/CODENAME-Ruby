@@ -108,6 +108,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
     public float RearmRadius => _rearmRadius;
+    /// <summary>The body capsule's radius in world units: how far its surface sits from its centre.</summary>
+    public float BodyRadius => _capsule.radius * Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.z));
     public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
     /// <summary>Ragdolling in an upright spin: a spinning top that knocks other enemies away.</summary>
