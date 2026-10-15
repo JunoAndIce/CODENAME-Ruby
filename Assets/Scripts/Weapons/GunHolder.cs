@@ -36,6 +36,13 @@ public class GunHolder : MonoBehaviour
             Debug.LogWarning($"{name}: the starting gun isn't under the Hand. It still fires, but a gun picked up later sits at the Hand, so put the starting gun there too.", this);
         if (HeldGun != null) RecordGrip(HeldGun.transform);
 
+        // Turned off the hand's axes to aim, a gun under a non-uniformly scaled hand is sheared out of shape.
+        Vector3 scale = _hand.lossyScale;
+        float largest = Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+        float smallest = Mathf.Min(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+        if (largest - smallest > 0.01f * largest)
+            Debug.LogWarning($"{name}: the Hand's scale {scale} isn't uniform, so a gun aimed sideways is sheared out of shape. Give the Hand a uniform scale (move its mesh to a child) and rescale the gun under it.", this);
+
         // Only a Gun makes its body kinematic in a hand. A body without one falls out at start, silently.
         if (HeldGun == null && _hand.GetComponentInChildren<Rigidbody>() != null)
             Debug.LogWarning($"{name}: the Hand holds a Rigidbody with no Gun component, so it falls out at start. Add Gun to that object's prefab.", this);
@@ -64,9 +71,12 @@ public class GunHolder : MonoBehaviour
     public void Drop(Vector3 velocity)
     {
         if (!IsArmed) return;
+        // Lowered first: aimed off the hand's axes, a gun under a non-uniformly scaled hand is
+        // sheared, and leaving the hand would set the shear as a stretched scale.
+        Lower();
         Gun dropped = HeldGun;
         HeldGun = null;
-        dropped.Drop(velocity);
+        dropped.Drop(velocity, transform.position);
     }
 
     /// <summary>Points the held gun flat at a point. The body can face elsewhere, so a running officer still aims.</summary>
