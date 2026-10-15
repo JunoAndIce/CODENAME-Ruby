@@ -2,8 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// Sets its body's Rigidbody.mass from a weight class, and owns its kinematic flag: Immovable
-/// bodies are kinematic, everything else dynamic. Everything else reads the Rigidbody, so
-/// nothing needs to know this component exists.
+/// bodies are kinematic, everything else dynamic. Collisions read the Rigidbody; anything that
+/// weighs a character as a whole reads TotalMassKg through MassOf, because a ragdoll spreads
+/// Rigidbody.mass over its bones.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class Weight : MonoBehaviour
@@ -14,6 +15,13 @@ public class Weight : MonoBehaviour
     [SerializeField, Min(0.01f)] private float _customKg = 1f;
 
     private float Kg => _class == WeightClass.Custom ? _customKg : _table.KgFor(_class);
+
+    /// <summary>The whole body's weight in kg. It holds while a ragdoll spreads Rigidbody.mass over its bones.</summary>
+    public float TotalMassKg { get; private set; }
+
+    /// <summary>A body's whole weight: its Weight's, or the Rigidbody's own mass when it has none.</summary>
+    public static float MassOf(Rigidbody body)
+        => body.TryGetComponent(out Weight weight) ? weight.TotalMassKg : body.mass;
 
     private void Awake() => Apply();
 
@@ -32,9 +40,11 @@ public class Weight : MonoBehaviour
         {
             // No silent default: a guessed mass would quietly skew every drag, pull and throw.
             Debug.LogWarning($"{name}: Weight is set to {_class} but has no Weight Table; its Rigidbody mass is left as is.", this);
+            TotalMassKg = body.mass;
             return;
         }
 
+        TotalMassKg = Kg;
         if (!Mathf.Approximately(body.mass, Kg)) body.mass = Kg;
     }
 }

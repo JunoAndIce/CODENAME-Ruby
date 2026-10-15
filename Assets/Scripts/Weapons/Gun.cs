@@ -25,6 +25,8 @@ public class Gun : MonoBehaviour
     [Tooltip("Where bullets leave: at the barrel's tip.")]
     [SerializeField] private Transform _muzzle;
     [SerializeField, Min(0f)] private float _damage = 30f;
+    [Tooltip("The push a bullet lands, in kg·m/s, on whatever takes knockback (IKnockback). 240 pushes 60 kg Ruby at 4 m/s.")]
+    [SerializeField, Min(0f)] private float _knockback = 240f;
     [SerializeField, Min(0.1f)] private float _bulletSpeed = 30f;
     [SerializeField, Min(0.05f)] private float _fireCooldown = 0.8f;
     [Tooltip("Each shot turns by up to this many degrees either way, so a moving target isn't always hit.")]
@@ -184,7 +186,7 @@ public class Gun : MonoBehaviour
         _nextShot = Time.time + _fireCooldown;
         Vector3 direction = Quaternion.AngleAxis(Random.Range(-_spread, _spread), Vector3.up) * aim.normalized;
         Bullet bullet = ObjectPoolManager.SpawnObject(_bulletPrefab, _muzzle.position, Quaternion.LookRotation(direction));
-        bullet.Launch(direction, _bulletSpeed, _damage, _bulletLifetime, shooter);
+        bullet.Launch(direction, _bulletSpeed, _damage, _knockback, _bulletLifetime, shooter);
         return true;
     }
 

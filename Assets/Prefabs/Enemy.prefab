@@ -292,7 +292,7 @@ MonoBehaviour:
   _searchSpeed: 6
   _alertRadius: 12.5
   _giveUpRadius: 16.5
-  _aggroTime: 5
+  _aggroTime: 1.5
   _eyeHeight: 0.5
   _searchDuration: 10
   _dropFlingSpeed: 60

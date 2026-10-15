@@ -93,7 +93,10 @@ It knows nothing about officers, the chain or Ruby.
   - **Damage:** on stopping, a `Health` on the hit body takes the damage. If that kills it, its
     `IKnockdown` is called.
   - It returns to the pool when it stops, or after its lifetime runs out.
-  - It never pushes anything.
+  - It never pushes anything. *Superseded by `docs/plans/2026-10-12-ruby-ragdoll.md`, Task 6: after
+    the damage it lands the gun's Knockback impulse (240 kg·m/s) on any `IKnockback` at the hit
+    point. Only Ruby takes it: standing, it's a push carried on her move; down, it hits her ragdoll
+    at the limb it struck. Enemies don't implement it.*
 - **`IBulletTarget`:** `bool StopsBullets { get; }`. Anything that doesn't implement it is solid.
 
 ### `Ruby.Game`

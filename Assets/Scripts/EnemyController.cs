@@ -157,7 +157,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // The whole transition graph, in one place. States never name each other.
     private void BuildTransitions()
     {
-        At(Idle, Aggro, new FuncPredicate(DetectsPlayer));
         At(Patrol, Aggro, new FuncPredicate(DetectsPlayer));
         At(Searching, Aggro, new FuncPredicate(DetectsPlayer));
 
@@ -466,12 +465,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         return _canSeePlayer;
     }
 
-    // Characters see past each other.
+    // Characters see past each other, ragdoll bones included: each bone is a body of its own.
     private bool IsCharacter(Collider collider)
     {
         Rigidbody body = collider.attachedRigidbody;
         if (body == null) return false;
-        return body.transform == _player.transform || body.TryGetComponent(out EnemyController _);
+        return body.GetComponentInParent<PlayerController>() == _player || body.GetComponentInParent<EnemyController>() != null;
     }
 
     public float DistanceToPlayer()

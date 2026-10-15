@@ -29,6 +29,9 @@ public class Tether
     readonly Rigidbody _player;
     readonly Rigidbody _host;     // null for static-world nodes
     readonly GrappleNode _node;
+    // Whole-body weights: a ragdolling body's Rigidbody.mass is only one bone's share.
+    readonly float _playerMass;
+    readonly float _hostMass;     // 0 for static-world nodes
 
     // A moving host no heavier than the player: one that can be parked and spun.
     readonly bool _spinnable;
@@ -117,8 +120,10 @@ public class Tether
         _node = node;
         _host = node.IsStaticWorld ? null : node.Host;
         _maxLength = maxLength;
-        _spinnable = _host != null && _host.mass <= player.mass;
-        _dragFraction = _host != null ? Mathf.Clamp01(1f - _host.mass / player.mass) : 0f;
+        _playerMass = Weight.MassOf(player);
+        _hostMass = _host != null ? Weight.MassOf(_host) : 0f;
+        _spinnable = _host != null && _hostMass <= _playerMass;
+        _dragFraction = _host != null ? Mathf.Clamp01(1f - _hostMass / _playerMass) : 0f;
         _pullSpeed = MaxCorrectionSpeed * Mathf.Sqrt(_dragFraction);
         _playerColliders = Footprint.SolidColliders(player);
         _hostColliders = _host != null ? Footprint.SolidColliders(_host) : System.Array.Empty<Collider>();
@@ -176,8 +181,8 @@ public class Tether
         direction.y = 0f;
         if (direction.sqrMagnitude < 0.0001f) return;
 
-        float invP = 1f / _player.mass;
-        float invT = 1f / _host.mass;
+        float invP = 1f / _playerMass;
+        float invT = 1f / _hostMass;
         _host.WakeUp();
         VelocityUtil.SetFlatVelocity(_host, direction.normalized * (impulse * invT / (invP + invT)));
     }
@@ -309,7 +314,7 @@ public class Tether
         float closing = Vector3.Dot(relative, push);
         float drive = Mathf.Max(0f, Mathf.Min(error / Time.fixedDeltaTime, cap) - closing);
         _host.linearVelocity += push * drive;
-        Tension = drive * _host.mass / Time.fixedDeltaTime;
+        Tension = drive * _hostMass / Time.fixedDeltaTime;
     }
 
     // The rope stops the walk rather than pulling her back: through LimitMove the player may walk
@@ -439,7 +444,7 @@ public class Tether
         float availN = _length - (pathLen2 - lastSpanLen);
         Vector3 hostPull = SolveEnd(_host, wraps[wraps.Count - 1], availN, _pullSpeed);
         _host.linearVelocity += hostPull;
-        Tension = hostPull.magnitude * _host.mass / Time.fixedDeltaTime;
+        Tension = hostPull.magnitude * _hostMass / Time.fixedDeltaTime;
     }
 
     // The host's end against a static pivot. Returns the velocity change for the caller to apply.
@@ -463,7 +468,7 @@ public class Tether
         float speed = _player.linearVelocity.magnitude;
         // The node and host may be destroyed by now (detaching because they were): don't read them then.
         string node = _node != null ? _node.name : "(destroyed)";
-        string host = _host == null ? "static or gone" : $"{_host.name} m={_host.mass}";
+        string host = _host == null ? "static or gone" : $"{_host.name} m={_hostMass}";
         string hand = Gripped ? "held" : _biting ? "bite" : "loose";
         return $"node={node} len={_length:F1} hand={hand} tension={Tension:F0} playerSpeed={speed:F1} host=({host})";
     }
