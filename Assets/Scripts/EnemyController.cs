@@ -511,7 +511,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
         // The gun's engagement band: fires out to Range, closes in only to Min Distance. In edit
         // mode Arms isn't set yet, so read the gun under the hand directly.
-        Gun gun = Arms != null ? Arms.Held : GetComponentInChildren<Gun>();
+        Gun gun = Arms != null ? Arms.HeldGun : GetComponentInChildren<Gun>();
         if (gun != null)
         {
             Gizmos.color = Color.magenta;

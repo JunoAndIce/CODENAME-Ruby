@@ -54,7 +54,7 @@ public class AggroState : EnemyStateBase
         }
 
         bool armed = Enemy.IsArmed;
-        float minDistance = armed ? Enemy.Arms.Held.MinDistance : 0f;
+        float minDistance = armed ? Enemy.Arms.HeldGun.MinDistance : 0f;
         switch (Engage(armed, Enemy.CanSeePlayer(), Enemy.DistanceToPlayer(), minDistance))
         {
             case Move.Chase:

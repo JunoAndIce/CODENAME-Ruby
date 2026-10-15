@@ -17,34 +17,34 @@ public class GunHolder : MonoBehaviour
     private Quaternion _gripRotation = Quaternion.identity;
     private Vector3 _gripScale = Vector3.one;
 
-    public Gun Held { get; private set; }
-    public bool IsArmed => Held != null;
+    public Gun HeldGun { get; private set; }
+    public bool IsArmed => HeldGun != null;
 
     private void Awake()
     {
         // Any Gun under the character is the starting gun. Gun counts itself held when a GunHolder is
         // anywhere above it, and the two must agree: a gun that's held but unknown to its holder
         // hangs there, never fired.
-        Held = GetComponentInChildren<Gun>();
+        HeldGun = GetComponentInChildren<Gun>();
 
         if (_hand == null)
         {
             Debug.LogError($"{name}: GunHolder has no Hand, so it can't hold a gun.", this);
             return;
         }
-        if (Held != null && !Held.transform.IsChildOf(_hand))
+        if (HeldGun != null && !HeldGun.transform.IsChildOf(_hand))
             Debug.LogWarning($"{name}: the starting gun isn't under the Hand. It still fires, but a gun picked up later sits at the Hand, so put the starting gun there too.", this);
-        if (Held != null) RecordGrip(Held.transform);
+        if (HeldGun != null) RecordGrip(HeldGun.transform);
 
         // Only a Gun makes its body kinematic in a hand. A body without one falls out at start, silently.
-        if (Held == null && _hand.GetComponentInChildren<Rigidbody>() != null)
+        if (HeldGun == null && _hand.GetComponentInChildren<Rigidbody>() != null)
             Debug.LogWarning($"{name}: the Hand holds a Rigidbody with no Gun component, so it falls out at start. Add Gun to that object's prefab.", this);
     }
 
     public bool PickUp(Gun gun)
     {
         if (IsArmed || gun == null || gun.IsHeld || _hand == null) return false;
-        Held = gun;
+        HeldGun = gun;
         gun.Hold(_hand, _gripPosition, _gripRotation, _gripScale);
         return true;
     }
@@ -64,8 +64,8 @@ public class GunHolder : MonoBehaviour
     public void Drop(Vector3 velocity)
     {
         if (!IsArmed) return;
-        Gun dropped = Held;
-        Held = null;
+        Gun dropped = HeldGun;
+        HeldGun = null;
         dropped.Drop(velocity);
     }
 
@@ -73,25 +73,25 @@ public class GunHolder : MonoBehaviour
     public void AimAt(Vector3 point)
     {
         if (!IsArmed) return;
-        Vector3 direction = point - Held.transform.position;
+        Vector3 direction = point - HeldGun.transform.position;
         direction.y = 0f;
-        if (direction.sqrMagnitude > 0.0001f) Held.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+        if (direction.sqrMagnitude > 0.0001f) HeldGun.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
     }
 
     /// <summary>Back to the grip's resting pose.</summary>
     public void Lower()
     {
-        if (IsArmed) Held.transform.localRotation = _gripRotation;
+        if (IsArmed) HeldGun.transform.localRotation = _gripRotation;
     }
 
-    public bool InRange(Vector3 point) => IsArmed && FlatDistance(transform.position, point) <= Held.Range;
+    public bool InRange(Vector3 point) => IsArmed && FlatDistance(transform.position, point) <= HeldGun.Range;
 
     /// <summary>In range, turns the gun to the point and fires if its cooldown allows.</summary>
     public bool TryFireAt(Vector3 point)
     {
         if (!InRange(point)) return false;
         AimAt(point);
-        return Held.TryFire(point, transform);
+        return HeldGun.TryFire(point, transform);
     }
 
     /// <summary>The nearest loose, resting gun within radius that the caller also counts as free, or null.</summary>
