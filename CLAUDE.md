@@ -74,7 +74,8 @@ The scripts are split into assembly definitions so the systems can be lifted int
 | `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, patrol routes |
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
-| `Ruby.Game` | the root and `States/` | all of the above, Input System | player, enemy, gun, bullets, animator, every state |
+| `Ruby.Weapons` | `Weapons/` | Core | guns, bullets, gun hands |
+| `Ruby.Game` | the root and `States/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, animator, every state |
 | `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor` |
 
 The systems reach the game only through interfaces declared in their own assembly, which the
@@ -86,6 +87,7 @@ game implements:
 | `IGrabbable` | Grapple | `EnemyController` | grab, drag and throw it |
 | `IPathAgent` | Pathing | `EnemyController` | a body for `GridNavigator` to steer |
 | `ICameraTarget` | CameraRig | `PlayerController` | a position, an aim point, peek |
+| `IBulletTarget` | Weapons | `EnemyController` | whether a body stops bullets (only while held on the chain) |
 
 **Never make a system reference `Ruby.Game`.** Unity refuses the cycle anyway. When a system needs
 something from the game, add it to the system's interface and implement it in the game. A new script
@@ -125,7 +127,7 @@ Two ways in:
   `Release()` (thrown), `KnockDown()` (a hit at Knockdown Speed). These guard on current state
   themselves.
 
-`EnemyState` distinguishes AI states (Idle/Patrol/Searching/Aggro) from **overrides**
+`EnemyState` distinguishes AI states (Idle/Patrol/Searching/Aggro/Rearm) from **overrides**
 (Grabbed/Ragdoll/Dead) that are imposed externally. The enemy plan, with progress, lives in
 `docs/specs/2026-09-29-enemy-states-v2.md`.
 
@@ -358,10 +360,25 @@ through the player never slows the walk.
   line can't. Cached once per frame.
 - **Detection**: within Alert Radius **and** in sight → Aggro. Damage and getting up from a ragdoll
   (thrown or dropped) also enter Aggro.
-- **Aggro** hunts along the shared chase field and attacks within Attack Range with a clear line
-  (placeholder attack until weapons). Contact holds while the player is in sight within Give Up
-  Radius. After Aggro Time without it the enemy searches **where the hunt was leading when it gave
-  up** (recorded on Aggro's exit), not where the player slipped out of view.
+- **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
+  sight, it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
+  backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyController.StepAway`),
+  standing its ground when cornered. It fires alongside all of that, whenever she's in sight, in
+  range and on her feet; firing is not a state. Contact holds while the player is in sight within
+  Give Up Radius. After Aggro Time without it the enemy searches **where the hunt was leading when
+  it gave up** (recorded on Aggro's exit), not where the player slipped out of view.
+- **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
+  Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
+  up within 0.3 m of its body's surface, measured to the nearest point of the gun's colliders
+  (`Gun.ClosestPoint`, `EnemyController.BodyRadius`), so the pickup lands before the capsule
+  touches the gun: measured to the pivot, an enemy walked into a long gun's far end and kicked it
+  away. When the navigator says it has arrived but it's still short (a gun against a wall or in a
+  corner sits on a clearance-blocked cell), it stretches to 1 m, or gives up on that gun and tries
+  the next, so it can never stand beside a gun for good. A gun it gave up on gets another try once
+  it has moved 0.5 m or after 10 s; retrying sooner would send an enemy near a truly unreachable
+  gun back into Rearm, and from there back to Aggro, every few seconds. It always hands back to
+  Aggro. Having given up on every gun in reach, it waits Route Retry Time before trying again, so
+  it doesn't flicker.
 - **Patrol** walks a route of **area nodes** stored on the enemy (`PatrolRoute`). Each area is a
   circle or a rectangle lined up with X and Z (`GridArea`), so it can fill a room or run along a
   corridor. The enemy heads for an area's centre, and when the centre is occupied the nearest open
@@ -442,6 +459,46 @@ it in `FixedUpdate` too, because a knockdown lands in a collision callback that 
 physics step and the next `Update`. Alive, she gets up once the ragdoll settles; dead, she stays
 down, with no restart yet.
 
+### Weapons
+
+Spec: `docs/specs/2026-10-11-enemy-weapons.md`. Officers carry pistols (`Gun`, held by a
+`GunHolder`). Ruby's revolver (`GunController`, `BulletController`) is a different gun and isn't
+part of this system.
+
+- **Bullets** (`Bullet`, pooled) sweep a 0.05 m sphere along each physics step, so a fast bullet
+  can't skip through a thin wall. They stop at the nearest thing that stops bullets: anything
+  solid, unless its `IBulletTarget` says no. Enemies stop them only while held on the chain (a
+  shield), so there's no friendly fire. A bullet does the gun's fixed Damage (30, so one shot kills
+  Ruby) and knocks down what it kills. It never pushes anything. It isn't impact damage: under that
+  formula a light, 30 m/s bullet would do almost nothing.
+- **Held vs loose:**
+  - A held gun is kinematic with its colliders off (characters collide with their root capsule
+    only), and its **interpolation off**. Interpolation writes the body's own physics history over
+    its transform each frame, so a held gun drifted off the hand.
+  - A loose gun is a prop (class Small, 20 kg, so a full throw kills an officer). Its grab point is a child listed in Dropped Only, switched on only
+    while loose, so the chain takes guns off the floor but never out of a hand.
+  - `GrappleNode` resolves its Host and Grabbable on every enable, not once on wake. A gun's grab
+    point first wakes in an officer's hand, and resolving it there made grabbing the dropped gun
+    grab the officer.
+- **The holder:**
+  - `GunHolder` finds its starting gun anywhere under the character. `Gun` counts itself held
+    whenever a holder is above it, and the two must agree, or a held gun is never fired.
+  - It records the starting gun's pose relative to the Hand, so a gun picked up later sits exactly
+    where the starting one did.
+  - It warns when the starting gun isn't under the Hand, when the Hand holds a Rigidbody with no
+    Gun, and when the Hand's scale isn't uniform. Aiming turns a gun off the Hand's axes, and under
+    a non-uniformly scaled Hand Unity shears it; the officer's Hand is (1, 1, 1), its cube on a
+    `HandMesh` child.
+- **Drops:** `EnterGrabbed`, `KnockDown` and `DeadState.Enter` drop the gun with the body's
+  velocity, so a knockdown sends it off at the hit's speed.
+  - The holder lowers it first, and the gun restores its true world scale (read at Awake) once it
+    leaves the hand, so a drop mid-aim can't keep a shear as a stretched scale.
+  - It's dropped from about a metre in front of the officer, so `Gun.KeepOutOfWalls` casts from the
+    holder's centre to the gun's far end and pulls it back toward the officer until it clears
+    anything solid. Otherwise one dropped facing a wall started inside it.
+  - A loose gun uses continuous collision detection, since a knockdown drop is fast enough to pass
+    through a wall in one step; a held one goes back to discrete before turning kinematic.
+
 ### Ragdoll seam
 
 `IRagdollBody` exists because the enemy is currently a capsule with no rig; joint ragdolls aren't
@@ -514,7 +571,8 @@ The original slice plan: 0 enemy foundation → 1 camera rig → 2 targeting ind
 charge is built as the charged throw in `GrappleController`, its swing as the parked spin; the old
 `PlayerHoldingState` scaffold and its spec (quantised swing directions, a break-out timer) were
 retired. Slice 5, impact damage, is built: enemies and Ruby take it, and dead enemies stay as
-corpses.
+corpses. Enemy weapons (pistols, drops, re-arming) are built to `2026-10-11-enemy-weapons.md`;
+melee and Ruby's revolver are still to come.
 
 ## Unity/git
 

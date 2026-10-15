@@ -5,6 +5,7 @@ public enum EnemyState
     Patrol,
     Searching,
     Aggro,
+    Rearm,
     // Overrides: things done to the enemy, entered from outside rather than by the table.
     Grabbed,
     Ragdoll,

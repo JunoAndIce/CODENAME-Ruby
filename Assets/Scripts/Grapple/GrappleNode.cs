@@ -35,13 +35,15 @@ public class GrappleNode : MonoBehaviour
 
     public Vector3 AnchorPoint => transform.position;
 
-    void Awake()
+    // Resolved on every enable, not once on wake: a node that first woke somewhere else would keep
+    // that old owner. A gun's grab point wakes in an officer's hand and is switched on only once
+    // the gun is dropped; resolved on wake, grabbing the dropped gun would grab the officer.
+    void OnEnable()
     {
         Host = GetComponentInParent<Rigidbody>();
         Grabbable = GetComponentInParent<IGrabbable>();
+        All.Add(this);
     }
-
-    void OnEnable() => All.Add(this);
     void OnDisable() => All.Remove(this);
 
     /// <summary>

@@ -3,7 +3,7 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(CapsuleCollider))]
 [RequireComponent(typeof(Health))]
-public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
+public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown, IBulletTarget
 {
     [Header("Movement")]
     [SerializeField] private float _chaseSpeed = 2f;
@@ -20,11 +20,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("Height above the enemy's centre that sight is cast from.")]
     [SerializeField] private float _eyeHeight = 0.5f;
     [SerializeField] private float _searchDuration = 5f;
-
-    [Header("Combat")]
-    [SerializeField] private float _attackRange = 2f;
-    [Tooltip("Seconds between attacks. Moves to the weapon when weapons exist.")]
-    [SerializeField, Min(0.05f)] private float _attackCooldown = 1f;
 
     [Header("Dropped")]
     [Tooltip("An enemy let go while being spun always flings out. One that wasn't (being dragged, say) flings if it's moving at least this fast across the floor, and otherwise spins in place.")]
@@ -50,6 +45,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("When every patrol point fails in a row, wait this long before trying the route again.")]
     [SerializeField, Min(0f)] private float _routeRetryTime = 3f;
 
+    [Header("Gun")]
+    [Tooltip("Unarmed, an enemy goes for a free dropped gun within this radius. 0 = never re-arms.")]
+    [SerializeField, Min(0f)] private float _rearmRadius = 10f;
+
     [Header("References")]
     [SerializeField] private PlayerController _player;
 
@@ -58,6 +57,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // Velocity going into this physics step. Collision callbacks arrive after the solver has
     // already spent the speed, so a hit is worked out from this, not from the body.
     private Vector3 _preStepVelocity;
+    private float _nextRearm;   // after giving up on a gun, no new attempt before this time
     // Creation order, so exactly one of two colliding tops handles their hit.
     private static int _created;
     private int _order;
@@ -70,23 +70,46 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public PatrolState Patrol { get; private set; }
     public SearchingState Searching { get; private set; }
     public AggroState Aggro { get; private set; }
+    public RearmState Rearm { get; private set; }
     public GrabbedState Grabbed { get; private set; }
     public RagdollState Ragdoll { get; private set; }
     public DeadState Dead { get; private set; }
+    /// <summary>The enemy's gun hand, or null on an enemy built without one.</summary>
+    public GunHolder Arms { get; private set; }
+    public bool IsArmed => Arms != null && Arms.IsArmed;
+    /// <summary>The player is on her feet. Nobody shoots a body.</summary>
+    public bool PlayerIsUp => _player != null && _player.CanAct;
+    /// <summary>Only on the chain does an enemy, alive or dead, stop bullets: a shield. Free, it lets them through.</summary>
+    public bool StopsBullets => IsHeld;
+
+    /// <summary>Lets the gun go with the body's velocity, so it skids on the way the enemy was moving.</summary>
+    public void DropGun()
+    {
+        if (Arms != null) Arms.Drop(Body.linearVelocity);
+    }
+
+    /// <summary>
+    /// After giving up on every gun in reach, wait Route Retry Time before looking again. Without
+    /// it, an enemy with only unreachable guns around would flicker between hunting and re-arming.
+    /// </summary>
+    public void WaitBeforeRearming() => _nextRearm = Time.time + _routeRetryTime;
+
+    private bool WantsGun() => Arms != null && !Arms.IsArmed && _rearmRadius > 0f && Time.time >= _nextRearm && Rearm.CanFindGun();
 
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
-    public float AttackRange => _attackRange;
-    public float AttackCooldown => _attackCooldown;
     public float DropSpinSpeed => _dropSpinSpeed;
     public float DropSpinTime => _dropSpinTime;
     public PatrolRoute SafeRoute => _safeRoute;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
+    public float RearmRadius => _rearmRadius;
+    /// <summary>The body capsule's radius in world units: how far its surface sits from its centre.</summary>
+    public float BodyRadius => _capsule.radius * Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.z));
     public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
     /// <summary>Ragdolling in an upright spin: a spinning top that knocks other enemies away.</summary>
@@ -117,11 +140,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
         RagdollBody = ragdoll;
         Navigator = new GridNavigator(this);
+        Arms = GetComponent<GunHolder>();
 
         Idle = new IdleState(this);
         Patrol = new PatrolState(this);
         Searching = new SearchingState(this);
         Aggro = new AggroState(this);
+        Rearm = new RearmState(this);
         Grabbed = new GrabbedState(this);
         Ragdoll = new RagdollState(this);
         Dead = new DeadState(this);
@@ -137,6 +162,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         At(Searching, Aggro, new FuncPredicate(DetectsPlayer));
 
         At(Aggro, Searching, new FuncPredicate(() => Aggro.LostPlayer));
+
+        // Unarmed with a free gun in reach: fetching it comes before anything else the AI wants.
+        At(Idle, Rearm, new FuncPredicate(WantsGun));
+        At(Patrol, Rearm, new FuncPredicate(WantsGun));
+        At(Searching, Rearm, new FuncPredicate(WantsGun));
+        At(Aggro, Rearm, new FuncPredicate(WantsGun));
+        // Always back to the hunt: an enemy only loses its gun to Ruby, so it knows she's around.
+        At(Rearm, Aggro, new FuncPredicate(() => Rearm.Armed || Rearm.GaveUp));
 
         At(Searching, Patrol, new FuncPredicate(() => Searching.SearchExpired && HasPatrolRoute));
         At(Searching, Idle, new FuncPredicate(() => Searching.SearchExpired && !HasPatrolRoute));
@@ -223,6 +256,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public void KnockDown()
     {
         if (Health.IsDead || _state.Current is GrabbedState or RagdollState or DeadState) return;
+        DropGun();
         Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity));
         _state.SetState(Ragdoll);
     }
@@ -242,6 +276,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     public void EnterGrabbed()
     {
+        DropGun();
         IsHeld = true;
         if (Health.IsDead) Dead.Grab();
         else _state.SetState(Grabbed);
@@ -305,16 +340,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (_player != null) LastKnownPlayerPosition = _player.transform.position;
     }
 
-    /// <summary>
-    /// Placeholder attack until weapons exist: a log line and a red flash toward the player.
-    /// Weapons replace this body; AggroState's call site and cadence stay as they are.
-    /// </summary>
-    public void Attack()
-    {
-        DebugLog.Info($"{name} attacks {_player.name}.", this);
-        Debug.DrawLine(EyePosition, _player.transform.position, Color.red, 0.15f);
-    }
-
     public void Release(Vector3 velocity)
     {
         IsHeld = false;
@@ -339,6 +364,23 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (direction.sqrMagnitude > 0.01f)
             transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
         VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, transform.forward * speed));
+    }
+
+    /// <summary>
+    /// Backs toward a spot while facing the player: an armed enemy giving ground keeps its gun on
+    /// her instead of turning its back, which MoveToward would do.
+    /// </summary>
+    public void StepAway(Vector3 spot, float speed)
+    {
+        FaceTarget();
+        Vector3 direction = spot - transform.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.0001f)
+        {
+            Stop();
+            return;
+        }
+        VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, direction.normalized * speed));
     }
 
     /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>
@@ -371,7 +413,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// Walk to a wander spot, as an area just big enough to arrive in: with a wider one, another
     /// enemy standing on the spot would count as arrived instead of blocked.
     /// </summary>
-    public NavResult WanderTo(Vector3 spot, float speed) => Navigator.MoveToArea(GridArea.Circle(spot, WanderSpotRadius), speed);
+    public NavResult WanderTo(Vector3 spot, float speed) => WalkTo(spot, WanderSpotRadius, speed);
+
+    /// <summary>Walk until within reach of a point, along an A* route.</summary>
+    public NavResult WalkTo(Vector3 point, float reach, float speed) => Navigator.MoveToArea(GridArea.Circle(point, reach), speed);
 
     /// <summary>Chase the player along this floor's shared flow field.</summary>
     public void PathToPlayer(float speed)
@@ -444,7 +489,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     {
         // Give-up must sit outside alert, or the enemy aggros and de-aggros in the same frame.
         _giveUpRadius = Mathf.Max(_giveUpRadius, _alertRadius + 1f);
-        _attackRange = Mathf.Min(_attackRange, _alertRadius);
     }
 
     // Play-mode path overlay: visible in the Scene view without selecting the enemy.
@@ -465,8 +509,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, _giveUpRadius);
 
-        Gizmos.color = Color.magenta;
-        Gizmos.DrawWireSphere(transform.position, _attackRange);
+        // The gun's engagement band: fires out to Range, closes in only to Min Distance. In edit
+        // mode Arms isn't set yet, so read the gun under the hand directly.
+        Gun gun = Arms != null ? Arms.HeldGun : GetComponentInChildren<Gun>();
+        if (gun != null)
+        {
+            Gizmos.color = Color.magenta;
+            Gizmos.DrawWireSphere(transform.position, gun.Range);
+            Gizmos.color = new Color(1f, 0.5f, 0f);
+            Gizmos.DrawWireSphere(transform.position, gun.MinDistance);
+        }
 
         // Sight line in play: green when the player is in view, red when something static is in the way.
         if (Application.isPlaying && _player != null)

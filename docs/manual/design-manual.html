@@ -1,0 +1,639 @@
+<title>CODENAME: Ruby</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a developer manual in one readable column. Numbered sections with a contents list up top;
+   each equation sits in its own row as display math, with plain-English terms. */
+:root {
+  --bg: #fbfafa;
+  --surface: #f3eff0;
+  --fg: #1d1a1c;
+  --muted: #625a5e;
+  --rule: #ddd4d7;
+  --accent: #a3122f;
+  --accent-soft: #f6e3e7;
+  --planned: #7a5a00;
+  --planned-soft: #fbf1d3;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --font-data: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  --font-math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", math, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151214; --surface: #1f1b1d; --fg: #ece6e8; --muted: #a79da2; --rule: #3a3236;
+    --accent: #f05a78; --accent-soft: #3a1820; --planned: #e8c25a; --planned-soft: #33280c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #151214; --surface: #1f1b1d; --fg: #ece6e8; --muted: #a79da2; --rule: #3a3236;
+  --accent: #f05a78; --accent-soft: #3a1820; --planned: #e8c25a; --planned-soft: #33280c;
+  color-scheme: dark;
+}
+
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 16px/1.65 var(--font-body); }
+.page { max-width: 46rem; margin: 0 auto; padding-inline: 20px; padding-block: 56px 96px; }
+h1, h2, h3, h4 { font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: 2.8rem; font-weight: 800; letter-spacing: -0.01em; margin-top: 0.4rem; }
+h2 { font-size: 1.75rem; font-weight: 800; padding-top: 0.6rem; border-top: 3px solid var(--accent); margin-top: 4rem; }
+h2 .num { color: var(--accent); margin-right: 0.4em; }
+h3 { font-size: 1.22rem; font-weight: 700; margin-top: 2.4rem; }
+h4 { font-size: 1rem; font-weight: 700; margin-top: 1.5rem; }
+p, ul, ol { margin: 0.7rem 0 0; }
+ul, ol { padding-left: 1.4rem; }
+li + li { margin-top: 0.3rem; }
+strong { font-weight: 600; }
+.kicker { font: 500 0.78rem var(--font-data); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.lede { font-size: 1.15rem; margin-top: 1.1rem; }
+.meta { color: var(--muted); font-size: 0.9rem; margin-top: 0.9rem; }
+
+nav.toc { margin-top: 2.2rem; padding: 1rem 1.2rem; background: var(--surface); border-radius: 6px; }
+nav.toc .kicker { color: var(--muted); }
+nav.toc ol { margin-top: 0.5rem; padding-left: 1.6rem; columns: 2 14rem; column-gap: 2rem; }
+nav.toc li { margin: 0 0 0.25rem; break-inside: avoid; }
+nav.toc a { color: var(--fg); text-decoration: none; }
+nav.toc a:hover { color: var(--accent); text-decoration: underline; }
+
+.table-wrap { overflow-x: auto; margin-top: 1rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.45rem 0.7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font: 600 0.74rem var(--font-data); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-bottom: 2px solid var(--rule); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.where { font: 0.8rem var(--font-data); color: var(--muted); }
+tr.group td { font: 600 0.76rem var(--font-data); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); padding-top: 1.1rem; }
+kbd { font: 500 0.82rem var(--font-data); background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 0.05rem 0.35rem; white-space: nowrap; }
+code { font: 0.86em var(--font-data); background: var(--surface); padding: 0.05rem 0.3rem; border-radius: 3px; }
+
+.eq-name { font: 600 0.76rem var(--font-data); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-top: 1.8rem; }
+.eq { margin: 0.6rem 0 0; padding: 1rem 1.1rem; background: var(--surface); border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0; overflow-x: auto; }
+.eq mtd { text-align: left; }
+.eq math + math { margin-top: 0.7em; }
+.eq math { font-family: var(--font-math); font-size: 1.12rem; color: var(--fg); }
+
+.note { margin-top: 1rem; padding: 0.8rem 1rem; background: var(--accent-soft); border-radius: 6px; font-size: 0.95rem; }
+.note strong:first-child { color: var(--accent); }
+.planned { display: inline-block; font: 600 0.68rem var(--font-data); letter-spacing: 0.08em; text-transform: uppercase; color: var(--planned); background: var(--planned-soft); border-radius: 3px; padding: 0.05rem 0.4rem; vertical-align: 0.15em; }
+.placeholder { margin-top: 1rem; padding: 1rem 1.1rem; border: 1px dashed var(--planned); border-radius: 6px; color: var(--muted); }
+.placeholder strong { color: var(--fg); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 480px) { h1 { font-size: 2.1rem; } h2 { font-size: 1.45rem; } .eq math { font-size: 1rem; } }
+
+@media print {
+  :root, :root[data-theme="dark"], :root:not([data-theme="light"]) {
+    --bg: #ffffff; --surface: #f4f1f2; --fg: #1d1a1c; --muted: #5a5357; --rule: #d6ccd0;
+    --accent: #a3122f; --accent-soft: #f7e6ea; --planned: #6e5100; --planned-soft: #fbf1d3;
+    color-scheme: light;
+  }
+  @page { size: Letter; margin: 0.75in 0.7in; }
+  body { font-size: 11pt; }
+  .page { max-width: none; padding: 0; }
+  h2 { break-before: page; margin-top: 0; }
+  h2, h3, h4, .eq-name { break-after: avoid; }
+  .eq, tr, .note, .placeholder { break-inside: avoid; }
+  .table-wrap { overflow: visible; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+
+<main class="page">
+
+<header>
+  <div class="kicker">Design manual · Tech demo build</div>
+  <h1>CODENAME: Ruby</h1>
+  <p class="lede">A top-down action game in the style of Hotline Miami, built on Unity's physics engine so every kill can be improvised from whatever is in the room.</p>
+  <p class="meta">Unity 6000.5.10f1 · URP · New Input System. Values match the editor as of 12 October 2026. Items marked <span class="planned">Planned</span> are design intent and are not in the build yet.</p>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <div class="kicker">Contents</div>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#controls">Controls</a></li>
+    <li><a href="#stats">Tuning reference</a></li>
+    <li><a href="#ruby">Ruby</a></li>
+    <li><a href="#abilities">Ruby's abilities</a></li>
+    <li><a href="#damage">Impact damage</a></li>
+    <li><a href="#enemies">Enemies</a></li>
+    <li><a href="#level">Level 1: Police Station</a></li>
+    <li><a href="#sound">Sound</a></li>
+    <li><a href="#world">The world of Parabellum</a></li>
+  </ol>
+</nav>
+
+<h2 id="overview"><span class="num">1</span>Overview</h2>
+<p>Ruby is a mercenary armed with a revolver and a chain whip. She can't swap them for other weapons. The revolver holds six bullets and can't be reloaded until she reaches a new floor, so most kills come from the <strong>chain whip</strong>.</p>
+<p>The whip grabs almost anything in a level, from crates and tables to enemies and their corpses. Ruby can drag what she grabs, reel it in, spin it around herself and throw it. Anything moving fast enough hurts whatever it hits, so a crate, a body or a spinning enemy is a weapon.</p>
+
+<h3>Design pillars</h3>
+<ul>
+  <li><strong>Snappy controls.</strong> Every action responds on the press. Ruby never loses control of her movement to her own abilities: grabbing, pulling and throwing never move her.</li>
+  <li><strong>Weight matters.</strong> Every object has a real weight in kilograms. Weight decides how fast Ruby drags, reels and throws an object, and how hard it hits.</li>
+  <li><strong>One damage rule.</strong> Every hit in the game uses the same formula, built from speed and weight.</li>
+  <li><strong>Fast deaths.</strong> Enemies have little health. A hit fast enough to knock someone down usually kills them.</li>
+</ul>
+
+<h3>Demo scope</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Area</th><th>Content</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>Engine</td><td>Physics-based movement, chain whip, impact damage, ragdolls, grid pathfinding</td><td>Built</td></tr>
+    <tr><td>Playable character</td><td>Ruby: revolver and chain whip</td><td>Built</td></tr>
+    <tr><td>Enemy</td><td>Police officer</td><td>Built</td></tr>
+    <tr><td>Enemy</td><td>Police boss</td><td><span class="planned">Planned</span></td></tr>
+    <tr><td>Level</td><td>Police Station (one floor)</td><td>Test floor built; final layout <span class="planned">Planned</span></td></tr>
+    <tr><td>Art direction</td><td>Not decided. Characters are placeholder capsules.</td><td><span class="planned">Planned</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="controls"><span class="num">2</span>Controls</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Action</th><th>Keyboard and mouse</th><th>Gamepad</th></tr></thead>
+  <tbody>
+    <tr><td>Move</td><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrow keys</td><td>Left stick</td></tr>
+    <tr><td>Aim</td><td>Mouse cursor</td><td>Right stick</td></tr>
+    <tr><td>Shoot (throw, while charging)</td><td>Left click or <kbd>E</kbd></td><td>Right trigger</td></tr>
+    <tr><td>Grab · hold to charge a throw · tap to drop</td><td>Right click</td><td>Right bumper</td></tr>
+    <tr><td>Pull · tap to tug, hold to reel in and spin</td><td><kbd>Space</kbd> or <kbd>Q</kbd></td><td>Left bumper</td></tr>
+    <tr><td>Peek (look further toward the cursor)</td><td><kbd>Shift</kbd></td><td>Left trigger</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note"><strong>Gamepad layout:</strong> the bumpers are the chain (right to grab, left to pull), and the triggers mirror each other (right to shoot, left held to peek).</p>
+<p>The game reads the <code>Fire</code>, <code>Grab</code> and <code>Pull</code> actions by name. Renaming an action in the input asset means renaming its constant in <code>GrappleController</code> too.</p>
+
+<h2 id="stats"><span class="num">3</span>Tuning reference</h2>
+<p>Every tunable value in the demo, where it lives in the editor, and its current setting.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Setting</th><th>Where</th><th class="num">Value</th></tr></thead>
+  <tbody>
+    <tr class="group"><td colspan="3">Ruby</td></tr>
+    <tr><td>Weight</td><td class="where">WeightTable · Player</td><td class="num">60 kg</td></tr>
+    <tr><td>Health</td><td class="where">Player · Health</td><td class="num">30</td></tr>
+    <tr><td>Move Speed</td><td class="where">PlayerController</td><td class="num">15 m/s</td></tr>
+    <tr><td>Gamepad Aim Distance</td><td class="where">PlayerController</td><td class="num">6 m</td></tr>
+    <tr class="group"><td colspan="3">Revolver</td></tr>
+    <tr><td>Bullet Count</td><td class="where">PlayerController</td><td class="num">6</td></tr>
+    <tr><td>Bullet Speed</td><td class="where">GunController</td><td class="num">18 m/s</td></tr>
+    <tr><td>Bullet Life Time</td><td class="where">GunController</td><td class="num">2 s</td></tr>
+    <tr class="group"><td colspan="3">Chain whip</td></tr>
+    <tr><td>Max / Min Chain Length</td><td class="where">GrappleController</td><td class="num">8 m / 1.2 m</td></tr>
+    <tr><td>Snap Radius</td><td class="where">GrappleController</td><td class="num">3 m</td></tr>
+    <tr><td>Pull Impulse (reel speed)</td><td class="where">GrappleController</td><td class="num">8.5 m/s</td></tr>
+    <tr><td>Spin Speed</td><td class="where">GrappleController</td><td class="num">40 m/s</td></tr>
+    <tr><td>Spin Up Time</td><td class="where">GrappleController</td><td class="num">1 s</td></tr>
+    <tr><td>Spin Bounce</td><td class="where">GrappleController</td><td class="num">0.7</td></tr>
+    <tr><td>Throw Impulse</td><td class="where">GrappleController</td><td class="num">120</td></tr>
+    <tr><td>Tap Threshold</td><td class="where">GrappleController</td><td class="num">0.3 s</td></tr>
+    <tr><td>Full Charge Time</td><td class="where">GrappleController</td><td class="num">0.8 s</td></tr>
+    <tr><td>Min Throw Fraction</td><td class="where">GrappleController</td><td class="num">0.3</td></tr>
+    <tr><td>Throw Pass Through</td><td class="where">GrappleController</td><td class="num">0.15 s</td></tr>
+    <tr><td>Jiggle amplitude (min / max)</td><td class="where">GrappleController</td><td class="num">0.03 / 0.1 m</td></tr>
+    <tr><td>Jiggle frequency (charging / full)</td><td class="where">GrappleController</td><td class="num">12 / 22 Hz</td></tr>
+    <tr class="group"><td colspan="3">Impact damage</td></tr>
+    <tr><td>Knockdown Speed</td><td class="where">ImpactRules asset</td><td class="num">25 m/s</td></tr>
+    <tr><td>Damage Scale</td><td class="where">ImpactRules asset</td><td class="num">1</td></tr>
+    <tr><td>Reference Mass</td><td class="where">ImpactRules asset</td><td class="num">60 kg</td></tr>
+    <tr class="group"><td colspan="3">Officers' pistol</td></tr>
+    <tr><td>Damage</td><td class="where">Pistol · Gun</td><td class="num">30</td></tr>
+    <tr><td>Bullet Speed / Bullet Lifetime</td><td class="where">Pistol · Gun</td><td class="num">30 m/s / 2 s</td></tr>
+    <tr><td>Fire Cooldown</td><td class="where">Pistol · Gun</td><td class="num">0.6 s</td></tr>
+    <tr><td>Range / Min Distance</td><td class="where">Pistol · Gun</td><td class="num">12.5 m / 5 m</td></tr>
+    <tr><td>Spread</td><td class="where">Pistol · Gun</td><td class="num">±2°</td></tr>
+    <tr><td>Weight (dropped)</td><td class="where">Pistol · Weight</td><td class="num">Small, 20 kg</td></tr>
+    <tr class="group"><td colspan="3">Police officer</td></tr>
+    <tr><td>Weight</td><td class="where">WeightTable · Enemy</td><td class="num">50 kg</td></tr>
+    <tr><td>Health</td><td class="where">Enemy prefab · Health</td><td class="num">20</td></tr>
+    <tr><td>Chase / Patrol / Search Speed</td><td class="where">EnemyController</td><td class="num">10 / 7 / 6 m/s</td></tr>
+    <tr><td>Alert Radius / Give Up Radius</td><td class="where">EnemyController</td><td class="num">12.5 m / 16.5 m</td></tr>
+    <tr><td>Aggro Time / Search Duration</td><td class="where">EnemyController</td><td class="num">5 s / 10 s</td></tr>
+    <tr><td>Eye Height</td><td class="where">EnemyController</td><td class="num">0.5 m</td></tr>
+    <tr><td>Rearm Radius</td><td class="where">EnemyController</td><td class="num">10 m</td></tr>
+    <tr><td>Node Pause Time / Route Retry Time</td><td class="where">EnemyController</td><td class="num">2.5 s / 3 s</td></tr>
+    <tr><td>Wander Span (a lone stop this far across is wandered)</td><td class="where">PatrolRoute (fixed)</td><td class="num">4 m</td></tr>
+    <tr><td>Drop Fling Speed / Drop Spin Speed</td><td class="where">EnemyController</td><td class="num">60 / 10</td></tr>
+    <tr><td>Drop Spin Time</td><td class="where">EnemyController</td><td class="num">2.5 s</td></tr>
+    <tr><td>Top Bounce</td><td class="where">EnemyController</td><td class="num">0.6</td></tr>
+    <tr><td>Corpse Brightness</td><td class="where">EnemyController</td><td class="num">0.35</td></tr>
+    <tr><td>Settle Speed / Settle Time (getting up)</td><td class="where">CapsuleRagdollBody</td><td class="num">0.4 m/s / 0.75 s</td></tr>
+    <tr class="group"><td colspan="3">Weight table</td></tr>
+    <tr><td>Tiny / Small / Medium</td><td class="where">WeightTable asset</td><td class="num">10 / 20 / 30 kg</td></tr>
+    <tr><td>Large / Huge</td><td class="where">WeightTable asset</td><td class="num">40 / 50 kg</td></tr>
+    <tr><td>Immovable (also fixed in place)</td><td class="where">WeightTable asset</td><td class="num">60 kg</td></tr>
+    <tr class="group"><td colspan="3">World and camera</td></tr>
+    <tr><td>Physics step</td><td class="where">Project Settings · Time</td><td class="num">0.01 s (100 Hz)</td></tr>
+    <tr><td>Camera view height</td><td class="where">Main Camera · Size 6.25</td><td class="num">12.5 m</td></tr>
+    <tr><td>Lead Fraction (lean toward the cursor)</td><td class="where">CameraFocus</td><td class="num">0.15</td></tr>
+    <tr><td>Cam Height / Peek Height</td><td class="where">CameraFocus</td><td class="num">35 / 44</td></tr>
+    <tr><td>Damping / Peek Damping</td><td class="where">CameraFocus</td><td class="num">0.15 / 0.08 s</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="ruby"><span class="num">4</span>Ruby</h2>
+<p>Ruby weighs <strong>60 kg</strong>, as much as an Immovable object, and has <strong>30 health</strong>. She walks at 15 m/s and always faces the cursor, so she can move one way while aiming another.</p>
+<ul>
+  <li><strong>Movement and shooting are always on.</strong> Ruby can walk and fire while grabbing, pulling, spinning or charging a throw.</li>
+  <li><strong>Nothing she does moves her.</strong> The chain never pulls or drags her. When a held object can't follow her, the chain stops her walk instead.</li>
+  <li><strong>She feels weight when she walks into things.</strong> She pushes an object at her drag fraction (see <a href="#drag">Drag fraction</a>), so light crates slide away, heavy ones barely move, and anything 60 kg or heavier blocks her.</li>
+  <li><strong>She can be knocked down.</strong> Any hit at Knockdown Speed or faster ragdolls her and takes away her control until she gets back up. If the hit kills her, she stays down.</li>
+</ul>
+
+<h3 id="drag">Drag fraction</h3>
+<p>Every weight rule in the game comes from one number: the share of Ruby's strength left over after an object's weight.</p>
+<div class="eq-name">Drag fraction</div>
+<div class="eq">
+<math display="block">
+  <mrow>
+    <mtext>Drag Fraction</mtext><mo>=</mo>
+    <mtext>clamp</mtext><mo>(</mo>
+    <mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><mfrac><mtext>Object Weight</mtext><mtext>Pusher's Weight</mtext></mfrac>
+    <mo>,</mo><mspace width="0.3em"/><mn>0</mn><mo>,</mo><mspace width="0.3em"/><mn>1</mn><mo>)</mo>
+  </mrow>
+</math>
+</div>
+<p>For the chain, the pusher is always Ruby. When anyone walks into an object, the pusher is the walker, so two characters of equal weight block each other. The fraction is 0 for walls, Immovable objects and anything as heavy as the pusher.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Weight class</th><th class="num">Weight</th><th class="num">Drag fraction</th><th class="num">Dragged at</th><th class="num">Reeled in at</th><th class="num">Full throw</th><th>Spins?</th></tr></thead>
+  <tbody>
+    <tr><td>Tiny</td><td class="num">10 kg</td><td class="num">0.83</td><td class="num">12.5 m/s</td><td class="num">8.5 m/s</td><td class="num">103 m/s</td><td>Yes</td></tr>
+    <tr><td>Small</td><td class="num">20 kg</td><td class="num">0.67</td><td class="num">10 m/s</td><td class="num">8.5 m/s</td><td class="num">90 m/s</td><td>Yes</td></tr>
+    <tr><td>Medium</td><td class="num">30 kg</td><td class="num">0.50</td><td class="num">7.5 m/s</td><td class="num">8.5 m/s</td><td class="num">80 m/s</td><td>Yes</td></tr>
+    <tr><td>Large</td><td class="num">40 kg</td><td class="num">0.33</td><td class="num">5 m/s</td><td class="num">8.5 m/s</td><td class="num">72 m/s</td><td>Yes</td></tr>
+    <tr><td>Huge, police officer</td><td class="num">50 kg</td><td class="num">0.17</td><td class="num">2.5 m/s</td><td class="num">8.2 m/s</td><td class="num">65 m/s</td><td>Yes</td></tr>
+    <tr><td>Immovable, walls</td><td class="num">60 kg</td><td class="num">0</td><td class="num">Stops Ruby</td><td class="num">Can't pull</td><td class="num">Can't throw</td><td>No</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="meta">"Dragged at" assumes Ruby walks at her full 15 m/s. "Reeled in at" is capped by the 8.5 m/s Pull Impulse. "Full throw" is a fully charged throw; the weakest throw is 30% of it.</p>
+<p>To change how heavy something feels, give it a different weight class, or retune the class in the <strong>WeightTable</strong> asset. Don't edit Rigidbody masses directly: the <code>Weight</code> component overwrites them at start.</p>
+
+<h2 id="abilities"><span class="num">5</span>Ruby's abilities</h2>
+
+<h3>Chain whip</h3>
+<p>The whip launches at a <strong>node</strong>, a grab point placed on the world, a prop, an enemy or a corpse. Once it lands, the chain holds that node until Ruby lets go, throws, or the chain is pulled past its breaking strength.</p>
+
+<h4>Grabbing</h4>
+<ul>
+  <li><strong>Right click</strong> launches the whip at the node marked by the white aim orb.</li>
+  <li>The orb marks the free node <strong>nearest the cursor</strong>, within 3 m of it (Snap Radius) and within 8 m of Ruby. Clicking far from every node grabs nothing.</li>
+  <li><strong>The whip can't grab through walls.</strong> Only walls and Immovable objects block it. Crates and enemies don't, though the chain catches on them once attached.</li>
+  <li>The chain wraps around corners. Ruby's limit is measured along the wrapped chain.</li>
+</ul>
+
+<h4>Walking on the chain</h4>
+<p>Walking toward the node gives the chain slack. Walking away tightens it until it reaches its limit: the current length while Pull is held, or the full 8 m when it isn't. At the limit Ruby drags the object behind her at her drag fraction. If the object can't follow, because it's fixed, wedged against a wall or too heavy, she stops.</p>
+<div class="eq-name">Ruby's speed away from the node</div>
+<div class="eq">
+<math display="block">
+  <mrow>
+    <mtext>Speed Away</mtext><mo>=</mo>
+    <mtext>max</mtext><mo>(</mo>
+    <mn>0</mn><mo>,</mo><mspace width="0.4em"/>
+    <mfrac><mrow><mtext>Chain Limit</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><mtext>Distance</mtext></mrow><mtext>Physics Step</mtext></mfrac><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mtext>Drag Fraction</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Walking Speed</mtext>
+    <mo>)</mo>
+  </mrow>
+</math>
+</div>
+<p>The first term is the slack left in the chain. When the object can't follow, the chain stays stretched past its limit, that term goes negative and cancels the second, and Ruby stops within a few centimetres. Walking sideways around the node is never limited.</p>
+
+<h4>Pulling</h4>
+<p><strong>Space</strong> or <strong>Q</strong> pulls. A tap tugs the object in once; holding reels it in. Pull does nothing on walls, Immovable objects or anything as heavy as Ruby, so it never drags her toward the node.</p>
+<div class="eq-name">Reel-in speed</div>
+<div class="eq">
+<math display="block">
+  <mrow>
+    <mtext>Reel Speed</mtext><mo>=</mo>
+    <mtext>min</mtext><mo>(</mo>
+    <mtext>Pull Impulse</mtext><mo>,</mo><mspace width="0.4em"/>
+    <mn>20</mn><mtext> m/s</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><msqrt><mtext>Drag Fraction</mtext></msqrt>
+    <mo>)</mo>
+  </mrow>
+</math>
+</div>
+<p>The square root makes reeling gentler on heavy objects than dragging is. A 50 kg officer, with a drag fraction of 0.17, is reeled in at about 8 m/s but dragged at only 2.5 m/s.</p>
+
+<h4>Throwing</h4>
+<p>While holding an object, hold right click to charge a throw. Left click throws it along Ruby's aim, the line from her through the cursor, harder the longer it charged. The held object jiggles while charging, faster once fully charged.</p>
+<ul>
+  <li>Releasing right click without throwing cancels the charge and keeps hold.</li>
+  <li>A quick tap of right click (under 0.3 s) drops the object instead.</li>
+  <li>Right click held from the launch starts charging the moment the whip lands, so Ruby can grab and throw in one motion.</li>
+  <li>The throw happens on the click and the chain lets go at once, so Ruby can grab again straight away.</li>
+  <li>A thrown object can't hit Ruby for 0.15 s (Throw Pass Through), so something thrown from behind her flies through her.</li>
+</ul>
+<div class="eq-name">Charge</div>
+<div class="eq">
+<math display="block">
+  <mrow>
+    <mtext>Charge</mtext><mo>=</mo>
+    <mtext>clamp</mtext>
+    <mo>(</mo>
+    <mfrac>
+      <mrow><mtext>Time Held</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><mtext>Tap Threshold</mtext></mrow>
+      <mrow><mtext>Full Charge Time</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><mtext>Tap Threshold</mtext></mrow>
+    </mfrac>
+    <mo>,</mo><mspace width="0.3em"/><mn>0</mn><mo>,</mo><mspace width="0.3em"/><mn>1</mn>
+    <mo>)</mo>
+  </mrow>
+</math>
+</div>
+<div class="eq-name">Throw speed</div>
+<div class="eq">
+<math display="block"><mrow><mtext>Throw Speed</mtext><mo>=</mo> <mtext>Throw Impulse</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Charge Multiplier</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/>
+        <mfrac><mtext>Ruby's Weight</mtext><mrow><mtext>Ruby's Weight</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mtext>Object Weight</mtext></mrow></mfrac></mrow></math>
+<math display="block"><mrow><mtext>Charge Multiplier</mtext><mo>=</mo> <mtext>Min Throw Fraction</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mo>(</mo><mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><mtext>Min Throw Fraction</mtext><mo>)</mo><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Charge</mtext></mrow></math>
+</div>
+<p>The throw replaces whatever speed the object had, so the same cursor position always sends it the same way, wherever it is in a swing.</p>
+
+<h4>Spinning</h4>
+<p>Holding Pull reels the object all the way in to the minimum length (1.2 m, or more for a big object so it clears Ruby). If it weighs <strong>60 kg or less</strong>, it then spins around her. Ruby is the pivot: she keeps walking freely and carries the spin with her, and the spinning object passes through her.</p>
+<div class="eq-name">Spin rev-up, every physics step</div>
+<div class="eq">
+<math display="block"><mrow><mtext>New Spin</mtext><mo>=</mo> <mtext>Current Spin</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mo>(</mo><mtext>Spin Speed</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><mtext>Current Spin</mtext><mo>)</mo><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Rev Share</mtext></mrow></math>
+<math display="block"><mrow><mtext>Rev Share</mtext><mo>=</mo> <mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><msup><mi>e</mi><mrow><mo>−</mo><mn>3</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Physics Step</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">÷</mo><mspace width="0.22em"/><mtext>Spin Up Time</mtext></mrow></msup></mrow></math>
+</div>
+<p>The spin closes about 3% of the gap to Spin Speed every step and reaches 95% of 40 m/s after one second, like an arm winding up. At full speed on a 1.2 m chain, the object goes round about <strong>5.3 times a second</strong>. Spin speed doesn't depend on weight, and the spin ignores where Ruby aims.</p>
+<div class="eq-name">Holding the spin on its circle</div>
+<div class="eq">
+<math display="block">
+  <mrow>
+    <mtext>Extra Pull Each Step</mtext><mo>=</mo>
+    <mfrac><msup><mtext>Current Spin</mtext><mn>2</mn></msup><mtext>Chain Length</mtext></mfrac><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Physics Step</mtext>
+  </mrow>
+</math>
+</div>
+<p>While spinning, the chain's correction limit is raised by exactly this much, so a fast spin never stretches loose. At 40 m/s on a 1.2 m chain that's 13.3 m/s, on top of the normal 20 m/s limit.</p>
+<div class="eq-name">Bouncing off walls</div>
+<div class="eq">
+<math display="block"><mrow><mtext>Expected Speed</mtext><mo>=</mo> <mfrac><mtext>Current Spin</mtext><msqrt><mrow><mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><msup><mrow><mo>(</mo><mtext>Current Spin</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Physics Step</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">÷</mo><mspace width="0.22em"/><mtext>Chain Length</mtext><mo>)</mo></mrow><mn>2</mn></msup></mrow></msqrt></mfrac></mrow></math>
+<math display="block"><mrow><mtext>Spin After Bounce</mtext><mo>=</mo> <mo>−</mo><mtext>Spin Bounce</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Current Spin</mtext></mrow></math>
+</div>
+<p>A spinning object bounces when, in one step, it keeps <strong>less than half</strong> of its expected speed <strong>and</strong> touches something wall-like: a wall, the side of a crate or an enemy. Scraping the floor doesn't count. It reverses direction, keeps 70% of its speed and revs back up. A swung enemy that hits a wall at Knockdown Speed or faster takes impact damage.</p>
+
+<h4>Letting go of a spin</h4>
+<p>A right-click tap while spinning lets go. The object keeps its speed but is turned onto Ruby's aim, so it flies where she points. A spun enemy flies out as a spinning top (see <a href="#ragdoll">Ragdoll</a>). At 40 m/s it's well above Knockdown Speed and hurts whatever it hits.</p>
+
+<h3>Revolver</h3>
+<p>Semi-automatic: one shot per pull of the trigger, and holding it does nothing. It holds six bullets (Bullet Count) and stops firing when they run out. The revolver fires at all times, including while the chain is holding something. The one exception is charging a throw: while right click is held, left click throws instead of firing.</p>
+<div class="placeholder">
+  <p><strong>Placeholder: revolver data.</strong> <span class="planned">Planned</span> To be filled in when the revolver is reworked:</p>
+  <ul>
+    <li>Reloading on a new floor. The six-bullet limit is built; there's no reload yet.</li>
+    <li>Bullet damage, and whether bullets use the impact damage formula.</li>
+    <li>Fire rate, accuracy and bullet behaviour on walls and props.</li>
+    <li>Sound and how far enemies hear a shot.</li>
+  </ul>
+</div>
+
+<h2 id="damage"><span class="num">6</span>Impact damage</h2>
+<p>Every hit in the game uses one formula: a thrown crate, an enemy swung into a wall, a spinning enemy hitting another, or anything fast hitting Ruby. Both bodies in a hit take damage. Walls and props have no health, so they only deal it. A hit counts once, when the contact begins.</p>
+
+<div class="eq-name">Impact speed</div>
+<div class="eq">
+<math display="block">
+  <mrow>
+    <mtext>Impact Speed</mtext><mo>=</mo>
+    <mo form="prefix" fence="true">|</mo><mtext>Closing Velocity</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">·</mo><mspace width="0.22em"/><mtext>Hit Direction</mtext><mo form="postfix" fence="true">|</mo>
+  </mrow>
+</math>
+</div>
+<p>Only the part of the speed heading straight into the hit counts. A head-on hit counts fully; a glancing one counts for less.</p>
+
+<div class="eq-name">Damage</div>
+<div class="eq">
+<math display="block"><mrow><mtext>Damage</mtext><mo>=</mo><mtext>Damage Scale</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Impact Speed</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><msqrt><mfrac><mtext>Hitter Weight</mtext><mtext>Reference Mass</mtext></mfrac></msqrt></mrow></math>
+<math display="block"><mrow><mtext>Damage</mtext><mo>=</mo><mn>0</mn><mspace width="1em"/><mtext>if Impact Speed is below Knockdown Speed</mtext></mrow></math>
+</div>
+
+<div class="eq-name">Hitter weight</div>
+<div class="eq">
+<math display="block">
+  <mrow>
+    <mtext>Hitter Weight</mtext><mo>=</mo>
+    <mrow>
+      <mo>{</mo>
+      <mtable displaystyle="true" columnalign="left left" columnspacing="1.5em" rowspacing="0.7em">
+        <mtr><mtd><mtext>Other Body's Weight</mtext></mtd><mtd><mtext>if the other body can move</mtext></mtd></mtr>
+        <mtr><mtd><mtext>Own Weight</mtext></mtd><mtd><mtext>if it hit something fixed, like a wall</mtext></mtd></mtr>
+      </mtable>
+    </mrow>
+  </mrow>
+</math>
+</div>
+<p>A hit at Knockdown Speed or faster also <strong>knocks the body down</strong>. A knocked-down enemy ragdolls and gets back up into Aggro if it survives. An enemy held on the chain stays held, so a swung enemy keeps swinging while it takes damage. Damage is large from the threshold on purpose: anything fast enough to knock a character down should usually kill.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>What hits an officer (20 health)</th><th class="num">Speed</th><th class="num">√(weight ÷ 60)</th><th class="num">Damage</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>Anything</td><td class="num">24 m/s</td><td class="num">–</td><td class="num">0</td><td>Nothing</td></tr>
+    <tr><td>Tiny crate (10 kg)</td><td class="num">25 m/s</td><td class="num">0.41</td><td class="num">10.2</td><td>Knocked down, survives</td></tr>
+    <tr><td>Small crate (20 kg)</td><td class="num">40 m/s</td><td class="num">0.58</td><td class="num">23.1</td><td>Dies</td></tr>
+    <tr><td>Another officer (50 kg)</td><td class="num">25 m/s</td><td class="num">0.91</td><td class="num">22.8</td><td>Dies</td></tr>
+    <tr><td>A wall, swung at full spin (its own 50 kg)</td><td class="num">40 m/s</td><td class="num">0.91</td><td class="num">36.5</td><td>Dies</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The smallest damaging hit is about <strong>10.2</strong>: the lightest object (10 kg) at exactly Knockdown Speed.</p>
+<p class="note"><strong>Tuning rule:</strong> keep Knockdown Speed above Ruby's walk plus an officer's chase (15 + 10 = 25 m/s), or characters running into each other head-on can knock each other down. At 25 it sits exactly on that line. Spin Speed must stay above Knockdown Speed for swings to hurt.</p>
+<p>A tethered object switches to continuous collision detection, because a thrown crate can move almost a metre per physics step and would otherwise pass straight through an enemy.</p>
+
+<h2 id="enemies"><span class="num">7</span>Enemies</h2>
+
+<h3>Police officer</h3>
+<p>The demo's only enemy. Weighs 50 kg and has 20 health, and carries a pistol. Officers are placeholder capsules until real models arrive.</p>
+
+<h3>Pistol</h3>
+<ul>
+  <li><strong>One shot kills Ruby.</strong> A bullet does 30 damage against her 30 health. Bullets are visible and fly at 30 m/s, twice her walking speed, so a sidestep can dodge one.</li>
+  <li><strong>Fires on the move.</strong> An armed officer keeps hunting and fires every 0.6 s whenever Ruby is in sight within 12.5 m and on her feet. There's no wind-up. Once she's down, officers lower their guns.</li>
+  <li><strong>Keeps its distance.</strong> With Ruby in sight, an armed officer closes in only to 5 m and holds between 5 and 6 m. If she comes closer it backs away, still facing her and firing. Cornered, it holds its ground. Ruby walks faster than it backs off, so she can still run a gunman down.</li>
+  <li><strong>What stops a bullet:</strong> walls, crates and props, Ruby, and anything Ruby holds on the chain. A held officer or corpse is a shield. Free officers and resting corpses let bullets through, so there's no friendly fire.</li>
+  <li><strong>Drops.</strong> An officer drops its pistol when the chain grabs it, when it's knocked down, and when it dies. The gun keeps the officer's momentum and skids, so a knockdown sends it flying. It never starts inside or passes through a wall.</li>
+  <li><strong>A dropped pistol is a prop.</strong> The chain can grab, reel and throw it, but never take one out of a hand. Ruby can't pick one up or fire it.</li>
+</ul>
+<p>Officers see in a straight line from eye height. Walls, crates and tables block their sight; other characters don't. Windows are <span class="planned">Planned</span>.</p>
+
+<h3>States</h3>
+<p>An officer is always in exactly one state. Five are AI states it chooses for itself; three are done <em>to</em> it.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>State</th><th>Kind</th><th>Enters when</th><th>Leaves when</th></tr></thead>
+  <tbody>
+    <tr><td>Idle</td><td>AI</td><td>No patrol route</td><td>Sees Ruby → Aggro</td></tr>
+    <tr><td>Patrol</td><td>AI</td><td>Has a patrol route</td><td>Sees Ruby → Aggro</td></tr>
+    <tr><td>Aggro</td><td>AI</td><td>Sees Ruby, is hurt, or gets up</td><td>Loses Ruby for 5 s → Searching</td></tr>
+    <tr><td>Searching</td><td>AI</td><td>Lost Ruby</td><td>Sees Ruby → Aggro; 10 s pass → Idle or Patrol</td></tr>
+    <tr><td>Rearm</td><td>AI</td><td>Unarmed, with a free gun within 10 m</td><td>Picks one up, or none left → Aggro</td></tr>
+    <tr><td>Grabbed</td><td>Imposed</td><td>The whip lands on it</td><td>Thrown or dropped → Ragdoll</td></tr>
+    <tr><td>Ragdoll</td><td>Imposed</td><td>Knocked down, thrown or dropped</td><td>Settles → Aggro</td></tr>
+    <tr><td>Dead</td><td>Imposed</td><td>Health reaches 0</td><td>Never</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h4>Idle</h4>
+<p>Stands in place. Sees Ruby within the 12.5 m Alert Radius if nothing blocks its sight, and enters Aggro.</p>
+
+<h4>Patrol</h4>
+<ul>
+  <li>Walks its patrol route at 7 m/s, pausing 2.5 s at each stop. A stop can set its own pause.</li>
+  <li>Each stop is an <strong>area</strong>, not an exact point: a circle, or a rectangle lined up with the grid, so it can fill a room or run along a corridor. The officer heads for its centre, and if the centre is occupied, the nearest open spot inside the area counts as reached.</li>
+  <li><strong>Mode</strong> sets the order: Loop (0, 1, 2, 0), Ping Pong (0, 1, 2, 1) or Random. Random picks any stop except the one the officer is at and the one it just came from. With two stops it goes back and forth; with three it can only go round.</li>
+  <li><strong>A route with one stop 4 m or more across is wandered</strong>: a circle 4 m wide (2 m radius) or a rectangle whose longer side is 4 m. The officer walks to random open spots inside it, each at least a quarter of the way across, pausing at each, so a 2 × 10 m corridor gets paced along. It only picks ground it can reach without leaving the area, so an area drawn across a wall is wandered on its centre's side. A smaller single stop means "stand here". The Scene view labels a wandered stop "0 · wander".</li>
+  <li>After being pulled off its route, it rejoins at the nearest stop, not the first.</li>
+  <li>A stop it can't reach is skipped with a warning. If every stop fails, it waits 3 s and tries again.</li>
+  <li>Routes are edited with handles in the Scene view, on the officer itself. Drag a circle's rim dot to size it, or a rectangle's edges, as on a Box Collider.</li>
+</ul>
+
+<h4>Aggro</h4>
+<ul>
+  <li>Entered on seeing Ruby, on taking damage, or on getting up after being knocked down.</li>
+  <li>Chases Ruby at 10 m/s along the floor's shared chase paths. Armed, with her in sight, it keeps the pistol's 5–6 m band instead, and fires as it moves (see <strong>Pistol</strong>).</li>
+  <li>Stays in contact while Ruby is in sight within the 16.5 m Give Up Radius. After <strong>5 seconds</strong> without contact, it starts Searching.</li>
+</ul>
+
+<h4>Searching</h4>
+<ul>
+  <li>Searches at 6 m/s where its chase was leading when it gave up, since that's where Ruby went, not where she slipped out of view.</li>
+  <li>After <strong>10 seconds</strong> it goes back to Idle or Patrol.</li>
+</ul>
+
+<h4>Rearm</h4>
+<ul>
+  <li>An officer without a gun goes for the nearest <strong>free</strong> one within 10 m (Rearm Radius): lying still, not on Ruby's chain, and not already claimed by another officer, so two never race for one gun.</li>
+  <li>It runs there at chase speed and picks the gun up just before touching it, so it never kicks it away. A gun against a wall or in a corner, where it can't get right up to it, it picks up from as far as 1 m. The gun sits in its hand exactly as the starting gun did. Then it goes back to hunting.</li>
+  <li>If the gun starts moving (Ruby yanks it away), is taken, or can't be reached, the officer tries the next one. With none left it chases Ruby unarmed, and waits 3 s before looking again. A gun it couldn't reach gets another try once it has moved, or after 10 s.</li>
+</ul>
+
+<h4>Grabbed</h4>
+<ul>
+  <li>Held by Ruby's chain. It drops its pistol, and can't move on its own: it's dragged, reeled, spun and thrown like any object. While held it stops bullets, so Ruby can use it as a shield.</li>
+  <li>Thrown, it ragdolls and hits whatever it flies into.</li>
+  <li>Dropped with a quick right-click tap, it spins upright in place, winding down over 2.5 s. If Ruby was spinning it, it flies out along her aim as a spinning top instead.</li>
+</ul>
+
+<h4 id="ragdoll">Ragdoll</h4>
+<ul>
+  <li>Knocked down, thrown or flung, the officer tumbles under physics. Once it settles, it gets up into Aggro.</li>
+  <li>A <strong>spinning</strong> officer is a top. When it hits another officer, the two trade momentum by weight: the top bounces off and keeps spinning, and the other is sent flying.</li>
+</ul>
+<div class="eq-name">Spinning top hit</div>
+<div class="eq">
+<math display="block">
+  <mrow>
+    <mtext>Struck Officer's Speed Change</mtext><mo>=</mo>
+    <mo>(</mo><mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mtext>Top Bounce</mtext><mo>)</mo><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/>
+    <mfrac><mtext>Top's Weight</mtext><mrow><mtext>Top's Weight</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mtext>Struck Officer's Weight</mtext></mrow></mfrac><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Closing Speed</mtext>
+  </mrow>
+</math>
+</div>
+<p>Whether the struck officer is knocked down is decided by Knockdown Speed, like any other hit, so a slow graze only shoves it.</p>
+
+<h4>Dead</h4>
+<ul>
+  <li>A dead officer becomes a corpse, darkened to 35% brightness. Corpses are never removed.</li>
+  <li>An officer killed while held on the chain stays held.</li>
+  <li>Corpses can still be grabbed, swung and thrown, and hit like any other body. They take no further damage.</li>
+  <li>A corpse at rest has no collision: Ruby and officers walk over it. It can still be grabbed.</li>
+</ul>
+
+<h3>Planned behaviour <span class="planned">Planned</span></h3>
+<ul>
+  <li><strong>Cautious.</strong> An officer that has seen Ruby and lost her walks a separate, more careful route. Once cautious, it never relaxes.</li>
+  <li><strong>Afraid.</strong> The step after cautious. It might hide in a corner with its gun, flee the building, hunt Ruby down or cower.</li>
+  <li><strong>Police boss.</strong> A second enemy with Aiming, Patrol, Searching, Firing, Grabbed and Ragdoll states.</li>
+  <li><strong>Melee officers</strong>, once melee weapons exist.</li>
+</ul>
+
+<h2 id="level"><span class="num">8</span>Level 1: Police Station</h2>
+<p>The demo's level is a police precinct in Central City's lower slums. Ruby fights her way from the street outside to the station's interior.</p>
+
+<h3>Goal</h3>
+<ul>
+  <li>Kill every officer on the floor, then reach the exit. <span class="planned">Planned</span></li>
+  <li>A timer counts up from the first room, for speedrunning. <span class="planned">Planned</span></li>
+</ul>
+
+<h3>Room flow <span class="planned">Planned</span></h3>
+<p>Each room introduces or combines one kind of threat, so the player learns the chain before the level asks for everything at once.</p>
+<ol>
+  <li><strong>Outside the precinct.</strong> The opening room puts Ruby straight into a fight rather than a quiet tutorial. A few officers in the open, with light crates nearby to grab and throw.</li>
+  <li><strong>Precinct entrance: melee.</strong> Officers rush Ruby at close range. Spinning a grabbed officer and letting go teaches crowd control.</li>
+  <li><strong>Precinct entrance: ranged.</strong> Officers hold back and shoot. Cover matters, and the chain's reach lets Ruby pull targets out of it.</li>
+  <li><strong>Inside the station: ranged and melee.</strong> Both kinds together, in tighter rooms with heavier props.</li>
+</ol>
+
+<h3>Current test floor</h3>
+<p>The scene in the editor is a test floor for the systems above, not the final layout.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Content</th><th class="num">Count</th></tr></thead>
+  <tbody>
+    <tr><td>Police officers</td><td class="num">10</td></tr>
+    <tr><td>Doors</td><td class="num">9</td></tr>
+    <tr><td>Wall pieces</td><td class="num">30</td></tr>
+    <tr><td>Crates: Tiny (10 kg)</td><td class="num">32</td></tr>
+    <tr><td>Crates: Small (20 kg)</td><td class="num">1</td></tr>
+    <tr><td>Crates: Medium (30 kg)</td><td class="num">16</td></tr>
+    <tr><td>Crates: Large (40 kg)</td><td class="num">12</td></tr>
+    <tr><td>Crates: Huge (50 kg)</td><td class="num">10</td></tr>
+    <tr><td>Crates: Immovable</td><td class="num">10</td></tr>
+    <tr><td>Table (Huge, 50 kg)</td><td class="num">1</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Officers find their way with a grid baked over the floor at start. Every doorway needs to be at least 1.5 m wide, or officers can't path through it. Props that should block paths while resting carry a <code>GridObstacle</code> component.</p>
+
+<h2 id="sound"><span class="num">9</span>Sound <span class="planned">Planned</span></h2>
+<ul>
+  <li>Sounds let officers notice Ruby and draw them toward where the sound came from.</li>
+  <li>Each sound comes from a point in the world.</li>
+  <li>Each sound has a loudness or a reach, which would also allow sounds heard across the whole floor.</li>
+</ul>
+
+<h2 id="world"><span class="num">10</span>The world of Parabellum</h2>
+<p class="meta">For artistic inspiration.</p>
+<p>CODENAME: Ruby takes place in the world of <strong><em>Parabellum</em></strong>, the franchise it belongs to.</p>
+<p>The story is set almost 300 years after the fall of our current civilization. Three hundred years ago, humans born with elemental powers were discovered, and the world was thrown into chaos. Over the next three centuries the elementalists became all that remained. After countless wars left the earth unrecognizable, they set out to rebuild civilization. The leaders of the war effort became political leaders, and those who followed them laid the groundwork for future generations to thrive. The country we once knew as the United States of America became <strong>the United Front</strong>.<sup>*</sup></p>
+<p>The United Front set out to be a refuge for anyone seeking safety from the war: a nation that turns away no one except those who wish to see it fall, and that houses elementalists of every kind. It is also a nation where the roots of corruption had already dug deep.</p>
+<p>After its founding, the United Front enjoyed a short era of peace. It set up its systems of government and founded small cities that would grow into great metropolises. Its capital is Central City.</p>
+<p>Technology has boomed thanks to brilliant minds across the world. Cybernetics are now legal in three fields:</p>
+<ul>
+  <li><strong>Weaponry</strong></li>
+  <li><strong>Medicine</strong></li>
+  <li><strong>Luxury upgrades for the upper class</strong></li>
+</ul>
+<p>The government of Central City and the United Front is not like our own. It has three branches:</p>
+<ul>
+  <li>The Royal Guard</li>
+  <li>The U.F.S.F. (United Front Special Forces)</li>
+  <li>The CCPD (Central City Police Department)</li>
+</ul>
+<p>The corruption grew out of what happened during the 300 years of war:</p>
+<ul>
+  <li>Factions formed between the elements. This complicated the war, because some elementalists sided with humans, while others sought to wipe out non-elementalists and anyone who disagreed with them.</li>
+  <li>Once the last humans had either converted or been killed, the elementalist leaders called a truce, but no peace treaty was ever signed. A council of leaders from each major faction met in what was once Berlin, Germany, and chose the leaders who would rebuild civilization. Some of them still longed for battle and held grudges against other factions.</li>
+</ul>
+<p>So after roughly 300 years, some groups of elementalists still want to fight, and still want the power to make the rules.</p>
+<p>The Royal Guard has fallen to an internal coup d'état, and these groups are using the chaos to seize power.</p>
+<ul>
+  <li>Since the fall of the Royal Guard, corrupt police factions have ruled Central City.</li>
+  <li>Ruby's parents were both police officers. Ruby discovered that both of them aided and abetted corrupt officers, and that only her father truly tried to do the right thing. Her mother was Deputy Chief of Police, and her superiors used her to commit crimes.</li>
+  <li>When Ruby found out, she couldn't do anything about it.</li>
+  <li>A rival police squad, which served the wealthy districts, opposed Captain Rector, captain of the Lower Slums squad. That squad was led by three women: Gensha, Omara and Zahra.</li>
+  <li>Ruby's partner, Taka, was brutally assaulted by the squad her father once belonged to. That squad is now run by his old rival, who abuses his power wherever he can to run his own small empire in the lower slums.</li>
+  <li>Years later, Ruby returns to that squad to give them what they're owed.</li>
+</ul>
+<p class="meta">* Working name. "The United Front" is not final.</p>
+
+</main>
