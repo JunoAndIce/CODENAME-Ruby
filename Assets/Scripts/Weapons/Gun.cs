@@ -38,7 +38,7 @@ public class Gun : MonoBehaviour
     [SerializeField, Min(0f)] private float _minDistance = 5f;
 
     [Header("Dropped")]
-    [Tooltip("Switched on only while the gun lies loose: its grab point. Keep them inactive in the prefab.")]
+    [Tooltip("Switched on only while the gun lies loose: its grab point. Whether they start active doesn't matter.")]
     [SerializeField] private GameObject[] _droppedOnly = Array.Empty<GameObject>();
 
     private Rigidbody _body;
@@ -78,13 +78,12 @@ public class Gun : MonoBehaviour
     {
         _body = GetComponent<Rigidbody>();
         _looseInterpolation = _body.interpolation;
-        _solids =Array.FindAll(GetComponentsInChildren<Collider>(true), c => !c.isTrigger);
+        _solids = Array.FindAll(GetComponentsInChildren<Collider>(true), c => !c.isTrigger);
         // Read before anything aims it. A starting gun under a stretched hand carries a scale that
         // cancels the stretch, so its world scale is still its true size.
         _looseScale = transform.lossyScale;
-        // Decided before anything wakes the dropped-only objects. A grab point that first woke under
-        // an officer would cache the officer as what it grabs. The body's flags wait for Start,
-        // because Weight's Awake makes every non-Immovable body dynamic.
+        // Decided here, for Start to set the body up by. The body's flags wait for Start, because
+        // Weight's Awake makes every non-Immovable body dynamic.
         IsHeld = GetComponentInParent<GunHolder>() != null;
 
         if (_bulletPrefab == null || _muzzle == null)

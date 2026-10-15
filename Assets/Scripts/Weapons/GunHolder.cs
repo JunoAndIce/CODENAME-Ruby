@@ -56,9 +56,19 @@ public class GunHolder : MonoBehaviour
         return true;
     }
 
-    // Measured relative to the hand, so it holds even for a starting gun placed elsewhere under the character.
+    // A gun directly under the hand keeps its local pose, exact at any angle. One placed elsewhere
+    // under the character is measured against the hand, whose per-axis scale ratio is exact only
+    // while the gun lines up with the hand's axes.
     private void RecordGrip(Transform gun)
     {
+        if (gun.parent == _hand)
+        {
+            _gripPosition = gun.localPosition;
+            _gripRotation = gun.localRotation;
+            _gripScale = gun.localScale;
+            return;
+        }
+
         _gripPosition = _hand.InverseTransformPoint(gun.position);
         _gripRotation = Quaternion.Inverse(_hand.rotation) * gun.rotation;
         Vector3 hand = _hand.lossyScale, held = gun.lossyScale;
@@ -96,13 +106,12 @@ public class GunHolder : MonoBehaviour
 
     public bool InRange(Vector3 point) => IsArmed && FlatDistance(transform.position, point) <= HeldGun.Range;
 
-    /// <summary>In range, turns the gun to the point and fires if its cooldown allows.</summary>
-    public bool TryFireAt(Vector3 point)
-    {
-        if (!InRange(point)) return false;
-        AimAt(point);
-        return HeldGun.TryFire(point, transform);
-    }
+    /// <summary>
+    /// In range, fires at the point if its cooldown allows. The shot runs from the muzzle to the
+    /// point whichever way the gun faces, so turning it is AimAt's job, kept apart because the
+    /// owner aims out of range too.
+    /// </summary>
+    public bool TryFireAt(Vector3 point) => InRange(point) && HeldGun.TryFire(point, transform);
 
     /// <summary>The nearest loose, resting gun within radius that the caller also counts as free, or null.</summary>
     public Gun FindLooseGun(float radius, Predicate<Gun> isFree)

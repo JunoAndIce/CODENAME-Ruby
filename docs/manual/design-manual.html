@@ -458,7 +458,7 @@ a { color: var(--accent); }
   <li><strong>Fires on the move.</strong> An armed officer keeps hunting and fires every 0.6 s whenever Ruby is in sight within 12.5 m and on her feet. There's no wind-up. Once she's down, officers lower their guns.</li>
   <li><strong>Keeps its distance.</strong> With Ruby in sight, an armed officer closes in only to 5 m and holds between 5 and 6 m. If she comes closer it backs away, still facing her and firing. Cornered, it holds its ground. Ruby walks faster than it backs off, so she can still run a gunman down.</li>
   <li><strong>What stops a bullet:</strong> walls, crates and props, Ruby, and anything Ruby holds on the chain. A held officer or corpse is a shield. Free officers and resting corpses let bullets through, so there's no friendly fire.</li>
-  <li><strong>Drops.</strong> An officer drops its pistol when the chain grabs it, when it's knocked down, and when it dies. The gun keeps the officer's momentum and skids.</li>
+  <li><strong>Drops.</strong> An officer drops its pistol when the chain grabs it, when it's knocked down, and when it dies. The gun keeps the officer's momentum and skids, so a knockdown sends it flying. It never starts inside or passes through a wall.</li>
   <li><strong>A dropped pistol is a prop.</strong> The chain can grab, reel and throw it, but never take one out of a hand. Ruby can't pick one up or fire it.</li>
 </ul>
 <p>Officers see in a straight line from eye height. Walls, crates and tables block their sight; other characters don't. Windows are <span class="planned">Planned</span>.</p>
@@ -511,8 +511,8 @@ a { color: var(--accent); }
 <h4>Rearm</h4>
 <ul>
   <li>An officer without a gun goes for the nearest <strong>free</strong> one within 10 m (Rearm Radius): lying still, not on Ruby's chain, and not already claimed by another officer, so two never race for one gun.</li>
-  <li>It runs there at chase speed and picks the gun up within 1 m. The gun sits in its hand exactly as the starting gun did. Then it goes back to hunting.</li>
-  <li>If the gun starts moving (Ruby yanks it away), is taken, or can't be reached, the officer tries the next one. With none left it chases Ruby unarmed, and waits 3 s before looking again.</li>
+  <li>It runs there at chase speed and picks the gun up just before touching it, so it never kicks it away. A gun against a wall or in a corner, where it can't get right up to it, it picks up from as far as 1 m. The gun sits in its hand exactly as the starting gun did. Then it goes back to hunting.</li>
+  <li>If the gun starts moving (Ruby yanks it away), is taken, or can't be reached, the officer tries the next one. With none left it chases Ruby unarmed, and waits 3 s before looking again. A gun it couldn't reach gets another try once it has moved, or after 10 s.</li>
 </ul>
 
 <h4>Grabbed</h4>

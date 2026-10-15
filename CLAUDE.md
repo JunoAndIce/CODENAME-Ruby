@@ -127,7 +127,7 @@ Two ways in:
   `Release()` (thrown), `KnockDown()` (a hit at Knockdown Speed). These guard on current state
   themselves.
 
-`EnemyState` distinguishes AI states (Idle/Patrol/Searching/Aggro) from **overrides**
+`EnemyState` distinguishes AI states (Idle/Patrol/Searching/Aggro/Rearm) from **overrides**
 (Grabbed/Ragdoll/Dead) that are imposed externally. The enemy plan, with progress, lives in
 `docs/specs/2026-09-29-enemy-states-v2.md`.
 
@@ -367,10 +367,18 @@ through the player never slows the walk.
   range and on her feet; firing is not a state. Contact holds while the player is in sight within
   Give Up Radius. After Aggro Time without it the enemy searches **where the hunt was leading when
   it gave up** (recorded on Aggro's exit), not where the player slipped out of view.
-- **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius and
-  picks it up within 1 m. Free means loose, resting, not on the chain and not claimed by another
-  enemy. It always hands back to Aggro. Having given up on every gun in reach, it waits Route
-  Retry Time before trying again, so it doesn't flicker.
+- **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
+  Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
+  up within 0.3 m of its body's surface, measured to the nearest point of the gun's colliders
+  (`Gun.ClosestPoint`, `EnemyController.BodyRadius`), so the pickup lands before the capsule
+  touches the gun: measured to the pivot, an enemy walked into a long gun's far end and kicked it
+  away. When the navigator says it has arrived but it's still short (a gun against a wall or in a
+  corner sits on a clearance-blocked cell), it stretches to 1 m, or gives up on that gun and tries
+  the next, so it can never stand beside a gun for good. A gun it gave up on gets another try once
+  it has moved 0.5 m or after 10 s; retrying sooner would send an enemy near a truly unreachable
+  gun back into Rearm, and from there back to Aggro, every few seconds. It always hands back to
+  Aggro. Having given up on every gun in reach, it waits Route Retry Time before trying again, so
+  it doesn't flicker.
 - **Patrol** walks a route of **area nodes** stored on the enemy (`PatrolRoute`). Each area is a
   circle or a rectangle lined up with X and Z (`GridArea`), so it can fill a room or run along a
   corridor. The enemy heads for an area's centre, and when the centre is occupied the nearest open
@@ -477,10 +485,19 @@ part of this system.
     whenever a holder is above it, and the two must agree, or a held gun is never fired.
   - It records the starting gun's pose relative to the Hand, so a gun picked up later sits exactly
     where the starting one did.
-  - It warns when the starting gun isn't under the Hand, or when the Hand holds a Rigidbody with no
-    Gun.
+  - It warns when the starting gun isn't under the Hand, when the Hand holds a Rigidbody with no
+    Gun, and when the Hand's scale isn't uniform. Aiming turns a gun off the Hand's axes, and under
+    a non-uniformly scaled Hand Unity shears it; the officer's Hand is (1, 1, 1), its cube on a
+    `HandMesh` child.
 - **Drops:** `EnterGrabbed`, `KnockDown` and `DeadState.Enter` drop the gun with the body's
-  velocity.
+  velocity, so a knockdown sends it off at the hit's speed.
+  - The holder lowers it first, and the gun restores its true world scale (read at Awake) once it
+    leaves the hand, so a drop mid-aim can't keep a shear as a stretched scale.
+  - It's dropped from about a metre in front of the officer, so `Gun.KeepOutOfWalls` casts from the
+    holder's centre to the gun's far end and pulls it back toward the officer until it clears
+    anything solid. Otherwise one dropped facing a wall started inside it.
+  - A loose gun uses continuous collision detection, since a knockdown drop is fast enough to pass
+    through a wall in one step; a held one goes back to discrete before turning kinematic.
 
 ### Ragdoll seam
 
