@@ -13,6 +13,9 @@ using Random = UnityEngine.Random;
 public class Gun : MonoBehaviour
 {
     private const float RestSpeed = 1f;   // slower than this, a loose gun counts as lying still
+    private const float WallMargin = 0.05f;   // how far clear of a wall a dropped gun is pulled back
+    // Room for everything between a holder and the gun it drops.
+    private static readonly RaycastHit[] Hits = new RaycastHit[16];
 
     /// <summary>Every loose gun, so holders scan a list instead of searching the scene.</summary>
     public static readonly List<Gun> Loose = new();
@@ -43,6 +46,7 @@ public class Gun : MonoBehaviour
     private Rigidbody _body;
     private RigidbodyInterpolation _looseInterpolation;   // the prefab's setting, used while loose
     private Collider[] _solids;
+    private Vector3 _looseScale;   // its true size in the world, restored whenever it leaves a hand
     private float _nextShot;
     private bool _started;
 
@@ -77,6 +81,9 @@ public class Gun : MonoBehaviour
         _body = GetComponent<Rigidbody>();
         _looseInterpolation = _body.interpolation;
         _solids =Array.FindAll(GetComponentsInChildren<Collider>(true), c => !c.isTrigger);
+        // Read before anything aims it. A starting gun under a stretched hand carries a scale that
+        // cancels the stretch, so its world scale is still its true size.
+        _looseScale = transform.lossyScale;
         // Decided before anything wakes the dropped-only objects. A grab point that first woke under
         // an officer would cache the officer as what it grabs. The body's flags wait for Start,
         // because Weight's Awake makes every non-Immovable body dynamic.
@@ -109,14 +116,60 @@ public class Gun : MonoBehaviour
         ApplyMode();
     }
 
-    /// <summary>Out of the hand, carrying the holder's velocity, so a gun dropped mid-run skids on.</summary>
-    public void Drop(Vector3 velocity)
+    /// <summary>
+    /// Out of the hand, carrying the holder's velocity, so a gun dropped mid-run skids on. `from` is
+    /// the holder's centre, which is never inside a wall: a gun that would start in one is pulled
+    /// back toward it.
+    /// </summary>
+    public void Drop(Vector3 velocity, Vector3 from)
     {
         IsHeld = false;
         transform.SetParent(null, true);
+        // Out of a non-uniformly scaled hand, a gun keeps whatever stretch the hand gave it.
+        transform.localScale = _looseScale;
         ApplyMode();
+        KeepOutOfWalls(from);
         _body.linearVelocity = velocity;
         _body.angularVelocity = Vector3.zero;
+    }
+
+    // A hand reaching past a wall drops the gun inside it, and the solver can push it out the far
+    // side. Along the line from the holder to the gun, anything solid nearer than the gun's far end
+    // pulls the gun back toward the holder until it clears.
+    private void KeepOutOfWalls(Vector3 from)
+    {
+        Vector3 origin = new(from.x, transform.position.y, from.z);
+        Vector3 toGun = transform.position - origin;
+        float distance = toGun.magnitude;
+        if (distance < 0.001f) return;
+
+        Vector3 direction = toGun / distance;
+        float reach = distance + FarExtent(direction);
+        // Starting inside the holder's own capsule, the ray never reports it.
+        int count = Physics.RaycastNonAlloc(origin, direction, Hits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        float nearest = reach;
+        for (int i = 0; i < count; i++)
+            if (Hits[i].rigidbody != _body) nearest = Mathf.Min(nearest, Hits[i].distance);
+        if (nearest >= reach) return;
+
+        transform.position -= direction * Mathf.Min(reach - nearest + WallMargin, distance);
+        _body.position = transform.position;
+    }
+
+    // How far the gun's colliders reach past its pivot in a direction.
+    private float FarExtent(Vector3 direction)
+    {
+        float far = 0f;
+        foreach (Collider solid in _solids)
+        {
+            if (!solid.enabled) continue;
+            Bounds bounds = solid.bounds;
+            Vector3 extents = bounds.extents;
+            float reach = Vector3.Dot(bounds.center - transform.position, direction)
+                          + Mathf.Abs(extents.x * direction.x) + Mathf.Abs(extents.y * direction.y) + Mathf.Abs(extents.z * direction.z);
+            far = Mathf.Max(far, reach);
+        }
+        return far;
     }
 
     /// <summary>
@@ -140,7 +193,12 @@ public class Gun : MonoBehaviour
 
     private void ApplyMode()
     {
+        // Continuous while loose: a knockdown drops the gun at the hit's speed, fast enough for a
+        // 20 kg body to pass through a wall in one step on discrete detection. Discrete before going
+        // kinematic, which supports only speculative detection.
+        if (IsHeld) _body.collisionDetectionMode = CollisionDetectionMode.Discrete;
         _body.isKinematic = IsHeld;
+        if (!IsHeld) _body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         // Interpolation writes the body's own physics history over its transform every frame, so a
         // held gun drifted off the hand instead of following it. Smooth sliding is only for the floor.
         _body.interpolation = IsHeld ? RigidbodyInterpolation.None : _looseInterpolation;
