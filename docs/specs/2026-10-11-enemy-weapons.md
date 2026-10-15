@@ -223,3 +223,22 @@ be got wrong.
   gun sits at an offset, rotation and compensating scale under a non-uniformly scaled Hand.
   `GunHolder` now records the starting gun's pose relative to the Hand. `Gun.Hold` takes that pose,
   and `Lower` returns to its rotation.
+
+## Fixed after review
+
+The end-of-plan review found these; each is fixed in code.
+
+- **Re-arming could stall or kick the gun away.** Reach ran from the officer's centre to the gun's
+  pivot, and the navigator's Arrived went unhandled. A gun against a wall or in a corner left the
+  officer standing beside it for good; approaching a gun from its back end touched its collider
+  before the pivot came within reach and shoved it away. Reach now runs from the body's surface to
+  the gun's nearest point (0.3 m), and Arrived either stretches to 1 m or moves on to the next gun.
+- **A gun given up on was ignored for good.** Marks now expire once the gun moves 0.5 m or after
+  10 s.
+- **Aiming sheared the gun, and a drop kept the shear.** The Hand's non-uniform scale is gone (a
+  uniform Hand, its cube on a child), the holder lowers the gun before dropping it, the gun
+  restores its true scale on leaving the hand, and `GunHolder` warns about a non-uniform Hand.
+- **A gun dropped facing a wall started inside it.** It's now pulled back toward the officer until
+  it clears.
+- **A knockdown drop could pass through walls.** The drop keeps the body's velocity, as this spec
+  says (kept after review), and a loose gun now uses continuous collision detection.
