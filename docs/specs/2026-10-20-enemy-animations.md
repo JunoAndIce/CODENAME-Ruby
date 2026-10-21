@@ -1,0 +1,275 @@
+# Enemy animations: officers on a humanoid model
+
+Status: draft 2026-10-20, branch `enemy-animations`. Limp ragdolls for officers are the next branch,
+not this one.
+
+## Intent
+
+Officers stop being capsules. Each one wears Kevin Iglesias's `HumanM_Model` (already in the
+project, under `Assets/Kevin Iglesias/Human Animations/`) and moves, aims and reacts the way a police
+officer would. The pistol sits in his hand. The animation side is built as its own reusable piece
+that the game only *tells what the character is doing*; the piece decides how that looks, so real
+animations can be dropped in later without code changes. Ruby moves onto the same piece.
+
+What the user wants players to see, in their words:
+
+- "From patrolling, they walk with the gun at a resting position. [...] the pistol will be held down
+  walking crouched like officers do in raids."
+- "When spotted they stand upright to shoot or chase Ruby to move into range. They will have a
+  running animation that moves the gun down like safety protocols in police training."
+- "When grabbed they will move to a constricted animation [...] Grabbed enemies will try to wiggle
+  but will be held tight." The gun should "pop out", a small pop, not a big fling.
+- "When thrown, they will move to ragdoll immediately. If they don't die, they will have a getup
+  animation and move to the next state they need to be in."
+- Standing and shooting while Ruby circles: the "upper body should turn to a certain point but then
+  the legs should follow."
+- "We will eventually add animations for these": two-handed weapons get a two-handed rest.
+
+**Most of these animations don't exist yet.** The pack has idles, 8-direction walk, run and sprint,
+turn-in-place, a hand-grip pose (`Human@ObjectGripHands01`) and avatar masks. It has no pistol
+stances, no pinned pose, no wriggle, no get-up and no aim poses. So the core of this branch is a set
+of **named slots**, one per moment, each filled now with the nearest stand-in from the pack.
+
+## Goals, non-goals, anti-goals
+
+Goals:
+- Officers show the right body for each moment (table below), with the gun in the right hand.
+- The aim twist: upper body turns toward Ruby up to a limit, then the legs turn in place to follow.
+- The game code reports what a character is doing; it never names a clip, state or blend tree.
+- A real animation replaces a stand-in by editing one asset, with no code change.
+- Ruby runs on the same piece and looks exactly as she does today.
+
+Non-goals (later branches):
+- Limp ragdolls for officers (the next branch). See **Not a falling animation** below.
+- Hand-made aim poses (an aim matrix, as Valve's games and Unreal's Aim Offsets do). The code twist
+  is the stand-in, built so the poses can replace it.
+- Two-handed weapons, a pickup animation, Ruby's own get-up, footstep sounds.
+
+Anti-goals (a failure even if it technically works):
+- **An animation moving or slowing a character.** No root motion. The game code moves every body,
+  as now; animation follows the body. Movement and aiming stay instant.
+- Game code that knows clip, state or parameter names, or a system assembly that references
+  `Ruby.Game`.
+- Ruby looking or feeling any different.
+- Hand-editing `.controller`, `.prefab` or `.unity` YAML.
+
+## Decisions
+
+The user chose each of these:
+
+- **Officers wear `HumanM_Model`**, the pistol held on its right-hand prop bone, `B-handProp.R`. Both
+  pack models have `B-handProp.L` and `.R`, bones made for holding props.
+- **Moments and how they look** (stand-ins in the slot table below):
+
+  | Moment | Body |
+  | --- | --- |
+  | Patrolling, searching, idle at a post | **Rest**: crouched raid walk, pistol held low |
+  | Ruby in sight and in range (firing), whether he's chasing, holding distance or backing away | **Aim**: upright, upper body twisted toward Ruby, legs walking in any direction |
+  | Closing in beyond range or out of sight (or running unarmed) | **Run**: gun pointed down |
+  | Grabbed by the chain, or spun as a top | **Restrained**: pinned arms, wriggling |
+  | Thrown, knocked down, or dead | Animation **frozen** in its current pose (this branch) |
+  | Getting up after surviving a fall | **Get up**, then on to the next state |
+  | No gun | The pack's ordinary walk and run |
+
+- **The aim twist is code**, Unity's built-in Humanoid look-at on the spine, not baked poses. Past a
+  limit (about 60–90°) the legs turn in place, using the pack's Turn Left and Turn Right, until he
+  faces Ruby again. Hand-made aim poses replace the code twist later; the code then passes the angle
+  to the poses instead of turning the spine.
+- **The gun pops out on a grab** with a small hop, not a fling. Knockdowns and deaths keep today's
+  rule (the gun leaves at the officer's speed, which after a hit is the hit's speed).
+- **Not a falling animation.** In this branch a thrown, knocked-down or dead officer still tumbles
+  as his stiff capsule; his animation simply freezes in whatever pose he was in and tumbles with it.
+  The next branch makes him truly limp (animation off, bones live, as Ruby does), so no falling clip
+  is ever needed.
+- **Limp bodies come next**, not here.
+- **Chasing and shooting at once:** within range with Ruby in sight, he's in the upright **Aim**
+  body while he keeps moving at chase speed and firing, exactly as officers fight today. The
+  gun-down **Run** is only for closing in beyond range or when she's out of sight. Rejected:
+  stopping to shoot, which would change how officers fight.
+- **The officer is `popo.prefab`**, the old `Enemy.prefab` renamed in the editor (it kept its GUID,
+  so every officer in `SampleScene` is already a popo). The model nests inside it as visuals only.
+  The bare `HumanM_Model` prefab saved as a new `Enemy.prefab` is deleted.
+- **Ruby moves onto the same piece**, looking exactly as today. Her shooting pose and turning get
+  slots to fill later.
+
+## Calls I made
+
+These are mine, not the user's; each is open to correction.
+
+- **A new assembly, `Ruby.Animation`** (`Assets/Scripts/Animation/`, no references), with an editor
+  assembly beside it. It knows nothing about the game, like the other systems.
+- **The game reports through an interface the animation assembly declares** (`IAnimatedCharacter`,
+  name the builder's), which `EnemyController` and `PlayerController` implement. The animator
+  *polls* it every frame, the way the tether polls `IGrappleUser`. Nothing pushes events at it.
+- **Slots live in a data asset, and the Animator Controller is generated from it.** One
+  `CharacterAnimationSet` asset per character type (Officer, Ruby) lists a clip for every slot. An
+  editor command builds that character's Animator Controller from its set: parameters, layers, blend
+  trees, transitions. Swapping in a real animation means dropping the clip into the set and
+  rebuilding. Rejected: a hand-built base controller with Animator Override Controllers, because an
+  override maps by *clip*, not by slot, so two slots sharing one stand-in (Rest and Run might both
+  start as the same walk) couldn't later be replaced separately. Hand-building ~50 blend-tree cells
+  per character is also the kind of Inspector work that drifts from the code's parameter names.
+- **Visual facing is separate from the body's facing.** Today `EnemyController.FaceTarget()` snaps
+  the whole officer to face Ruby. Facing is purely visual for officers (sight has no view cone,
+  shots go from the muzzle to the target whichever way he faces), so the game code stays as it is,
+  and the *model* lags: the animation piece keeps a lower-body yaw on the model child, twists the
+  upper body toward the target up to the limit, and turns the lower body to catch up past it. The
+  capsule, movement, pathing and sight don't change.
+- **The gun is aimed after animation.** With the pistol on an animated hand bone, an aim set in
+  `FixedUpdate` is overwritten as the hand moves. `GunHolder.AimAt` records the target, and the gun
+  is turned flat toward it in `LateUpdate`, after the animator and the look-at have posed the hand,
+  so the gun points where its shots go. `Lower` clears the target.
+- **Getting up is a phase of `RagdollState`, not a new state.** Once the tumble settles, the officer
+  is stood up (`Recover`) and holds still for **Get Up Time**, reporting "getting up"; the table moves
+  him on to Aggro only after that (`RagdollState` exposes a bool, the table reads it, as elsewhere).
+  He can't move, aim or shoot during it. A spinning top that winds down is already on its feet and
+  goes straight on, with no get-up.
+- **A hit at Knockdown Speed during the get-up knocks him down again.** He's on his feet by then,
+  so the rule for anyone standing applies, rather than a window where nothing can floor him, a rule
+  nothing else in the game has. Today's guards treat all of `RagdollState` as "already down", so
+  `KnockDown` (relaunch the tumble), a spinning top's hit (`TakeHit`: shove him as a standing
+  officer, not `RagdollBody.Push`) and `Alert` (ignored; he goes to Aggro once up anyway) must check
+  the get-up phase.
+- **Officers aim only within range.** Today `AggroState.Shoot` turns the gun toward Ruby whenever
+  she's in sight, beyond range too. With the gun turned in `LateUpdate`, that would twist it off his
+  hand during the gun-down Run. Beyond range he lowers it instead. Where he can fire is unchanged.
+- **Ruby's settings make her identical to today:** twist limit 0 (legs follow at once), look-at
+  weight 0, Get Up Time 0. Her current 8-direction run is her Run slot set.
+- **The staged `Speed`, `ChainState` and `Fire` parameters and the Hold/Throw upper-body states in
+  `PlayerAnimator.controller` aren't carried over.** Nothing writes them; they come back as slots when
+  the chain animations are designed.
+
+## Pieces
+
+### `Ruby.Animation` (new, `Assets/Scripts/Animation/`, references nothing)
+
+- **`IAnimatedCharacter`**, implemented by the game. What the animator needs, each frame:
+  - the body's velocity (its `Rigidbody`) and the speed it's trying to move at, so moving at its
+    intended speed reads as full in the blend and standing still reads as zero;
+  - its **stance**: Rest, Aim, Run, Restrained, Frozen, GettingUp;
+  - what it holds: None or Pistol (TwoHanded reserved for later);
+  - where to look and aim (a world point), or none.
+- **`CharacterAnimator`**, a component on the model's GameObject (beside the `Animator`, so it gets
+  `OnAnimatorIK`). It finds its `IAnimatedCharacter` above it. Each frame it:
+  - writes the parameters: local move direction (relative to the lower body's facing), stance,
+    weapon, and a turn value while turning in place;
+  - keeps the lower body's yaw, turning it toward the look point at **Turn Speed** once the twist
+    passes **Twist Limit**, and matching the body's facing while moving;
+  - applies the look-at in `OnAnimatorIK` (body, head) toward the look point, clamped to the limit;
+  - on Frozen, pauses the animator (speed 0) and resumes on leaving it. It never enables or disables
+    the `Animator`: Ruby's `SkeletonRagdollBody` already switches hers off when she's downed, and the
+    two must not fight.
+- **`CharacterAnimationSet`** (ScriptableObject): the slots, grouped as stance × weapon.
+  Directional slots hold nine clips (idle plus eight directions).
+
+### `Ruby.Animation.Editor` (new, references `Ruby.Animation`)
+
+- A menu command that builds or rebuilds a character's Animator Controller from its
+  `CharacterAnimationSet`, with the IK pass on the layer that needs it. Rebuilding keeps the
+  controller asset's GUID, so prefabs that use it stay wired.
+
+### `Ruby.Game`
+
+- **`EnemyController`** implements `IAnimatedCharacter`. Stance comes from its state:
+
+  | State | Stance |
+  | --- | --- |
+  | Idle, Patrol, Searching | Rest |
+  | Aggro, armed, Ruby in sight, in range and on her feet (he's firing) | Aim, looking at Ruby, whether moving or not |
+  | Aggro, otherwise moving | Run |
+  | Aggro, otherwise standing (holding with Ruby down, cornered) | Rest |
+  | Rearm | Run (unarmed) |
+  | Grabbed | Restrained |
+  | Ragdoll, spinning upright | Restrained |
+  | Ragdoll, tumbling | Frozen |
+  | Ragdoll, getting up | GettingUp |
+  | Dead | Frozen |
+
+  `AggroState` exposes whether he's firing (armed, Ruby in sight, in range and on her feet) so the
+  controller can read it. An unarmed officer's Rest and Run use the no-gun slots.
+- **`EnemyController.EnterGrabbed`** drops the gun with a small pop: the body's velocity plus **Grab
+  Gun Pop** up and outward, away from his body. `GunHolder` and `Gun` already keep it out of walls
+  and on continuous collision.
+- **`RagdollState`** gains the get-up phase; the transition to Aggro reads it. `KnockDown`,
+  `TakeHit` and `Alert` treat the get-up phase as standing (see Calls).
+- **`PlayerController`** implements `IAnimatedCharacter` for Ruby (Run stance while moving, Frozen
+  while downed). `PlayerAnimator` is removed once Ruby runs on `CharacterAnimator`.
+
+### `Ruby.Weapons`
+
+- **`GunHolder`** aims in `LateUpdate` toward the target recorded by `AimAt` (see Calls).
+
+## Slots and stand-ins
+
+All clips are the pack's in-place versions (not the `RootMotion` folders).
+
+| Slot | Officer stand-in (`HumanM@...`) | Ruby (`HumanF@...`) |
+| --- | --- | --- |
+| Rest, no gun / pistol (9 each) | `Idle01` + `Walk01_*` | not used |
+| Run, no gun / pistol (9 each) | `Idle01` + `Run01_*` | `Idle01` + `Run01_*` (today's) |
+| Aim, pistol (9) | `Idle01` + `Walk01_*` | her run set, until an aim clip exists |
+| Turn in place, left / right | `Turn01_Left`, `Turn01_Right` | same, unused at twist limit 0 |
+| Restrained | `Idle01` (pinned and wriggling later) | not used |
+| Get up | `Idle01` (a real get-up later) | not used |
+
+The crouched raid walk, low-ready run, upright aim, pinned wriggle and get-up are the clips to make
+or buy; each drops into its slot.
+
+## Assets: Inspector work for the user
+
+1. **`HumanM_Model.fbx` import:** Rig is Humanoid (Create From This Model) and Optimize Game Objects
+   is off; both are already set. Its `.meta` holds no saved bone mapping, unlike `HumanF_Model`'s,
+   so open Rig → Configure and confirm the Avatar is valid before using it.
+2. **The pack's clips:** in-place versions, Loop Time on for locomotion, root motion baked into the
+   pose. Check, don't assume.
+3. **`popo.prefab`** (the officer; work in progress in the editor, uncommitted):
+   - Delete the new bare `Enemy.prefab`; popo replaces it.
+   - `HumanM_Model` nests as a child, `Model`, at local (0, −1, 0), so its feet meet the capsule's
+     bottom. Today it sits at (0, 0, 0).
+   - Remove the second set of officer components from the model's root: Rigidbody, CapsuleCollider,
+     Health, EnemyController, Weight, CapsuleRagdollBody and ImpactDamage. Two EnemyControllers
+     would each run an AI, the second with no gun, and `CharacterAnimator` looking up from the model
+     would find the model's one first. The model carries the Animator, `CharacterAnimator` and bones
+     only.
+   - Keep the chain's grab point (`GrappleNode`) on popo's root at (0, 0.5, 0), not on a bone: the
+     rope anchors to the node every physics step, so on a bone the anchor would wriggle with the
+     Restrained animation.
+   - On `Model`'s `Animator`: the generated Officer controller, Apply Root Motion off, Culling Mode
+     Always Animate (the gun's muzzle is on a bone, and shots leave from it even off screen).
+   - Add `CharacterAnimator` to `Model`, with the Officer animation set.
+   - Move the `Pistol` onto `B-handProp.R`, posed in the grip, scale (1, 1, 1). It's at scale 0.3
+     with a −1.388 offset today. Point `GunHolder`'s Hand at `B-handProp.R`. Delete `Hand` and
+     `HandMesh`.
+   - Turn off the root's capsule `MeshRenderer`. The model has no colliders; keep it that way.
+   - Material and colour are the user's call (officers are pink today).
+4. **`Red.prefab`:** replace `PlayerAnimator` with `CharacterAnimator` on her model, with Ruby's set
+   and her generated controller.
+
+## Defaults
+
+| Setting | Where | Default | Why |
+| --- | --- | --- | --- |
+| Twist Limit | CharacterAnimator | 70° officer, 0° Ruby | Inside the user's 60–90°; Ruby's legs follow at once, as today. |
+| Turn Speed | CharacterAnimator | 360°/s | The legs catch up in about a quarter second. |
+| Look-at weights | CharacterAnimator | body 0.8, head 1 officer; 0 Ruby | Most of the twist in the chest. |
+| Move damping | CharacterAnimator | 0.1 s | As `PlayerAnimator` today. |
+| Get Up Time | EnemyController | 1 s | Long enough to read; a real clip sets the final value. |
+| Grab Gun Pop | EnemyController | 3 m/s up, 2 m/s out | A small hop clear of his hands. |
+
+## Build order
+
+One step at a time, with the user's play-test after each.
+
+1. `Ruby.Animation`: the interface, `CharacterAnimator`, the animation set and the controller
+   builder. Ruby moves onto it with identical looks: the proof the piece works.
+2. Officers on `HumanM_Model`: the Inspector work, stances from state, the pistol on its prop bone,
+   the gun aimed after animation.
+3. The aim twist and the legs following.
+4. Grab pop, Restrained, the get-up phase, freezing.
+5. Docs: CLAUDE.md, the manual, this spec's "Changed in play-testing".
+
+## Out of scope
+
+- Limp ragdolls for officers (next branch).
+- Hand-made aim poses, two-handed weapons, a pickup animation, Ruby's get-up, footsteps.
+- Any change to how officers move, see, path or fight.
