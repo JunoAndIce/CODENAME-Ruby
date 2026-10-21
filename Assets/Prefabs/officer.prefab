@@ -20,7 +20,7 @@ GameObject:
   - component: {fileID: -5388707325153722506}
   - component: {fileID: 3654045223431285361}
   m_Layer: 0
-  m_Name: popo
+  m_Name: officer
   m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
