@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(CapsuleCollider))]
-public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKnockdown, IKnockback
+public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKnockdown, IKnockback, IAnimatedCharacter
 {
     public float _moveSpeed = 15f;
     public int _bulletCount = 6;
@@ -40,6 +40,20 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
 
     Vector3 ICameraTarget.Position => transform.position;
     bool ICameraTarget.WantsPeek => _peekHeld;
+
+    Rigidbody IAnimatedCharacter.Body => _myRigidbody;
+    // Only while a direction is pressed: reported as always moving, her legs would never lag behind
+    // her aim while she stands still.
+    float IAnimatedCharacter.MoveSpeed => _moveVelocity.sqrMagnitude > 0f ? _moveSpeed : 0f;
+    // She always faces the cursor, so on her feet she's always aiming.
+    AnimStance IAnimatedCharacter.Stance => _downed ? AnimStance.Frozen : AnimStance.Aim;
+    WeaponHold IAnimatedCharacter.Weapon => WeaponHold.Pistol;
+
+    bool IAnimatedCharacter.TryFindTarget(out Vector3 point)
+    {
+        point = _aimPoint;
+        return !_downed;
+    }
 
     void Start()
     {

@@ -49,7 +49,7 @@
 - Produces:
   - `public enum AnimStance { Rest = 0, Aim = 1, Run = 2, Restrained = 3, Frozen = 4, GettingUp = 5 }`
   - `public enum WeaponHold { None = 0, Pistol = 1, TwoHanded = 2 }`
-  - `public interface IAnimatedCharacter { Rigidbody Body { get; } float MoveSpeed { get; } AnimStance Stance { get; } WeaponHold Weapon { get; } bool TryGetLookTarget(out Vector3 point); }`. `MoveSpeed` is the speed the character is trying to move at, 0 when standing.
+  - `public interface IAnimatedCharacter { Rigidbody Body { get; } float MoveSpeed { get; } AnimStance Stance { get; } WeaponHold Weapon { get; } bool TryFindTarget(out Vector3 point); }`. `MoveSpeed` is the speed the character is trying to move at, 0 when standing.
   - `[Serializable] public class DirectionalClips` with public fields `Idle, Forward, ForwardRight, Right, BackwardRight, Backward, BackwardLeft, Left, ForwardLeft` (all `AnimationClip`), and `public bool IsEmpty`, true when every clip is null.
   - `public class CharacterAnimationSet : ScriptableObject`, with `[CreateAssetMenu(menuName = "Ruby/Character Animation Set")]`. Serialized `DirectionalClips` slots: `_restUnarmed`, `_restPistol`, `_runUnarmed`, `_runPistol`, `_aimPistol`. Clips: `_turnLeft`, `_turnRight`, `_restrained`, `_getUp`. Read properties of the same names without the underscore, PascalCase.
   - `public static class CharacterControllerBuilder` with `public static AnimatorController Build(CharacterAnimationSet set)`. The menu item is `Assets/Ruby/Build Character Controller` (on a selected set); a custom inspector for the set has a **Build Controller** button. The output is `<set folder>/<set name> Controller.controller`.
@@ -74,7 +74,7 @@
   - `MoveSpeed`: `_moveSpeed` while a direction is pressed (`_moveVelocity` isn't zero), else 0. Comment why: reported as always moving, her legs would never lag in Task 3.
   - `Stance => _downed ? AnimStance.Frozen : AnimStance.Aim`. She always faces the cursor.
   - `Weapon => WeaponHold.Pistol`.
-  - `TryGetLookTarget` gives `_aimPoint` while she's not downed; otherwise it returns false.
+  - `TryFindTarget` gives `_aimPoint` while she's not downed; otherwise it returns false.
 - [ ] **Step 5: Compile.** Run `python tools/compile_check.py`. Expected: `compile-check: OK` (it finds new asmdefs by itself).
 - [ ] **Step 6: Inspector work for the user** (hand this list over and wait):
   1. Create `Assets/Animations/Ruby Animation Set.asset` (Create → Ruby → Character Animation Set). Fill **Aim Pistol** with `HumanF@Idle01` and `HumanF@Run01_*`, one per direction, as her current tree. Leave every other slot empty for now.
@@ -100,7 +100,7 @@
 - Produces:
   - `AggroState.Firing` (`public bool`), true while armed, with Ruby in sight, on her feet and `Arms.InRange`.
   - `EnemyController.MoveSpeed` (the last speed passed to `MoveToward`/`StepAway`; `Stop` sets 0).
-  - `EnemyController.Stance` / `Weapon` / `TryGetLookTarget`.
+  - `EnemyController.Stance` / `Weapon` / `TryFindTarget`.
 
 - [ ] **Step 1: The intended speed.** Add `private float _intendedSpeed`. `MoveToward` and `StepAway` set it to their `speed`, and `Stop()` sets it to 0. `MoveSpeed => _intendedSpeed`. `Body` already satisfies the interface.
 - [ ] **Step 2: `AggroState.Firing`.** In `Shoot`, compute `Firing = Enemy.IsArmed && Enemy.CanSeePlayer() && Enemy.PlayerIsUp && Enemy.Arms.InRange(player)`. If firing, `AimAt` then `TryFireAt`; otherwise `Lower()`. Today it also aims beyond range; the spec ends that. Reset `Firing` to false in `Enter` and `Exit`.
@@ -115,7 +115,7 @@
   | Ragdoll | `RagdollBody.IsSpinning` → Restrained; else Frozen (Task 4 adds GettingUp) |
   | Dead | Frozen |
 
-  `TryGetLookTarget` gives Ruby's position when `Stance == Aim`; otherwise it returns false.
+  `TryFindTarget` gives Ruby's position when `Stance == Aim`; otherwise it returns false.
 - [ ] **Step 4: `GunHolder` aims after animation.**
   - `AimAt(point)` records `_aimPoint` and sets `_aiming = true`; it no longer turns the gun.
   - A new `LateUpdate` turns the held gun flat toward `_aimPoint` while armed and aiming. Keep the existing `LookRotation` code, moved here.
@@ -149,7 +149,7 @@
 - Modify: `Assets/Scripts/Animation/Editor/CharacterControllerBuilder.cs`
 
 **Interfaces:**
-- Consumes: `IAnimatedCharacter.TryGetLookTarget`, `Body`.
+- Consumes: `IAnimatedCharacter.TryFindTarget`, `Body`.
 - Produces:
   - New serialized fields on `CharacterAnimator`: `[SerializeField, Range(0f, 180f)] _twistLimit = 70f`, `[SerializeField, Min(0f)] _turnSpeed = 360f`, `[SerializeField, Range(0f, 1f)] _bodyLookWeight = 0.8f`, `[SerializeField, Range(0f, 1f)] _headLookWeight = 1f`.
   - The builder: the base layer's IK pass on; the `Aim Pistol` idle cell becomes a 1D blend tree on `Turn`: −1 `TurnLeft`, 0 `Idle`, 1 `TurnRight`, when the turn clips are set.
