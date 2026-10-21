@@ -70,11 +70,12 @@ The scripts are split into assembly definitions so the systems can be lifted int
 
 | Assembly | Folder (under `Assets/Scripts/`) | References | Holds |
 | --- | --- | --- | --- |
-| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdoll seam, pooling, `DebugLog` |
+| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdolls (seam, capsule and skeleton), `IKnockback`, pooling, `DebugLog` |
 | `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, patrol routes |
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
-| `Ruby.Game` | the root and `States/` | all of the above, Input System | player, enemy, gun, bullets, animator, every state |
+| `Ruby.Weapons` | `Weapons/` | Core | guns, bullets, gun hands |
+| `Ruby.Game` | the root and `States/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, animator, every state |
 | `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor` |
 
 The systems reach the game only through interfaces declared in their own assembly, which the
@@ -86,6 +87,7 @@ game implements:
 | `IGrabbable` | Grapple | `EnemyController` | grab, drag and throw it |
 | `IPathAgent` | Pathing | `EnemyController` | a body for `GridNavigator` to steer |
 | `ICameraTarget` | CameraRig | `PlayerController` | a position, an aim point, peek |
+| `IBulletTarget` | Weapons | `EnemyController` | whether a body stops bullets (only while held on the chain) |
 
 **Never make a system reference `Ruby.Game`.** Unity refuses the cycle anyway. When a system needs
 something from the game, add it to the system's interface and implement it in the game. A new script
@@ -125,7 +127,7 @@ Two ways in:
   `Release()` (thrown), `KnockDown()` (a hit at Knockdown Speed). These guard on current state
   themselves.
 
-`EnemyState` distinguishes AI states (Idle/Patrol/Searching/Aggro) from **overrides**
+`EnemyState` distinguishes AI states (Idle/Patrol/Searching/Aggro/Rearm) from **overrides**
 (Grabbed/Ragdoll/Dead) that are imposed externally. The enemy plan, with progress, lives in
 `docs/specs/2026-09-29-enemy-states-v2.md`.
 
@@ -300,14 +302,16 @@ fraction: a gentler weight curve than walking drag, so heavier still comes in sl
 The game is 2D feel on a 3D physics stack. [VelocityUtil.cs](Assets/Scripts/Core/VelocityUtil.cs) owns
 how characters author movement:
 
-- **The player** writes her velocity fresh every physics step from movement input alone
-  (`SetFlatVelocity`). Nothing pushes her: the tether never does, and a hit at Knockdown Speed
-  ragdolls her instead. An older scheme inferred pushes from what the body actually did, read "a
-  wall stopped me" as "something pushed me", and bounced the player off walls and crates and pinned
-  enemies in corners. The explicit-push path that replaced it (`AddExternalVelocity`, faded by Fling
-  Damping) was never called, so it was removed. **When knockback arrives, bring it back as an
-  explicit push carried on top of the move and faded on its own: never inferred from the body, and
-  never by writing a character's Rigidbody velocity directly.**
+- **The player** writes her velocity fresh every physics step from movement input
+  (`SetFlatVelocity`). The tether never pushes her, and a hit at Knockdown Speed ragdolls her
+  instead. The one push is **knockback** (`IKnockback`, a bullet's): `PlayerController` adds
+  impulse ÷ her mass to `_knockback`, carries it on top of the move before `PushLimit` and the rope
+  limit (so a wall or the rope stops it like a step she took), and fades it at Knockback
+  Deceleration. An older scheme inferred pushes from what the body actually did, read "a wall
+  stopped me" as "something pushed me", and bounced the player off walls and crates and pinned
+  enemies in corners. **Any new push follows knockback's pattern: explicit, carried on top of the
+  move and faded on its own; never inferred from the body, and never by writing a character's
+  Rigidbody velocity directly.**
 - **Enemies** set their velocity directly (`SetFlatVelocity`): nothing pushes them while their AI
   steers, because the rope only acts while grabbed, and `GrabbedState` doesn't steer.
 - `Flatten()` redirects an upward launch into XZ **preserving magnitude**, so throw distance depends
@@ -324,8 +328,12 @@ damage will be computed from mass and speed. A body gets its mass from a **`Weig
 (`Core/`): it picks a `WeightClass` (Tiny 10, Small 20, Medium 30, Large 40, Huge 50, Immovable 60, Player,
 Enemy, or Custom kg) and
 writes that class's kg from the shared **`WeightTable`** asset into `Rigidbody.mass` at Awake.
-`Rigidbody.mass` stays the runtime truth that everything reads. Retune the table, not individual
-Rigidbodies.
+Retune the table, not individual Rigidbodies. **Two masses, two uses.** `Rigidbody.mass` is what
+collisions see, and what impact damage reads off the body that hit. The character's whole weight is
+`Weight.TotalMassKg`, or `Weight.MassOf(body)` for any Rigidbody (its own mass when it has no
+`Weight`). They differ only while Ruby is ragdolled: her root then carries 2% of her weight and her
+bones the rest. Anything that weighs a character as a whole, like the tether, reads `MassOf`, or
+a downed Ruby would weigh 1.2 kg on the chain.
 **Immovable also makes the body kinematic** (`Weight` owns `isKinematic` on its body), because
 every system already treats kinematic as fixed: the tether anchors to it, walking and thrown bodies
 can't move it, and the PathGrid bakes it as static. Special interactions on immovable objects (a
@@ -333,7 +341,7 @@ turret's gun pulled off) belong on nodes on their child parts.
 `WeightClass` values are explicit and out of order on purpose: Unity saves the number, so a new
 class takes a new number rather than shifting the ones after it.
 
-The tether only reads **ratios** to the player's mass: she drags a host at a drag fraction of
+The tether only reads **ratios** to the player's mass (whole weights, through `MassOf`): she drags a host at a drag fraction of
 `f = clamp01(1 − mT / mP)` and reels it in at up to 20 m/s × √f, a throw flies at `throwImpulse · mP / (mP + mT)`, and a host
 parks only when `mT ≤ mP`. So whether something feels heavy on the chain depends on its mass compared with the
 player's, and walking into it is judged against the walker's own mass. Tension is the one absolute
@@ -353,15 +361,33 @@ through the player never slows the walk.
 ### Enemy AI
 
 - **Sight** (`EnemyController.CanSeePlayer`): a ray from eye height to the player. **Anything solid
-  blocks it except characters** (the player, enemies, their child colliders). Unlike paths, sight is
+  blocks it except characters** (any body under the player or an enemy, so Ruby's own ragdoll bones
+  never hide her). Unlike paths, sight is
   checked fresh every frame, so a crate or table can hide the player, while a prop lower than the eye
   line can't. Cached once per frame.
-- **Detection**: within Alert Radius **and** in sight → Aggro. Damage and getting up from a ragdoll
-  (thrown or dropped) also enter Aggro.
-- **Aggro** hunts along the shared chase field and attacks within Attack Range with a clear line
-  (placeholder attack until weapons). Contact holds while the player is in sight within Give Up
-  Radius. After Aggro Time without it the enemy searches **where the hunt was leading when it gave
-  up** (recorded on Aggro's exit), not where the player slipped out of view.
+- **Detection**: patrolling or searching, within Alert Radius **and** in sight → Aggro. **Idle
+  officers hold their post**: seeing Ruby doesn't move them, and only damage (or, unarmed, a free
+  gun in reach) does. That includes an officer with no route that went back to Idle after a search.
+  Damage and getting up from a ragdoll (thrown or dropped) enter Aggro from any AI state.
+- **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
+  sight, it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
+  backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyController.StepAway`),
+  standing its ground when cornered. It fires alongside all of that, whenever she's in sight, in
+  range and on her feet; firing is not a state. Contact holds while the player is in sight within
+  Give Up Radius. After Aggro Time without it the enemy searches **where the hunt was leading when
+  it gave up** (recorded on Aggro's exit), not where the player slipped out of view.
+- **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
+  Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
+  up within 0.3 m of its body's surface, measured to the nearest point of the gun's colliders
+  (`Gun.ClosestPoint`, `EnemyController.BodyRadius`), so the pickup lands before the capsule
+  touches the gun: measured to the pivot, an enemy walked into a long gun's far end and kicked it
+  away. When the navigator says it has arrived but it's still short (a gun against a wall or in a
+  corner sits on a clearance-blocked cell), it stretches to 1 m, or gives up on that gun and tries
+  the next, so it can never stand beside a gun for good. A gun it gave up on gets another try once
+  it has moved 0.5 m or after 10 s; retrying sooner would send an enemy near a truly unreachable
+  gun back into Rearm, and from there back to Aggro, every few seconds. It always hands back to
+  Aggro. Having given up on every gun in reach, it waits Route Retry Time before trying again, so
+  it doesn't flicker.
 - **Patrol** walks a route of **area nodes** stored on the enemy (`PatrolRoute`). Each area is a
   circle or a rectangle lined up with X and Z (`GridArea`), so it can fill a room or run along a
   corridor. The enemy heads for an area's centre, and when the centre is occupied the nearest open
@@ -403,14 +429,17 @@ A\* for individual ones**:
 ### Impact damage
 
 One formula for every hit (spec: `docs/specs/2026-10-08-impact-damage.md`). **`ImpactDamage`**
-(`Core/`, on anything that can be hurt; needs Health) measures each contact's closing speed
+(`Core/`, on anything that can be hurt) finds its `Health` and `IKnockdown` on its own object or a
+parent, so each bone of Ruby's ragdoll carries one and hurts Ruby. It measures each contact's closing speed
 (`collision.relativeVelocity` along the contact normal, taken before the solver absorbs it). Below
 the shared **`ImpactRules`** asset's Knockdown Speed nothing happens, for any weight. At or above
 it, the body takes `Damage Scale × speed × √(hitter mass / Reference Mass)`, the hitter being the
 other body, or its own mass against anything fixed, and is knocked down through **`IKnockdown`**,
 whose owner decides what that means. Each body in a hit carries its own `ImpactDamage`, so both
 sides are hurt; walls and props have none, so they only deal. Once per contact
-(`OnCollisionEnter`): pinned against a wall isn't a hit every step, but each bounce is.
+(`OnCollisionEnter`): pinned against a wall isn't a hit every step, but each bounce is. A hit
+from a body sharing the same `Health` doesn't count: a falling ragdoll's arm striking its own chest
+isn't a hit.
 
 **A hit has to happen to count.** A host is switched to continuous collision detection the moment
 the tether attaches, and left that way: a thrown 20 kg crate leaves at about 90 m/s, almost a metre
@@ -434,7 +463,7 @@ like any body. A corpse takes no more damage and is never a spinning top. `Grapp
 calls `EnterGrabbed` before building the tether, because a body at rest has trigger colliders until
 then and the tether sizes the park distance from solid ones.
 
-`PlayerController.KnockDown` ragdolls Ruby (her `CapsuleRagdollBody`) and takes her control away,
+`PlayerController.KnockDown` ragdolls Ruby (her `SkeletonRagdollBody`) and takes her control away,
 the one deliberate exception to "never take movement away": `_downed` stops movement, aim and the
 gun (`CanShoot`), and `IGrappleUser.CanAct` makes the grapple stand down (`StandDown`: lets go of
 whatever it holds, calls back a whip in flight, clears the trail and any charge). The grapple checks
@@ -442,16 +471,106 @@ it in `FixedUpdate` too, because a knockdown lands in a collision callback that 
 physics step and the next `Update`. Alive, she gets up once the ragdoll settles; dead, she stays
 down, with no restart yet.
 
+### Weapons
+
+Spec: `docs/specs/2026-10-11-enemy-weapons.md`. Officers carry pistols (`Gun`, held by a
+`GunHolder`). Ruby's revolver (`GunController`, `BulletController`) is a different gun and isn't
+part of this system. For now it wears the officers' pistol model: a bare mesh (`EnemyPistol`, with
+no `Gun`, Rigidbody or collider, which would make it a loose prop and drop it) under her left hand
+bone, `Wrist_L`, so it follows her animation standing and her forearm when she's down. Its `Muzzle`
+child is the Fire Point and carries the `GunController`, which finds the `PlayerController` above
+it. Shots fly flat from the muzzle toward `AimPoint`, never along the muzzle's own facing: that
+swings and tilts with her animated hand, and a bullet flown along it would hit the floor.
+
+- **Bullets** (`Bullet`, pooled) sweep a 0.05 m sphere along each physics step, so a fast bullet
+  can't skip through a thin wall. They stop at the nearest thing that stops bullets: anything
+  solid, unless its `IBulletTarget` says no. Enemies stop them only while held on the chain (a
+  shield), so there's no friendly fire. A bullet does the gun's fixed Damage (30, so one shot kills
+  Ruby) and knocks down what it kills. Then it lands the gun's Knockback (240 kg·m/s) on whatever
+  takes it (`IKnockback`, only Ruby): after the knockdown, so a killing shot hits her ragdoll, at
+  the limb it struck (`IRagdollBody.ApplyHit`), and a shot she survives shoves her about 4 m/s.
+  Enemies take no push, so a held shield doesn't budge. It isn't impact damage: under that formula
+  a light bullet at the pistol's 40 m/s would do almost nothing.
+- **Held vs loose:**
+  - A held gun is kinematic with its colliders off (characters collide with their root capsule
+    only), and its **interpolation off**. Interpolation writes the body's own physics history over
+    its transform each frame, so a held gun drifted off the hand.
+  - A loose gun is a prop (class Small, 20 kg, so a full throw kills an officer). Its grab point is a child listed in Dropped Only, switched on only
+    while loose, so the chain takes guns off the floor but never out of a hand.
+  - `GrappleNode` resolves its Host and Grabbable on every enable, not once on wake. A gun's grab
+    point first wakes in an officer's hand, and resolving it there made grabbing the dropped gun
+    grab the officer.
+- **The holder:**
+  - `GunHolder` finds its starting gun anywhere under the character. `Gun` counts itself held
+    whenever a holder is above it, and the two must agree, or a held gun is never fired.
+  - It records the starting gun's pose relative to the Hand, so a gun picked up later sits exactly
+    where the starting one did.
+  - It warns when the starting gun isn't under the Hand, when the Hand holds a Rigidbody with no
+    Gun, and when the Hand's scale isn't uniform. Aiming turns a gun off the Hand's axes, and under
+    a non-uniformly scaled Hand Unity shears it; the officer's Hand is (1, 1, 1), its cube on a
+    `HandMesh` child.
+- **Drops:** `EnterGrabbed`, `KnockDown` and `DeadState.Enter` drop the gun with the body's
+  velocity, so a knockdown sends it off at the hit's speed.
+  - The holder lowers it first, and the gun restores its true world scale (read at Awake) once it
+    leaves the hand, so a drop mid-aim can't keep a shear as a stretched scale.
+  - It's dropped from about a metre in front of the officer, so `Gun.KeepOutOfWalls` casts from the
+    holder's centre to the gun's far end and pulls it back toward the officer until it clears
+    anything solid. Otherwise one dropped facing a wall started inside it.
+  - A loose gun uses continuous collision detection, since a knockdown drop is fast enough to pass
+    through a wall in one step; a held one goes back to discrete before turning kinematic.
+
 ### Ragdoll seam
 
-`IRagdollBody` exists because the enemy is currently a capsule with no rig; joint ragdolls aren't
-buildable yet. `CapsuleRagdollBody` is the physics-handoff implementation, swappable when rigs
-arrive. It reports `IsSettled` after velocity stays below a threshold for a sustained period, or,
-for an in-place `Spin`, once the spin's time is up, and the transition table uses that to hand
-control back to `Aggro`. The spin raises the body's `maxAngularVelocity`, because Unity's default
-cap of 7 rad/s would silently slow it. `Rest` lays a body to rest (frozen, its solid colliders made
-triggers) and every other call (`Ragdoll`, `Spin`, `Hold`, `Recover`) wakes it first, so a body
-can't be left frozen by accident.
+`IRagdollBody` keeps how a body ragdolls out of the characters that use it. Both backends
+report `IsSettled` once the body has stayed slow for a while (or, for an in-place `Spin`, once the
+spin's time is up), and `Rest` lays a body to rest (frozen, its solid colliders made triggers).
+Every other call (`Ragdoll`, `Spin`, `Hold`, `Recover`) wakes it first, so a body can't be left
+frozen by accident. `ApplyHit` lands an impulse at a point on a ragdolling body (a bullet's
+knockback) and does nothing otherwise.
+
+**`CapsuleRagdollBody`** (enemies) is the physics handoff on a capsule with no rig. The
+transition table uses `IsSettled` to hand control back to `Aggro`. The spin raises the body's
+`maxAngularVelocity` to twice its speed, because the cap (Default Max Angular Speed, 50 rad/s in
+this project's physics settings) would silently slow a faster spin. Enemies stay
+on it: a spinning top isn't a knockdown ragdoll. What converting them needs is listed in the
+completion gate of `docs/plans/2026-10-12-ruby-ragdoll.md`.
+
+**`SkeletonRagdollBody`** (Ruby) ragdolls her humanoid rig. It goes on the **root**, beside the
+capsule, not on the model, and it's model-agnostic with nothing to wire. It finds the pelvis
+through the Humanoid Avatar (`Animator.GetBoneTransform(HumanBodyBones.Hips)`), and takes as bones
+the pelvis and every *jointed* Rigidbody under it, so a gun held under a hand bone isn't one. A new
+model needs a Humanoid import with **Optimize Game Objects off** (on, its bones don't exist as
+GameObjects and the Hips lookup fails), the Ragdoll Wizard on its prefab, and `ImpactDamage` on each
+bone. The wizard's masses only set proportions.
+
+- **Standing:** the Animator runs, the bones are kinematic with their colliders off, and the root
+  capsule collides and carries her whole weight. The bones are forced to this in `Start`, whatever
+  the prefab says.
+- **Ragdolling:** the Animator and capsule go off, and the bones go live (continuous detection)
+  sharing 98% of `Weight.TotalMassKg` in the wizard's proportions. The root keeps 2% and rides the
+  pelvis on a `ConfigurableJoint`, so the camera, the AI and the chain still follow her root.
+  - It's a joint rather than moving the root after the pelvis, because the chain pulls a host by
+    its root.
+  - Both anchors are set to zero: Unity starts a new joint at (0, 1, 0), which held the root a
+    metre under the pelvis, under the floor once she lay down.
+  - Jointed neighbours don't collide with each other, which is Unity's joint default, but other
+    limbs do (a forearm against the chest), so the body reads as solid.
+  - Whatever meets her body meets one bone at its own mass. Impact damage reads that mass, and one
+    body touching several limbs is several contacts, so a crate across two limbs hurts her twice
+    (the per-contact rule, applied per limb). `PushLimit` reads it too, so an officer walking into
+    her shoves her limbs aside rather than being blocked by her 60 kg.
+- **Settled:** every bone stays below Settle Speed and Settle Angular Speed for Settle Time. Only
+  the pelvis being still isn't enough, because a limb still swinging means she hasn't landed.
+- **`Recover`** stands the root up on the ground under the pelvis, facing as before, restores the
+  weight and the capsule, then evaluates the Animator at once, so the mesh doesn't flash its ragdoll
+  pose for a frame.
+- **`ApplyHit`** lands Hit Local Share (0.3) of the impulse on the limb nearest the point, so a
+  shoulder shot twists her. The rest is the same velocity change on every body, so no single joint
+  takes the whole push and tears.
+- Her model sits at local Y −1 under the root, so its feet meet the capsule's bottom.
+- Ruby is `Assets/Prefabs/Red.prefab`. Its model is an unpacked copy of the School Girl rig, not a
+  nested `Player.prefab`, so her bones, ragdoll and gun are edited on `Red` itself; changes to
+  `Player.prefab` don't reach her.
 
 `GrabbedState` keeps the body **dynamic**: the tether moves its host by writing velocity, and a
 kinematic body would silently ignore it and hang frozen instead of being dragged.
@@ -466,7 +585,7 @@ be cleared.
 
 ### Animation
 
-`PlayerAnimator` (on the Player root, driving the Animator on the `All` model child) converts
+`PlayerAnimator` (on Ruby's root, driving the Animator on her model child) converts
 Rigidbody velocity to **local space** before writing `MoveX`/`MoveZ`, because the player faces the
 cursor while moving independently — in world space, running north while aiming east would play the
 forward clip instead of a strafe. It reads the Rigidbody rather than input, so pushing into a wall
@@ -487,7 +606,8 @@ the chain states.
   own a speed field.
 - **Characters collide with their root capsule only.** Visual children (models, the gun, eyes) carry
   no colliders: a protruding child collider snags corners and makes the body far wider than it looks.
-  The model can be big for readability; the capsule stays slim.
+  The model can be big for readability; the capsule stays slim. The one exception is a ragdolled
+  Ruby: her bones' colliders take over while the capsule is off, never both at once.
 - `OnValidate` enforces invariants between serialized values (give-up radius outside alert radius, etc.).
 - `OnDrawGizmosSelected` visualises radii, routes, paths and camera lead. Add gizmos for anything
   spatial you introduce.
@@ -514,7 +634,10 @@ The original slice plan: 0 enemy foundation → 1 camera rig → 2 targeting ind
 charge is built as the charged throw in `GrappleController`, its swing as the parked spin; the old
 `PlayerHoldingState` scaffold and its spec (quantised swing directions, a break-out timer) were
 retired. Slice 5, impact damage, is built: enemies and Ruby take it, and dead enemies stay as
-corpses.
+corpses. Enemy weapons (pistols, drops, re-arming) are built to `2026-10-11-enemy-weapons.md`.
+Ruby ragdolls on her own rig, and officers' bullets knock her back, built to
+`docs/plans/2026-10-12-ruby-ragdoll.md`. Enemies are still capsules, and melee and Ruby's revolver
+are still to come.
 
 ## Unity/git
 

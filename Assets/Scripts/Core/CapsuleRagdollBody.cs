@@ -77,7 +77,7 @@ public class CapsuleRagdollBody : MonoBehaviour, IRagdollBody
         // Upright: free to turn round the vertical, never to tip over.
         _rb.constraints = (_defaultConstraints & ~RigidbodyConstraints.FreezeRotationY)
                           | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
-        // Unity caps bodies at 7 rad/s by default, which would quietly slow the spin.
+        // Unity caps a body's spin (Default Max Angular Speed, 50 rad/s here), which would quietly slow a faster one.
         _rb.maxAngularVelocity = Mathf.Max(_defaultMaxAngularVelocity, Mathf.Abs(angularSpeed) * 2f);
         _rb.linearVelocity = launchVelocity;
         _rb.angularVelocity = Vector3.up * angularSpeed;
@@ -88,6 +88,13 @@ public class CapsuleRagdollBody : MonoBehaviour, IRagdollBody
         // A body pushed off the spot it was dropped on is no longer held there.
         _spinInPlace = false;
         _rb.linearVelocity = velocity;
+    }
+
+    // Off centre it turns the capsule as well as pushing it.
+    public void ApplyHit(Vector3 impulse, Vector3 point)
+    {
+        if (!_isRagdolling) return;
+        _rb.AddForceAtPosition(impulse, point, ForceMode.Impulse);
     }
 
     public void Hold()

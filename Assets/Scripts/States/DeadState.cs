@@ -16,6 +16,7 @@ public class DeadState : EnemyStateBase
 
     public override void Enter()
     {
+        Enemy.DropGun();
         Enemy.Darken();
 
         // Killed mid-swing, it stays on the chain and the spin carries on.

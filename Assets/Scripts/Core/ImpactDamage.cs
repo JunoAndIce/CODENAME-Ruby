@@ -4,9 +4,10 @@ using UnityEngine;
 /// Hurts its body when something hits it fast enough, by the shared ImpactRules. Each body in a hit
 /// carries its own, so both sides of a hit are hurt; walls and props, which have none, only deal.
 /// Once per contact (OnCollisionEnter): a body pinned against a wall isn't hurt every step, but
-/// each fresh bounce is a new hit.
+/// each fresh bounce is a new hit. The Health may sit on a parent, so each bone of a ragdoll hurts
+/// the character it belongs to.
 /// </summary>
-[RequireComponent(typeof(Rigidbody), typeof(Health))]
+[RequireComponent(typeof(Rigidbody))]
 public class ImpactDamage : MonoBehaviour
 {
     [SerializeField] private ImpactRules _rules;
@@ -18,12 +19,17 @@ public class ImpactDamage : MonoBehaviour
     private void Awake()
     {
         _body = GetComponent<Rigidbody>();
-        _health = GetComponent<Health>();
-        TryGetComponent(out _knockdown);
+        _health = GetComponentInParent<Health>();
+        _knockdown = GetComponentInParent<IKnockdown>();
 
         if (_rules == null)
         {
             Debug.LogError($"{name}: ImpactDamage has no Impact Rules — it takes no impact damage.", this);
+            enabled = false;
+        }
+        if (_health == null)
+        {
+            Debug.LogError($"{name}: ImpactDamage needs a Health on this object or a parent — it takes no impact damage.", this);
             enabled = false;
         }
     }
@@ -35,8 +41,11 @@ public class ImpactDamage : MonoBehaviour
         float speed = ImpactSpeed(collision);
         if (speed < _rules.KnockdownSpeed) return;
 
-        // Hitting something fixed, you hit it with your own weight.
+        // One part of a body striking another, an arm against the chest as it falls, isn't a hit.
         Rigidbody other = collision.rigidbody;
+        if (other != null && other.GetComponentInParent<Health>() == _health) return;
+
+        // Hitting something fixed, you hit it with your own weight.
         float hitterMass = other != null && !other.isKinematic ? other.mass : _body.mass;
         float damage = _rules.Damage(speed, hitterMass);
 

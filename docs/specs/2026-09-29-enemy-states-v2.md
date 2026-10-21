@@ -25,7 +25,8 @@ Lifecycle" plans.
 - [~] Perception: **line of sight is done** (with Aggro). Anything solid blocks it except
   characters, so props hide the player and low props under the eye line don't. Windows and
   **sound (last)** remain.
-- [ ] Weapons
+- [x] **Weapons:** pistols, built to `2026-10-11-enemy-weapons.md`, which supersedes section 7.
+  Melee is deferred.
 - [ ] Controller housekeeping
 
 Earlier experiments (`PatrolRoute` objects, a NavMeshAgent navigator, a friction material swap) are kept
@@ -303,6 +304,10 @@ waypoints. Each point is now an **area**, a centre plus a radius:
   `_searchDuration` runs out. `SearchExpired` is what the table reads.
 
 ### 7. Weapons: `Assets/Scripts/Weapons/`
+
+*Superseded by `2026-10-11-enemy-weapons.md`, which covers pistols. It has its own assembly,
+drops, re-arming, and bullets that stop on anything except free officers. Melee waits for a later
+pass. The original plan follows.*
 
 - `EnemyWeapon` (abstract MonoBehaviour):
   - Fields: `_range`, `_cooldown`, `_damage`.
