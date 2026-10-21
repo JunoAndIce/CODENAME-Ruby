@@ -90,6 +90,16 @@ The user chose each of these:
 - **The officer is `popo.prefab`**, the old `Enemy.prefab` renamed in the editor (it kept its GUID,
   so every officer in `SampleScene` is already a popo). The model nests inside it as visuals only.
   The bare `HumanM_Model` prefab saved as a new `Enemy.prefab` is deleted.
+- **Holding the gun** (decided 2026-10-21), in three parts:
+  - *Attachment:* the gun is a child of the hand's prop bone, so it follows the hand. Done.
+  - *Grip:* the pack's `Human@ObjectGripHands01` hand pose, closed around the gun, on a layer
+    masked to the gun hand (the pack's Right Hand mask for officers, Left Hand for Ruby, whose
+    pistol is in her left hand). It's laid over the body while the character holds a weapon and
+    lifted when unarmed.
+  - *Arm:* while aiming, Unity's built-in Humanoid hand IK reaches the gun hand out from its
+    shoulder along the aim, so the arm points the gun at the target. It's a stand-in: pistol-holding
+    animations (idle, walk, run, aim) dropped into the slots replace it later, the way aim poses
+    replace the twist.
 - **Ruby moves onto the same piece, and gets the body turn too** (decided 2026-10-21): "she
   should use it. It will make her movements more realistic." Standing still, her chest follows the
   cursor and her feet step round past the limit. Her aim point, shots and whip still turn

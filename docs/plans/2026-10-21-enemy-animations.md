@@ -121,6 +121,12 @@
   - A new `LateUpdate` turns the held gun flat toward `_aimPoint` while armed and aiming. Keep the existing `LookRotation` code, moved here.
   - `Lower()` sets `_aiming = false` and restores the grip rotation, as now.
   - Comment the reason: an aim set in `FixedUpdate` is overwritten when the animated hand moves.
+- [ ] **Step 4b: The grip layer** (added 2026-10-21).
+  - `CharacterAnimationSet` gains `_grip` (`AnimationClip`) and `_gripMask` (`AvatarMask`), read as `Grip` and `GripMask`.
+  - The builder adds a layer named `CharacterAnimator.GripLayer` (`"Grip"`) when both are set: masked to `GripMask`, Override, default weight 0, with one state holding `Grip`. A grip clip without a mask logs a warning and builds no layer.
+  - `CharacterAnimator` finds the layer by name in `Awake`, then moves its weight toward 1 while `Weapon` isn't None and toward 0 otherwise, over 0.15 s. Weight is driven from code because an empty "open" state would write the hand's default pose.
+  - The parameter and layer names become `public const` strings on `CharacterAnimator`, and the builder reads them from there, so the two can't drift.
+  - `Clear` destroys every sub-asset but the controller and the base layer's machine, so a removed layer leaves nothing behind.
 - [ ] **Step 5: Compile.** Expected: `compile-check: OK`.
 - [ ] **Step 6: Inspector work for the user:**
   1. Create `Assets/Animations/Officer Animation Set.asset` and fill the slots from the spec's table, all `HumanM@…` in-place clips:
@@ -129,6 +135,8 @@
      - **Aim Pistol**: `Idle01` plus `Walk01_*`.
      - **Turn Left/Right**: `Turn01_Left`, `Turn01_Right` (not the `[RM]` ones).
      - **Restrained** and **Get Up**: `Idle01`.
+     - **Grip**: `Masked Poses/Human@ObjectGripHands01`; **Grip Mask**: `Models/Avatar Masks/Hands/Human Hand Right Mask`.
+     - In Ruby's set too: the same **Grip**, with **Human Hand Left Mask** (her pistol is in her left hand). Rebuild her controller.
   2. **Build Controller.**
   3. On `popo.prefab`'s `Model`: set the Animator's Controller to `Officer Animation Set Controller`, and add `CharacterAnimator`.
   4. Check the pack's clips: Loop Time on for the locomotion clips, and root rotation and position baked into the pose.
@@ -137,6 +145,7 @@
   - **Patrolling and searching** officers walk.
   - **Chasing beyond range, or out of sight,** officers run. An officer **firing at Ruby** switches to the Aim set while he keeps moving, walking or backpedalling.
   - **The gun** stays in his hand and points at Ruby while he's firing, and follows the hand once lowered.
+  - **The grip:** an armed officer's right hand is closed around the gun, and opens once he's lost it (grabbed, knocked down, or dead). Ruby's left hand is closed around hers.
   - **An unarmed officer** uses the no-gun walk and run, and runs while re-arming.
   - **Grabbed** shows the Restrained stand-in. **Thrown** freezes the pose and tumbles. **Dead** stays frozen, and the model darkens.
   - **Ruby** still looks as she did after Task 1.
@@ -152,6 +161,7 @@
 - Consumes: `IAnimatedCharacter.TryFindTarget`, `Body`.
 - Produces:
   - New serialized fields on `CharacterAnimator`: `[SerializeField, Range(0f, 180f)] _twistLimit = 70f`, `[SerializeField, Min(0f)] _turnSpeed = 360f`, `[SerializeField, Range(0f, 1f)] _bodyLookWeight = 0.8f`, `[SerializeField, Range(0f, 1f)] _headLookWeight = 1f`.
+  - For the aiming arm: `[SerializeField] AvatarIKGoal _gunHand = AvatarIKGoal.RightHand` and `[SerializeField, Range(0f, 1f)] _aimArmWeight = 1f`.
   - The builder: the base layer's IK pass on; the `Aim Pistol` idle cell becomes a 1D blend tree on `Turn`: −1 `TurnLeft`, 0 `Idle`, 1 `TurnRight`, when the turn clips are set.
 
 - [ ] **Step 1: Lower-body yaw.** Keep `_lowerYaw`, the model's world yaw, initialised from the root. Each `Update`, before writing `MoveX`/`MoveZ`, with `rootYaw` taken from `Body.transform`:
@@ -171,11 +181,17 @@
   - With a look target and a body or head weight above 0, rotate the flat direction to the target so it's at most `_twistLimit` off `_lowerYaw`, keeping the target's height.
   - Then call `SetLookAtWeight(1f, _bodyLookWeight, _headLookWeight, 0f, 0f)` and `SetLookAtPosition`.
   - Otherwise call `SetLookAtWeight(0f)`.
+- [ ] **Step 2b: The aiming arm** (added 2026-10-21). In the same `OnAnimatorIK`, while the stance is Aim, there's a target and `Weapon` isn't None:
+  - Reach the gun hand out from its shoulder: the Humanoid upper-arm bone on `_gunHand`'s side.
+  - Point it along the same clamped flat aim direction the look-at uses, at shoulder height.
+  - Use the arm's own length, upper arm plus forearm measured from the bones in `Awake`, times 0.95 so the elbow stays slightly bent.
+  - Call `SetIKPosition` and `SetIKPositionWeight(_gunHand, _aimArmWeight)`; set position only, since `GunHolder` already turns the gun toward the target.
+  - Otherwise, weight 0.
 - [ ] **Step 3: Builder.** Turn on the IK pass and add the Aim turn blend as above. Compile; expected: OK.
 - [ ] **Step 4: Inspector work for the user:**
   1. Rebuild both controllers.
   2. Ruby's set: fill **Turn Left/Right** with `HumanF@Turn01_Left` and `HumanF@Turn01_Right` (not the `[RM]` ones), then rebuild her controller.
-  3. On Ruby's `CharacterAnimator`, set Twist Limit 60 and Turn Speed 720. Look weights keep the defaults.
+  3. On Ruby's `CharacterAnimator`, set Twist Limit 60, Turn Speed 720 and **Gun Hand Left Hand**. Look weights and Aim Arm Weight keep the defaults.
   4. popo keeps the defaults.
 - [ ] **Play-test gate:**
   - A standing officer firing at Ruby turns his chest toward her as she circles.
@@ -183,6 +199,7 @@
   - Once he starts moving, his legs swing round to his direction of travel smoothly.
   - **Ruby, standing still:** her chest follows the cursor, and past about 60° her feet step round. Running, her legs keep up with her facing.
   - **Ruby's controls:** her aim, shots and whip are as instant as before; only her legs lag.
+  - **The aiming arm:** an officer firing at Ruby holds his right arm out, pointing the gun at her, and his arm relaxes once he lowers it. Ruby's left arm points her gun at the cursor.
 - [ ] **Commit.**
 
 ### Task 4: Grab pop, the get-up phase, and re-knockdowns
