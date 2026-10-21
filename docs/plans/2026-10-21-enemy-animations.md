@@ -16,8 +16,8 @@
 - `Ruby.Animation` references nothing; `Ruby.Animation.Editor` references `Ruby.Animation` only; `Ruby.Game` adds `Ruby.Animation`. No system references `Ruby.Game`. The game never names a clip, state or parameter.
 - Unity saves enum numbers, and the Animator reads them as ints: `AnimStance { Rest = 0, Aim = 1, Run = 2, Restrained = 3, Frozen = 4, GettingUp = 5 }`, `WeaponHold { None = 0, Pistol = 1, TwoHanded = 2 }`. Never renumber.
 - Generated controllers are written through the `UnityEditor.Animations` API, never by editing YAML. Rebuilding keeps the controller asset (same GUID).
-- **Ruby must look and move exactly as today.** Her settings: Twist Limit 0, look-at weights 0.
-- Defaults (spec): Twist Limit 70° officer / 0° Ruby; Turn Speed 360°/s; look-at body 0.8, head 1 officer / 0, 0 Ruby; Move Damping 0.1 s; Get Up Time 1 s; Grab Gun Pop 3 m/s up, 2 m/s out.
+- **Ruby's controls stay exactly as instant as today**: her aim point, shots and whip never wait on animation; only her legs lag. She uses the body turn (decided 2026-10-21), with snappier settings than officers.
+- Defaults (spec): Twist Limit 70° officer / 60° Ruby; Turn Speed 360°/s officer / 720°/s Ruby; look-at body 0.8, head 1; Move Damping 0.1 s; Get Up Time 1 s; Grab Gun Pop 3 m/s up, 2 m/s out.
 - Conventions: no namespaces; private `[SerializeField]` `_camelCase` fields with expression-bodied read properties; comments explain why; warnings for bad setup, `DebugLog` for chatter.
 - Verification: `python tools/compile_check.py` must end `compile-check: OK` after every code step. There are no automated tests; the play-test gates are manual, so don't call them tests. Commit after each task's gate passes.
 
@@ -27,7 +27,7 @@
 2. **The animator stays frozen.** Speed 0 must be undone whenever the stance leaves Frozen, including Ruby's recovery, where `SkeletonRagdollBody` re-enables her Animator itself. `CharacterAnimator` never toggles `Animator.enabled`. Owned by Task 1: the gate checks Ruby gets up animating.
 3. **The gun fights the hand.** An aim set in `FixedUpdate` is overwritten as the animated hand moves. Expect the gun to point at Ruby while aiming, and to follow the hand once lowered. Owned by Task 2: aim in `LateUpdate`, `Lower` clears it.
 4. **Rebuilding duplicates or orphans.** A second build must leave exactly one set of parameters, layers and states, and must keep the asset's GUID so prefabs stay wired. Owned by Task 1: the gate builds twice.
-5. **The legs pop.** The lower body may not snap when a standing, twisted officer starts moving, or when the look target appears or vanishes. Ruby (limit 0) may never lag at all. Owned by Task 3.
+5. **The legs pop, or Ruby's controls lag.** The lower body may not snap when a standing, twisted character starts moving, or when the look target appears or vanishes; and however her legs lag, Ruby's aim, shots and whip stay instant. Owned by Task 3.
 
 ---
 
@@ -71,18 +71,18 @@
   - Save the assets.
 - [ ] **Step 4: Ruby implements `IAnimatedCharacter`.**
   - `Body` is an explicit interface implementation returning `_myRigidbody`.
-  - `MoveSpeed => _moveSpeed`.
-  - `Stance => _downed ? AnimStance.Frozen : AnimStance.Run`.
+  - `MoveSpeed`: `_moveSpeed` while a direction is pressed (`_moveVelocity` isn't zero), else 0. Comment why: reported as always moving, her legs would never lag in Task 3.
+  - `Stance => _downed ? AnimStance.Frozen : AnimStance.Aim`. She always faces the cursor.
   - `Weapon => WeaponHold.Pistol`.
-  - `TryGetLookTarget` returns false.
+  - `TryGetLookTarget` gives `_aimPoint` while she's not downed; otherwise it returns false.
 - [ ] **Step 5: Compile.** Run `python tools/compile_check.py`. Expected: `compile-check: OK` (it finds new asmdefs by itself).
 - [ ] **Step 6: Inspector work for the user** (hand this list over and wait):
-  1. Create `Assets/Animations/Ruby Animation Set.asset` (Create → Ruby → Character Animation Set). Fill **Run Pistol** with `HumanF@Idle01` and `HumanF@Run01_*`, one per direction, as her current tree. Leave every other slot empty.
+  1. Create `Assets/Animations/Ruby Animation Set.asset` (Create → Ruby → Character Animation Set). Fill **Aim Pistol** with `HumanF@Idle01` and `HumanF@Run01_*`, one per direction, as her current tree. Leave every other slot empty for now.
   2. Press **Build Controller**; `Ruby Animation Set Controller.controller` appears beside it.
   3. On `Red.prefab`: on her model child `Player`, set the Animator's Controller to that controller and add `CharacterAnimator`. Remove `PlayerAnimator` from Red's root.
 - [ ] **Step 7: Delete `PlayerAnimator.cs`** and its `.meta`, then compile again. Expected: OK.
 - [ ] **Play-test gate:**
-  - Ruby runs, strafes and backpedals exactly as before.
+  - Ruby runs, strafes and backpedals exactly as before. The twist arrives in Task 3.
   - Knocked down, she ragdolls. She gets up animating, not frozen.
   - Pressing **Build Controller** a second time leaves exactly one set of parameters and states, and Red's Animator still references the controller.
   - The Console is clean.
@@ -139,7 +139,7 @@
   - **The gun** stays in his hand and points at Ruby while he's firing, and follows the hand once lowered.
   - **An unarmed officer** uses the no-gun walk and run, and runs while re-arming.
   - **Grabbed** shows the Restrained stand-in. **Thrown** freezes the pose and tumbles. **Dead** stays frozen, and the model darkens.
-  - **Ruby** is unchanged.
+  - **Ruby** still looks as she did after Task 1.
 - [ ] **Commit.**
 
 ### Task 3: The aim twist, and the legs following
@@ -157,7 +157,7 @@
 - [ ] **Step 1: Lower-body yaw.** Keep `_lowerYaw`, the model's world yaw, initialised from the root. Each `Update`, before writing `MoveX`/`MoveZ`, with `rootYaw` taken from `Body.transform`:
 
   ```text
-  if twistLimit <= 0:            lowerYaw = rootYaw                                  (Ruby: never lags)
+  if twistLimit <= 0:            lowerYaw = rootYaw                                  (turning switched off: never lags)
   else if MoveSpeed > 0:         lowerYaw = MoveTowardsAngle(lowerYaw, rootYaw, turnSpeed·dt);  turning = false
   else if look target:           aimYaw = flat yaw to target
                                  if turning or |DeltaAngle(lowerYaw, aimYaw)| > twistLimit: turning = true
@@ -174,13 +174,15 @@
 - [ ] **Step 3: Builder.** Turn on the IK pass and add the Aim turn blend as above. Compile; expected: OK.
 - [ ] **Step 4: Inspector work for the user:**
   1. Rebuild both controllers.
-  2. On Ruby's `CharacterAnimator`, set Twist Limit 0 and both look weights 0.
-  3. popo keeps the defaults.
+  2. Ruby's set: fill **Turn Left/Right** with `HumanF@Turn01_Left` and `HumanF@Turn01_Right` (not the `[RM]` ones), then rebuild her controller.
+  3. On Ruby's `CharacterAnimator`, set Twist Limit 60 and Turn Speed 720. Look weights keep the defaults.
+  4. popo keeps the defaults.
 - [ ] **Play-test gate:**
   - A standing officer firing at Ruby turns his chest toward her as she circles.
   - Past about 70°, he turns in place, playing the turn animations, until he faces her. Nothing snaps.
   - Once he starts moving, his legs swing round to his direction of travel smoothly.
-  - Ruby is unchanged, with no lag at all.
+  - **Ruby, standing still:** her chest follows the cursor, and past about 60° her feet step round. Running, her legs keep up with her facing.
+  - **Ruby's controls:** her aim, shots and whip are as instant as before; only her legs lag.
 - [ ] **Commit.**
 
 ### Task 4: Grab pop, the get-up phase, and re-knockdowns

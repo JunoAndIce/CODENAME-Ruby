@@ -37,7 +37,8 @@ Goals:
 - The aim twist: upper body turns toward Ruby up to a limit, then the legs turn in place to follow.
 - The game code reports what a character is doing; it never names a clip, state or blend tree.
 - A real animation replaces a stand-in by editing one asset, with no code change.
-- Ruby runs on the same piece and looks exactly as she does today.
+- Ruby runs on the same piece, with the same body turn as officers, while her controls stay as
+  instant as today.
 
 Non-goals (later branches):
 - Limp ragdolls for officers (the next branch). See **Not a falling animation** below.
@@ -50,7 +51,7 @@ Anti-goals (a failure even if it technically works):
   as now; animation follows the body. Movement and aiming stay instant.
 - Game code that knows clip, state or parameter names, or a system assembly that references
   `Ruby.Game`.
-- Ruby looking or feeling any different.
+- Ruby's aim, shots or whip responding any later than today. Only her legs may lag.
 - Hand-editing `.controller`, `.prefab` or `.unity` YAML.
 
 ## Decisions
@@ -89,8 +90,10 @@ The user chose each of these:
 - **The officer is `popo.prefab`**, the old `Enemy.prefab` renamed in the editor (it kept its GUID,
   so every officer in `SampleScene` is already a popo). The model nests inside it as visuals only.
   The bare `HumanM_Model` prefab saved as a new `Enemy.prefab` is deleted.
-- **Ruby moves onto the same piece**, looking exactly as today. Her shooting pose and turning get
-  slots to fill later.
+- **Ruby moves onto the same piece, and gets the body turn too** (decided 2026-10-21): "she
+  should use it. It will make her movements more realistic." Standing still, her chest follows the
+  cursor and her feet step round past the limit. Her aim point, shots and whip still turn
+  instantly; only her legs catch up. Her shooting pose gets a slot to fill later.
 
 ## Calls I made
 
@@ -133,8 +136,12 @@ These are mine, not the user's; each is open to correction.
 - **Officers aim only within range.** Today `AggroState.Shoot` turns the gun toward Ruby whenever
   she's in sight, beyond range too. With the gun turned in `LateUpdate`, that would twist it off his
   hand during the gun-down Run. Beyond range he lowers it instead. Where he can fire is unchanged.
-- **Ruby's settings make her identical to today:** twist limit 0 (legs follow at once), look-at
-  weight 0, Get Up Time 0. Her current 8-direction run is her Run slot set.
+- **Ruby's stance is Aim whenever she's on her feet,** since she always faces the cursor; her
+  Aim slot holds her current 8-direction run, and her turn slots `HumanF@Turn01_Left/Right`. She
+  reports a move speed of 0 with no direction pressed, or the code would treat her as always
+  moving and her legs would never lag. She looks at her aim point.
+- **Ruby turns snappier than officers:** Twist Limit 60° and Turn Speed 720°/s to start, against
+  70° and 360°/s, so her legs keep up with a fast cursor. Both are play-test starting points.
 - **The staged `Speed`, `ChainState` and `Fire` parameters and the Hold/Throw upper-body states in
   `PlayerAnimator.controller` aren't carried over.** Nothing writes them; they come back as slots when
   the chain animations are designed.
@@ -192,8 +199,9 @@ These are mine, not the user's; each is open to correction.
   and on continuous collision.
 - **`RagdollState`** gains the get-up phase; the transition to Aggro reads it. `KnockDown`,
   `TakeHit` and `Alert` treat the get-up phase as standing (see Calls).
-- **`PlayerController`** implements `IAnimatedCharacter` for Ruby (Run stance while moving, Frozen
-  while downed). `PlayerAnimator` is removed once Ruby runs on `CharacterAnimator`.
+- **`PlayerController`** implements `IAnimatedCharacter` for Ruby (Aim stance on her feet, looking
+  at her aim point; Frozen while downed; move speed 0 with no direction pressed). `PlayerAnimator`
+  is removed once Ruby runs on `CharacterAnimator`.
 
 ### `Ruby.Weapons`
 
@@ -206,9 +214,9 @@ All clips are the pack's in-place versions (not the `RootMotion` folders).
 | Slot | Officer stand-in (`HumanM@...`) | Ruby (`HumanF@...`) |
 | --- | --- | --- |
 | Rest, no gun / pistol (9 each) | `Idle01` + `Walk01_*` | not used |
-| Run, no gun / pistol (9 each) | `Idle01` + `Run01_*` | `Idle01` + `Run01_*` (today's) |
-| Aim, pistol (9) | `Idle01` + `Walk01_*` | her run set, until an aim clip exists |
-| Turn in place, left / right | `Turn01_Left`, `Turn01_Right` | same, unused at twist limit 0 |
+| Run, no gun / pistol (9 each) | `Idle01` + `Run01_*` | not used |
+| Aim, pistol (9) | `Idle01` + `Walk01_*` | `Idle01` + `Run01_*` (today's run), until an aim clip exists |
+| Turn in place, left / right | `Turn01_Left`, `Turn01_Right` | `Turn01_Left`, `Turn01_Right` |
 | Restrained | `Idle01` (pinned and wriggling later) | not used |
 | Get up | `Idle01` (a real get-up later) | not used |
 
@@ -247,9 +255,9 @@ or buy; each drops into its slot.
 
 | Setting | Where | Default | Why |
 | --- | --- | --- | --- |
-| Twist Limit | CharacterAnimator | 70° officer, 0° Ruby | Inside the user's 60–90°; Ruby's legs follow at once, as today. |
-| Turn Speed | CharacterAnimator | 360°/s | The legs catch up in about a quarter second. |
-| Look-at weights | CharacterAnimator | body 0.8, head 1 officer; 0 Ruby | Most of the twist in the chest. |
+| Twist Limit | CharacterAnimator | 70° officer, 60° Ruby | Inside the user's 60–90°; Ruby's a little tighter, to keep up with a fast cursor. |
+| Turn Speed | CharacterAnimator | 360°/s officer, 720°/s Ruby | An officer's legs catch up in about a quarter second; Ruby's twice as fast. |
+| Look-at weights | CharacterAnimator | body 0.8, head 1 | Most of the twist in the chest. |
 | Move damping | CharacterAnimator | 0.1 s | As `PlayerAnimator` today. |
 | Get Up Time | EnemyController | 1 s | Long enough to read; a real clip sets the final value. |
 | Grab Gun Pop | EnemyController | 3 m/s up, 2 m/s out | A small hop clear of his hands. |
@@ -259,7 +267,8 @@ or buy; each drops into its slot.
 One step at a time, with the user's play-test after each.
 
 1. `Ruby.Animation`: the interface, `CharacterAnimator`, the animation set and the controller
-   builder. Ruby moves onto it with identical looks: the proof the piece works.
+   builder. Ruby moves onto it, looking identical until the twist arrives: the proof the piece
+   works.
 2. Officers on `HumanM_Model` (the model and pistol are already in place): stances from state,
    the gun aimed after animation.
 3. The aim twist and the legs following.
