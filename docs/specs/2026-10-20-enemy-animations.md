@@ -217,33 +217,31 @@ or buy; each drops into its slot.
 
 ## Assets: Inspector work for the user
 
-1. **`HumanM_Model.fbx` import:** Rig is Humanoid (Create From This Model) and Optimize Game Objects
-   is off; both are already set. Its `.meta` holds no saved bone mapping, unlike `HumanF_Model`'s,
-   so open Rig → Configure and confirm the Avatar is valid before using it.
-2. **The pack's clips:** in-place versions, Loop Time on for locomotion, root motion baked into the
+**Done on 2026-10-21** (commit `7091cbd`):
+- The officer is `popo.prefab` (renamed from `Enemy.prefab`, same GUID, so the scene's 18 officers
+  and their patrol routes still point at it). Its root keeps the whole officer: capsule, Rigidbody,
+  `EnemyController`, `GunHolder`, `Health`, `Weight`, ragdoll, Impact Damage and one grab point
+  (`GrappleNode`) at (0, 0.5, 0). The capsule's mesh renderer is off.
+- `HumanM_Model` nests directly under the root as `Model`, at (0, −1, 0), visuals only: no
+  components added. Its Animator has root motion off and Culling Mode Always Animate, and no
+  controller yet.
+- The pistol sits on `B-handProp.R` at local (0, 0.044, 0.137), scale (1, 1, 1), and
+  `GunHolder`'s Hand is that bone. `Hand` and `HandMesh` are gone.
+- `Pistol.prefab` is hand-sized inside the prefab (about 0.3 of its old size), with its mesh,
+  collider and muzzle centred on the gun's pivot, which aiming turns around and the chain's grab
+  point and a re-arming officer use. Weight stays Small (20 kg).
+- Lesson kept for later work: moving an officer's components onto another object makes them new
+  components, and the scene's per-officer settings aimed at the old ones are silently dropped.
+
+**Still to do, once the code exists:**
+1. On popo's `Model`: assign the generated Officer controller to the Animator, and add
+   `CharacterAnimator` with the Officer animation set.
+2. The pack's clips: in-place versions, Loop Time on for locomotion, root motion baked into the
    pose. Check, don't assume.
-3. **`popo.prefab`** (the officer; work in progress in the editor, uncommitted):
-   - Delete the new bare `Enemy.prefab`; popo replaces it.
-   - `HumanM_Model` nests as a child, `Model`, at local (0, −1, 0), so its feet meet the capsule's
-     bottom. Today it sits at (0, 0, 0).
-   - Remove the second set of officer components from the model's root: Rigidbody, CapsuleCollider,
-     Health, EnemyController, Weight, CapsuleRagdollBody and ImpactDamage. Two EnemyControllers
-     would each run an AI, the second with no gun, and `CharacterAnimator` looking up from the model
-     would find the model's one first. The model carries the Animator, `CharacterAnimator` and bones
-     only.
-   - Keep the chain's grab point (`GrappleNode`) on popo's root at (0, 0.5, 0), not on a bone: the
-     rope anchors to the node every physics step, so on a bone the anchor would wriggle with the
-     Restrained animation.
-   - On `Model`'s `Animator`: the generated Officer controller, Apply Root Motion off, Culling Mode
-     Always Animate (the gun's muzzle is on a bone, and shots leave from it even off screen).
-   - Add `CharacterAnimator` to `Model`, with the Officer animation set.
-   - Move the `Pistol` onto `B-handProp.R`, posed in the grip, scale (1, 1, 1). It's at scale 0.3
-     with a −1.388 offset today. Point `GunHolder`'s Hand at `B-handProp.R`. Delete `Hand` and
-     `HandMesh`.
-   - Turn off the root's capsule `MeshRenderer`. The model has no colliders; keep it that way.
-   - Material and colour are the user's call (officers are pink today).
-4. **`Red.prefab`:** replace `PlayerAnimator` with `CharacterAnimator` on her model, with Ruby's set
-   and her generated controller.
+3. `HumanM_Model`'s `.meta` holds no saved bone mapping; if its Rig tab's Configure shows a tick,
+   the Avatar is valid.
+4. `Red.prefab`: replace `PlayerAnimator` with `CharacterAnimator` on her model, with Ruby's set and
+   her generated controller.
 
 ## Defaults
 
@@ -262,7 +260,7 @@ One step at a time, with the user's play-test after each.
 
 1. `Ruby.Animation`: the interface, `CharacterAnimator`, the animation set and the controller
    builder. Ruby moves onto it with identical looks: the proof the piece works.
-2. Officers on `HumanM_Model`: the Inspector work, stances from state, the pistol on its prop bone,
+2. Officers on `HumanM_Model` (the model and pistol are already in place): stances from state,
    the gun aimed after animation.
 3. The aim twist and the legs following.
 4. Grab pop, Restrained, the get-up phase, freezing.
