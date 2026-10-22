@@ -75,7 +75,9 @@ The scripts are split into assembly definitions so the systems can be lifted int
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
 | `Ruby.Weapons` | `Weapons/` | Core | guns, bullets, gun hands |
-| `Ruby.Game` | the root and `States/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, animator, every state |
+| `Ruby.Animation` | `Animation/` | none | `IAnimatedCharacter`, `CharacterAnimator`, `CharacterAnimationSet`, the stance and weapon enums |
+| `Ruby.Animation.Editor` | `Animation/Editor/` | Animation | `CharacterControllerBuilder` and the set's Build Controller button |
+| `Ruby.Game` | the root and `States/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state |
 | `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor` |
 
 The systems reach the game only through interfaces declared in their own assembly, which the
@@ -88,6 +90,7 @@ game implements:
 | `IPathAgent` | Pathing | `EnemyController` | a body for `GridNavigator` to steer |
 | `ICameraTarget` | CameraRig | `PlayerController` | a position, an aim point, peek |
 | `IBulletTarget` | Weapons | `EnemyController` | whether a body stops bullets (only while held on the chain) |
+| `IAnimatedCharacter` | Animation | `PlayerController`, `EnemyController` | what the body is doing: velocity, the speed it's trying to move at, stance, weapon, target |
 
 **Never make a system reference `Ruby.Game`.** Unity refuses the cycle anyway. When a system needs
 something from the game, add it to the system's interface and implement it in the game. A new script
@@ -373,7 +376,8 @@ through the player never slows the walk.
   sight, it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
   backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyController.StepAway`),
   standing its ground when cornered. It fires alongside all of that, whenever she's in sight, in
-  range and on her feet; firing is not a state. Contact holds while the player is in sight within
+  range and on her feet (`AggroState.Firing`); firing is not a state. It only aims within range:
+  beyond it he runs with the gun down. Contact holds while the player is in sight within
   Give Up Radius. After Aggro Time without it the enemy searches **where the hunt was leading when
   it gave up** (recorded on Aggro's exit), not where the player slipped out of view.
 - **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
@@ -450,7 +454,12 @@ speed (Ruby 15 + an enemy's chase, about 25), and a swing only hurts once Spin S
 Damage is big from the threshold on purpose: fast enough to knock a character down usually kills.
 
 `EnemyController.KnockDown` ragdolls the enemy at the velocity the hit left it with; held on the
-chain or already down, the hit only hurts, so a swung enemy keeps swinging.
+chain or already down, the hit only hurts, so a swung enemy keeps swinging. **Getting up:** once a
+survivor's body settles, `RagdollState` stands it up and holds it still for Get Up Time (1 s, the
+stand-in for a get-up clip's length) before the table sends it hunting; a top that winds down is
+already on its feet and skips it. Getting up, it's standing again: a hit at Knockdown Speed floors
+it once more (`RagdollState.Relaunch`, since `SetState` can't re-enter Ragdoll and would drop the
+knockdown silently), and a spinning top shoves it like any standing enemy.
 
 **Dead enemies are corpses, never destroyed.** `DeadState` darkens the enemy (`EnemyController.Darken`,
 Corpse Brightness through MaterialPropertyBlocks, so shared materials are untouched) and keeps its
@@ -507,10 +516,16 @@ swings and tilts with her animated hand, and a bullet flown along it would hit t
     where the starting one did.
   - It warns when the starting gun isn't under the Hand, when the Hand holds a Rigidbody with no
     Gun, and when the Hand's scale isn't uniform. Aiming turns a gun off the Hand's axes, and under
-    a non-uniformly scaled Hand Unity shears it; the officer's Hand is (1, 1, 1), its cube on a
-    `HandMesh` child.
-- **Drops:** `EnterGrabbed`, `KnockDown` and `DeadState.Enter` drop the gun with the body's
-  velocity, so a knockdown sends it off at the hit's speed.
+    a non-uniformly scaled Hand Unity shears it.
+  - The officer's Hand is his model's right-hand prop bone, `B-handProp.R`, which the clips don't
+    animate, with the pistol posed in the fist. Pose it in Play mode and paste the values into the
+    prefab: Prefab Mode shows the T-pose, where a spot that looks like the palm is up the forearm.
+  - `AimAt` only records the target; the gun is turned toward it in `LateUpdate`, after animation,
+    because a turn made in `FixedUpdate` was overwritten as the animated hand moved. `Lower` releases
+    it to follow the hand again.
+- **Drops:** `KnockDown` and `DeadState.Enter` drop the gun with the body's velocity, so a knockdown
+  sends it off at the hit's speed. `EnterGrabbed` pops it out instead: a small hop, Grab Pop Up and
+  Grab Pop Out away from his body, to sell the grab.
   - The holder lowers it first, and the gun restores its true world scale (read at Awake) once it
     leaves the hand, so a drop mid-aim can't keep a shear as a stretched scale.
   - It's dropped from about a metre in front of the officer, so `Gun.KeepOutOfWalls` casts from the
@@ -570,7 +585,10 @@ bone. The wizard's masses only set proportions.
 - Her model sits at local Y −1 under the root, so its feet meet the capsule's bottom.
 - Ruby is `Assets/Prefabs/Red.prefab`. Its model is an unpacked copy of the School Girl rig, not a
   nested `Player.prefab`, so her bones, ragdoll and gun are edited on `Red` itself; changes to
-  `Player.prefab` don't reach her.
+  `Player.prefab` don't reach her. The School Girl FBX exports its skeleton root, `UnrealRoot`,
+  2.42 m off the model's origin; on `Red` it's zeroed, so Prefab Mode shows her inside her capsule.
+  In Play the Humanoid Animator places her hips relative to the model either way, so never move the
+  capsule to match her default pose.
 
 `GrabbedState` keeps the body **dynamic**: the tether moves its host by writing velocity, and a
 kinematic body would silently ignore it and hang frozen instead of being dragged.
@@ -585,15 +603,48 @@ be cleared.
 
 ### Animation
 
-`PlayerAnimator` (on Ruby's root, driving the Animator on her model child) converts
-Rigidbody velocity to **local space** before writing `MoveX`/`MoveZ`, because the player faces the
-cursor while moving independently — in world space, running north while aiming east would play the
-forward clip instead of a strafe. It reads the Rigidbody rather than input, so pushing into a wall
-correctly plays idle.
+Spec: `docs/specs/2026-10-20-enemy-animations.md`. `Ruby.Animation` animates any character without
+the game naming a clip, state or parameter. The game implements **`IAnimatedCharacter`** (its body,
+the speed it's trying to move at, a stance, a weapon and a target), and **`CharacterAnimator`**, on
+the model beside its Animator, polls it every frame, the way the tether polls `IGrappleUser`. Its
+`Update` runs after the game's scripts (`DefaultExecutionOrder(100)`): `PlayerController` turns
+Ruby in its own `Update`, and placing the model first let that turn carry it off for a frame.
 
-`PlayerAnimator.controller` also declares `Speed`, `ChainState`, and `Fire` parameters, plus an
-Upper Body layer (weight 0) holding Hold/Throw states. Nothing writes them yet — they're staged for
-the chain states.
+- **Stances** (`AnimStance`, numbered, saved): Rest (weapon at rest: patrolling, searching, idle),
+  Aim (firing at Ruby, moving or not; Ruby whenever she's on her feet, since she always faces the
+  cursor), Run (closing in out of range or out of sight, re-arming), Restrained (grabbed, or spun
+  as a top), Frozen (thrown, knocked down, dead: the Animator pauses at speed 0, never disabled,
+  because Ruby's ragdoll switches hers off and on itself) and GettingUp. `EnemyController.Stance`
+  maps its state; `PlayerController` reports Aim or Frozen.
+- **Slots, not clips:** a **`CharacterAnimationSet`** asset per character holds a clip per moment:
+  nine-direction sets for Rest, Run and Aim (unarmed and pistol), turn-in-place left and right,
+  Restrained, Get Up, and a grip pose with its hand mask. **Build Controller**
+  (`CharacterControllerBuilder`) generates the Animator Controller from it: the parameters (named in
+  `CharacterAnimator`'s constants, so they can't drift), a free-form directional blend tree per
+  filled slot, the Aim idle cell as a turn blend, Any State transitions on stance and weapon, the IK
+  pass, and a Grip layer masked to the gun hand. Rebuilding refills the same asset (same GUID) and
+  destroys its old sub-assets. Most slots hold stand-ins from Kevin Iglesias's pack until real
+  animations exist; swapping one is an edit to the set and a rebuild, never code.
+- **The legs follow the body.** The body turns at once, as the game wants; the model keeps its own
+  facing while upright. Standing, the head and chest twist toward the aim (Humanoid look-at, chest
+  weight 0.8) and past Twist Limit the feet step round with the turn clips; moving, the legs swing
+  to the aim (or the body's facing) at Turn Speed. A turn-around past 150 degrees goes the gun
+  hand's way, and a turn keeps its direction until the aim comes back within 90 degrees, so the arm
+  never crosses the chest and a sweeping cursor can't flip it. Held, tumbling or getting up, the
+  model is left alone: a tumbling capsule takes it along, and Ruby's live ragdoll bones hang under it.
+- **The aim is a level heading, never a point,** from the body to the target, held within 1.5 m and
+  eased over 0.08 s. The cursor's spot at Ruby's root height pitched her head and spine down into
+  her body; close to her a slight mouse move is a big turn, and the camera's lean keeps the point
+  under the cursor drifting. Only the pose uses it: her body, shots and whip still turn instantly.
+- **The gun arm** (Humanoid hand IK, a stand-in for pistol-holding animations): aiming, the gun
+  hand reaches out from its shoulder along the aim; armed but not aiming, it holds the gun at Carry
+  Point, a low-ready spot in front of the body, because the pack's unarmed walk swings it into the
+  leg. Both points are rebuilt each frame from where the body is, and only the blend, the weight and
+  the arm's direction (as an angle round the shoulder) are eased: easing a world position left the
+  hand trailing a running Ruby and cut through her chest on a turn. The Grip layer closes the gun
+  hand while armed, driven from code because an empty "open" state would write the hand's default pose.
+- **Settings:** officers Twist Limit 70, Turn Speed 360, right hand; Ruby 60, 720, left hand (her
+  pistol is in her left hand).
 
 ## Conventions
 
@@ -636,8 +687,10 @@ charge is built as the charged throw in `GrappleController`, its swing as the pa
 retired. Slice 5, impact damage, is built: enemies and Ruby take it, and dead enemies stay as
 corpses. Enemy weapons (pistols, drops, re-arming) are built to `2026-10-11-enemy-weapons.md`.
 Ruby ragdolls on her own rig, and officers' bullets knock her back, built to
-`docs/plans/2026-10-12-ruby-ragdoll.md`. Enemies are still capsules, and melee and Ruby's revolver
-are still to come.
+`docs/plans/2026-10-12-ruby-ragdoll.md`. Officers wear Kevin Iglesias's `HumanM_Model`
+(`officer.prefab`, the old `Enemy.prefab` renamed, same GUID), and both they and Ruby are animated
+through `Ruby.Animation`, built to `2026-10-20-enemy-animations.md`. Officers still fall as stiff
+capsules (limp ragdolls are next), and melee and Ruby's revolver are still to come.
 
 ## Unity/git
 

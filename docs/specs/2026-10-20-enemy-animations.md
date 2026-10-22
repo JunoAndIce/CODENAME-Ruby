@@ -1,6 +1,8 @@
 # Enemy animations: officers on a humanoid model
 
-Status: draft 2026-10-20, branch `enemy-animations`. Limp ragdolls for officers are the next branch,
+Status: approved 2026-10-21, built 2026-10-22 on branch `enemy-animations` (plan
+`docs/plans/2026-10-21-enemy-animations.md`). **Changed in play-testing** at the end records where the
+build differs from this design. Limp ragdolls for officers are the next branch,
 not this one.
 
 ## Intent
@@ -293,3 +295,28 @@ One step at a time, with the user's play-test after each.
 - Limp ragdolls for officers (next branch).
 - Hand-made aim poses, two-handed weapons, a pickup animation, Ruby's get-up, footsteps.
 - Any change to how officers move, see, path or fight.
+
+## Changed in play-testing
+
+- **The officer prefab** became `officer.prefab` (renamed twice in the editor, from `Enemy.prefab`
+  via `popo.prefab`, same GUID). An attempt to move the officer's components onto the model's root
+  made them new components and silently dropped the scene's 320 per-officer settings, patrol
+  routes included; popo was restored from the commit and the model added as visuals only.
+- **The pistol** is hand-sized inside its prefab, centred on its pivot, and posed in the fist on
+  `B-handProp.R`. Prefab Mode shows the T-pose, where a spot that looks like the palm is up the
+  forearm, so the pose is set in Play mode and pasted into the prefab.
+- **Holding the gun** gained the grip layer (the pack's object-grip pose through a hand mask) and
+  the gun arm's IK; the carry hold came from the pack's unarmed walk swinging the gun into the leg.
+- **The aim is a level heading, not a point:** the cursor's spot at Ruby's root height pitched her
+  head and spine down into her body. The heading holds within 1.5 m of the character and eases over
+  0.08 s; a turn-around past 150 degrees goes the gun hand's way and keeps its direction until the
+  aim comes back within 90 degrees.
+- **The arm's targets** are rebuilt each frame and only the blend, the weight and the arm's angle
+  are eased: easing a world position trailed a running Ruby and cut through her chest on a turn.
+- **CharacterAnimator runs after the game's scripts** (DefaultExecutionOrder 100), and leaves the
+  model alone while not upright: placing it before Ruby's body turned let the turn carry it off for a
+  frame, and resetting it on a knockdown would snap her live ragdoll round.
+- **Ruby's model:** the School Girl FBX's skeleton root sits 2.42 m off its origin; on `Red` it's
+  zeroed so Prefab Mode shows her inside her capsule. Her CharacterAnimator is left-handed, Twist
+  Limit 60, Turn Speed 720.
+- **Officers' looks:** Enemy.mat colours the model pink.
