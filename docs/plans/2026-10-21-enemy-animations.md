@@ -161,7 +161,7 @@
 - Consumes: `IAnimatedCharacter.TryFindTarget`, `Body`.
 - Produces:
   - New serialized fields on `CharacterAnimator`: `[SerializeField, Range(0f, 180f)] _twistLimit = 70f`, `[SerializeField, Min(0f)] _turnSpeed = 360f`, `[SerializeField, Range(0f, 1f)] _bodyLookWeight = 0.8f`, `[SerializeField, Range(0f, 1f)] _headLookWeight = 1f`.
-  - For the aiming arm: `[SerializeField] AvatarIKGoal _gunHand = AvatarIKGoal.RightHand` and `[SerializeField, Range(0f, 1f)] _aimArmWeight = 1f`.
+  - For the gun arm: `[SerializeField] AvatarIKGoal _gunHand = AvatarIKGoal.RightHand`, `[SerializeField, Range(0f, 1f)] _aimArmWeight = 1f`, `[SerializeField] Vector3 _carryPoint = new(0.2f, 1f, 0.35f)` (the low-ready spot in the model's own space: right, up from the feet, forward) and `[SerializeField, Range(0f, 1f)] _carryWeight = 1f`.
   - The builder: the base layer's IK pass on; the `Aim Pistol` idle cell becomes a 1D blend tree on `Turn`: −1 `TurnLeft`, 0 `Idle`, 1 `TurnRight`, when the turn clips are set.
 
 - [ ] **Step 1: Lower-body yaw.** Keep `_lowerYaw`, the model's world yaw, initialised from the root. Each `Update`, before writing `MoveX`/`MoveZ`, with `rootYaw` taken from `Body.transform`:
@@ -181,12 +181,12 @@
   - With a look target and a body or head weight above 0, rotate the flat direction to the target so it's at most `_twistLimit` off `_lowerYaw`, keeping the target's height.
   - Then call `SetLookAtWeight(1f, _bodyLookWeight, _headLookWeight, 0f, 0f)` and `SetLookAtPosition`.
   - Otherwise call `SetLookAtWeight(0f)`.
-- [ ] **Step 2b: The aiming arm** (added 2026-10-21). In the same `OnAnimatorIK`, while the stance is Aim, there's a target and `Weapon` isn't None:
-  - Reach the gun hand out from its shoulder: the Humanoid upper-arm bone on `_gunHand`'s side.
-  - Point it along the same clamped flat aim direction the look-at uses, at shoulder height.
-  - Use the arm's own length, upper arm plus forearm measured from the bones in `Awake`, times 0.95 so the elbow stays slightly bent.
-  - Call `SetIKPosition` and `SetIKPositionWeight(_gunHand, _aimArmWeight)`; set position only, since `GunHolder` already turns the gun toward the target.
-  - Otherwise, weight 0.
+- [ ] **Step 2b: The gun arm** (aim added 2026-10-21; carry added the same day, after play-testing). In the same `OnAnimatorIK`, whenever `Weapon` isn't None:
+  - **Aiming** (stance Aim, with a target): reach the gun hand out from its shoulder (the Humanoid upper-arm bone on `_gunHand`'s side), along the same clamped flat aim direction the look-at uses, at shoulder height. Use the arm's own length, upper arm plus forearm measured from the bones in `Awake`, times 0.95 so the elbow stays slightly bent. Weight `_aimArmWeight`.
+  - **Carrying** (stance Rest or Run): hold the hand at `_carryPoint`, turned from the model's own space into the world (`transform.TransformPoint`). Weight `_carryWeight`. The pack's unarmed walk and run otherwise swing the gun into the leg.
+  - Otherwise, or unarmed: weight 0, so the arm swings with the animation.
+  - Ease between them: move the IK hand target toward the wanted point, and the weight toward the wanted weight, with `t = 1 − exp(−dt / 0.1)` each frame. Starting to aim swings the arm up rather than snapping it.
+  - Position only (`SetIKPosition`, `SetIKPositionWeight`): while aiming, `GunHolder` turns the gun itself; while carrying, it follows the hand.
 - [ ] **Step 3: Builder.** Turn on the IK pass and add the Aim turn blend as above. Compile; expected: OK.
 - [ ] **Step 4: Inspector work for the user:**
   1. Rebuild both controllers.
@@ -199,7 +199,7 @@
   - Once he starts moving, his legs swing round to his direction of travel smoothly.
   - **Ruby, standing still:** her chest follows the cursor, and past about 60° her feet step round. Running, her legs keep up with her facing.
   - **Ruby's controls:** her aim, shots and whip are as instant as before; only her legs lag.
-  - **The aiming arm:** an officer firing at Ruby holds his right arm out, pointing the gun at her, and his arm relaxes once he lowers it. Ruby's left arm points her gun at the cursor.
+  - **The gun arm:** an officer firing at Ruby holds his right arm out, pointing the gun at her. Not firing but armed (walking, standing, running), he holds the gun low in front of him, clear of his legs, and the arm swings smoothly between the two. Unarmed, his arms swing with the walk. Ruby's left arm points her gun at the cursor.
 - [ ] **Commit.**
 
 ### Task 4: Grab pop, the get-up phase, and re-knockdowns

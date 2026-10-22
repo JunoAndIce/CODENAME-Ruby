@@ -97,9 +97,12 @@ The user chose each of these:
     pistol is in her left hand). It's laid over the body while the character holds a weapon and
     lifted when unarmed.
   - *Arm:* while aiming, Unity's built-in Humanoid hand IK reaches the gun hand out from its
-    shoulder along the aim, so the arm points the gun at the target. It's a stand-in: pistol-holding
-    animations (idle, walk, run, aim) dropped into the slots replace it later, the way aim poses
-    replace the twist.
+    shoulder along the aim, so the arm points the gun at the target. Armed but not aiming
+    (resting or running), the same IK holds the gun hand at a low-ready spot in front of the body,
+    because the pack's unarmed walk and run swing that hand, and the gun in it, into the leg
+    (decided 2026-10-21, after play-testing). Both are stand-ins: pistol-holding animations (idle,
+    walk, run, aim) dropped into the slots replace them later, the way aim poses replace the
+    twist.
 - **Ruby moves onto the same piece, and gets the body turn too** (decided 2026-10-21): "she
   should use it. It will make her movements more realistic." Standing still, her chest follows the
   cursor and her feet step round past the limit. Her aim point, shots and whip still turn
