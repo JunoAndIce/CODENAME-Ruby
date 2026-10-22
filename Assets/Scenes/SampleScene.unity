@@ -7763,11 +7763,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: _chaseSpeed
-      value: 0
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: _patrolSpeed
-      value: 0
+      value: 7
       objectReference: {fileID: 0}
     - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: _pushStrength
