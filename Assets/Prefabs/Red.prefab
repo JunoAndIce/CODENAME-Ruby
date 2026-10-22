@@ -48265,7 +48265,7 @@ Transform:
   m_GameObject: {fileID: 5244939881954929420}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.82224, y: -0.27582, z: 0.66081}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -55763,14 +55763,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5883688588926228448}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.024226757, y: -0.9595838, z: 0.010151774, w: 0.28019452}
-  m_LocalPosition: {x: 0.14, y: -0.043, z: 0.06}
-  m_LocalScale: {x: 23.3, y: 12.9, z: 14.6}
+  m_LocalRotation: {x: -0.60627645, y: 0.33708176, z: -0.44680578, w: -0.5649508}
+  m_LocalPosition: {x: 0.0836, y: 0.0113, z: 0.0251}
+  m_LocalScale: {x: 8, y: 5.72, z: 6.06}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3412596131734603948}
   m_Father: {fileID: 1682669501480419497}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -260.489, y: 256.844, z: 324.432}
 --- !u!33 &7873141662762451711
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -83990,7 +83990,7 @@ Transform:
   m_GameObject: {fileID: 8753082032778786686}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 2.416868, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -87386,6 +87386,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Ruby.Animation::CharacterAnimator
   _damping: 0.1
+  _twistLimit: 60
+  _turnSpeed: 720
+  _bodyLookWeight: 0.8
+  _headLookWeight: 1
+  _gunHand: 2
+  _aimArmWeight: 1
+  _carryPoint: {x: 0.2, y: 1, z: 0.35}
+  _carryWeight: 1
 --- !u!1 &9097329697620118329
 GameObject:
   m_ObjectHideFlags: 0

@@ -59,7 +59,9 @@ public static class CharacterControllerBuilder
             tree.blendType = BlendTreeType.FreeformDirectional2D;
             tree.blendParameter = CharacterAnimator.MoveXParameter;
             tree.blendParameterY = CharacterAnimator.MoveZParameter;
-            AddDirections(tree, clips);
+            // Aiming, the idle cell turns on the spot when the legs catch up with the twist.
+            bool turnsInPlace = stance == AnimStance.Aim && set.TurnLeft != null && set.TurnRight != null;
+            AddDirections(tree, clips, turnsInPlace ? set : null);
 
             AddEntry(machine, state, stance, weapon);
             first ??= state;
@@ -74,6 +76,11 @@ public static class CharacterControllerBuilder
         if (start != null) machine.defaultState = start;
         else Debug.LogWarning($"{set.name} has no clips in any slot, so its controller has no states. Fill the slots and build again.", set);
 
+        // The IK pass runs CharacterAnimator.OnAnimatorIK: the spine's twist and the gun arm.
+        AnimatorControllerLayer[] layers = controller.layers;
+        layers[0].iKPass = true;
+        controller.layers = layers;
+
         AddGrip(controller, set);
 
         EditorUtility.SetDirty(controller);
@@ -82,15 +89,30 @@ public static class CharacterControllerBuilder
         return controller;
     }
 
-    // Positions match Ruby's hand-built tree: diagonals at 0.7, not normalised.
-    private static void AddDirections(BlendTree tree, DirectionalClips clips)
+    // Positions match Ruby's hand-built tree: diagonals at 0.7, not normalised. Given turns, the
+    // idle cell is a blend on Turn instead: left at -1, standing at 0, right at 1.
+    private static void AddDirections(BlendTree tree, DirectionalClips clips, CharacterAnimationSet turns)
     {
         void Add(AnimationClip clip, float x, float z)
         {
             if (clip != null) tree.AddChild(clip, new Vector2(x, z));
         }
 
-        Add(clips.Idle, 0f, 0f);
+        if (turns != null)
+        {
+            BlendTree turn = tree.CreateBlendTreeChild(Vector2.zero);
+            turn.name = tree.name + " Turn";
+            turn.blendType = BlendTreeType.Simple1D;
+            turn.blendParameter = CharacterAnimator.TurnParameter;
+            turn.useAutomaticThresholds = false;
+            turn.AddChild(turns.TurnLeft, -1f);
+            if (clips.Idle != null) turn.AddChild(clips.Idle, 0f);
+            turn.AddChild(turns.TurnRight, 1f);
+        }
+        else
+        {
+            Add(clips.Idle, 0f, 0f);
+        }
         Add(clips.Forward, 0f, 1f);
         Add(clips.ForwardRight, 0.7f, 0.7f);
         Add(clips.Right, 1f, 0f);
