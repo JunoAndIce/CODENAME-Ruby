@@ -21,8 +21,12 @@ public class AggroState : EnemyStateBase
 
     public bool LostPlayer => _lostTimer >= Enemy.AggroTime;
 
+    /// <summary>Armed, with Ruby in sight, in range and on her feet: it's shooting, so its body aims.</summary>
+    public bool Firing { get; private set; }
+
     public override void Enter()
     {
+        Firing = false;
         _lostTimer = 0f;
         _hadSight = Enemy.CanSeePlayer();
     }
@@ -30,6 +34,7 @@ public class AggroState : EnemyStateBase
     // The hunt tracks the player right up to here, so this is where a search should start.
     public override void Exit()
     {
+        Firing = false;
         Enemy.RecordTrailEnd();
         if (Enemy.IsArmed) Enemy.Arms.Lower();
     }
@@ -94,15 +99,19 @@ public class AggroState : EnemyStateBase
 
     private void Shoot()
     {
+        Firing = false;
         if (!Enemy.IsArmed) return;
 
-        if (!Enemy.CanSeePlayer() || !Enemy.PlayerIsUp)
+        // Only within range: beyond it he runs with the gun down, and a gun turned toward her
+        // would twist off his hand.
+        Vector3 player = Enemy.PlayerTransform.position;
+        Firing = Enemy.CanSeePlayer() && Enemy.PlayerIsUp && Enemy.Arms.InRange(player);
+        if (!Firing)
         {
             Enemy.Arms.Lower();
             return;
         }
 
-        Vector3 player = Enemy.PlayerTransform.position;
         Enemy.Arms.AimAt(player);
         Enemy.Arms.TryFireAt(player);
     }

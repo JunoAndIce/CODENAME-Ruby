@@ -40,11 +40,11 @@ public static class CharacterControllerBuilder
         if (controller == null) controller = AnimatorController.CreateAnimatorControllerAtPath(path);
         else Clear(controller, path);
 
-        controller.AddParameter("MoveX", AnimatorControllerParameterType.Float);
-        controller.AddParameter("MoveZ", AnimatorControllerParameterType.Float);
-        controller.AddParameter("Turn", AnimatorControllerParameterType.Float);
-        controller.AddParameter("Stance", AnimatorControllerParameterType.Int);
-        controller.AddParameter("Weapon", AnimatorControllerParameterType.Int);
+        controller.AddParameter(CharacterAnimator.MoveXParameter, AnimatorControllerParameterType.Float);
+        controller.AddParameter(CharacterAnimator.MoveZParameter, AnimatorControllerParameterType.Float);
+        controller.AddParameter(CharacterAnimator.TurnParameter, AnimatorControllerParameterType.Float);
+        controller.AddParameter(CharacterAnimator.StanceParameter, AnimatorControllerParameterType.Int);
+        controller.AddParameter(CharacterAnimator.WeaponParameter, AnimatorControllerParameterType.Int);
 
         AnimatorStateMachine machine = controller.layers[0].stateMachine;
         AnimatorState first = null;
@@ -57,8 +57,8 @@ public static class CharacterControllerBuilder
             AnimatorState state = controller.CreateBlendTreeInController(name, out BlendTree tree, 0);
             tree.name = name;
             tree.blendType = BlendTreeType.FreeformDirectional2D;
-            tree.blendParameter = "MoveX";
-            tree.blendParameterY = "MoveZ";
+            tree.blendParameter = CharacterAnimator.MoveXParameter;
+            tree.blendParameterY = CharacterAnimator.MoveZParameter;
             AddDirections(tree, clips);
 
             AddEntry(machine, state, stance, weapon);
@@ -73,6 +73,8 @@ public static class CharacterControllerBuilder
         AnimatorState start = restUnarmed ?? first;
         if (start != null) machine.defaultState = start;
         else Debug.LogWarning($"{set.name} has no clips in any slot, so its controller has no states. Fill the slots and build again.", set);
+
+        AddGrip(controller, set);
 
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
@@ -99,6 +101,31 @@ public static class CharacterControllerBuilder
         Add(clips.ForwardLeft, -0.7f, 0.7f);
     }
 
+    // A layer over the base, masked to the gun hand, holding the grip pose. Its weight starts at 0:
+    // CharacterAnimator closes it while the character holds a weapon and opens it when unarmed. An
+    // empty "open" state can't stand in for that, since an empty state writes the hand's default pose.
+    private static void AddGrip(AnimatorController controller, CharacterAnimationSet set)
+    {
+        if (set.Grip == null) return;
+        if (set.GripMask == null)
+        {
+            Debug.LogWarning($"{set.name} has a Grip clip but no Grip Mask, so the grip would cover the whole body. Add the gun hand's mask and build again.", set);
+            return;
+        }
+
+        controller.AddLayer(CharacterAnimator.GripLayer);
+        AnimatorControllerLayer[] layers = controller.layers;
+        AnimatorControllerLayer grip = layers[layers.Length - 1];
+        grip.avatarMask = set.GripMask;
+        grip.blendingMode = AnimatorLayerBlendingMode.Override;
+        grip.defaultWeight = 0f;
+        controller.layers = layers;
+
+        AnimatorState state = grip.stateMachine.AddState(CharacterAnimator.GripLayer);
+        state.motion = set.Grip;
+        grip.stateMachine.defaultState = state;
+    }
+
     private static AnimatorState AddSingle(AnimatorStateMachine machine, string name, AnimationClip clip, AnimStance stance)
     {
         if (clip == null) return null;
@@ -112,16 +139,18 @@ public static class CharacterControllerBuilder
     private static void AddEntry(AnimatorStateMachine machine, AnimatorState state, AnimStance stance, WeaponHold? weapon)
     {
         AnimatorStateTransition transition = machine.AddAnyStateTransition(state);
-        transition.AddCondition(AnimatorConditionMode.Equals, (int)stance, "Stance");
-        if (weapon.HasValue) transition.AddCondition(AnimatorConditionMode.Equals, (int)weapon.Value, "Weapon");
+        transition.AddCondition(AnimatorConditionMode.Equals, (int)stance, CharacterAnimator.StanceParameter);
+        if (weapon.HasValue) transition.AddCondition(AnimatorConditionMode.Equals, (int)weapon.Value, CharacterAnimator.WeaponParameter);
         transition.hasExitTime = false;
         transition.hasFixedDuration = true;
         transition.duration = TransitionTime;
         transition.canTransitionToSelf = false;
     }
 
-    // Empties the controller for a rebuild. Removing a state leaves its blend tree behind as a
-    // sub-asset of the controller file, so those are destroyed too, or every rebuild adds more.
+    // Empties the controller for a rebuild. Removing a state or a layer can leave its blend trees,
+    // states and transitions behind as sub-assets of the controller file, so once the base layer is
+    // empty, everything in the file but the controller and that layer's machine is destroyed too,
+    // or every rebuild adds more.
     private static void Clear(AnimatorController controller, string path)
     {
         while (controller.parameters.Length > 0) controller.RemoveParameter(0);
@@ -134,7 +163,7 @@ public static class CharacterControllerBuilder
 
         var orphans = new List<Object>();
         foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(path))
-            if (asset is BlendTree) orphans.Add(asset);
+            if (asset != null && asset != controller && asset != machine) orphans.Add(asset);
         foreach (Object orphan in orphans) Object.DestroyImmediate(orphan, true);
     }
 }

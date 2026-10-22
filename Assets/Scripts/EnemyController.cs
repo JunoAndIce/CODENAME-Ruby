@@ -3,7 +3,7 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(CapsuleCollider))]
 [RequireComponent(typeof(Health))]
-public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown, IBulletTarget
+public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown, IBulletTarget, IAnimatedCharacter
 {
     [Header("Movement")]
     [SerializeField] private float _chaseSpeed = 2f;
@@ -57,6 +57,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // Velocity going into this physics step. Collision callbacks arrive after the solver has
     // already spent the speed, so a hit is worked out from this, not from the body.
     private Vector3 _preStepVelocity;
+    private float _intendedSpeed;   // the last move's speed, 0 once stopped
     private float _nextRearm;   // after giving up on a gun, no new attempt before this time
     // Creation order, so exactly one of two colliding tops handles their hit.
     private static int _created;
@@ -114,6 +115,28 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public Transform PlayerTransform => _player == null ? null : _player.transform;
     /// <summary>Ragdolling in an upright spin: a spinning top that knocks other enemies away.</summary>
     public bool IsTop => _state.Current == Ragdoll && RagdollBody.IsSpinning;
+
+    /// <summary>The speed of the last move it was told to make, 0 once stopped: how fast it's trying to go.</summary>
+    public float MoveSpeed => _intendedSpeed;
+    public WeaponHold Weapon => IsArmed ? WeaponHold.Pistol : WeaponHold.None;
+
+    /// <summary>What its body is doing, for its animation. Firing, it aims; moving otherwise, it runs.</summary>
+    public AnimStance Stance => _state.Current switch
+    {
+        AggroState => Aggro.Firing ? AnimStance.Aim : _intendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
+        RearmState => _intendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
+        GrabbedState => AnimStance.Restrained,
+        RagdollState => RagdollBody.IsSpinning ? AnimStance.Restrained : AnimStance.Frozen,
+        DeadState => AnimStance.Frozen,
+        _ => AnimStance.Rest,
+    };
+
+    /// <summary>Ruby, while it's aiming at her.</summary>
+    public bool TryFindTarget(out Vector3 point)
+    {
+        point = _player != null ? _player.transform.position : default;
+        return _player != null && Stance == AnimStance.Aim;
+    }
     /// <summary>
     /// Where the hunt was leading when aggro ended, which is where search goes. Aggro keeps
     /// tracking the player for Aggro Time after losing contact, so this is where they went, not
@@ -357,6 +380,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     public void MoveToward(Vector3 target, float speed)
     {
+        _intendedSpeed = speed;
         Vector3 direction = target - transform.position;
         direction.y = 0f;
 
@@ -371,6 +395,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public void StepAway(Vector3 spot, float speed)
     {
+        _intendedSpeed = speed;
         FaceTarget();
         Vector3 direction = spot - transform.position;
         direction.y = 0f;
@@ -423,7 +448,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (_player != null) Navigator.ChaseTo(_player.transform, speed);
     }
 
-    public void Stop() => VelocityUtil.SetFlatVelocity(Body, Vector3.zero);
+    public void Stop()
+    {
+        _intendedSpeed = 0f;
+        VelocityUtil.SetFlatVelocity(Body, Vector3.zero);
+    }
 
     private Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
 

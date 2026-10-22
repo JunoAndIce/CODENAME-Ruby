@@ -8,19 +8,30 @@ using UnityEngine;
 [RequireComponent(typeof(Animator))]
 public class CharacterAnimator : MonoBehaviour
 {
+    // The names the controller builder writes and this reads, kept in one place so they can't drift.
+    public const string MoveXParameter = "MoveX";
+    public const string MoveZParameter = "MoveZ";
+    public const string TurnParameter = "Turn";
+    public const string StanceParameter = "Stance";
+    public const string WeaponParameter = "Weapon";
+    public const string GripLayer = "Grip";
+
     // A floor for the speed the blend divides by, so a character standing still reads as still.
     private const float MinMoveSpeed = 0.01f;
+    // How long the grip takes to close or open, in seconds.
+    private const float GripBlendTime = 0.15f;
 
-    private static readonly int MoveXId = Animator.StringToHash("MoveX");
-    private static readonly int MoveZId = Animator.StringToHash("MoveZ");
-    private static readonly int StanceId = Animator.StringToHash("Stance");
-    private static readonly int WeaponId = Animator.StringToHash("Weapon");
+    private static readonly int MoveXId = Animator.StringToHash(MoveXParameter);
+    private static readonly int MoveZId = Animator.StringToHash(MoveZParameter);
+    private static readonly int StanceId = Animator.StringToHash(StanceParameter);
+    private static readonly int WeaponId = Animator.StringToHash(WeaponParameter);
 
     [Tooltip("Smoothing on the blend parameters, in seconds. Stops a sharp change of direction snapping between clips.")]
     [SerializeField, Min(0f)] private float _damping = 0.1f;
 
     private Animator _animator;
     private IAnimatedCharacter _character;
+    private int _gripLayer = -1;
 
     private void Awake()
     {
@@ -30,7 +41,10 @@ public class CharacterAnimator : MonoBehaviour
         {
             Debug.LogError($"{name}: CharacterAnimator needs {(_animator == null ? "an Animator on this object" : "an IAnimatedCharacter (a PlayerController or EnemyController) on this object or above it")}. It won't animate.", this);
             enabled = false;
+            return;
         }
+        // A set with no grip builds no grip layer; then there's nothing to close.
+        _gripLayer = _animator.GetLayerIndex(GripLayer);
     }
 
     private void Update()
@@ -41,6 +55,13 @@ public class CharacterAnimator : MonoBehaviour
         _animator.speed = stance == AnimStance.Frozen ? 0f : 1f;
         _animator.SetInteger(StanceId, (int)stance);
         _animator.SetInteger(WeaponId, (int)_character.Weapon);
+
+        // The grip closes the gun hand only while there's a gun in it.
+        if (_gripLayer >= 0)
+        {
+            float grip = _character.Weapon == WeaponHold.None ? 0f : 1f;
+            _animator.SetLayerWeight(_gripLayer, Mathf.MoveTowards(_animator.GetLayerWeight(_gripLayer), grip, Time.deltaTime / GripBlendTime));
+        }
 
         Vector3 velocity = _character.Body.linearVelocity;
         velocity.y = 0f;

@@ -43,6 +43,12 @@ public class CharacterAnimationSet : ScriptableObject
     [SerializeField] private AnimationClip _restrained;
     [SerializeField] private AnimationClip _getUp;
 
+    [Header("Holding a weapon")]
+    [Tooltip("A hand pose closed around the weapon, laid over the gun hand while the character holds one.")]
+    [SerializeField] private AnimationClip _grip;
+    [Tooltip("Limits the grip to the gun hand: the right hand's mask for officers, the left's for Ruby.")]
+    [SerializeField] private AvatarMask _gripMask;
+
     public DirectionalClips RestUnarmed => _restUnarmed;
     public DirectionalClips RestPistol => _restPistol;
     public DirectionalClips RunUnarmed => _runUnarmed;
@@ -52,4 +58,6 @@ public class CharacterAnimationSet : ScriptableObject
     public AnimationClip TurnRight => _turnRight;
     public AnimationClip Restrained => _restrained;
     public AnimationClip GetUp => _getUp;
+    public AnimationClip Grip => _grip;
+    public AvatarMask GripMask => _gripMask;
 }

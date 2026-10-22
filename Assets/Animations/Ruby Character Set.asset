@@ -66,3 +66,5 @@ MonoBehaviour:
   _turnRight: {fileID: 0}
   _restrained: {fileID: 0}
   _getUp: {fileID: 0}
+  _grip: {fileID: 3094330708855449807, guid: a92ad04671c1e2c42ab2feb0e9ac684c, type: 3}
+  _gripMask: {fileID: 31900000, guid: b7a9bc6acd2eaa941ab64d230864a316, type: 2}

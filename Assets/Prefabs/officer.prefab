@@ -261,7 +261,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 94f9f922bb16c2641bd05dae354eb703, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Ruby.Weapons::GunHolder
-  _hand: {fileID: 2347840254207487560}
+  _hand: {fileID: 8684735036919276816}
 --- !u!1 &9102003000000000001
 GameObject:
   m_ObjectHideFlags: 0
@@ -361,6 +361,10 @@ PrefabInstance:
       value: Model
       objectReference: {fileID: 0}
     - target: {fileID: 5866666021909216657, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 76e0da16d7588f542847178816d45a4e, type: 2}
+    - target: {fileID: 5866666021909216657, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
       propertyPath: m_CullingMode
       value: 0
       objectReference: {fileID: 0}
@@ -374,16 +378,42 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -6574882734343921810, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1635276935865999660}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7377106651306853720}
   m_SourcePrefab: {fileID: 100100000, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
 --- !u!4 &278906268042647245 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
   m_PrefabInstance: {fileID: 311987217187909926}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &618417469408644215 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
+  m_PrefabInstance: {fileID: 311987217187909926}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &7377106651306853720
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 618417469408644215}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbddb3fd35a686d45a51f4d911597edf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ruby.Animation::CharacterAnimator
+  _damping: 0.1
 --- !u!4 &2347840254207487560 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -6574882734343921810, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
+  m_PrefabInstance: {fileID: 311987217187909926}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &8684735036919276816 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -229113793236118474, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
   m_PrefabInstance: {fileID: 311987217187909926}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &8468042189328397012
@@ -400,51 +430,55 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1
+      value: 0.7
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalScale.y
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0.044
-      objectReference: {fileID: 0}
-    - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0.137
-      objectReference: {fileID: 0}
-    - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
-      propertyPath: m_LocalRotation.w
+      propertyPath: m_LocalScale.z
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0.0806
+      objectReference: {fileID: 0}
+    - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.0954
+      objectReference: {fileID: 0}
+    - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.0271
+      objectReference: {fileID: 0}
+    - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.5880656
+      objectReference: {fileID: 0}
+    - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0.050296515
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: 0.80723447
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: 0.0046476205
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
+      value: -176.178
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
+      value: -432.001
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
+      value: 535.647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
