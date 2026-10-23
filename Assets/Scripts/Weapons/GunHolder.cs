@@ -16,6 +16,8 @@ public class GunHolder : MonoBehaviour
     private Vector3 _gripPosition;
     private Quaternion _gripRotation = Quaternion.identity;
     private Vector3 _gripScale = Vector3.one;
+    private Vector3 _aimPoint;
+    private bool _aiming;
 
     public Gun HeldGun { get; private set; }
     public bool IsArmed => HeldGun != null;
@@ -92,15 +94,24 @@ public class GunHolder : MonoBehaviour
     /// <summary>Points the held gun flat at a point. The body can face elsewhere, so a running officer still aims.</summary>
     public void AimAt(Vector3 point)
     {
-        if (!IsArmed) return;
-        Vector3 direction = point - HeldGun.transform.position;
+        _aimPoint = point;
+        _aiming = IsArmed;
+    }
+
+    // After animation: the hand the gun sits in is animated, and a turn made in FixedUpdate was
+    // overwritten as the hand moved, so the gun pointed wherever the hand did.
+    private void LateUpdate()
+    {
+        if (!_aiming || !IsArmed) return;
+        Vector3 direction = _aimPoint - HeldGun.transform.position;
         direction.y = 0f;
         if (direction.sqrMagnitude > 0.0001f) HeldGun.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
     }
 
-    /// <summary>Back to the grip's resting pose.</summary>
+    /// <summary>Back to the grip's resting pose, following the hand again.</summary>
     public void Lower()
     {
+        _aiming = false;
         if (IsArmed) HeldGun.transform.localRotation = _gripRotation;
     }
 
