@@ -87387,7 +87387,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Ruby.Animation::CharacterAnimator
   _damping: 0
   _twistLimit: 60
-  _turnSpeed: 4690
+  _turnSpeed: 720
   _bodyLookWeight: 0.8
   _headLookWeight: 1
   _gunHand: 2

@@ -7,8 +7,9 @@ using UnityEngine;
 /// CharacterAnimationSet, built into its controller.
 ///
 /// The model's facing is its own. The body turns at once, as the game wants, and the model's legs
-/// follow: standing, the upper body twists toward the target up to Twist Limit, then the feet step
-/// round; moving, the legs swing to the body's facing at Turn Speed.
+/// follow: standing, the upper body twists toward the target up to Twist Limit, past which it drags
+/// the legs along, and then the feet step round; moving, the legs swing to the aim at Turn Speed. A
+/// shot snaps the upper body and gun arm onto the target for the frame it fires (SnapToTarget).
 /// </summary>
 // After the game's own scripts each frame: PlayerController turns Ruby's body in its Update, and
 // placing the model first let that turn carry the model a frame's worth off, then snap it back,
@@ -86,13 +87,14 @@ public class CharacterAnimator : MonoBehaviour
     private bool _facing;      // the model's facing is its own (standing, aiming or running)
     private float _lowerYaw;   // the model's world yaw: where its legs point
     private bool _turning;     // stepping round on the spot
-    private float _turnSign;   // which way the current turn on the spot goes: +1 right, -1 left
     private bool _hasTarget;
     private Vector3 _target;
     // Where the character aims, as a level heading, never a point: a point on the floor near her
     // pitched Ruby's head and spine down into her own body, and dragged the gun arm with them.
     private float _aimYaw;
     private bool _aiming;
+    private bool _snapNow;     // asked to snap onto the target; taken up at the start of the next Update
+    private bool _snapping;    // snapping this frame, through to the IK pass
 
     private Transform _head;
     private float _lookWeight;
@@ -138,8 +140,19 @@ public class CharacterAnimator : MonoBehaviour
         if (_gunHand != AvatarIKGoal.LeftHand && _gunHand != AvatarIKGoal.RightHand) _gunHand = AvatarIKGoal.RightHand;
     }
 
+    /// <summary>
+    /// Puts the aim, head, chest and gun arm exactly on the target this frame, rather than letting
+    /// them swing there, and drags the legs round as far as Twist Limit needs. A shot calls it in
+    /// Update and fires from the muzzle in LateUpdate, once this frame's pose is on, so the bullet
+    /// leaves the barrel along the line to the target however fast the aim moved.
+    /// </summary>
+    public void SnapToTarget() => _snapNow = true;
+
     private void Update()
     {
+        _snapping = _snapNow;
+        _snapNow = false;
+
         AnimStance stance = _character.Stance;
         // Frozen holds the pose the body tumbles in. Speed, never enabled: Ruby's ragdoll switches her
         // Animator off and back on by itself, and the two must not fight.
@@ -174,7 +187,8 @@ public class CharacterAnimator : MonoBehaviour
     // still turns at once, so aiming stays as instant as the game makes it. Close in, the heading
     // holds; further out, it eases toward the target, turning TurnDelta's way so a big swing still
     // goes the gun hand's way round. Starting to aim, it starts where it's wanted, or at the body's
-    // facing if the target is already on top of the character.
+    // facing if the target is already on top of the character. A snap puts it straight on the
+    // target, close in or not.
     private void UpdateAimHeading()
     {
         if (!_hasTarget)
@@ -192,6 +206,11 @@ public class CharacterAnimator : MonoBehaviour
         {
             _aimYaw = wanted;
             _aiming = true;
+            return;
+        }
+        if (_snapping)
+        {
+            if (flat.sqrMagnitude > 0.0001f) _aimYaw += TurnDelta(_aimYaw, Mathf.Atan2(flat.x, flat.z) * Mathf.Rad2Deg);
             return;
         }
         if (!far) return;
@@ -222,6 +241,20 @@ public class CharacterAnimator : MonoBehaviour
             _lowerYaw = transform.eulerAngles.y;
         }
 
+        // The chest leads the legs by Twist Limit at most. Past it, the legs are dragged along rather
+        // than the chest stopping and waiting for them, so the upper body, and the gun arm with it,
+        // always reaches the aim; standing, the feet then step round the rest of the way.
+        bool pastLimit = false;
+        if (_aiming && _twistLimit > 0f)
+        {
+            float twist = AimDelta();
+            if (Mathf.Abs(twist) > _twistLimit)
+            {
+                _lowerYaw += twist - Mathf.Sign(twist) * _twistLimit;
+                pastLimit = true;
+            }
+        }
+
         // Every turn of the legs goes TurnDelta's way, so the legs and the arm always agree on which
         // way round a turn-around goes.
         float step = _turnSpeed * Time.deltaTime;
@@ -241,14 +274,10 @@ public class CharacterAnimator : MonoBehaviour
         }
         else if (_aiming)
         {
-            float delta = AimDelta();
-            if (!_turning && Mathf.Abs(delta) > _twistLimit)
-            {
-                _turning = true;
-                _turnSign = Mathf.Sign(delta);
-            }
+            if (pastLimit) _turning = true;
             if (_turning)
             {
+                float delta = AimDelta();
                 _lowerYaw += Mathf.Clamp(delta, -step, step);
                 turn = Mathf.Sign(delta);
                 if (Mathf.Abs(AimDelta()) < SettleAngle) _turning = false;
@@ -279,15 +308,15 @@ public class CharacterAnimator : MonoBehaviour
 
         // Eased like the gun arm, so the head and chest turn onto a target that appears, let go of
         // one that's lost, and swing across when the twist changes side, rather than snapping in a
-        // frame. Rising from nothing, the look starts where it's wanted.
+        // frame. Rising from nothing, or snapping, the look goes straight where it's wanted.
         float t = 1f - Mathf.Exp(-Time.deltaTime / LookBlendTime);
-        if (looking) _lookYaw = _lookWeight <= 0.001f ? ClampedAimYaw() : Mathf.LerpAngle(_lookYaw, ClampedAimYaw(), t);
+        if (looking) _lookYaw = _lookWeight <= 0.001f || _snapping ? ClampedAimYaw() : Mathf.LerpAngle(_lookYaw, ClampedAimYaw(), t);
         _lookWeight = Mathf.Lerp(_lookWeight, looking ? 1f : 0f, t);
 
         if (_lookWeight > 0.001f)
         {
             // Level, from head height, along the heading twisted no further than the limit (past
-            // it, the feet are already stepping round). Never down at the target itself.
+            // it, the legs come along). Never down at the target itself.
             Vector3 eye = _head != null ? _head.position : transform.position + Vector3.up * FallbackEyeHeight;
             _animator.SetLookAtWeight(_lookWeight, _bodyLookWeight, _headLookWeight, 0f, 0f);
             _animator.SetLookAtPosition(eye + Quaternion.Euler(0f, _lookYaw, 0f) * Vector3.forward * LookDistance);
@@ -319,8 +348,9 @@ public class CharacterAnimator : MonoBehaviour
         float t = 1f - Mathf.Exp(-Time.deltaTime / ArmBlendTime);
         bool rising = _handWeight <= 0.001f;
         // Rising from nothing, the arm starts where it's wanted rather than sweeping from a stale pose.
+        // Snapping, it's on the target in this frame's pose, which the shot leaves from.
         _aimBlend = rising ? wantedBlend : Mathf.Lerp(_aimBlend, wantedBlend, t);
-        _armYaw = rising ? aimYaw : Mathf.LerpAngle(_armYaw, aimYaw, t);
+        _armYaw = rising || _snapping ? aimYaw : Mathf.LerpAngle(_armYaw, aimYaw, t);
         _handWeight = Mathf.Lerp(_handWeight, wantedWeight, t);
 
         // Level at shoulder height, along the eased heading: the hand sweeps round in front of the
@@ -335,15 +365,9 @@ public class CharacterAnimator : MonoBehaviour
     // The level aim heading, turned no further than Twist Limit off the legs.
     private float ClampedAimYaw() => _lowerYaw + Mathf.Clamp(AimDelta(), -_twistLimit, _twistLimit);
 
-    // How far round the aim lies from the legs. Mid-turn it stays on the side the turn started
-    // toward, unless the target has come back within 90 degrees of the legs: a cursor sweeping
-    // round behind the character otherwise flipped the turn, and the arm, from side to side.
-    private float AimDelta()
-    {
-        float delta = TurnDelta(_lowerYaw, _aimYaw);
-        if (_turning && Mathf.Sign(delta) != _turnSign && Mathf.Abs(delta) > 90f) delta += 360f * _turnSign;
-        return delta;
-    }
+    // How far round the aim lies from the legs. The legs are dragged to stay within Twist Limit of
+    // the aim, so it can't get round behind them and flip a turn from side to side.
+    private float AimDelta() => TurnDelta(_lowerYaw, _aimYaw);
 
     // How far round to turn from one heading to another, the short way, except a turn-around past
     // TurnAroundAngle goes the gun hand's way: the arm leads the turn instead of crossing the chest.

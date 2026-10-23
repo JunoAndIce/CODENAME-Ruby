@@ -62,8 +62,8 @@ MonoBehaviour:
     BackwardLeft: {fileID: 3094330708855449807, guid: 5dcc71b9770f2554e8fd3ea0d6c1e1f4, type: 3}
     Left: {fileID: 3094330708855449807, guid: b702e254d5e77904da0429cfcbc77709, type: 3}
     ForwardLeft: {fileID: 3094330708855449807, guid: 3a4cf5e04ded562489d1c3b2da8c2d7a, type: 3}
-  _turnLeft: {fileID: 3094330708855449807, guid: 6f466407f9f035f4fbf426e686e6444b, type: 3}
-  _turnRight: {fileID: 3094330708855449807, guid: 0e7376aa8f8f38e4fb138892f92fe2e6, type: 3}
+  _turnLeft: {fileID: 0}
+  _turnRight: {fileID: 0}
   _restrained: {fileID: -2576967968662016515, guid: 56fd86b76fc74d24d83522069f5deb9b, type: 3}
   _getUp: {fileID: -2576967968662016515, guid: 56fd86b76fc74d24d83522069f5deb9b, type: 3}
   _grip: {fileID: 3094330708855449807, guid: a92ad04671c1e2c42ab2feb0e9ac684c, type: 3}
