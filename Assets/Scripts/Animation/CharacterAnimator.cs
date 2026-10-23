@@ -33,6 +33,8 @@ public class CharacterAnimator : MonoBehaviour
     private const float SettleAngle = 5f;
     // The time constant the gun arm eases with, in seconds, so starting to aim swings it up.
     private const float ArmBlendTime = 0.1f;
+    // The time constant the head and chest ease with, in seconds.
+    private const float LookBlendTime = 0.1f;
     // How much of the arm's length the aimed hand reaches, keeping the elbow slightly bent.
     private const float ArmReachShare = 0.95f;
     // Nearer than this, the heading holds. Close to the character, a small move of the target is a
@@ -93,6 +95,8 @@ public class CharacterAnimator : MonoBehaviour
     private bool _aiming;
 
     private Transform _head;
+    private float _lookWeight;
+    private float _lookYaw;      // where the head and chest look: eased as an angle, like the arm
 
     private Transform _gunShoulder;
     private float _armReach;
@@ -260,19 +264,33 @@ public class CharacterAnimator : MonoBehaviour
         _animator.SetFloat(TurnId, turn, _damping, Time.deltaTime);
     }
 
+    // Where the model stands is its body's business, and how it faces is this script's, so a clip's
+    // root motion never moves it. Handling root motion here, and doing nothing with it, holds
+    // whatever the Animator's Apply Root Motion box says: Ruby's had it on, and the clips' baked
+    // motion could walk her model out of her capsule, or turn it against the facing set above.
+    private void OnAnimatorMove() { }
+
     private void OnAnimatorIK(int layerIndex)
     {
         if (layerIndex != 0) return;
 
         bool upright = IsUpright(_character.Stance);
         bool looking = upright && _aiming && (_bodyLookWeight > 0f || _headLookWeight > 0f);
-        if (looking)
+
+        // Eased like the gun arm, so the head and chest turn onto a target that appears, let go of
+        // one that's lost, and swing across when the twist changes side, rather than snapping in a
+        // frame. Rising from nothing, the look starts where it's wanted.
+        float t = 1f - Mathf.Exp(-Time.deltaTime / LookBlendTime);
+        if (looking) _lookYaw = _lookWeight <= 0.001f ? ClampedAimYaw() : Mathf.LerpAngle(_lookYaw, ClampedAimYaw(), t);
+        _lookWeight = Mathf.Lerp(_lookWeight, looking ? 1f : 0f, t);
+
+        if (_lookWeight > 0.001f)
         {
             // Level, from head height, along the heading twisted no further than the limit (past
             // it, the feet are already stepping round). Never down at the target itself.
             Vector3 eye = _head != null ? _head.position : transform.position + Vector3.up * FallbackEyeHeight;
-            _animator.SetLookAtWeight(1f, _bodyLookWeight, _headLookWeight, 0f, 0f);
-            _animator.SetLookAtPosition(eye + Quaternion.Euler(0f, ClampedAimYaw(), 0f) * Vector3.forward * LookDistance);
+            _animator.SetLookAtWeight(_lookWeight, _bodyLookWeight, _headLookWeight, 0f, 0f);
+            _animator.SetLookAtPosition(eye + Quaternion.Euler(0f, _lookYaw, 0f) * Vector3.forward * LookDistance);
         }
         else
         {
@@ -291,7 +309,8 @@ public class CharacterAnimator : MonoBehaviour
     // through the chest whenever the aim swung across.
     private void UpdateGunArm(bool upright)
     {
-        bool armed = upright && _character.Weapon != WeaponHold.None && _gunShoulder != null;
+        if (_gunShoulder == null) return;
+        bool armed = upright && _character.Weapon != WeaponHold.None;
         bool aim = armed && _character.Stance == AnimStance.Aim && _aiming;
         float wantedWeight = !armed ? 0f : aim ? _aimArmWeight : _carryWeight;
         float wantedBlend = aim ? 1f : 0f;

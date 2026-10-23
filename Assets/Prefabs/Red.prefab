@@ -87385,9 +87385,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bbddb3fd35a686d45a51f4d911597edf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Ruby.Animation::CharacterAnimator
-  _damping: 0.1
+  _damping: 0
   _twistLimit: 60
-  _turnSpeed: 720
+  _turnSpeed: 4690
   _bodyLookWeight: 0.8
   _headLookWeight: 1
   _gunHand: 2

@@ -24,6 +24,13 @@ public class RagdollState : EnemyStateBase
     /// <summary>On its feet and done getting up. Read by the transition table.</summary>
     public bool GotUp => _recovered && _getUpLeft <= 0f;
 
+    /// <summary>
+    /// On its feet: getting up, or done and waiting for the table to send it hunting. GotUp flips
+    /// in a physics step and the table moves on in the next Update, so a hit in between still meets
+    /// a standing enemy, and has to be treated as one.
+    /// </summary>
+    public bool Standing => _recovered;
+
     /// <summary>The next ragdoll tumbles, flying at this velocity.</summary>
     public void Launch(Vector3 velocity)
     {

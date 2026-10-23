@@ -148,7 +148,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         AggroState => Aggro.Firing ? AnimStance.Aim : _intendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
         RearmState => _intendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
         GrabbedState => AnimStance.Restrained,
-        RagdollState => Ragdoll.GettingUp ? AnimStance.GettingUp : RagdollBody.IsSpinning ? AnimStance.Restrained : AnimStance.Frozen,
+        RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : RagdollBody.IsSpinning ? AnimStance.Restrained : AnimStance.Frozen,
         DeadState => AnimStance.Frozen,
         _ => AnimStance.Rest,
     };
@@ -289,7 +289,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private void TakeHit(Vector3 velocity)
     {
         // Getting up, it's standing again, so it's shoved like any enemy on its feet.
-        if (_state.Current == Ragdoll && !Ragdoll.GettingUp) RagdollBody.Push(velocity);
+        if (_state.Current == Ragdoll && !Ragdoll.Standing) RagdollBody.Push(velocity);
         else Body.linearVelocity = velocity;
     }
 
@@ -305,7 +305,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         {
             // Getting up, it's on its feet, so a hard enough hit floors it again, as it would anyone
             // standing. SetState can't re-enter Ragdoll, so the state is relaunched instead.
-            if (Ragdoll.GettingUp) Ragdoll.Relaunch(VelocityUtil.Flatten(Body.linearVelocity));
+            if (Ragdoll.Standing) Ragdoll.Relaunch(VelocityUtil.Flatten(Body.linearVelocity));
             return;
         }
         DropGun();
