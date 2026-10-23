@@ -521,9 +521,11 @@ snaps her arm onto the cursor first, so the muzzle is on the line when the bulle
   - It warns when the starting gun isn't under the Hand, when the Hand holds a Rigidbody with no
     Gun, and when the Hand's scale isn't uniform. Aiming turns a gun off the Hand's axes, and under
     a non-uniformly scaled Hand Unity shears it.
-  - The officer's Hand is his model's right-hand prop bone, `B-handProp.R`, which the clips don't
-    animate, with the pistol posed in the fist. Pose it in Play mode and paste the values into the
-    prefab: Prefab Mode shows the T-pose, where a spot that looks like the palm is up the forearm.
+  - The officer's Hand is his model's right hand bone, `B-hand.R`, with the pistol a direct child
+    of it, posed in the fist. Hand and pistol parent must be the same bone: the pistol first sat on
+    the prop bone under it, `B-handProp.R`, while the Hand pointed at `B-hand.R`. Pose it in Play
+    mode and paste the values into the prefab: Prefab Mode shows the T-pose, where a spot that looks
+    like the palm is up the forearm.
   - `AimAt` only records the target; the gun is turned toward it in `LateUpdate`, after animation,
     because a turn made in `FixedUpdate` was overwritten as the animated hand moved. `Lower` releases
     it to follow the hand again.

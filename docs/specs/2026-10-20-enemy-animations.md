@@ -302,9 +302,11 @@ One step at a time, with the user's play-test after each.
   via `popo.prefab`, same GUID). An attempt to move the officer's components onto the model's root
   made them new components and silently dropped the scene's 320 per-officer settings, patrol
   routes included; popo was restored from the commit and the model added as visuals only.
-- **The pistol** is hand-sized inside its prefab, centred on its pivot, and posed in the fist on
-  `B-handProp.R`. Prefab Mode shows the T-pose, where a spot that looks like the palm is up the
-  forearm, so the pose is set in Play mode and pasted into the prefab.
+- **The pistol** is hand-sized inside its prefab, centred on its pivot, and posed in the fist.
+  Prefab Mode shows the T-pose, where a spot that looks like the palm is up the forearm, so the pose
+  is set in Play mode and pasted into the prefab. It sits on the hand bone itself, `B-hand.R`, not
+  the prop bone: the GunHolder's Hand pointed at `B-hand.R` while the pistol sat on `B-handProp.R`
+  under it, and the final review caught the mismatch.
 - **Holding the gun** gained the grip layer (the pack's object-grip pose through a hand mask) and
   the gun arm's IK; the carry hold came from the pack's unarmed walk swinging the gun into the leg.
 - **The aim is a level heading, not a point:** the cursor's spot at Ruby's root height pitched her
