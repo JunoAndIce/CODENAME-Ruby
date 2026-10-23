@@ -320,3 +320,20 @@ One step at a time, with the user's play-test after each.
   zeroed so Prefab Mode shows her inside her capsule. Her CharacterAnimator is left-handed, Twist
   Limit 60, Turn Speed 720.
 - **Officers' looks:** Enemy.mat colours the model pink.
+- **From the final review:** the look-at's weight and yaw ease over 0.1 s, so the head and chest no
+  longer snap when a target appears or is lost; root motion is discarded (an empty
+  `OnAnimatorMove`), since Ruby's Animator had Apply Root Motion on; and `RagdollState.Standing`
+  keeps an officer who has just finished getting up knockable until the table sends him hunting.
+- **A shot snaps the arm onto the cursor.** The pull puts Ruby's heading, head, chest and gun arm
+  exactly on the cursor in that frame's pose, and the bullet leaves the muzzle in `LateUpdate`, once
+  she's posed. Her trailing arm had made it unclear where a bullet would come from or go. Tried and
+  dropped first: spawning on her aim line when the muzzle was off (bullets must leave the muzzle), and
+  a Hotline Miami turn-around, a 0.08 s spin when the cursor crossed her plus a wait of up to 0.3 s
+  for the arm before firing (clicks felt late).
+- **Past Twist Limit the chest drags the legs** instead of stopping to wait for the feet, so the
+  upper body always reaches the aim. That retired the rule keeping a turn's direction until the aim
+  came back within 90 degrees: the aim can no longer get round behind the legs.
+- **The turn slots are empty.** The pack's `Turn01` clips bake their turn into the pose; blended in
+  at whatever phase the aim state was in, they turned the hips on top of the model's own turn and
+  snapped it away when the feet settled, and the legs jumped. A turn on the spot needs a foot-shuffle
+  clip that doesn't turn the body.

@@ -459,7 +459,9 @@ survivor's body settles, `RagdollState` stands it up and holds it still for Get 
 stand-in for a get-up clip's length) before the table sends it hunting; a top that winds down is
 already on its feet and skips it. Getting up, it's standing again: a hit at Knockdown Speed floors
 it once more (`RagdollState.Relaunch`, since `SetState` can't re-enter Ragdoll and would drop the
-knockdown silently), and a spinning top shoves it like any standing enemy.
+knockdown silently), and a spinning top shoves it like any standing enemy. `RagdollState.Standing`
+covers the get-up and the moment after it before the table moves on: done in a physics step, it's
+sent hunting in the next `Update`, and a hit in between still meets a standing enemy.
 
 **Dead enemies are corpses, never destroyed.** `DeadState` darkens the enemy (`EnemyController.Darken`,
 Corpse Brightness through MaterialPropertyBlocks, so shared materials are untouched) and keeps its
@@ -489,7 +491,9 @@ no `Gun`, Rigidbody or collider, which would make it a loose prop and drop it) u
 bone, `Wrist_L`, so it follows her animation standing and her forearm when she's down. Its `Muzzle`
 child is the Fire Point and carries the `GunController`, which finds the `PlayerController` above
 it. Shots fly flat from the muzzle toward `AimPoint`, never along the muzzle's own facing: that
-swings and tilts with her animated hand, and a bullet flown along it would hit the floor.
+swings and tilts with her animated hand, and a bullet flown along it would hit the floor. The pull
+snaps her arm onto the cursor first, so the muzzle is on the line when the bullet leaves (see
+**Animation**).
 
 - **Bullets** (`Bullet`, pooled) sweep a 0.05 m sphere along each physics step, so a fast bullet
   can't skip through a thin wall. They stop at the nearest thing that stops bullets: anything
@@ -627,11 +631,20 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
   animations exist; swapping one is an edit to the set and a rebuild, never code.
 - **The legs follow the body.** The body turns at once, as the game wants; the model keeps its own
   facing while upright. Standing, the head and chest twist toward the aim (Humanoid look-at, chest
-  weight 0.8) and past Twist Limit the feet step round with the turn clips; moving, the legs swing
-  to the aim (or the body's facing) at Turn Speed. A turn-around past 150 degrees goes the gun
-  hand's way, and a turn keeps its direction until the aim comes back within 90 degrees, so the arm
-  never crosses the chest and a sweeping cursor can't flip it. Held, tumbling or getting up, the
-  model is left alone: a tumbling capsule takes it along, and Ruby's live ragdoll bones hang under it.
+  weight 0.8, eased over 0.1 s) up to Twist Limit. Past it the chest drags the legs along rather
+  than stopping to wait for them, so the upper body and the gun arm always reach the aim, and the
+  feet step round the rest of the way at Turn Speed. Moving, the legs swing to the aim (or the
+  body's facing) at Turn Speed. A turn-around past 150 degrees goes the gun hand's way, so the arm
+  never crosses the chest. Held, tumbling or getting up, the model is left alone: a tumbling capsule
+  takes it along, and Ruby's live ragdoll bones hang under it.
+- **Turn clips must be feet only, so the turn slots are empty.** Kevin Iglesias's `Turn01` clips
+  bake their turn into the pose. Blended in at whatever phase the aim state was in, they turned the
+  hips on top of the model's own turn and snapped it away when the feet settled, and the legs
+  jumped (in a frame, at Ruby's blend damping of 0). A turn on the spot needs a foot shuffle that
+  doesn't turn the body.
+- **Root motion is discarded** (an empty `OnAnimatorMove`), whatever the Animator's Apply Root
+  Motion says: where the model stands is its body's business, and how it faces is
+  `CharacterAnimator`'s.
 - **The aim is a level heading, never a point,** from the body to the target, held within 1.5 m and
   eased over 0.08 s. The cursor's spot at Ruby's root height pitched her head and spine down into
   her body; close to her a slight mouse move is a big turn, and the camera's lean keeps the point
@@ -643,6 +656,14 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
   the arm's direction (as an angle round the shoulder) are eased: easing a world position left the
   hand trailing a running Ruby and cut through her chest on a turn. The Grip layer closes the gun
   hand while armed, driven from code because an empty "open" state would write the hand's default pose.
+- **A shot snaps the arm onto the target.** `GunController` calls `CharacterAnimator.SnapToTarget`
+  in `Update`, which puts the heading, the head and chest and the gun arm exactly on the cursor in
+  that frame's pose, and spawns the bullet in `LateUpdate`, after the Animator has posed her. Every
+  shot leaves the barrel and flies along it to the cursor, on the click. Between shots the arm keeps
+  its easing: a shot from wherever the trailing muzzle had got to left from her side or behind her,
+  and the player couldn't tell where a bullet would come from or go. A wait for the arm, and a fast
+  spin when the cursor crossed her, were tried first and dropped: clicks felt late. The arm points
+  along the aim from its shoulder, so close in a bullet runs a few degrees inward of the barrel.
 - **Settings:** officers Twist Limit 70, Turn Speed 360, right hand; Ruby 60, 720, left hand (her
   pistol is in her left hand).
 

@@ -266,8 +266,8 @@ a { color: var(--accent); }
 <h3 id="ruby-turning">How Ruby turns</h3>
 <p>Ruby's body, shots and whip turn to the cursor the instant it moves; only her pose follows a moment behind, to read naturally.</p>
 <ul>
-  <li><strong>Standing still,</strong> her head and chest twist toward where she aims. Once that's more than 60° from her feet, her feet step round on the spot. Running, her legs swing to face where she aims, and she strafes or backpedals when she moves another way.</li>
-  <li><strong>Her left arm points her gun</strong> straight out where she aims, level, however close or far the cursor is. Her left hand is closed around the gun.</li>
+  <li><strong>Standing still,</strong> her head and chest twist toward where she aims. Once that's more than 60° from her feet, her chest pulls her legs round with it, and her feet step round the rest of the way. Running, her legs swing to face where she aims, and she strafes or backpedals when she moves another way.</li>
+  <li><strong>Her left arm points her gun</strong> straight out where she aims, level, however close or far the cursor is. It swings round a moment after her aim, but the instant she fires it snaps onto the cursor, so every bullet leaves the barrel and flies along it. Her left hand is closed around the gun.</li>
   <li><strong>She never looks down.</strong> Her pose aims along a level heading, never at the floor under the cursor, and it holds steady while the cursor is within 1.5 m of her, so small mouse moves close to her don't set her twisting.</li>
   <li><strong>Turning right round,</strong> she turns the way her gun hand leads (left), so her arm sweeps round in front of her instead of crossing her body.</li>
 </ul>
@@ -410,7 +410,7 @@ a { color: var(--accent); }
 <p>A right-click tap while spinning lets go. The object keeps its speed but is turned onto Ruby's aim, so it flies where she points. A spun enemy flies out as a spinning top (see <a href="#ragdoll">Ragdoll</a>). At 40 m/s it's well above Knockdown Speed and hurts whatever it hits.</p>
 
 <h3>Revolver</h3>
-<p>For now Ruby carries the officers' pistol model in her left hand. Shots leave its muzzle and fly flat toward the cursor, wherever her hand is in its swing. The gun stays in her hand when she's knocked down.</p>
+<p>For now Ruby carries the officers' pistol model in her left hand. Pulling the trigger snaps her gun arm onto the cursor, and the shot leaves the muzzle in that same frame and flies flat to the cursor: a bullet always comes out of the barrel and goes where she aims, however fast the cursor moved. There's no delay. The gun stays in her hand when she's knocked down.</p>
 <p>Semi-automatic: one shot per pull of the trigger, and holding it does nothing. It holds six bullets (Bullet Count) and stops firing when they run out. The revolver fires at all times, including while the chain is holding something. The one exception is charging a throw: while right click is held, left click throws instead of firing.</p>
 <div class="placeholder">
   <p><strong>Placeholder: revolver data.</strong> <span class="planned">Planned</span> To be filled in when the revolver is reworked:</p>
@@ -497,7 +497,7 @@ a { color: var(--accent); }
 </table>
 </div>
 <ul>
-  <li><strong>Turning to aim:</strong> standing and firing, his chest twists toward Ruby as she moves, up to 70°; past that his feet step round to face her.</li>
+  <li><strong>Turning to aim:</strong> standing and firing, his chest twists toward Ruby as she moves, up to 70°; past that his chest pulls his legs round with it, and his feet step round to face her.</li>
   <li><strong>The grab:</strong> the chain knocks his pistol out of his hand with a small hop.</li>
   <li><strong>Getting up:</strong> after a fall he stands still for a second, unable to move or shoot, then hunts again. A hard enough hit during that second puts him down again. A spun officer who winds down is already on his feet and goes straight on.</li>
 </ul>
