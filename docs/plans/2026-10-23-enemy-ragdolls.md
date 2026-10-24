@@ -2,28 +2,32 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Execute one task at a time and stop after each for the user's Inspector work and play-test. Never hand-edit `.prefab`, `.unity` or `.controller` YAML.
 
-**Goal:** Officers fall as limp bodies on their `HumanM_Model` skeleton, stay wrapped in one piece on the chain alive or dead, and when let go without a throw they spin limp and upright, slow down, wobble dizzily and tip over, replacing the spinning top.
+**Goal:** Officers fall limp on their `HumanM_Model` skeleton, the chain grabs them limp (pulled by the chest, arms bound tight against it, in any position), and letting go is just a fall: no spin, no top.
 
-**Architecture:** Officers move from `CapsuleRagdollBody` to Ruby's `SkeletonRagdollBody`, which goes on their root. `IRagdollBody.Hold` comes to mean wrapped (standing in one piece, the capsule colliding), and `Spin` becomes the dizzy spin, run by `SkeletonRagdollBody` itself in phases. The spinning top's momentum exchange goes. The chain's pass-through window after a let-go is gathered after the officer goes limp, so it covers his bones. `CapsuleRagdollBody` is deleted once nothing uses it.
+**Architecture:**
+- Officers move from `CapsuleRagdollBody` to Ruby's `SkeletonRagdollBody`, on their root.
+- The spin and the spinning top are removed.
+- `IRagdollBody` gains a limp hold that binds the arms to the chest, a let-go that keeps the body's motion, and a `Torso` for the chain to pull.
+- The tether pulls whatever body the grabbable offers (`IGrabbable.Body`), but weighs the host whole and works from all the colliders it collides through.
+- The throw's pass-through window starts after the let-go, so it covers the limbs.
 
 **Tech Stack:** Unity 6000.5.10f1 (PhysX Rigidbodies and joints, Mecanim Humanoid), C# 9. Assemblies touched: `Ruby.Core`, `Ruby.Grapple`, `Ruby.Animation`, `Ruby.Animation.Editor` and `Ruby.Game`.
 
-**Spec:** `docs/specs/2026-10-23-enemy-ragdolls.md` (approved 2026-10-23). Read it first; this plan argues from it, and its table of moments is the play-test script.
+**Spec:** `docs/specs/2026-10-23-enemy-ragdolls.md` (approved 2026-10-23, revised twice the same day). Read it first. Its table of moments is the play-test script.
 
 ## Global Constraints
 
 - **Snappy verbs.** Grab, release and throw stay instant, and nothing here moves Ruby or slows her.
-- **Ruby's ragdoll behaves exactly as today.** She's never spun or held, so changes to `Spin` and `Hold` must not reach her `Ragdoll`, `Recover`, `Rest` or `ApplyHit`.
-- **Unity saves enum numbers.** `AnimStance` gains `RestrainedStill = 6`. Never renumber the existing values (`Rest 0, Aim 1, Run 2, Restrained 3, Frozen 4, GettingUp 5`).
-- **Values from the spec:**
-  - Drop Spin Speed 12 rad/s, Drop Spin Time 3 s, Dizzy Time 0.6 s.
-  - Get Up Time 1 s, Throw Pass Through 0.15 s. Drop Fling Speed is unchanged.
-- **New values (the plan's):** on `SkeletonRagdollBody`, Spin Slide 6 m/s², Dizzy Tilt 20° and Dizzy Wobble 1.5 Hz.
+- **The chain's rules don't change.** Weights, speeds, parking, the spin round Ruby, the throw, the aimed let-go and the walk limit stay as they are. Only which body of a limp officer they act on changes.
+- **Ruby's ragdoll behaves exactly as today.** She's never held, so new `Hold`/`LetGo` code must not reach her `Ragdoll`, `Recover`, `Rest` or `ApplyHit`.
+- **Unity saves enum numbers.** `AnimStance` keeps `Rest 0, Aim 1, Run 2, Restrained 3, Frozen 4, GettingUp 5`, with nothing added.
+- **Values:** Get Up Time 1 s, Throw Pass Through 0.15 s. Drop Fling Speed, Drop Spin Speed, Drop Spin Time and Top Bounce are removed.
 - **Conventions:**
   - no namespaces;
   - private `[SerializeField]` `_camelCase` fields with expression-bodied read properties and tooltips;
   - comments explain why;
-  - real problems use `Debug.LogWarning`/`LogError`, and chatter uses `DebugLog.Info`.
+  - real problems use `Debug.LogWarning`/`LogError`, and chatter uses `DebugLog.Info`;
+  - no system references `Ruby.Game`.
 - **Verification:**
   - `python tools/compile_check.py` must end `compile-check: OK` after every code step.
   - There are no automated tests. The play-test gates are manual, so don't call them tests.
@@ -31,152 +35,174 @@
 
 ## Review Focus
 
-1. **Ruby knocked down by her own throw.** An officer goes limp the instant he's let go, and Unity drops an ignore-collision pair set while a collider was disabled. Expect a body thrown or let go from behind to pass through her for Throw Pass Through. Owned by Task 1 (Step 4) and its gate.
-2. **A hit, grab or death in the spin's phases does nothing.** `SetState` can't re-enter Ragdoll, and the old code ignored hits on a ragdolling officer. Expect a knockdown during the spin or wobble to tumble him, a grab to stand him up wrapped, and a death to drop him limp. Owned by Task 2 (Steps 3 and 5) and its gate.
-3. **A grabbed corpse sized from the wrong colliders.** `LandWhip` calls `EnterGrabbed` before the tether reads the host's colliders, so `Hold` must have the capsule enabled by the time it returns. Otherwise the parked distance comes out as zero and the corpse orbits inside Ruby. Owned by Task 1 (Step 2) and its gate.
-4. **Officers' bones seen while standing.** If the bones' colliders block the path grid's bake, or simulate for a step before `SkeletonRagdollBody.Start` parks them, cells under officers bake blocked or officers jerk on load. Owned by Task 1's gate.
-5. **The upright hold fights the joints.** A pelvis or chest pulled harder than the joints allow jitters, or sinks through the floor once the hold lets go. Expect a smooth spin and a clean tip-over. Owned by Task 2's gate.
+1. **Ruby knocked down by her own throw.** An officer's bones collide in place of his capsule, and Unity drops an ignore pair set on a disabled collider. Expect a body thrown, or let go mid-spin, from behind to pass through her, and a parked body never to hit her. Owned by Task 1 (after the let-go) and Task 3 (while parked).
+2. **A limp body that doesn't follow the chain.** Pulled through his 1 kg root, he'd hang back while the rope stretches. Expect him to drag, reel and park like today's officer. Owned by Task 3.
+3. **A grab that stands a body up.** `RagdollState.Exit` calls `Recover` today, so grabbing a tumbling officer stands him up. Expect a body grabbed down to stay down. Owned by Task 3.
+4. **A let-go that freezes the flailing legs.** `Ragdoll(launch)` sets every bone to one velocity. Expect legs flung out by a swing to keep swinging when let go. Owned by Task 3 (`LetGo`, `RagdollState.Continue`).
+5. **Officers' bones seen while standing.** If they block the path grid's bake, or simulate before being parked, cells under officers bake blocked or officers jerk on load. Owned by Task 1's gate.
 
 ---
 
-### Task 1: Officers on the skeleton ragdoll, wrapped on the chain
+### Task 1: Officers fall limp, and the throw window covers their limbs
+
+Steps 1–7 were built before the spec's revisions. Step 8 takes back the parts the revisions dropped.
 
 **Files:**
-- Modify: `Assets/Scripts/Animation/AnimStance.cs` (add `RestrainedStill = 6`)
-- Modify: `Assets/Scripts/Animation/Editor/CharacterControllerBuilder.cs` (a "Restrained Still" state)
-- Modify: `Assets/Scripts/Core/IRagdollBody.cs` (the `Hold` contract, the summary)
-- Modify: `Assets/Scripts/Core/SkeletonRagdollBody.cs` (`Hold` wraps)
-- Modify: `Assets/Scripts/EnemyController.cs` (`Stance` for a held corpse)
-- Modify: `Assets/Scripts/States/DeadState.cs` (comments only, for the new `Hold`)
+- Modify: `Assets/Scripts/Animation/AnimStance.cs`, `Assets/Scripts/Animation/Editor/CharacterControllerBuilder.cs` (Step 1, reverted in Step 8)
+- Modify: `Assets/Scripts/Core/IRagdollBody.cs`, `Assets/Scripts/Core/SkeletonRagdollBody.cs` (`Hold`)
+- Modify: `Assets/Scripts/EnemyController.cs`, `Assets/Scripts/States/DeadState.cs`
 - Modify: `Assets/Scripts/Grapple/Footprint.cs`, `Tether.cs`, `GrappleController.cs` (the pass-through)
-- Delete (last step, after the user's swap): `Assets/Scripts/Core/CapsuleRagdollBody.cs` and its `.meta`
+- Delete: `Assets/Scripts/Core/CapsuleRagdollBody.cs` and its `.meta`
 
 **Interfaces:**
 - Produces:
-  - `AnimStance.RestrainedStill = 6`: wrapped on the chain and still (a corpse).
-  - `IRagdollBody.Hold()`: wrapped for the chain. The body is stood up in one piece where it lies, its capsule colliding and its Animator posing it.
-  - `Footprint.BodyColliders(Rigidbody body) : Collider[]`: every enabled, non-trigger collider on an active object under `body`, child bodies included.
-  - Builder state name: `Restrained Still`.
+  - `Footprint.BodyColliders(Rigidbody body) : Collider[]`: every enabled, non-trigger collider under `body`, child bodies included.
+  - `Tether.PassThroughAfterEnd` gathers that set from the host when it's called. `GrappleController.Detach` calls it after the grabbable's `Release`/`EndGrab`.
+  - Interim, until Task 3: `SkeletonRagdollBody.Hold()` calls `Recover()`, so a grabbed corpse stands up in one piece.
 
-- [ ] **Step 1: The still restrained stance.**
-  - Add `RestrainedStill = 6` to `AnimStance`, with a comment: wrapped on the chain and not moving, for a corpse.
-  - In `CharacterControllerBuilder`, when `set.Restrained` is set, also add a state named `Restrained Still`: the same clip, `state.speed = 0` so it holds the clip's first frame, entered on `Stance == RestrainedStill`. Use `AddSingle`, then set the speed.
-  - `CharacterAnimator` needs no change: `IsUpright` already leaves the model alone outside Rest, Aim and Run.
-- [ ] **Step 2: `Hold` wraps.**
-  - In `SkeletonRagdollBody`, `Hold()` does exactly what `Recover()` does: wake from rest, stand the root up under the pelvis with the capsule colliding, and restart and evaluate the Animator. Implement it as a call to `Recover`, with a comment that wrapped on the chain is standing in one piece.
-  - Rewrite `IRagdollBody.Hold`'s summary to the contract above.
-  - Remove "capsule" from the interface's own summary: it names `SkeletonRagdollBody` alone once Step 7 lands.
-- [ ] **Step 3: A held corpse is still.** In `EnemyController.Stance`, map `DeadState => IsHeld ? AnimStance.RestrainedStill : AnimStance.Frozen`. In `DeadState`, update the comments on `Enter` and `Grab`: killed mid-swing, it stays on the chain wrapped; `Grab` stands it up wrapped, not limp.
-- [ ] **Step 4: The pass-through reaches the limp body.**
-  - Add `Footprint.BodyColliders` as above. `SolidColliders` stays as it is: the tether's reach still measures the wrapped capsule.
-  - Change `Tether.PassThroughAfterEnd` to gather `Footprint.BodyColliders(_host)` when it's called, instead of reusing `_hostColliders` from the tether's start.
-  - In `GrappleController.Detach`, reorder:
-    1. `_tether.End()`.
-    2. Read `bool parked = _tether.IsParked`. If parked, call `AimRelease`.
-    3. The grabbable's `Release` or `EndGrab(parked)`. The officer goes limp here.
-    4. Last, if `_user.CanAct && (thrown || parked)`, call `PassThroughAfterEnd`.
-
-    Comment why: Unity loses an ignore pair set on a disabled collider, and his bones only switch on once he's let go.
-- [ ] **Step 5: Compile.** Run `python tools/compile_check.py`. Expected: `compile-check: OK`.
-- [ ] **Step 6: Inspector work for the user** (hand this list over and wait):
-  1. On `officer.prefab`, select the `Model` child and run the Ragdoll Wizard (GameObject → 3D Object → Ragdoll). Pelvis is the Avatar's Hips bone; fill the hips, knees, arms, elbows, Middle Spine and Head from the matching bones. Total Mass doesn't matter, since only its proportions are used.
-  2. Add `ImpactDamage` to every bone the wizard gave a Rigidbody, the pelvis included.
-  3. On the officer's root, remove `CapsuleRagdollBody` and add `SkeletonRagdollBody`, leaving its defaults.
-  4. Open `Assets/Animations/Enemy Animation Set` and press **Build Controller**, which adds `Restrained Still`.
-- [ ] **Step 7: Delete `CapsuleRagdollBody.cs`** and its `.meta`, then compile again. Expected: OK. Nothing else references the class.
+- [x] **Step 1: The still restrained stance** (`AnimStance.RestrainedStill` and a "Restrained Still" controller state). Reverted in Step 8.
+- [x] **Step 2: `Hold` stands the body up,** calling `Recover`. Interim.
+- [x] **Step 3: A held corpse maps to the still stance.** Reverted in Step 8.
+- [x] **Step 4: The pass-through reaches the limp body.** `Footprint.BodyColliders`; `PassThroughAfterEnd` gathers it at call time; `Detach` reordered to `End`, then `AimRelease` if parked, then `Release`/`EndGrab`, then the pass-through.
+- [x] **Step 5: Compile.** OK.
+- [x] **Step 6: Inspector work** (done by the user): the Ragdoll Wizard on the officer's model (`B-hips` as Pelvis), `ImpactDamage` on its 11 bones, `SkeletonRagdollBody` on the root in place of `CapsuleRagdollBody`, and the controller rebuilt.
+- [x] **Step 7: Delete `CapsuleRagdollBody.cs`** and its `.meta`. Compile: OK.
+- [ ] **Step 8: Take back what the revisions dropped.**
+  - Remove `RestrainedStill` from `AnimStance`, the "Restrained Still" state from `CharacterControllerBuilder`, and its mapping in `EnemyController.Stance` (`DeadState => AnimStance.Frozen` again).
+  - Restore `DeadState`'s `Enter` and `Grab` comments.
+  - Mark `SkeletonRagdollBody.Hold` and `IRagdollBody.Hold`'s summary as interim, standing the body up until the limp hold replaces it.
+  - Compile. Expected: `compile-check: OK`.
+- [ ] **Step 9: Inspector work for the user:** open `Assets/Animations/Enemy Animation Set` and press **Build Controller** again, which removes `Restrained Still`.
 - [ ] **Play-test gate:**
   - `SampleScene` loads with every officer standing still; nothing jerks. With the PathGrid selected, no cell under an officer is blocked.
   - **Thrown:** an officer goes limp at once and tumbles. Lying still, he stands up where he lies, holds still for 1 s, then hunts.
   - **Knocked down** by a thrown crate: limp at once, then gets up the same way.
   - **Killed:** limp, settles, darkens and freezes, and Ruby walks over it.
-  - **A corpse grabbed off the floor** snaps upright, wrapped, darkened and still (no idle sway). Swung, it stays one piece. Let go mid-swing, it goes limp and flies out along Ruby's aim with no spin. Thrown, it tumbles limp.
-  - **From behind:** a body thrown, or let go mid-spin, from behind Ruby never hits her. Try it ten times.
-  - **A live officer let go** still spins, with the old stand-in spin and its limbs flailing; Task 2 replaces it. He gets up straight after, with no hold.
+  - **From behind:** an officer thrown, or let go mid-spin, from behind Ruby never hits her. Try it ten times.
+  - **Interim, not judged yet:** a let-go officer still spins with the old stand-in spin (Task 2 removes it), and a grabbed corpse stands up in one piece (Task 3 makes it limp).
   - Ruby's own knockdown and get-up are unchanged.
   - The Console is clean. Watch especially for "Animator is not playing an AnimatorController" while officers are limp. If it shows, guard `CharacterAnimator`'s Animator writes (not its bookkeeping) with `_animator.isActiveAndEnabled`, compile, and re-check before committing.
 - [ ] **Commit.**
 
-### Task 2: The dizzy spin replaces the top
+### Task 2: No spin, no top
 
 **Files:**
-- Modify: `Assets/Scripts/Core/IRagdollBody.cs` (`Spin` gains `dizzyTime`; `Push` goes)
-- Modify: `Assets/Scripts/Core/SkeletonRagdollBody.cs` (the spin's phases)
-- Modify: `Assets/Scripts/EnemyController.cs` (Dizzy Time, the top's removal, knockdowns during the spin)
-- Modify: `Assets/Scripts/States/RagdollState.cs` (every survivor gets up)
-- Modify: `Assets/Scripts/States/DeadState.cs` (a death mid-spin drops limp)
+- Modify: `Assets/Scripts/Core/IRagdollBody.cs`, `Assets/Scripts/Core/SkeletonRagdollBody.cs`
+- Modify: `Assets/Scripts/EnemyController.cs`
+- Modify: `Assets/Scripts/States/RagdollState.cs`
 
 **Interfaces:**
-- Consumes: Task 1's `Hold`, and officers on `SkeletonRagdollBody`.
+- Consumes: Task 1's officers on `SkeletonRagdollBody`.
 - Produces:
-  - `IRagdollBody.Spin(float angularSpeed, float duration, float dizzyTime, Vector3 launchVelocity)`. `IsSpinning` is true through the spin and the wobble. `IsSettled` is true only once the fall after the wobble has settled.
-  - `EnemyController.DizzyTime` (`float`, from `[SerializeField, Min(0f)] float _dizzyTime = 0.6f`).
-  - `SkeletonRagdollBody`, under a `[Header("Dizzy spin")]`:
-    - `[SerializeField, Min(0f)] float _spinSlide = 6f`, in m/s²;
-    - `[SerializeField, Range(0f, 60f)] float _dizzyTilt = 20f`, in degrees;
-    - `[SerializeField, Min(0f)] float _dizzyWobble = 1.5f`, in Hz.
+  - `IRagdollBody` without `Spin`, `IsSpinning` or `Push`.
+  - `RagdollState` with only `Launch(Vector3 velocity)` to set the next fall.
 
 - [ ] **Step 1: The seam.**
-  - Change `Spin`'s signature and summary as above: "upright and limp, the spin winding down over `duration`, then a dizzy wobble for `dizzyTime`, then a fall".
-  - Remove `Push` from the interface and from `SkeletonRagdollBody`: the top was its only caller.
-- [ ] **Step 2: `SkeletonRagdollBody`'s spin.** Replace the provisional `Spin`, its `_spinLeft` and the spin branch of `FixedUpdate` with a phase field (`None`, `Spinning` or `Dizzy`).
-  - `Ragdoll`, `Hold`, `Recover` and `Rest` set the phase to `None` and give the pelvis and chest back their `maxAngularVelocity`.
-  - **Held bodies:** the pelvis and the chest. The chest is the bone body on the Avatar's `Chest` bone, else `Spine`, else `UpperChest`, walking up parents to the first one in `_bones` that isn't the pelvis. With none, hold the pelvis alone.
-  - **Spin(...)**, called while the body still stands wrapped:
-    - First record, for each held body, the local direction pointing world-up, and the pelvis's height above the ground under it (a downward raycast, as `Recover` does).
-    - Then `Ragdoll(launchVelocity)`, phase `Spinning`, with the spin speed and a steady deceleration of `|angularSpeed| / duration`. A duration of 0 goes straight to `Dizzy`.
-    - In place means a launch velocity under 0.01 m/s.
-    - Raise the held bodies' `maxAngularVelocity` to `max(default, 2 × |angularSpeed|)`.
-  - **Each physics step in a spin phase** (then return, skipping the settle timer):
-
-    ```text
-    Spinning: speed moves toward 0 by deceleration·dt; on reaching 0 → Dizzy, dizzyLeft = dizzyTime
-    progress = Dizzy ? 1 − dizzyLeft / dizzyTime : 0
-    targetUp = world up, tilted by _dizzyTilt·progress about a level axis
-               that turns round world up at _dizzyWobble Hz
-    each held body: angularVelocity = (rotation from its up to targetUp, as axis·radians) / HoldTime
-                                      + world up · speed
-    pelvis height: vertical velocity = (ground + standHeight·lerp(1, DizzySag, progress) − y) / HoldTime,
-                   clamped to ±MaxLift
-    flat velocity of the held bodies: in place → 0; else its magnitude drops by _spinSlide·dt
-    Dizzy: dizzyLeft −= dt; at 0 → phase None, slow timer 0, and the chest gets TipSpeed
-           along targetUp's level lean, so he falls the way he wobbled
-    ```
-
-    Private constants: `HoldTime = 0.05f` s, `DizzySag = 0.85f`, `MaxLift = 5f` m/s, `TipSpeed = 1.5f` m/s. Probe the ground once per step from the pelvis.
-  - `IsSpinning => _ragdolling && phase != None`. `IsSettled` also requires `phase == None`.
-- [ ] **Step 3: `EnemyController`.**
-  - Add `_dizzyTime` under `[Header("Dropped")]`, with the tooltip "Seconds a dropped officer wobbles, dizzy, after the spin stops, before he tips over and falls." Expose it as `DizzyTime`.
-  - Retune `_dropSpinTime`'s tooltip: the spin winds down over it, then he's dizzy.
-  - Delete the top: `_topBounce`, `IsTop`, `OnCollisionEnter`, `TakeHit`, `_preStepVelocity` (and its write in `FixedUpdate`), `_created` and `_order`.
-  - `Stance`: `RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen`. Limp, the Animator is off anyway.
-  - `KnockDown`: in Ragdoll, relaunch when `Ragdoll.Standing || RagdollBody.IsSpinning`. Comment: spinning or dizzy, he's still upright, so a hard hit floors him.
-  - `EndGrab`'s summary: he spins, slows, wobbles and falls, then gets up. Its direction logic stays.
-- [ ] **Step 4: `RagdollState`.**
-  - `Enter` passes `Enemy.DizzyTime` to `Spin`.
-  - `FixedTick` always sets `_getUpLeft = Enemy.GetUpTime`, since every fall now ends lying down.
-  - Update the class summary to match.
-- [ ] **Step 5: `DeadState.Enter`.** Ragdoll the body when `!IsRagdolling || IsSpinning`, at its flattened velocity. Comment: a corpse never keeps the spin.
-- [ ] **Step 6: Compile.** Expected: `compile-check: OK`.
+  - Remove `Spin`, `IsSpinning` and `Push` from `IRagdollBody`.
+  - In `SkeletonRagdollBody`, remove the same, with `_spinLeft`, the spin branch of `FixedUpdate`, and the pelvis's raised `maxAngularVelocity` and its restore.
+  - `IsSettled => _ragdolling && _slowTimer >= _settleTime`.
+- [ ] **Step 2: `EnemyController`.**
+  - Remove the top: `_topBounce`, `IsTop`, `OnCollisionEnter`, `TakeHit`, `_preStepVelocity` and its write in `FixedUpdate`, `_created` and `_order`.
+  - Remove the spin's values: `_dropFlingSpeed`, `_dropSpinSpeed`, `_dropSpinTime` with their properties, and the `[Header("Dropped")]`.
+  - `EndGrab(bool wasSpun)`, alive: `Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity))`, then `SetState(Ragdoll)`. That's a plain fall at the speed he had, already turned onto Ruby's aim by the grapple when he was spun. Keep the parameter, since `IGrabbable` declares it, and say in the summary that he falls the same either way.
+  - `Stance`: `RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen`.
+  - `KnockDown` is unchanged.
+- [ ] **Step 3: `RagdollState`.**
+  - Remove `Spin(...)`, `_spin` and `_spinDirection`.
+  - `Enter` always calls `Ragdoll(_launch)`.
+  - `FixedTick` always sets `_getUpLeft = Enemy.GetUpTime`.
+  - Update the class summary.
+- [ ] **Step 4: Compile.** Expected: `compile-check: OK`.
 - [ ] **Play-test gate:**
-  - **Tap-drop a standing officer:**
-    - He spins on the spot, limp but upright, with his arms swinging out, slowing over 3 s.
-    - He wobbles for about 0.6 s, tips over the way he leaned, and lies there.
-    - Once still he stands, holds for 1 s, then hunts.
-  - **Let go mid-swing:**
-    - He flies out along Ruby's aim spinning, and slides to a stop about as far as the old top did.
-    - Into a wall, he bounces and keeps spinning.
-    - Hitting it at Knockdown Speed, he tumbles limp and is hurt.
-  - **Another officer:** a spinning officer that hits one no longer trades bounces with him; fast enough, it knocks him down through impact damage.
-  - **During the spin or wobble:**
-    - grabbed, he stands up wrapped;
-    - hit by a thrown crate, he tumbles;
-    - killed, he goes limp at once, keeps his speed and stops spinning.
-  - **Smoothness:** no jitter, and nothing sinks through the floor when he tips.
-  - **Values:** changing Dizzy Time, Drop Spin Speed, Drop Spin Time, Spin Slide, Dizzy Tilt and Dizzy Wobble in Play mode each changes what it says.
+  - **Tap-drop a standing officer:** he goes limp and crumples where he stands, lies still, gets up after 1 s, and hunts.
+  - **Let go mid-swing:** he flies out limp along Ruby's aim, tumbling, and gets up once still.
+  - **Another officer:** a let-go officer that hits one doesn't trade bounces with him; fast enough, it knocks him down through impact damage.
+  - The officer's Inspector no longer shows Drop Fling Speed, Drop Spin Speed, Drop Spin Time or Top Bounce.
+  - The Console is clean.
+- [ ] **Commit.**
+
+### Task 3: The limp grab
+
+**Files:**
+- Modify: `Assets/Scripts/Core/IRagdollBody.cs`, `Assets/Scripts/Core/SkeletonRagdollBody.cs`
+- Modify: `Assets/Scripts/Grapple/IGrabbable.cs` (comment), `Assets/Scripts/Grapple/Tether.cs`
+- Modify: `Assets/Scripts/EnemyController.cs`
+- Modify: `Assets/Scripts/States/GrabbedState.cs`, `RagdollState.cs`, `DeadState.cs`
+
+**Interfaces:**
+- Consumes: Task 1's `Footprint.BodyColliders`, and Task 2's seam and `RagdollState.Launch`.
+- Produces:
+  - `IRagdollBody.Hold()`: limp with the arms bound tight to the chest, for the chain to move. Going limp from standing, the bones carry the root's velocity. Already limp, it binds the arms and keeps the motion.
+  - `IRagdollBody.LetGo()`: off the chain. The arms come free, and the body carries on ragdolling exactly as it's moving, then settles as usual.
+  - `IRagdollBody.Torso` (`Rigidbody`): what moves a limp body (its chest). While standing, it's the root.
+  - `RagdollState.Continue()`: the next stay in Ragdoll starts from a body that's already limp, with `LetGo` instead of `Ragdoll(_launch)`.
+  - `DeadState.LetGo()` keeps the corpse's motion; `DeadState.Throw(Vector3 velocity)` launches it.
+
+- [ ] **Step 1: The limp hold in `SkeletonRagdollBody`.**
+  - **The torso:** the bone body on the Avatar's `Spine` bone, walking up its parents to the first body in `_bones` that isn't the pelvis. Try `Chest`, then `UpperChest`, if `Spine` finds none, and fall back to the pelvis. Found in `Start`.
+  - **The arms:** the bodies on the Avatar's `LeftUpperArm`, `LeftLowerArm`, `RightUpperArm` and `RightLowerArm` bones that are in `_bones`.
+  - **The bound pose:** each time the body goes live from standing (posed by the Animator, arms at his sides), record each arm body's position and rotation relative to the torso.
+  - **`Hold()`:**
+    - wake from rest;
+    - go live if standing, setting every bone's velocity to the root's;
+    - then bind: move each arm body to its recorded pose relative to the torso, at the torso's velocity, and add a `FixedJoint` from it to the torso.
+
+    A body grabbed mid-tumble has its arms snap in, which reads as the chain cinching.
+  - **Unbinding:** `LetGo`, `Ragdoll`, `Recover` and `Rest` destroy the joints first.
+  - **`LetGo()`:** unbind, set ragdolling, and reset the settle timer. No velocity is touched.
+  - `Torso => _live ? _torso : _root`.
+  - Comment the why: pulled through the 1 kg root, a limp body hangs back; bound arms are the user's "tightened at the arms and chest".
+- [ ] **Step 2: The seam.**
+  - Add `LetGo` and `Torso` to `IRagdollBody`, and rewrite `Hold`'s summary to the contract above.
+  - `IGrabbable.Body`'s summary: the body the rope drags, which may be part of a larger body (a limp officer's chest).
+- [ ] **Step 3: The tether** (constructor, `Tether.cs`).
+  - **The pulled body:** the node's grabbable's `Body` when there's a live grabbable. Use a Unity null check, since a destroyed grabbable passes a C# check. Otherwise `node.Host`.
+  - **The weight:** `Weight.MassOf(node.Host)`, which is the whole character, since the root carries `Weight`.
+  - **The colliders:** `_hostColliders = Footprint.BodyColliders(node.Host)`, for the reach and the parked pass-through. Keep `node.Host` in a field (`_hostRoot`), so `PassThroughAfterEnd` gathers `BodyColliders(_hostRoot)` too. Gathered from the pulled body, the chest, it would miss his pelvis and legs, which aren't under it.
+  - **`HostContacts`** goes on the pulled body.
+
+  Comment why: on a limp officer, the root rides his pelvis carrying 2% of him.
+- [ ] **Step 4: `EnemyController` and the states.**
+  - `Rigidbody IGrabbable.Body => IsHeld ? RagdollBody.Torso : Body`. Implement it explicitly, so `Body` stays the root for the AI, the navigator and the animator.
+  - `EndGrab`, alive: `Ragdoll.Continue()`, then `SetState(Ragdoll)`.
+  - `Release`, alive: as now, `Ragdoll.Launch(...)`.
+  - `EndGrab` and `Release`, dead: `Dead.LetGo()` and `Dead.Throw(velocity)`.
+  - `Stance`: `GrabbedState => AnimStance.Frozen`, since he's limp with the Animator off.
+  - `GrabbedState.Enter`: if not already ragdolling, `Enemy.Stop()` so his walk doesn't carry into the grab. Then `Enemy.RagdollBody.Hold()`. Update the class summary: limp, not dynamic-capsule.
+  - `RagdollState`:
+    - add `Continue()`;
+    - `Enter` calls `LetGo` for a continue, otherwise `Ragdoll(_launch)`;
+    - `Exit` no longer calls `Recover`, since its only unrecovered exit is now a grab, which must not stand him up.
+  - `DeadState`:
+    - `Enter`, held: `Grab()`, which holds an already-held body again, harmlessly;
+    - `Grab` calls `Hold`;
+    - `LetGo()` calls `RagdollBody.LetGo()`;
+    - `Throw(v)` calls `Ragdoll(Flatten(v))`.
+
+    Each sets `Loose` or `Held` as today.
+- [ ] **Step 5: Compile.** Expected: `compile-check: OK`.
+- [ ] **Play-test gate:**
+  - **Grab a standing officer:**
+    - his gun pops out and he goes limp at once, arms pinned to his chest;
+    - dragged, his legs and head flail and he follows the chain as today's officer did;
+    - reeled in, he arrives at about the same speed.
+  - **Park and spin him:**
+    - his legs fly out, and he never hits Ruby;
+    - against a wall, the spin bounces;
+    - he parks at a sensible distance, outside her.
+  - **Throw him:** he tumbles at the throw's speed and gets up once still.
+  - **Let go mid-swing:** he flies out along her aim, his legs still swinging, with no snap or stop.
+  - **Tap-drop him:** he crumples.
+  - **Grab one tumbling, one lying, and a corpse:**
+    - each is caught limp where it is and never stood up;
+    - its arms cinch in, and its legs flail;
+    - a corpse let go keeps its motion.
+  - **Killed while held:** he stays held.
+  - **Bullets:** a held officer stops them, limbs included.
   - Ruby is unchanged, and the Console is clean.
 - [ ] **Commit.**
 
-### Task 3: Docs, and the end-of-plan review
+### Task 4: Docs, and the end-of-plan review
 
 **Files:**
 - Modify: `CLAUDE.md`
@@ -184,22 +210,25 @@
 - Modify: `docs/specs/2026-10-23-enemy-ragdolls.md`
 
 - [ ] **Step 1: CLAUDE.md.**
-  - **Grapple section:** the let-go text and the "A spinning enemy is a top" paragraph give way to the dizzy spin. Note that pass-through now starts after the let-go, on the limp body's colliders.
+  - **Grapple section:**
+    - the let-go text and "A spinning enemy is a top" give way to the limp grab and a plain fall;
+    - the tether pulls the grabbable's body but weighs the host whole;
+    - pass-through starts after the let-go, on the limbs.
   - **Ragdoll seam section:**
-    - only `SkeletonRagdollBody` remains, on officers and Ruby;
-    - `Hold` is wrapped;
-    - `Spin` is the dizzy spin, with its phases and values;
+    - only `SkeletonRagdollBody`, on officers and Ruby;
+    - `Hold` binds the arms, and `LetGo` and `Torso` are described;
     - the capsule's paragraph goes.
-  - **Impact damage section:** the get-up applies to every survivor, and the top-shove sentence goes. Corpses are wrapped on the chain.
-  - **Animation section:** add the `RestrainedStill` stance; Restrained is no longer "spun as a top".
+  - **Impact damage section:** every survivor gets up, and the top-shove sentence goes. Corpses are held limp on the chain.
+  - **Animation section:** Restrained is no longer used by officers.
   - **Elsewhere:**
+    - the Weight section's top reference;
     - the assembly table's Core row;
-    - the "collide with their root capsule only" convention, whose exception is now any ragdolled character;
-    - the Specs paragraph's status.
+    - the "root capsule only" convention, whose exception is any ragdolled character;
+    - the Specs status.
 - [ ] **Step 2: The manual.**
-  - **The officer moments table:** thrown and knocked down are limp, dropped is the dizzy spin, and a corpse is wrapped on the chain.
+  - **The officer moments table:** grabbed is limp with arms bound, dropped is a fall, and thrown and knocked down are limp.
   - **The Dropped section.**
-  - **The tuning table:** add Dizzy Time, Spin Slide, Dizzy Tilt and Dizzy Wobble; remove Top Bounce.
+  - **The tuning table:** remove Drop Spin Speed, Drop Spin Time, Drop Fling Speed and Top Bounce.
   - Then rebuild the PDF and republish the manual's artifact page.
 - [ ] **Step 3: The spec.** Add a "Changed in building" section if anything differed from the design.
 - [ ] **Step 4: Review.** Run the end-of-plan code reviewer on the branch, in the background.

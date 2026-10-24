@@ -1,167 +1,185 @@
-# Enemy ragdolls: limp officers and the dizzy spin
+# Enemy ragdolls: limp officers, on the chain and off it
 
-**Status:** design, approved 2026-10-23. Branch `enemy-ragdolls`, stacked on
-`enemy-animations` (PR #10). Builds on Ruby's skeleton ragdoll (`docs/plans/2026-10-12-ruby-ragdoll.md`,
-whose completion gate lists the known enemy work) and on officers wearing `HumanM_Model`
-(`2026-10-20-enemy-animations.md`).
+**Status:** design, approved 2026-10-23 and revised twice the same day, before Task 1's play-test:
+officers are grabbed limp, and the spin is gone (see **Revisions**). Branch `enemy-ragdolls`,
+stacked on `enemy-animations` (PR #10). Builds on Ruby's skeleton ragdoll
+(`docs/plans/2026-10-12-ruby-ragdoll.md`, whose completion gate lists the known enemy work) and on
+officers wearing `HumanM_Model` (`2026-10-20-enemy-animations.md`).
 
 ## Intent
 
-Officers fall as limp bodies instead of stiff capsules, and the spinning top, built for the capsule,
-gives way to a cartoony dizzy spin. In the user's words:
+Officers stop being stiff capsules. They fall as limp bodies, and the chain grabs them as limp
+bodies too, bound round the chest. The spinning top, built for the capsule, goes, and with it any
+spin on release. In the user's words:
 
-- "We're aiming for a cartoony style spin, into a slow down for the spin. Imagine that Ruby yanked
-  the chain off of them, unwrapping it from around them, which makes them spin. The officers spin,
-  and then slow down and then tumble and fall as if dizzy. They get up like normal after."
-- "If she releases him, he should fling out, while spinning, in his ragdoll anim."
-- A corpse on the chain: "His body should be constrained because ruby's chain is wrapped around
-  them even while dead."
-- A corpse let go: "drop limp straight away. Since its dead, it doesn't even keep the spin."
+- "Instead of enemies going upright, let them be grabbed ragdolling."
+- "Torso does not have to stay upright. They should be able to be grabbed and be in any position."
+- "Forget the spin. Officers don't spin anymore when released, they just ragdoll, and fall.
+  Officers when grabbed just ragdoll around but are tightened at the arms and chest."
+- "The top isn't anything crazy... Its not a real top. That was only for the capsule."
+- On the result: "much more simple."
 
 ## What the player sees
 
 | Moment | His body |
 | --- | --- |
-| On the chain, alive | Wrapped: one solid piece (his capsule) in the restrained pose, swung and spun round Ruby as today |
-| On the chain, dead | Wrapped the same way, darkened, and still: the dead don't wriggle |
-| Let go without a throw, alive | The chain unwinds and he spins, limp but held upright at the hips, arms and legs swinging out with the spin. Swung, he flies out along Ruby's aim while spinning; dropped from a standstill, he spins on the spot. The spin slows to nothing over Drop Spin Time, he wobbles dizzily for Dizzy Time, then tips over and falls limp |
-| Thrown, alive | Limp at once, tumbling |
-| Knocked down by a hit, alive | Limp at once, tumbling |
+| Grabbed: standing, falling, lying or dead | Limp at once. The chain wraps his chest with his arms pinned tight against it, and pulls him by the chest, in whatever position he's in and facing any way. His legs and head flop and flail as he's dragged; spun round Ruby, his legs fly out. His gun pops out of his hand, as today |
+| Let go | The chain comes off and his arms come free. He carries on as he was moving, tumbling and falling. Let go mid-swing, he flies out along Ruby's aim |
+| Thrown | Limp, at the throw's speed, tumbling |
+| Knocked down by a hit | Limp at once, tumbling |
 | A survivor lying still | Stands up where he lies, facing the way he lay, holds still for Get Up Time, then hunts |
-| Let go or thrown, dead | Limp at once, keeping its speed but no spin: a swung corpse let go still flies out along Ruby's aim, one dropped from a standstill crumples |
-| Killed standing or tumbling | Falls, or keeps falling, limp |
+| Killed | Falls, or keeps falling, limp. On the chain, he stays held |
 | A corpse lying still | At rest as today: frozen where it lies, walked over, still grabbable |
 
-Who decided what: the table's rows are the user's, except the knocked-down, get-up, killed and
-at-rest rows, which were my guesses that the user accepted.
+Who decided what: the grab, let-go and throw rows are the user's. The others were my guesses, which
+the user accepted.
 
 ## Goals, non-goals, anti-goals
 
 Goals:
 
 - Officers ragdoll limp on their `HumanM_Model` skeleton.
-- The dizzy spin replaces the spinning top for every live let-go.
-- Everything on the chain is wrapped, alive or dead: one solid piece.
-- The spin is tuned with values: Drop Spin Speed and Drop Spin Time (existing), Dizzy Time (new).
-  Drop Fling Speed and Get Up Time keep their jobs.
+- The chain holds any officer limp, pulled by the chest, with his arms bound tight against it.
+- Letting go is just a fall: no spin, no special state.
 
 Non-goals:
 
-- The top's interplay with other officers goes: no trading momentum (Top Bounce), no bouncing off
-  them. A spinning or limp officer still hurts what it hits fast enough, through impact damage, like
-  any body.
-- New animations. Dizzy, wriggle and get-up clips come later, into the existing slots.
-- Ruby. She's never spun or held, so her ragdoll's behaviour doesn't change.
+- **Any spin on release.** The dizzy spin and its values (Drop Spin Speed, Drop Spin Time, Drop
+  Fling Speed) go.
+- **The top's interplay with other officers.** No trading momentum (Top Bounce), no bouncing off
+  them. A limp officer still hurts what he hits fast enough, through impact damage, like any body.
+- **New animations.** The Restrained slot is no longer used by officers, and a get-up clip comes
+  later.
+- **Ruby.** She's never held, so her ragdoll's behaviour doesn't change.
+- **The chain's rules.** Weights, speeds, parking, the spin round Ruby, the throw, the aimed let-go
+  and the walk limit all stay as they are. What changes is which body of a limp officer they act on.
 
 Anti-goals, failures even if it technically works:
 
-- Anything that moves Ruby or slows a verb: grab, release and throw stay instant.
-- A spin that doesn't read as a spin. A limp body that collapses on release has failed, however
-  correct its physics.
-- Jittering or teleporting limbs. The last branch's play-tests were sensitive to exactly this.
-- A knockdown, grab or death that silently does nothing because it landed in the wrong phase.
+- **Anything that moves Ruby or slows a verb.** Grab, release and throw stay instant.
+- **A limp body that doesn't follow the chain.** Pulled through something too light, he'd hang back
+  while the rope stretches.
+- **A body held too stiff or too loose.** Held stiff, his legs wouldn't flail; with his arms
+  flapping free, the binding doesn't read.
+- **Jittering or teleporting limbs.** The last branch's play-tests were sensitive to exactly this.
+- **A knockdown, grab or death that silently does nothing** because it landed in the wrong state.
 
 ## Constraints from the code
 
 - **The ragdoll seam** (`IRagdollBody`, `Core/`): `Ragdoll`, `Spin`, `Push`, `ApplyHit`, `Hold`,
-  `Rest`, `Recover`, `IsSettled`, `IsSpinning`, `IsRagdolling`. Two contracts change:
-  - `Spin` becomes the dizzy spin: upright and limp, winding down, a wobble, then a fall. The body
-    counts as settled only once the fall after the wobble has settled.
-  - `Hold` becomes wrapped: the standing capsule, posed by the Animator, not limp bones.
+  `Rest`, `Recover`, `IsSettled`, `IsSpinning`, `IsRagdolling`.
+  - `Spin`, `IsSpinning` and `Push` lose their only callers (the drop spin and the top), and go.
+  - `Hold` becomes: limp, with the arms bound tight to the chest, for the chain to move. Every grab
+    uses it, not only corpses. Ruby is never held.
+- **The chain pulls one body, the host, and caches it.**
+  - `GrappleNode.Host` is the first Rigidbody above the node: the officer's root.
+  - `Tether` keeps it for the whole hold. Every pull, the parked spin, the throw, the aimed let-go
+    and the charge jiggle write that body's velocity or position.
+  - On a limp officer the root carries 2% of his weight and rides his pelvis on a joint. Pulled, it
+    would barely move the rest of him.
 
-  `SkeletonRagdollBody.Spin` is marked provisional today ("spins the pelvis and lets the limbs flail;
-  the enemy plan decides"), and its `Hold` goes limp. Ruby uses neither.
-- **`CapsuleRagdollBody`** is used only by `officer.prefab`.
-- **`EnemyController`:**
-  - `IsTop`, the top exchange in `OnCollisionEnter` (the one place reading `Body.mass` as the
-    officer's weight), `TakeHit` and `_topBounce` exist only for the top.
-  - `Stance` maps a dead officer to Frozen even while he's held.
-- **`RagdollState`:** a spin that winds down counts as already standing and skips the get-up
-  (`_getUpLeft = 0`). Now every fall ends lying down, so every survivor gets up.
-- **`DeadState`:**
-  - `Grab` calls `Hold`, which will now wrap.
-  - `LetGo` calls `Ragdoll(velocity)`, which already carries no spin.
-  - Killed while spinning, a body "carries on" today.
-- **The chain:**
-  - `GrappleController.LandWhip` calls `EnterGrabbed` before it builds the tether.
-  - `Tether` sizes the parked distance and the throw pass-through from the host's own solid
-    colliders.
-
-  Every held body being the wrapped capsule keeps both working, provided the capsule is enabled by
-  the time the tether reads it.
-- **Pass-through after a let-go must cover the limp body.** For Throw Pass Through (0.15 s) after a
+  So, for a limp host:
+  - **The chain pulls his chest,** with his bound arms. The pelvis, head and legs follow only through
+    their joints, so the legs flail. Writing the same change to every bone would carry the body as a
+    rigid lump.
+  - **He's still weighed whole** (`Weight.TotalMassKg`, on his root). Drag fraction, reel speed,
+    throw speed and whether he parks then match today's officer. `Weight.MassOf(bone)` returns that
+    bone's own mass and can't change: `PushLimit` relies on it for limbs.
+  - **The colliders that count are his bones,** not his disabled capsule: for the parked distance,
+    for the pass-through while parked, and for the spin bounce's wall contacts.
+  - **`LandWhip` calls `EnterGrabbed` before it builds the tether,** so `EnterGrabbed` must have made
+    him limp, with his bone colliders on, before the tether reads him.
+- **The flow between states:**
+  - Today, grabbing a tumbling officer leaves Ragdoll, whose `Exit` stands him up (`Recover`). A grab
+    must never stand him up.
+  - Let go or thrown, a live officer goes to Ragdoll still limp, and gets up once settled.
+  - A corpse stays in Dead throughout: `Grab` holds it, and `LetGo` frees it.
+- **Letting go changes nothing about how he moves,** apart from the aimed let-go, which turns him
+  onto Ruby's aim. `SkeletonRagdollBody.Ragdoll(launch)` sets every bone to the launch velocity. That
+  suits a body going limp from standing, but would stop the legs a swing has flung out, mid-flail.
+  Already limp, he carries on as he is. The throw, which replaces his speed, is the one exception.
+- **Pass-through after a let-go must cover his bones.** For Throw Pass Through (0.15 s) after a
   throw or a parked let-go, the host can't collide with Ruby (`PassThrough`, through
-  `Physics.IgnoreCollision` on the host's colliders), so a body thrown from behind mid-spin passes
-  through her. An officer goes limp the moment he's let go, and his bones then collide in place of
-  his capsule, so the ignore pairs have to reach his bone colliders too. Otherwise her own throw can
-  hit her, knock her down and break the anti-goals.
-- **The spin's direction** comes from `EndGrab`: the way he orbited Ruby. Keep it.
-- **Writing to a disabled Animator.** The last branch deferred possible Console warnings from
-  `CharacterAnimator` writing parameters while Ruby's Animator is off. Every limp officer will now
-  hit the same case, so it falls to this branch if the Console shows it.
+  `Physics.IgnoreCollision`), so a body thrown from behind passes through her. The pairs have to be
+  the colliders he collides through once he's let go. Unity also drops an ignore pair set on a
+  disabled collider. Otherwise her own throw can knock her down.
+- **`EnemyController`:**
+  - The top goes: `IsTop`, the exchange in `OnCollisionEnter` (the one place reading `Body.mass` as
+    his weight), `TakeHit`, `_topBounce`, `_preStepVelocity` and the creation order.
+  - The spin goes: Drop Fling Speed, Drop Spin Speed, Drop Spin Time, and `EndGrab`'s orbit-direction
+    logic.
+  - `IGrabbable.Body` is "the body the rope drags", and `Release` and `EndGrab` read its velocity.
+- **`RagdollState`:** a spin that wound down skipped the get-up (`_getUpLeft = 0`). With no spin,
+  every survivor gets up.
+- **`CharacterAnimator`:** while limp, the Animator is off, so the stance hardly matters. Writing
+  parameters to a disabled Animator may log warnings, a minor deferred from the last branch, and every
+  limp officer now hits that case. It falls to this branch if the Console shows it.
 - **Bullets and sight** find the officer with `GetComponentInParent`, so his bones count as him:
-  - bullets pass a limp officer, since officers only stop bullets while held;
+  - bullets pass a limp officer who isn't held, and are stopped by one who is, limbs included;
   - his bones never block an officer's sight.
 - **`HumanM_Model`** is already imported Humanoid with Optimize Game Objects off.
 - **The pistol** is a Rigidbody under `B-hand.R` with no Joint, so the skeleton ragdoll won't take it
-  for a bone. It's dropped or popped before he goes limp anyway.
+  for a bone. It pops out on the grab and drops on a knockdown.
 - **The path grid** bakes at Start and must never see officers' bone colliders. Parked bones have
   their colliders off, but the order between the bake and the parking needs checking.
 
 ## Decided
 
 - Officers use Ruby's `SkeletonRagdollBody` on their root, replacing `CapsuleRagdollBody`. The
-  Ragdoll Wizard's bodies go on the model's bones, and `ImpactDamage` goes on each bone.
-- During the spin the body is limp but held upright at the hips, so the arms and legs swing out.
+  Ragdoll Wizard's bodies are on the model's bones, and `ImpactDamage` is on each bone. Done in
+  Task 1's Inspector work.
+- On the chain he's limp, pulled by the chest with his arms bound tight against it, in any position.
+- No spin.
 
 ## My calls (flagged to the user; the builder may raise any)
 
-1. **A corpse grabbed from rest snaps upright** into the wrapped pose at once, which reads as the
-   chain wrapping round it.
-2. **A corpse on the chain holds the restrained pose still**, with no wriggle. The mechanism (a
-   stance, or the Animator held at speed 0) is the builder's.
-3. **Killed during the spin or the wobble,** the spin ends and the body goes limp, keeping its speed.
-4. **A hit at Knockdown Speed during the spin or the wobble** ends it in a limp tumble. Today a
-   ragdolling officer only takes the damage.
-5. **Grabbed during the spin or the wobble,** he stands up wrapped, as a grabbed tumbling officer
-   does today.
-6. **`CapsuleRagdollBody` is deleted** with its `.meta`, since nothing else uses it.
-   `IRagdollBody`'s summary and CLAUDE.md are updated to match.
-7. **Starting values:** Dizzy Time 0.6 s. Drop Spin Speed (12 rad/s) and Drop Spin Time (3 s) keep
-   today's values.
+1. **Only the arms and chest are bound.** The head flops free with the legs.
+2. **Grabbing a standing officer makes him limp at once**, with no restrained pose first.
+3. **Held, he can't be knocked down**, being limp already; hits only hurt, as for a held officer
+   today.
+4. **`CapsuleRagdollBody` is deleted** with its `.meta`, since nothing else uses it.
 
 ## Left to the builder
 
-- **How the limp body is held upright:**
-  - by the pelvis alone or the chest too;
-  - by a joint drive or set each physics step;
-  - at what height;
-  - how the wobble loosens the hold before he tips.
-
-  The bar is the anti-goals: it reads as an upright spin with the limbs flung out, then a dizzy tip,
-  with no jitter. If a limp hold can't be made to read, the fallback is a fixed pose on a spinning
-  capsule that goes limp at the tip. Say so to the user before switching.
-- **How a flung spin slows across the floor.** It should travel roughly as far as today's flung top.
-- **Where the spin's phases live,** in `SkeletonRagdollBody` or `RagdollState`. `IsSettled` must stay
-  false until the final fall has settled.
+- **How the arms are bound:** joint drives or limits that hold them to a pose against the chest, or a
+  temporary fixed joint, and how they're freed on let-go.
+- **Which body is "the chest":** the spine body alone, or with the pelvis.
+- **How the chain learns his chest and whole weight** without `Ruby.Grapple` naming game types,
+  through `IGrabbable` or a small seam of its own.
 - **The path grid:** the order between its bake and the bones being parked.
 
-## Inspector work (the user's)
+## Inspector work (the user's, done in Task 1)
 
-- Run the Ragdoll Wizard on `officer.prefab`'s model, with the Avatar's Hips bone as Pelvis.
-- Add `ImpactDamage` to each bone.
-- On the officer's root, replace `CapsuleRagdollBody` with `SkeletonRagdollBody`.
+- The Ragdoll Wizard on `officer.prefab`'s model, with `B-hips` as Pelvis.
+- `ImpactDamage` on each bone.
+- `SkeletonRagdollBody` on the officer's root in place of `CapsuleRagdollBody`.
 
 ## Verification
 
 - `python tools/compile_check.py` passes.
 - Play-test every row of the table above, plus:
-  - grab, knockdown and death landing in each phase of the spin;
+  - grabbing an officer standing, tumbling, lying and dead;
+  - dragging, reeling, parking, spinning, throwing and letting go of a held officer, and how each
+    compares with today;
   - a full floor of officers;
   - Ruby's own ragdoll, unchanged;
   - a clean Console.
 
+## Revisions
+
+The first approval had every body on the chain wrapped in one piece, standing, and a dizzy spin on
+release: limp but upright, slowing, wobbling and tipping over. Before Task 1's play-test the user
+asked, in two steps, for officers to be grabbed limp instead, in any position and bound at the arms
+and chest, and for the spin to go entirely.
+
+Dropped with those changes:
+
+- the wrapped corpse and its still pose (`AnimStance.RestrainedStill`);
+- `Hold` meaning "stand up wrapped";
+- the two kinds of grab;
+- the dizzy spin and Dizzy Time.
+
 ## Out of scope
 
-- Dizzy, wriggle and get-up animations.
-- Any change to Ruby, the chain's feel, or how officers move, see, path or fight.
+- Get-up and wriggle animations.
+- Any change to Ruby, the chain's rules, or how officers move, see, path or fight.
