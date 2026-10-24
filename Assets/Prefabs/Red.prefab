@@ -48550,8 +48550,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d553c19f9390d50bab856a5d73da8615, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GrappleController
-  _maxChainLength: 8
-  _minChainLength: 1.2
+  _maxChainLength: 7
+  _minChainLength: 1.5
   _pullImpulse: 8.5
   _snapRadius: 3
   _spinSpeed: 40

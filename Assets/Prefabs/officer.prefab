@@ -170,10 +170,6 @@ MonoBehaviour:
   _aggroTime: 1.5
   _eyeHeight: 0.5
   _searchDuration: 10
-  _dropFlingSpeed: 60
-  _dropSpinSpeed: 10
-  _dropSpinTime: 2.5
-  _topBounce: 0.6
   _grabPopUp: 3
   _grabPopOut: 2
   _getUpTime: 1
@@ -1772,15 +1768,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6551856979550653786, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalScale.x
-      value: 14.1
+      value: 16
       objectReference: {fileID: 0}
     - target: {fileID: 6551856979550653786, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalScale.y
-      value: 9.8
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 6551856979550653786, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalScale.z
-      value: 10.45
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalScale.x
@@ -1796,15 +1792,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.08065575
+      value: -0.0836
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.24404675
+      value: 0.2092
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.0065187844
+      value: -0.0052
       objectReference: {fileID: 0}
     - target: {fileID: 7148668589302486008, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1834,8 +1830,7 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 535.647
       objectReference: {fileID: 0}
-    m_RemovedComponents:
-    - {fileID: 8895160221952571474, guid: f354aaa5e5c53cb468fedd23750d8068, type: 3}
+    m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []

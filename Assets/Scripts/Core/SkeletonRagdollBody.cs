@@ -31,7 +31,6 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
     private Rigidbody[] _bones;
     private float[] _shares;
     private CollisionDetectionMode[] _boneModes;
-    private float _pelvisMaxAngular;
     private Collider[] _boneColliders;
     private Collider[] _standing;
     private bool[] _standingEnabled;
@@ -44,11 +43,9 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
     private bool _live;          // the bones own the body: ragdolling, held or at rest
     private bool _ragdolling;
     private bool _resting;
-    private float _spinLeft;
     private float _slowTimer;
 
-    public bool IsSettled => _ragdolling && _spinLeft <= 0f && _slowTimer >= _settleTime;
-    public bool IsSpinning => _ragdolling && _spinLeft > 0f;
+    public bool IsSettled => _ragdolling && _slowTimer >= _settleTime;
     public bool IsRagdolling => _ragdolling;
 
     private float TotalMass => _weight != null ? _weight.TotalMassKg : _standingMass;
@@ -83,7 +80,6 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
 
         _rootInterpolation = _root.interpolation;
         _rootConstraints = _root.constraints;
-        _pelvisMaxAngular = _pelvis.maxAngularVelocity;
         _ready = true;
 
         // Parked whatever the prefab says: live bones would fight the Animator and shove the capsule.
@@ -143,35 +139,8 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
         if (!_ready) return;
         GoLive();
         _ragdolling = true;
-        _spinLeft = 0f;
         _slowTimer = 0f;
         SetVelocity(launchVelocity);
-    }
-
-    // Provisional: spins the pelvis and lets the limbs flail; the enemy plan decides what a limp spin should be.
-    public void Spin(float angularSpeed, float duration, Vector3 launchVelocity)
-    {
-        if (!_ready) return;
-        Ragdoll(launchVelocity);
-        _spinLeft = duration;
-        // Unity caps a body's spin (Default Max Angular Speed, 50 rad/s here), which would quietly slow a faster one.
-        _pelvis.maxAngularVelocity = Mathf.Max(_pelvisMaxAngular, Mathf.Abs(angularSpeed) * 2f);
-        _pelvis.angularVelocity = Vector3.up * angularSpeed;
-    }
-
-    public void Push(Vector3 velocity)
-    {
-        if (!_ready || _resting) return;
-        if (!_live)
-        {
-            _root.linearVelocity = velocity;
-            return;
-        }
-
-        // One change for every body keeps the limbs' motion relative to each other.
-        Vector3 change = velocity - _pelvis.linearVelocity;
-        _root.linearVelocity += change;
-        foreach (Rigidbody bone in _bones) bone.linearVelocity += change;
     }
 
     // All of it on the struck limb would tear it from its joint; spread evenly, a shoulder shot wouldn't turn her.
@@ -211,7 +180,6 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
         if (!_ready || !_live) return;
         _resting = true;
         _ragdolling = false;
-        _spinLeft = 0f;
 
         _root.linearVelocity = Vector3.zero;
         _root.constraints = RigidbodyConstraints.FreezeAll;
@@ -230,14 +198,12 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
         if (!_ready) return;
         Wake();
         _ragdolling = false;
-        _spinLeft = 0f;
         _slowTimer = 0f;
         if (!_live) return;
         _live = false;
 
         Carry(false);
         SetBones(false);
-        _pelvis.maxAngularVelocity = _pelvisMaxAngular;
 
         // She gets up where her body lies, on whatever is under her pelvis.
         Vector3 pelvis = _pelvis.position;
@@ -268,11 +234,6 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
     private void FixedUpdate()
     {
         if (!_ragdolling) return;
-        if (_spinLeft > 0f)
-        {
-            _spinLeft -= Time.fixedDeltaTime;
-            return;
-        }
 
         // A bouncing body passes through near-zero speed at the top of each bounce, so slowness must last.
         _slowTimer = AllSlow() ? _slowTimer + Time.fixedDeltaTime : 0f;

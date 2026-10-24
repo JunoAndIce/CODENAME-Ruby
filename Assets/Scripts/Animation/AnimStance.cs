@@ -8,7 +8,7 @@ public enum AnimStance
     Rest = 0,         // weapon at rest: patrolling, searching, holding a post
     Aim = 1,          // upright and aiming, moving or not
     Run = 2,          // running, weapon down
-    Restrained = 3,   // held on the chain, or spun as a top
+    Restrained = 3,   // held on the chain
     Frozen = 4,       // the pose holds while the body tumbles
     GettingUp = 5,
 }

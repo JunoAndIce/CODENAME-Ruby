@@ -26,7 +26,7 @@ public class DeadState : EnemyStateBase
             return;
         }
 
-        // Killed while already tumbling or spinning, it carries on; standing, it falls where the hit left it.
+        // Killed while already tumbling, it carries on; standing, it falls where the hit left it.
         if (!Enemy.RagdollBody.IsRagdolling) Enemy.RagdollBody.Ragdoll(VelocityUtil.Flatten(Enemy.Body.linearVelocity));
         _body = Body.Loose;
     }
