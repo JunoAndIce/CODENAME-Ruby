@@ -201,13 +201,10 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
         return nearest;
     }
 
-    public void Hold()
-    {
-        if (!_ready) return;
-        GoLive();
-        _ragdolling = false;
-        _spinLeft = 0f;
-    }
+    // Interim: stood up in one piece, because the chain still pulls the root and sizes its hold from
+    // the root's capsule, and a limp body is neither. The limp hold, pulled by the chest with the
+    // arms bound to it, replaces this (enemy ragdoll plan, Task 3).
+    public void Hold() => Recover();
 
     public void Rest()
     {

@@ -39,7 +39,7 @@ public class DeadState : EnemyStateBase
         _body = Body.AtRest;
     }
 
-    /// <summary>The chain has it: solid and limp, for the rope to move.</summary>
+    /// <summary>The chain has it: held for the rope to move.</summary>
     public void Grab()
     {
         Enemy.RagdollBody.Hold();

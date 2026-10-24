@@ -210,10 +210,15 @@ public class Tether
         SetPassThrough(false);
     }
 
-    /// <summary>Switch off collisions between the player and the host for `seconds`, outliving the tether.</summary>
+    /// <summary>
+    /// Switch off collisions between the player and the host for `seconds`, outliving the tether.
+    /// Call it once the host has been let go: its colliders are gathered then.
+    /// </summary>
     internal void PassThroughAfterEnd(PassThrough passThrough, float seconds)
     {
-        if (_host != null) passThrough.Begin(_playerColliders, _hostColliders, seconds);
+        // Gathered now, not reused from the tether's start: an officer let go goes limp and collides
+        // through his bones, which were switched off while he was held.
+        if (_host != null) passThrough.Begin(_playerColliders, Footprint.BodyColliders(_host), seconds);
     }
 
     /// <summary>

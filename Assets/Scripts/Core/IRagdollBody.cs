@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// <summary>The seam between a character and how its body ragdolls: a capsule (CapsuleRagdollBody) or a rigged skeleton (SkeletonRagdollBody).</summary>
+/// <summary>The seam between a character and how its body ragdolls (SkeletonRagdollBody, on a rigged skeleton).</summary>
 public interface IRagdollBody
 {
     bool IsSettled { get; }
@@ -25,7 +25,10 @@ public interface IRagdollBody
     /// <summary>An impulse (kg·m/s) landing at a world point on a ragdolling body, such as a bullet's. Ignored otherwise.</summary>
     void ApplyHit(Vector3 impulse, Vector3 point);
 
-    /// <summary>Limp and solid, for something else to move (a corpse on the chain).</summary>
+    /// <summary>
+    /// Held by the chain (a corpse on it). For now, stood up in one piece where the body lies, its
+    /// capsule colliding; it becomes a limp hold, bound at the arms and chest.
+    /// </summary>
     void Hold();
 
     /// <summary>
