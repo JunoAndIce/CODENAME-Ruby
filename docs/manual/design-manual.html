@@ -179,6 +179,7 @@ a { color: var(--accent); }
     <tr><td>Move Speed</td><td class="where">PlayerController</td><td class="num">15 m/s</td></tr>
     <tr><td>Gamepad Aim Distance</td><td class="where">PlayerController</td><td class="num">6 m</td></tr>
     <tr><td>Knockback Deceleration (how fast a push fades)</td><td class="where">PlayerController</td><td class="num">20 m/s²</td></tr>
+    <tr><td>Revive Delay (lying dead before she comes back)</td><td class="where">PlayerController</td><td class="num">2 s</td></tr>
     <tr><td>Settle Speed / Settle Angular Speed / Settle Time (getting up)</td><td class="where">SkeletonRagdollBody</td><td class="num">0.4 m/s / 0.5 rad/s / 0.75 s</td></tr>
     <tr><td>Hit Local Share (share of a shot on the limb it hits)</td><td class="where">SkeletonRagdollBody</td><td class="num">0.3</td></tr>
     <tr><td>Twist Limit / Turn Speed (her legs follow her aim)</td><td class="where">Red model · CharacterAnimator</td><td class="num">60° / 720°/s</td></tr>
@@ -248,7 +249,8 @@ a { color: var(--accent); }
   <li><strong>Movement and shooting are always on.</strong> Ruby can walk and fire while grabbing, pulling, spinning or charging a throw.</li>
   <li><strong>Nothing she does moves her.</strong> The chain never pulls or drags her. When a held object can't follow her, the chain stops her walk instead.</li>
   <li><strong>She feels weight when she walks into things.</strong> She pushes an object at her drag fraction (see <a href="#drag">Drag fraction</a>), so light crates slide away, heavy ones barely move, and anything 60 kg or heavier blocks her.</li>
-  <li><strong>She can be knocked down.</strong> Any hit at Knockdown Speed or faster ragdolls her: her whole body goes limp and tumbles, and she loses control. Once every part of her has come to rest, she gets up where she lies. If the hit kills her, she stays down.</li>
+  <li><strong>She can be knocked down.</strong> Any hit at Knockdown Speed or faster ragdolls her: her whole body goes limp and tumbles, and she loses control. Once every part of her has come to rest, she gets up where she lies.</li>
+  <li><strong>She comes back when she dies</strong> (an early revive, until a proper death and restart exist). She lies where she fell for 2 s (Revive Delay), then stands at her Revive Point, or where she started the level if none is set, with full health and the bullets she started with. The camera jumps there with her. The level is left as it is: dead officers stay dead, and those hunting her lose sight of her and search.</li>
   <li><strong>Bullets push her.</strong> An officer's shot shoves her away from the shooter. A shot she survives pushes her back about 4 m/s, fading within a fifth of a second, and she keeps full control; a wall or the chain stops the push like a step. A killing shot lands the push on the part of her body it hit, so a chest shot knocks her over backward and a shoulder shot twists her as she falls. Today every pistol shot kills her, so only the second case shows.</li>
 </ul>
 

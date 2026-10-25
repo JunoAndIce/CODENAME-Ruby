@@ -11,6 +11,12 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
     [Tooltip("How fast a push (a bullet's knockback) fades, in m/s per second. 20 fades a 4 m/s push in 0.2 s.")]
     [SerializeField, Min(1f)] private float _knockbackDeceleration = 20f;
 
+    [Header("Revive")]
+    [Tooltip("Where Ruby comes back after she dies: place it where her feet should stand. Left empty, she comes back where she stood when the level started.")]
+    [SerializeField] private Transform _revivePoint;
+    [Tooltip("Seconds after she dies before she's back on her feet at the Revive Point, in control again.")]
+    [SerializeField, Min(0f)] private float _reviveDelay = 2f;
+
     private Rigidbody _myRigidbody;
     private CapsuleCollider _capsule;
     private Camera _mainCamera;
@@ -29,7 +35,13 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
     private GrappleController _grapple;
     private Health _health;
     private IRagdollBody _ragdoll;
-    private bool _downed;        // knocked down: physics owns the body until she gets up, or for good if dead
+    private bool _downed;        // knocked down: physics owns the body until she gets up, or revives if dead
+    private float _deadFor;      // how long she's been dead, toward Revive Delay
+    // Where and how she started the level, for a revive with no Revive Point, and her bullets then.
+    private Vector3 _startPosition;
+    private Quaternion _startRotation;
+    private int _startBullets;
+    private float _rootAboveFeet;   // how high her root stands over the bottom of her capsule
 
     public Vector3 AimPoint => _aimPoint;
     public bool TriggerPressed => _triggerPressed;
@@ -66,11 +78,16 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
         TryGetComponent(out _health);
         if (!TryGetComponent(out _ragdoll))
             Debug.LogError($"{name} has no IRagdollBody (SkeletonRagdollBody) — a knockdown can't ragdoll her.", this);
+
+        _startPosition = transform.position;
+        _startRotation = transform.rotation;
+        _startBullets = _bulletCount;
+        _rootAboveFeet = transform.position.y - _capsule.bounds.min.y;
     }
 
     /// <summary>
     /// Knocked down by a hit (ImpactDamage): she ragdolls at the velocity the hit left her with and
-    /// loses control. Alive, she gets up once settled; dead, she stays down.
+    /// loses control. Alive, she gets up once settled; dead, she comes back after Revive Delay.
     /// </summary>
     public void KnockDown()
     {
@@ -86,14 +103,50 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
         if (_health != null && _health.IsDead) DebugLog.Info($"{name} is dead.", this);
     }
 
-    // Gets her up once the ragdoll settles, unless the hit (or a later one while down) killed her.
+    // Gets her up once the ragdoll settles. Killed (by the hit, or a later one while down), she lies
+    // where she fell for Revive Delay, then comes back at the Revive Point.
     private void UpdateDowned()
     {
-        if (_health != null && _health.IsDead || !_ragdoll.IsSettled) return;
+        if (_health != null && _health.IsDead)
+        {
+            _deadFor += Time.deltaTime;
+            if (_deadFor >= _reviveDelay) Revive();
+            return;
+        }
+        if (!_ragdoll.IsSettled) return;
 
         _ragdoll.Recover();
         _downed = false;
         _knockback = Vector3.zero;
+    }
+
+    // An early revive, until there's a proper one: back on her feet at the Revive Point (or where she
+    // started the level), at full health and with the bullets she started with. The level is left as
+    // it is: officers that were hunting her lose sight of her and search.
+    private void Revive()
+    {
+        // Stood up first, which gives her capsule and Animator back, then moved, bones and all.
+        _ragdoll.Recover();
+        Vector3 position = _startPosition;
+        Quaternion rotation = _startRotation;
+        if (_revivePoint != null)
+        {
+            position = _revivePoint.position + Vector3.up * _rootAboveFeet;
+            rotation = Quaternion.Euler(0f, _revivePoint.eulerAngles.y, 0f);
+        }
+        transform.SetPositionAndRotation(position, rotation);
+        _myRigidbody.position = position;
+        _myRigidbody.rotation = rotation;
+        _myRigidbody.linearVelocity = Vector3.zero;
+        _myRigidbody.angularVelocity = Vector3.zero;
+
+        _health.Revive();
+        _bulletCount = _startBullets;
+        _moveVelocity = Vector3.zero;
+        _knockback = Vector3.zero;
+        _deadFor = 0f;
+        _downed = false;
+        DebugLog.Info($"{name} revived.", this);
     }
 
     /// <summary>
@@ -129,8 +182,18 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
 
     void Update()
     {
+        // Dead on her feet (damage with no knockdown), she still goes down: the revive starts from there.
+        if (!_downed && _health != null && _health.IsDead) KnockDown();
         if (_downed) UpdateDowned();
         else MovePlayer();
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        if (_revivePoint == null) return;
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(_revivePoint.position, 0.4f);
+        Gizmos.DrawLine(_revivePoint.position, _revivePoint.position + _revivePoint.forward * 0.8f);
     }
 
     void MovePlayer()

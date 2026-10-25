@@ -169,7 +169,8 @@ scene when that's empty. The Main Camera is **orthographic**: Size 6.25 (a 12.5 
 framing, measured from the Police Station, where a character fills about 1/12.5 of the screen.
 
 - Normal play leans slightly toward `AimPoint` (Lead Fraction), smoothed by `SmoothDamp` — that
-  damping *is* the drag.
+  damping *is* the drag. A target that jumps more than 5 m in one frame was teleported (Ruby's
+  revive), and the view snaps there instead of gliding across the level.
 - **Peek (Shift)** throws the view to the **frame's edge in the cursor's direction**: only the
   direction counts, so the view can't be held near centre. It uses its own faster Peek Damping and
   zooms out to Peek Height.
@@ -476,8 +477,13 @@ the one deliberate exception to "never take movement away": `_downed` stops move
 gun (`CanShoot`), and `IGrappleUser.CanAct` makes the grapple stand down (`StandDown`: lets go of
 whatever it holds, calls back a whip in flight, clears the trail and any charge). The grapple checks
 it in `FixedUpdate` too, because a knockdown lands in a collision callback that can fall between a
-physics step and the next `Update`. Alive, she gets up once the ragdoll settles; dead, she stays
-down, with no restart yet.
+physics step and the next `Update`. Alive, she gets up once the ragdoll settles. **Dead, she
+revives early:** she lies where she fell for Revive Delay (2 s), then stands at the Revive Point
+(a scene object on her PlayerController; empty, where she stood when the level started, with her
+feet on it), at full health (`Health.Revive`) and with the bullets she started with. The level is
+left as it is. A stand-in until a proper death and restart; a death without a knockdown still
+knocks her down, so the revive always starts. A body that never quite settles (a limb jittering
+at rest) keeps a living Ruby down; it's rare, and there's no time limit on getting up yet.
 
 ### Weapons
 

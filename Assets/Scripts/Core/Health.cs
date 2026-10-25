@@ -22,4 +22,11 @@ public class Health : MonoBehaviour
 
         if (_currentHealth <= 0f) IsDead = true;
     }
+
+    /// <summary>Alive again at full health: a character that comes back after dying (Ruby's revive).</summary>
+    public void Revive()
+    {
+        _currentHealth = _maxHealth;
+        IsDead = false;
+    }
 }

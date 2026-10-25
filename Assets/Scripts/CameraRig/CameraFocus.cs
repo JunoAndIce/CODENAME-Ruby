@@ -38,8 +38,14 @@ public class CameraFocus : MonoBehaviour
     [Range(0f, 0.5f)]
     [SerializeField] private float _playerMargin = 0.25f;
 
+    // A target that moves further than this in one frame was teleported (a revive across the level):
+    // the view snaps there rather than gliding across everything in between. Far beyond anything a
+    // character covers in a frame.
+    private const float TeleportDistance = 5f;
+
     private ICameraTarget _follow;
     private Vector3 _followVelocity;
+    private Vector3 _lastTargetPosition;
     private float _currentHeight;
     private float _heightVelocity;
     // Kept while the cursor sits right on the player, so a peek never snaps to "no direction".
@@ -61,6 +67,7 @@ public class CameraFocus : MonoBehaviour
         _baseOrthoSize = _camera.orthographicSize;
         _currentHeight = _camHeight;
         transform.position = _follow.Position;
+        _lastTargetPosition = _follow.Position;
     }
 
     private void OnValidate()
@@ -86,7 +93,16 @@ public class CameraFocus : MonoBehaviour
         _currentHeight = Mathf.SmoothDamp(_currentHeight, peeking ? _peekHeight : _camHeight, ref _heightVelocity, _heightDamping);
 
         Vector3 target = _follow.Position + Lead(peeking);
-        transform.position = Vector3.SmoothDamp(transform.position, target, ref _followVelocity, peeking ? _peekDamping : _damping);
+        if ((_follow.Position - _lastTargetPosition).sqrMagnitude > TeleportDistance * TeleportDistance)
+        {
+            transform.position = target;
+            _followVelocity = Vector3.zero;
+        }
+        else
+        {
+            transform.position = Vector3.SmoothDamp(transform.position, target, ref _followVelocity, peeking ? _peekDamping : _damping);
+        }
+        _lastTargetPosition = _follow.Position;
 
         PlaceCamera();
     }
