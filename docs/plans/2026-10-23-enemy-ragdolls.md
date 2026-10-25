@@ -67,13 +67,13 @@ Steps 1–7 were built before the spec's revisions. Step 8 takes back the parts 
 - [x] **Step 5: Compile.** OK.
 - [x] **Step 6: Inspector work** (done by the user): the Ragdoll Wizard on the officer's model (`B-hips` as Pelvis), `ImpactDamage` on its 11 bones, `SkeletonRagdollBody` on the root in place of `CapsuleRagdollBody`, and the controller rebuilt.
 - [x] **Step 7: Delete `CapsuleRagdollBody.cs`** and its `.meta`. Compile: OK.
-- [ ] **Step 8: Take back what the revisions dropped.**
+- [x] **Step 8: Take back what the revisions dropped.**
   - Remove `RestrainedStill` from `AnimStance`, the "Restrained Still" state from `CharacterControllerBuilder`, and its mapping in `EnemyController.Stance` (`DeadState => AnimStance.Frozen` again).
   - Restore `DeadState`'s `Enter` and `Grab` comments.
   - Mark `SkeletonRagdollBody.Hold` and `IRagdollBody.Hold`'s summary as interim, standing the body up until the limp hold replaces it.
   - Compile. Expected: `compile-check: OK`.
-- [ ] **Step 9: Inspector work for the user:** open `Assets/Animations/Enemy Animation Set` and press **Build Controller** again, which removes `Restrained Still`.
-- [ ] **Play-test gate:**
+- [x] **Step 9: Inspector work for the user:** open `Assets/Animations/Enemy Animation Set` and press **Build Controller** again, which removes `Restrained Still`.
+- [x] **Play-test gate:**
   - `SampleScene` loads with every officer standing still; nothing jerks. With the PathGrid selected, no cell under an officer is blocked.
   - **Thrown:** an officer goes limp at once and tumbles. Lying still, he stands up where he lies, holds still for 1 s, then hunts.
   - **Knocked down** by a thrown crate: limp at once, then gets up the same way.
@@ -82,7 +82,7 @@ Steps 1–7 were built before the spec's revisions. Step 8 takes back the parts 
   - **Interim, not judged yet:** a let-go officer still spins with the old stand-in spin (Task 2 removes it), and a grabbed corpse stands up in one piece (Task 3 makes it limp).
   - Ruby's own knockdown and get-up are unchanged.
   - The Console is clean. Watch especially for "Animator is not playing an AnimatorController" while officers are limp. If it shows, guard `CharacterAnimator`'s Animator writes (not its bookkeeping) with `_animator.isActiveAndEnabled`, compile, and re-check before committing.
-- [ ] **Commit.**
+- [x] **Commit.**
 
 ### Task 2: No spin, no top
 
@@ -97,31 +97,33 @@ Steps 1–7 were built before the spec's revisions. Step 8 takes back the parts 
   - `IRagdollBody` without `Spin`, `IsSpinning` or `Push`.
   - `RagdollState` with only `Launch(Vector3 velocity)` to set the next fall.
 
-- [ ] **Step 1: The seam.**
+- [x] **Step 1: The seam.**
   - Remove `Spin`, `IsSpinning` and `Push` from `IRagdollBody`.
   - In `SkeletonRagdollBody`, remove the same, with `_spinLeft`, the spin branch of `FixedUpdate`, and the pelvis's raised `maxAngularVelocity` and its restore.
   - `IsSettled => _ragdolling && _slowTimer >= _settleTime`.
-- [ ] **Step 2: `EnemyController`.**
+- [x] **Step 2: `EnemyController`.**
   - Remove the top: `_topBounce`, `IsTop`, `OnCollisionEnter`, `TakeHit`, `_preStepVelocity` and its write in `FixedUpdate`, `_created` and `_order`.
   - Remove the spin's values: `_dropFlingSpeed`, `_dropSpinSpeed`, `_dropSpinTime` with their properties, and the `[Header("Dropped")]`.
   - `EndGrab(bool wasSpun)`, alive: `Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity))`, then `SetState(Ragdoll)`. That's a plain fall at the speed he had, already turned onto Ruby's aim by the grapple when he was spun. Keep the parameter, since `IGrabbable` declares it, and say in the summary that he falls the same either way.
   - `Stance`: `RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen`.
   - `KnockDown` is unchanged.
-- [ ] **Step 3: `RagdollState`.**
+- [x] **Step 3: `RagdollState`.**
   - Remove `Spin(...)`, `_spin` and `_spinDirection`.
   - `Enter` always calls `Ragdoll(_launch)`.
   - `FixedTick` always sets `_getUpLeft = Enemy.GetUpTime`.
   - Update the class summary.
-- [ ] **Step 4: Compile.** Expected: `compile-check: OK`.
-- [ ] **Play-test gate:**
+- [x] **Step 4: Compile.** Expected: `compile-check: OK`.
+- [x] **Play-test gate:**
   - **Tap-drop a standing officer:** he goes limp and crumples where he stands, lies still, gets up after 1 s, and hunts.
   - **Let go mid-swing:** he flies out limp along Ruby's aim, tumbling, and gets up once still.
   - **Another officer:** a let-go officer that hits one doesn't trade bounces with him; fast enough, it knocks him down through impact damage.
   - The officer's Inspector no longer shows Drop Fling Speed, Drop Spin Speed, Drop Spin Time or Top Bounce.
   - The Console is clean.
-- [ ] **Commit.**
+- [x] **Commit.**
 
 ### Task 3: The limp grab
+
+> **Not built as written.** Play-testing took the limp grab through four versions (arms bound; a physics lift on the spin; a scripted swing; a plain frictionless ragdoll) and the user called it back: grabbed officers are tied upright in one piece (`Hold` is `Recover`), and a held corpse shows the restrained pose. The steps below are the plan as written, left unticked. See the spec's **Changed in building**. Commits `3ffd3f9..b60450b`.
 
 **Files:**
 - Modify: `Assets/Scripts/Core/IRagdollBody.cs`, `Assets/Scripts/Core/SkeletonRagdollBody.cs`
@@ -209,7 +211,7 @@ Steps 1–7 were built before the spec's revisions. Step 8 takes back the parts 
 - Modify: `docs/manual/design-manual.html` and `docs/CODENAME-Ruby-Design-Manual.pdf`
 - Modify: `docs/specs/2026-10-23-enemy-ragdolls.md`
 
-- [ ] **Step 1: CLAUDE.md.**
+- [x] **Step 1: CLAUDE.md.**
   - **Grapple section:**
     - the let-go text and "A spinning enemy is a top" give way to the limp grab and a plain fall;
     - the tether pulls the grabbable's body but weighs the host whole;
@@ -225,11 +227,11 @@ Steps 1–7 were built before the spec's revisions. Step 8 takes back the parts 
     - the assembly table's Core row;
     - the "root capsule only" convention, whose exception is any ragdolled character;
     - the Specs status.
-- [ ] **Step 2: The manual.**
+- [x] **Step 2: The manual.**
   - **The officer moments table:** grabbed is limp with arms bound, dropped is a fall, and thrown and knocked down are limp.
   - **The Dropped section.**
   - **The tuning table:** remove Drop Spin Speed, Drop Spin Time, Drop Fling Speed and Top Bounce.
   - Then rebuild the PDF and republish the manual's artifact page.
-- [ ] **Step 3: The spec.** Add a "Changed in building" section if anything differed from the design.
+- [x] **Step 3: The spec.** Add a "Changed in building" section if anything differed from the design.
 - [ ] **Step 4: Review.** Run the end-of-plan code reviewer on the branch, in the background.
 - [ ] **Commit.**

@@ -1,6 +1,6 @@
 # Enemy ragdolls: limp officers, on the chain and off it
 
-**Status:** design, approved 2026-10-23 and revised twice the same day, before Task 1's play-test:
+**Status:** built (2026-10-24), with one change from this design: grabbed officers are tied upright, not limp (see **Changed in building**). Approved 2026-10-23 and revised twice the same day, before Task 1's play-test:
 officers are grabbed limp, and the spin is gone (see **Revisions**). Branch `enemy-ragdolls`,
 stacked on `enemy-animations` (PR #10). Builds on Ruby's skeleton ragdoll
 (`docs/plans/2026-10-12-ruby-ragdoll.md`, whose completion gate lists the known enemy work) and on
@@ -183,3 +183,31 @@ Dropped with those changes:
 
 - Get-up and wriggle animations.
 - Any change to Ruby, the chain's rules, or how officers move, see, path or fight.
+
+## Changed in building
+
+- **Grabbed officers are tied upright, not limp.** Task 3 built the limp grab and play-testing took
+  it through four versions:
+  - limp with the arms bound to the chest, the chain pulling the chest;
+  - a physics lift on the spin (the conical-pendulum balance);
+  - a scripted swing that carried the chest round Ruby and laid the body level, first kinematic,
+    then driven by velocity;
+  - a plain ragdoll, sliding frictionless while held.
+
+  None held up. The chain pulls one body, and a limp one dragged its limbs on the floor and ground
+  the spin down. Its hips only bend so far, so its legs hung to the floor however it was lifted.
+  Driving the chest round fast enough to clear the floor stretched the model: kinematic, the chest
+  sat inside the dynamic hierarchy and was dragged off its path; by velocity, the joints still
+  couldn't hold the limbs at that acceleration. The user called it back to the first design's grab:
+  `Hold` stands the body up on its capsule, tied upright, alive or dead, and the chain spins it with
+  the ordinary physics spin. Let go or thrown, he falls limp, as designed.
+- **A corpse on the chain shows the restrained pose**, like a living officer, rather than freezing
+  upright in its death pose. With the stand-in clip it breathes slightly; a still variant waits for
+  real clips.
+- **The Ragdoll Wizard strips colliders.** It deletes every collider, Rigidbody and joint under the
+  bones it sets up, so the officer's pistol, held under `B-hand.R`, lost its BoxCollider and fell
+  through the floor when popped. Its Rigidbody survived only because `Gun` and `Weight` require one.
+  The removal was reverted, and CLAUDE.md warns about it.
+- **The pass-through after a let-go** starts after the grabbable is released, on every collider the
+  host collides through then. Built in Task 1 and kept: a body let go goes limp, and its bones need
+  the window too.

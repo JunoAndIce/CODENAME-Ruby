@@ -70,7 +70,7 @@ The scripts are split into assembly definitions so the systems can be lifted int
 
 | Assembly | Folder (under `Assets/Scripts/`) | References | Holds |
 | --- | --- | --- | --- |
-| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdolls (seam, capsule and skeleton), `IKnockback`, pooling, `DebugLog` |
+| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdolls (seam and skeleton), `IKnockback`, pooling, `DebugLog` |
 | `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, patrol routes |
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
@@ -240,7 +240,10 @@ because a pivot that lets the held body overlap the player turns every collision
 
 Grabbing: a node grabs the `IGrabbable` on it or above it in the hierarchy (the enemy). `LandWhip` calls
 `EnterGrabbed()` when `CanBeGrabbed` (always, corpses included), and the controller keeps it for the whole
-tether. **Holding right click on a host charges a throw**, reaching full at Full Charge Time and
+tether. A grabbed officer is **tied upright** in one piece, alive or dead: his ragdoll's `Hold`
+stands him up on his capsule, in the restrained pose. A limp grab was tried and dropped (the enemy
+ragdolls spec): the chain pulls one body, and a limp one dragged its limbs on the floor, ground the
+spin down, and stretched when driven round fast enough to clear it. **Holding right click on a host charges a throw**, reaching full at Full Charge Time and
 holding there. **Left click throws** at `Throw Impulse × lerp(Min Throw Fraction, 1, charge)`.
 Letting right click go first cancels the charge and keeps hold, unless it was a tap shorter than
 Tap Threshold, which drops the host (`EndGrab()`). **The charge buffers:** right click still held
@@ -259,23 +262,16 @@ the next grab can follow without waiting: the whip's crack and its trail after t
 still play, but only as visuals, the grapple is ready during the trail (`Phase.Trailing` can
 launch), and a new launch cuts the trail short. Only pull bites still wait for their crack. For Throw Pass Through (0.15 s) after a throw, the thrown host can't collide with the
 player (`PassThrough`, shared with the parked tether), so a host thrown from behind mid-spin passes
-through them instead of hitting them in the back. Any other detach calls `EndGrab()`: the enemy
-spins upright (tilt locked), winding down to a stop over Drop Spin Time, then is back in Aggro.
-Let go while parked (`Tether.IsParked`, passed as `EndGrab(wasSpun)`), the host keeps its speed but
-is turned onto Ruby's aim first (`Tether.AimRelease`, for any host, crates included), gets the same
-pass-through window as a throw, and an enemy flings out along it as a spinning top. Otherwise it flings only at Drop Fling Speed
-or faster, and spins where it stands below that. A speed test alone was a coin flip for a spun enemy
-whenever Drop Fling Speed sat near Spin Speed. A throw still tumbles.
-
-**A spinning enemy is a top** (`EnemyController.IsTop`: in Ragdoll, `IRagdollBody.IsSpinning`). When
-it hits another enemy (`OnCollisionEnter`) the two trade momentum along the line between them, by
-weight, at Top Bounce: the top bounces off and keeps spinning (`IRagdollBody.Push`, which also frees
-a spin held in place), and the enemy it hit is sent off at its share. Whether that knocks it down
-is decided by impact damage's Knockdown Speed, like every other hit (see **Impact damage**), so a
-slow graze only shoves an enemy on its feet. The exchange uses each
-enemy's velocity recorded at the end of its `FixedUpdate`, because collision callbacks arrive after
-the solver has already spent the speed. Of two colliding tops, the one created first handles the
-pair, so a hit is never applied twice. Grabbed and dead enemies aren't hit.
+through them instead of hitting them in the back. The window starts only once the grabbable has
+been let go (`Detach`), on every collider the host collides through at that moment
+(`Footprint.BodyColliders`): an officer goes limp as he's released, colliding through his bones, and
+Unity drops an ignore pair set on a disabled collider, so a window set before the release missed his
+limbs and her own throw could knock her down. Any other detach calls `EndGrab()`: the enemy falls
+limp at the speed it had. Let go while parked (`Tether.IsParked`, passed as `EndGrab(wasSpun)`), the
+host keeps its speed but is turned onto Ruby's aim first (`Tether.AimRelease`, for any host, crates
+included), gets the same pass-through window as a throw, and an enemy flies out along it, limp. A
+throw tumbles limp too. (A spinning top that traded momentum with other officers, and a dizzy spin
+on release, were dropped with the capsule ragdoll.)
 
 **The rope stops the walk.** Each step (except while parked) the tether passes Ruby a walk limit
 through `IGrappleUser.LimitMove`: away from the far end (or the first wrap, when caught on
@@ -456,10 +452,9 @@ Damage is big from the threshold on purpose: fast enough to knock a character do
 `EnemyController.KnockDown` ragdolls the enemy at the velocity the hit left it with; held on the
 chain or already down, the hit only hurts, so a swung enemy keeps swinging. **Getting up:** once a
 survivor's body settles, `RagdollState` stands it up and holds it still for Get Up Time (1 s, the
-stand-in for a get-up clip's length) before the table sends it hunting; a top that winds down is
-already on its feet and skips it. Getting up, it's standing again: a hit at Knockdown Speed floors
-it once more (`RagdollState.Relaunch`, since `SetState` can't re-enter Ragdoll and would drop the
-knockdown silently), and a spinning top shoves it like any standing enemy. `RagdollState.Standing`
+stand-in for a get-up clip's length) before the table sends it hunting. Getting up, it's standing
+again: a hit at Knockdown Speed floors it once more (`RagdollState.Relaunch`, since `SetState` can't
+re-enter Ragdoll and would drop the knockdown silently). `RagdollState.Standing`
 covers the get-up and the moment after it before the table moves on: done in a physics step, it's
 sent hunting in the next `Update`, and a hit in between still meets a standing enemy.
 
@@ -469,8 +464,9 @@ body, which the chain can still grab, swing and throw (`CanBeGrabbed` is always 
 tracks the body: **held** while the rope has it (a death mid-swing stays on the chain, read from
 `EnemyController.IsHeld`), **loose** while it tumbles, and **at rest** once settled, frozen with
 trigger colliders (`IRagdollBody.Rest`), so Ruby and enemies walk over it and nothing collides with
-it. Grabbing wakes it (`Hold`); a throw or drop tumbles it again (`DeadState.LetGo`), and it hits
-like any body. A corpse takes no more damage and is never a spinning top. `GrappleController.LandWhip`
+it. Grabbing stands it up, tied upright in the restrained pose like a living officer (`Hold`); a
+throw or drop tumbles it again, limp (`DeadState.LetGo`), and it hits like any body. A corpse takes
+no more damage. `GrappleController.LandWhip`
 calls `EnterGrabbed` before building the tether, because a body at rest has trigger colliders until
 then and the tether sizes the park distance from solid ones.
 
@@ -542,21 +538,15 @@ snaps her arm onto the cursor first, so the muzzle is on the line when the bulle
 
 ### Ragdoll seam
 
-`IRagdollBody` keeps how a body ragdolls out of the characters that use it. Both backends
-report `IsSettled` once the body has stayed slow for a while (or, for an in-place `Spin`, once the
-spin's time is up), and `Rest` lays a body to rest (frozen, its solid colliders made triggers).
-Every other call (`Ragdoll`, `Spin`, `Hold`, `Recover`) wakes it first, so a body can't be left
-frozen by accident. `ApplyHit` lands an impulse at a point on a ragdolling body (a bullet's
-knockback) and does nothing otherwise.
+`IRagdollBody` keeps how a body ragdolls out of the characters that use it. It reports
+`IsSettled` once the body has stayed slow for a while, and `Rest` lays a body to rest (frozen, its
+solid colliders made triggers). Every other call (`Ragdoll`, `Hold`, `Recover`) wakes it first, so
+a body can't be left frozen by accident. `Hold` is `Recover`: a body on the chain is tied upright,
+standing on its capsule. `ApplyHit` lands an impulse at a point on a ragdolling body (a bullet's
+knockback) and does nothing otherwise. The capsule backend, `CapsuleRagdollBody`, is gone: officers
+ragdoll on their skeletons too.
 
-**`CapsuleRagdollBody`** (enemies) is the physics handoff on a capsule with no rig. The
-transition table uses `IsSettled` to hand control back to `Aggro`. The spin raises the body's
-`maxAngularVelocity` to twice its speed, because the cap (Default Max Angular Speed, 50 rad/s in
-this project's physics settings) would silently slow a faster spin. Enemies stay
-on it: a spinning top isn't a knockdown ragdoll. What converting them needs is listed in the
-completion gate of `docs/plans/2026-10-12-ruby-ragdoll.md`.
-
-**`SkeletonRagdollBody`** (Ruby) ragdolls her humanoid rig. It goes on the **root**, beside the
+**`SkeletonRagdollBody`** (Ruby, and officers on `HumanM_Model`) ragdolls a humanoid rig. It goes on the **root**, beside the
 capsule, not on the model, and it's model-agnostic with nothing to wire. It finds the pelvis
 through the Humanoid Avatar (`Animator.GetBoneTransform(HumanBodyBones.Hips)`), and takes as bones
 the pelvis and every *jointed* Rigidbody under it, so a gun held under a hand bone isn't one. A new
@@ -564,14 +554,23 @@ model needs a Humanoid import with **Optimize Game Objects off** (on, its bones 
 GameObjects and the Hips lookup fails), the Ragdoll Wizard on its prefab, and `ImpactDamage` on each
 bone. The wizard's masses only set proportions.
 
+- **The Ragdoll Wizard deletes every collider, Rigidbody and joint under the bones it sets up.** A
+  gun held under a hand bone loses its collider (its Rigidbody survives, since `Gun` and `Weight`
+  require one), and the gun then falls straight through the floor when it's dropped or popped.
+  After running the wizard, revert the removed collider override on the gun.
+- **The officer's bones:** `B-hips` (Pelvis), `B-thigh` (Hips), `B-shin` (Knee), `B-foot` (Foot),
+  `B-upperArm` (Arm), `B-forearm` (Elbow), each `.L` and `.R`, then `B-spine` (Middle Spine) and
+  `B-head`. Leave out `B-spineProxy`, `B-root`, the `B-handProp` bones and anything ending `_Skel`.
+
 - **Standing:** the Animator runs, the bones are kinematic with their colliders off, and the root
   capsule collides and carries her whole weight. The bones are forced to this in `Start`, whatever
   the prefab says.
 - **Ragdolling:** the Animator and capsule go off, and the bones go live (continuous detection)
   sharing 98% of `Weight.TotalMassKg` in the wizard's proportions. The root keeps 2% and rides the
   pelvis on a `ConfigurableJoint`, so the camera, the AI and the chain still follow her root.
-  - It's a joint rather than moving the root after the pelvis, because the chain pulls a host by
-    its root.
+  - It's a joint rather than moving the root after the pelvis, from when a limp body was to hang
+    on the chain by its root. Nothing pulls a limp root now (a held officer is tied upright), but
+    the joint keeps the root moving with the body as a physical body.
   - Both anchors are set to zero: Unity starts a new joint at (0, 1, 0), which held the root a
     metre under the pelvis, under the floor once she lay down.
   - Jointed neighbours don't collide with each other, which is Unity's joint default, but other
@@ -618,8 +617,8 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
 
 - **Stances** (`AnimStance`, numbered, saved): Rest (weapon at rest: patrolling, searching, idle),
   Aim (firing at Ruby, moving or not; Ruby whenever she's on her feet, since she always faces the
-  cursor), Run (closing in out of range or out of sight, re-arming), Restrained (grabbed, or spun
-  as a top), Frozen (thrown, knocked down, dead: the Animator pauses at speed 0, never disabled,
+  cursor), Run (closing in out of range or out of sight, re-arming), Restrained (held on the
+  chain, alive or dead), Frozen (thrown, knocked down, dead: the Animator pauses at speed 0, never disabled,
   because Ruby's ragdoll switches hers off and on itself) and GettingUp. `EnemyController.Stance`
   maps its state; `PlayerController` reports Aim or Frozen.
 - **Slots, not clips:** a **`CharacterAnimationSet`** asset per character holds a clip per moment:
@@ -681,7 +680,7 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
 - **Characters collide with their root capsule only.** Visual children (models, the gun, eyes) carry
   no colliders: a protruding child collider snags corners and makes the body far wider than it looks.
   The model can be big for readability; the capsule stays slim. The one exception is a ragdolled
-  Ruby: her bones' colliders take over while the capsule is off, never both at once.
+  character: its bones' colliders take over while the capsule is off, never both at once.
 - `OnValidate` enforces invariants between serialized values (give-up radius outside alert radius, etc.).
 - `OnDrawGizmosSelected` visualises radii, routes, paths and camera lead. Add gizmos for anything
   spatial you introduce.
@@ -712,8 +711,9 @@ corpses. Enemy weapons (pistols, drops, re-arming) are built to `2026-10-11-enem
 Ruby ragdolls on her own rig, and officers' bullets knock her back, built to
 `docs/plans/2026-10-12-ruby-ragdoll.md`. Officers wear Kevin Iglesias's `HumanM_Model`
 (`officer.prefab`, the old `Enemy.prefab` renamed, same GUID), and both they and Ruby are animated
-through `Ruby.Animation`, built to `2026-10-20-enemy-animations.md`. Officers still fall as stiff
-capsules (limp ragdolls are next), and melee and Ruby's revolver are still to come.
+through `Ruby.Animation`, built to `2026-10-20-enemy-animations.md`. Officers ragdoll limp on
+their skeletons too, and are tied upright on the chain, built to `2026-10-23-enemy-ragdolls.md`.
+Melee and Ruby's revolver are still to come.
 
 ## Unity/git
 
