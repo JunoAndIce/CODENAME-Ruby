@@ -187,10 +187,10 @@ a { color: var(--accent); }
     <tr><td>Bullet Speed</td><td class="where">GunController</td><td class="num">18 m/s</td></tr>
     <tr><td>Bullet Life Time</td><td class="where">GunController</td><td class="num">2 s</td></tr>
     <tr class="group"><td colspan="3">Chain whip</td></tr>
-    <tr><td>Max / Min Chain Length</td><td class="where">GrappleController</td><td class="num">8 m / 1.2 m</td></tr>
+    <tr><td>Max / Min Chain Length</td><td class="where">GrappleController</td><td class="num">7 m / 1 m</td></tr>
     <tr><td>Snap Radius</td><td class="where">GrappleController</td><td class="num">3 m</td></tr>
     <tr><td>Pull Impulse (reel speed)</td><td class="where">GrappleController</td><td class="num">8.5 m/s</td></tr>
-    <tr><td>Spin Speed</td><td class="where">GrappleController</td><td class="num">40 m/s</td></tr>
+    <tr><td>Spin Speed</td><td class="where">GrappleController</td><td class="num">32 m/s</td></tr>
     <tr><td>Spin Up Time</td><td class="where">GrappleController</td><td class="num">1 s</td></tr>
     <tr><td>Spin Bounce</td><td class="where">GrappleController</td><td class="num">0.7</td></tr>
     <tr><td>Throw Impulse</td><td class="where">GrappleController</td><td class="num">120</td></tr>
@@ -309,13 +309,13 @@ a { color: var(--accent); }
 <h4>Grabbing</h4>
 <ul>
   <li><strong>Right click</strong> launches the whip at the node marked by the white aim orb.</li>
-  <li>The orb marks the free node <strong>nearest the cursor</strong>, within 3 m of it (Snap Radius) and within 8 m of Ruby. Clicking far from every node grabs nothing.</li>
+  <li>The orb marks the free node <strong>nearest the cursor</strong>, within 3 m of it (Snap Radius) and within 7 m of Ruby. Clicking far from every node grabs nothing.</li>
   <li><strong>The whip can't grab through walls.</strong> Only walls and Immovable objects block it. Crates and enemies don't, though the chain catches on them once attached.</li>
   <li>The chain wraps around corners. Ruby's limit is measured along the wrapped chain.</li>
 </ul>
 
 <h4>Walking on the chain</h4>
-<p>Walking toward the node gives the chain slack. Walking away tightens it until it reaches its limit: the current length while Pull is held, or the full 8 m when it isn't. At the limit Ruby drags the object behind her at her drag fraction. If the object can't follow, because it's fixed, wedged against a wall or too heavy, she stops.</p>
+<p>Walking toward the node gives the chain slack. Walking away tightens it until it reaches its limit: the current length while Pull is held, or the full 7 m when it isn't. At the limit Ruby drags the object behind her at her drag fraction. If the object can't follow, because it's fixed, wedged against a wall or too heavy, she stops.</p>
 <div class="eq-name">Ruby's speed away from the node</div>
 <div class="eq">
 <math display="block">
@@ -380,13 +380,13 @@ a { color: var(--accent); }
 <p>The throw replaces whatever speed the object had, so the same cursor position always sends it the same way, wherever it is in a swing.</p>
 
 <h4>Spinning</h4>
-<p>Holding Pull reels the object all the way in to the minimum length (1.2 m, or more for a big object so it clears Ruby). If it weighs <strong>60 kg or less</strong>, it then spins around her. Ruby is the pivot: she keeps walking freely and carries the spin with her, and the spinning object passes through her.</p>
+<p>Holding Pull reels the object all the way in to the minimum length (1 m, or more for a big object so it clears Ruby). If it weighs <strong>60 kg or less</strong>, it then spins around her. Ruby is the pivot: she keeps walking freely and carries the spin with her, and the spinning object passes through her.</p>
 <div class="eq-name">Spin rev-up, every physics step</div>
 <div class="eq">
 <math display="block"><mrow><mtext>New Spin</mtext><mo>=</mo> <mtext>Current Spin</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mo>(</mo><mtext>Spin Speed</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><mtext>Current Spin</mtext><mo>)</mo><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Rev Share</mtext></mrow></math>
 <math display="block"><mrow><mtext>Rev Share</mtext><mo>=</mo> <mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><msup><mi>e</mi><mrow><mo>−</mo><mn>3</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Physics Step</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">÷</mo><mspace width="0.22em"/><mtext>Spin Up Time</mtext></mrow></msup></mrow></math>
 </div>
-<p>The spin closes about 3% of the gap to Spin Speed every step and reaches 95% of 40 m/s after one second, like an arm winding up. At full speed on a 1.2 m chain, the object goes round about <strong>5.3 times a second</strong>. Spin speed doesn't depend on weight, and the spin ignores where Ruby aims.</p>
+<p>The spin closes about 3% of the gap to Spin Speed every step and reaches 95% of 32 m/s after one second, like an arm winding up. At full speed on a 1 m chain, the object goes round about <strong>5.1 times a second</strong>. Spin speed doesn't depend on weight, and the spin ignores where Ruby aims.</p>
 <div class="eq-name">Holding the spin on its circle</div>
 <div class="eq">
 <math display="block">
@@ -396,7 +396,7 @@ a { color: var(--accent); }
   </mrow>
 </math>
 </div>
-<p>While spinning, the chain's correction limit is raised by exactly this much, so a fast spin never stretches loose. At 40 m/s on a 1.2 m chain that's 13.3 m/s, on top of the normal 20 m/s limit.</p>
+<p>While spinning, the chain's correction limit is raised by exactly this much, so a fast spin never stretches loose. At 32 m/s on a 1 m chain that's 10.2 m/s, on top of the normal 20 m/s limit.</p>
 <div class="eq-name">Bouncing off walls</div>
 <div class="eq">
 <math display="block"><mrow><mtext>Expected Speed</mtext><mo>=</mo> <mfrac><mtext>Current Spin</mtext><msqrt><mrow><mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><msup><mrow><mo>(</mo><mtext>Current Spin</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Physics Step</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">÷</mo><mspace width="0.22em"/><mtext>Chain Length</mtext><mo>)</mo></mrow><mn>2</mn></msup></mrow></msqrt></mfrac></mrow></math>
@@ -405,7 +405,7 @@ a { color: var(--accent); }
 <p>A spinning object bounces when, in one step, it keeps <strong>less than half</strong> of its expected speed <strong>and</strong> touches something wall-like: a wall, the side of a crate or an enemy. Scraping the floor doesn't count. It reverses direction, keeps 70% of its speed and revs back up. A swung enemy that hits a wall at Knockdown Speed or faster takes impact damage.</p>
 
 <h4>Letting go of a spin</h4>
-<p>A right-click tap while spinning lets go. The object keeps its speed but is turned onto Ruby's aim, so it flies where she points. A spun officer flies out limp, tumbling (see <a href="#ragdoll">Ragdoll</a>). At 40 m/s it's well above Knockdown Speed and hurts whatever it hits.</p>
+<p>A right-click tap while spinning lets go. The object keeps its speed but is turned onto Ruby's aim, so it flies where she points. A spun officer flies out limp, tumbling (see <a href="#ragdoll">Ragdoll</a>). At 32 m/s it's well above Knockdown Speed and hurts whatever it hits.</p>
 
 <h3>Revolver</h3>
 <p>For now Ruby carries the officers' pistol model in her left hand. Pulling the trigger snaps her gun arm onto the cursor, and the shot leaves the muzzle in that same frame and flies flat to the cursor: a bullet always comes out of the barrel and goes where she aims, however fast the cursor moved. There's no delay. The gun stays in her hand when she's knocked down.</p>
@@ -465,7 +465,7 @@ a { color: var(--accent); }
     <tr><td>Tiny crate (10 kg)</td><td class="num">25 m/s</td><td class="num">0.41</td><td class="num">10.2</td><td>Knocked down, survives</td></tr>
     <tr><td>Small crate (20 kg)</td><td class="num">40 m/s</td><td class="num">0.58</td><td class="num">23.1</td><td>Dies</td></tr>
     <tr><td>Another officer (50 kg)</td><td class="num">25 m/s</td><td class="num">0.91</td><td class="num">22.8</td><td>Dies</td></tr>
-    <tr><td>A wall, swung at full spin (its own 50 kg)</td><td class="num">40 m/s</td><td class="num">0.91</td><td class="num">36.5</td><td>Dies</td></tr>
+    <tr><td>A wall, swung at full spin (its own 50 kg)</td><td class="num">32 m/s</td><td class="num">0.91</td><td class="num">29.2</td><td>Dies</td></tr>
   </tbody>
 </table>
 </div>
