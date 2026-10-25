@@ -137,6 +137,9 @@ public class Tether
             _addedContacts = !_host.TryGetComponent(out _contacts);
             if (_addedContacts) _contacts = _host.gameObject.AddComponent<HostContacts>();
             _contacts.Ignore(player);
+            // Nothing on her own chain ever hurts her: reeled in fast, or slipping out of her spin
+            // into her, it would otherwise hit hard enough to knock her down.
+            ImpactDamage.SetHarmless(player.transform, _host.transform, true);
         }
 
         // A moving body can't be reeled closer than its size allows. Parked inside its own size,
@@ -205,6 +208,8 @@ public class Tether
     /// <summary>The chain is letting go: give back anything the tether switched off.</summary>
     public void End()
     {
+        // Off the chain it's an ordinary body again (a throw first passes through her for a moment).
+        if (_host != null) ImpactDamage.SetHarmless(_player.transform, _host.transform, false);
         if (_addedContacts && _contacts != null) Object.Destroy(_contacts);   // a dead host's is already gone
         StopJiggle();
         SetPassThrough(false);

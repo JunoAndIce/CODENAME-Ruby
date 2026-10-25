@@ -441,7 +441,11 @@ whose owner decides what that means. Each body in a hit carries its own `ImpactD
 sides are hurt; walls and props have none, so they only deal. Once per contact
 (`OnCollisionEnter`): pinned against a wall isn't a hit every step, but each bounce is. A hit
 from a body sharing the same `Health` doesn't count: a falling ragdoll's arm striking its own chest
-isn't a hit.
+isn't a hit. **Nothing on Ruby's chain hurts her:** while the tether holds a host, hits between
+anything under Ruby and anything under the host count for nothing, either way
+(`ImpactDamage.SetHarmless`, set by the `Tether` and cleared in `End`). They still bump. Without it,
+a host reeled in while she walked toward it, or one slipping out of her spin into her, closed fast
+enough to knock her down. Off the chain it's an ordinary body again, after a throw's pass-through.
 
 **A hit has to happen to count.** A host is switched to continuous collision detection the moment
 the tether attaches, and left that way: a thrown 20 kg crate leaves at about 90 m/s, almost a metre
