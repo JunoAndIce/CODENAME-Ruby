@@ -237,5 +237,5 @@ Steps 1–7 were built before the spec's revisions. Step 8 takes back the parts 
   - **The tuning table:** remove Drop Spin Speed, Drop Spin Time, Drop Fling Speed and Top Bounce.
   - Then rebuild the PDF and republish the manual's artifact page.
 - [x] **Step 3: The spec.** Add a "Changed in building" section if anything differed from the design.
-- [ ] **Step 4: Review.** Run the end-of-plan code reviewer on the branch, in the background.
-- [ ] **Commit.**
+- [x] **Step 4: Review.** Run the end-of-plan code reviewer on the branch, in the background.
+- [x] **Commit.**
