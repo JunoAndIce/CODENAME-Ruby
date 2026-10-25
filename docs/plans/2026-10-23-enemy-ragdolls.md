@@ -15,6 +15,8 @@
 
 **Spec:** `docs/specs/2026-10-23-enemy-ragdolls.md` (approved 2026-10-23, revised twice the same day). Read it first. Its table of moments is the play-test script.
 
+> **Built differently.** Play-testing dropped the limp grab: grabbed officers are tied upright in one piece (`Hold` is `Recover`), and letting go or throwing is a limp fall. Where this plan's Goal, Architecture, Review Focus items 2-4, Task 3 and Task 4's doc bullets describe the limp grab (arms bound, `LetGo`, `Torso`, the tether pulling the chest), they're superseded; the spec's **Changed in building** has what was built and why.
+
 ## Global Constraints
 
 - **Snappy verbs.** Grab, release and throw stay instant, and nothing here moves Ruby or slows her.
@@ -210,6 +212,8 @@ Steps 1–7 were built before the spec's revisions. Step 8 takes back the parts 
 - Modify: `CLAUDE.md`
 - Modify: `docs/manual/design-manual.html` and `docs/CODENAME-Ruby-Design-Manual.pdf`
 - Modify: `docs/specs/2026-10-23-enemy-ragdolls.md`
+
+> Steps 1 and 2 were written for the limp grab. The docs as built describe the upright grab instead.
 
 - [x] **Step 1: CLAUDE.md.**
   - **Grapple section:**

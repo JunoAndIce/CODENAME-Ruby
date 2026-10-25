@@ -40,7 +40,7 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
     private ConfigurableJoint _carry;
 
     private bool _ready;
-    private bool _live;          // the bones own the body: ragdolling, held or at rest
+    private bool _live;          // the bones own the body: ragdolling or at rest
     private bool _ragdolling;
     private bool _resting;
     private float _slowTimer;
@@ -305,7 +305,9 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
         foreach (Rigidbody bone in _bones) bone.linearVelocity = velocity;
     }
 
-    // A joint, not moving the root after the pelvis: the chain pulls an enemy by its root, and the body must follow.
+    // A joint carries the root on the pelvis, so the camera, the AI and the grab point, which follow
+    // the root, follow the body. (It was a joint so the chain could pull a limp body by its root;
+    // nothing does now, since a body on the chain is stood up first.)
     private void Carry(bool on)
     {
         if (_carry == null)

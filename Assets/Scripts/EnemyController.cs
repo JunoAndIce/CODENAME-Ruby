@@ -28,7 +28,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _grabPopOut = 2f;
 
     [Header("Getting up")]
-    [Tooltip("Seconds a surviving enemy stands getting up after a fall, unable to move or shoot, before it hunts again. A top that winds down is already on its feet and skips it.")]
+    [Tooltip("Seconds a surviving enemy stands getting up after a fall, unable to move or shoot, before it hunts again.")]
     [SerializeField, Min(0f)] private float _getUpTime = 1f;
 
     [Header("Dead")]

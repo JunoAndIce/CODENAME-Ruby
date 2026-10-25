@@ -240,8 +240,9 @@ because a pivot that lets the held body overlap the player turns every collision
 
 Grabbing: a node grabs the `IGrabbable` on it or above it in the hierarchy (the enemy). `LandWhip` calls
 `EnterGrabbed()` when `CanBeGrabbed` (always, corpses included), and the controller keeps it for the whole
-tether. A grabbed officer is **tied upright** in one piece, alive or dead: his ragdoll's `Hold`
-stands him up on his capsule, in the restrained pose. A limp grab was tried and dropped (the enemy
+tether. A grabbed officer is **tied upright** in one piece, alive or dead, standing on his
+capsule in the restrained pose: a living one is stood up as he leaves Ragdoll (`RagdollState.Exit`
+calls `Recover`), and a corpse by `DeadState.Grab` (`Hold`, which is `Recover`). A limp grab was tried and dropped (the enemy
 ragdolls spec): the chain pulls one body, and a limp one dragged its limbs on the floor, ground the
 spin down, and stretched when driven round fast enough to clear it. **Holding right click on a host charges a throw**, reaching full at Full Charge Time and
 holding there. **Left click throws** at `Throw Impulse × lerp(Min Throw Fraction, 1, charge)`.
@@ -330,9 +331,9 @@ writes that class's kg from the shared **`WeightTable`** asset into `Rigidbody.m
 Retune the table, not individual Rigidbodies. **Two masses, two uses.** `Rigidbody.mass` is what
 collisions see, and what impact damage reads off the body that hit. The character's whole weight is
 `Weight.TotalMassKg`, or `Weight.MassOf(body)` for any Rigidbody (its own mass when it has no
-`Weight`). They differ only while Ruby is ragdolled: her root then carries 2% of her weight and her
-bones the rest. Anything that weighs a character as a whole, like the tether, reads `MassOf`, or
-a downed Ruby would weigh 1.2 kg on the chain.
+`Weight`). They differ only while a character is ragdolled (Ruby, or an officer): its root then
+carries 2% of its weight and its bones the rest. Anything that weighs a character as a whole, like
+the tether, reads `MassOf`, or a downed Ruby would weigh 1.2 kg.
 **Immovable also makes the body kinematic** (`Weight` owns `isKinematic` on its body), because
 every system already treats kinematic as fixed: the tether anchors to it, walking and thrown bodies
 can't move it, and the PathGrid bakes it as static. Special interactions on immovable objects (a
@@ -636,8 +637,8 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
   than stopping to wait for them, so the upper body and the gun arm always reach the aim, and the
   feet step round the rest of the way at Turn Speed. Moving, the legs swing to the aim (or the
   body's facing) at Turn Speed. A turn-around past 150 degrees goes the gun hand's way, so the arm
-  never crosses the chest. Held, tumbling or getting up, the model is left alone: a tumbling capsule
-  takes it along, and Ruby's live ragdoll bones hang under it.
+  never crosses the chest. Held, tumbling or getting up, the model is left alone: a ragdolled
+  character's live bones hang under it.
 - **Turn clips must be feet only, so the turn slots are empty.** Kevin Iglesias's `Turn01` clips
   bake their turn into the pose. Blended in at whatever phase the aim state was in, they turned the
   hips on top of the model's own turn and snapped it away when the feet settled, and the legs

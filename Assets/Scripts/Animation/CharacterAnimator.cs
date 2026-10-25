@@ -222,8 +222,8 @@ public class CharacterAnimator : MonoBehaviour
     private static bool IsUpright(AnimStance stance) => stance is AnimStance.Rest or AnimStance.Aim or AnimStance.Run;
 
     // Only on its feet does the model keep its own facing. Held, tumbling or getting up, it's left
-    // alone and goes where its body goes: a tumbling capsule takes the model with it, and Ruby's
-    // live ragdoll bones hang under it, so turning it then would snap her falling body round.
+    // alone and goes where its body goes: a ragdolled character's live bones hang under it, so
+    // turning it then would snap the falling body round.
     private void UpdateFacing(AnimStance stance)
     {
         float rootYaw = _character.Body.transform.eulerAngles.y;

@@ -39,7 +39,7 @@ public class CharacterAnimationSet : ScriptableObject
     [Tooltip("Turning on the spot while aiming, once the upper body's twist runs out. Feet only: a clip that turns the body itself (a turn baked into the pose) adds its own turn on top of the model's, and snaps it away when the feet settle, so the legs jump. Leave empty rather than use one.")]
     [SerializeField] private AnimationClip _turnLeft;
     [SerializeField] private AnimationClip _turnRight;
-    [Tooltip("Held on the chain, or spun as a top.")]
+    [Tooltip("Held on the chain, tied upright: alive, or a corpse.")]
     [SerializeField] private AnimationClip _restrained;
     [SerializeField] private AnimationClip _getUp;
 
