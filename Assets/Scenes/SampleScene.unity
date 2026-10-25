@@ -6746,6 +6746,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 582790686}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &834853512
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 834853513}
+  m_Layer: 0
+  m_Name: Revive Spot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &834853513
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 834853512}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -33.811, y: 0.116, z: 2.74838}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &835160361 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8012345678901234502, guid: 7f3e9a2c5b8d4e01a6c9f3b2d8e41a57, type: 3}
@@ -17715,6 +17746,10 @@ PrefabInstance:
       propertyPath: _minChainLength
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 3894495727616990299, guid: fbd52bc02dda9ed4697b6898b092b3a9, type: 3}
+      propertyPath: _revivePoint
+      value: 
+      objectReference: {fileID: 834853513}
     - target: {fileID: 5244939881954929420, guid: fbd52bc02dda9ed4697b6898b092b3a9, type: 3}
       propertyPath: m_Name
       value: Red
@@ -17733,4 +17768,5 @@ SceneRoots:
   - {fileID: 1497746887}
   - {fileID: 1115923259}
   - {fileID: 1516360826}
+  - {fileID: 834853513}
   - {fileID: 8356562177823168000}
