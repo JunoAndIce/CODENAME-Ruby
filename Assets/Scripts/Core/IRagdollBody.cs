@@ -14,14 +14,14 @@ public interface IRagdollBody
     void ApplyHit(Vector3 impulse, Vector3 point);
 
     /// <summary>
-    /// Held by the chain (a corpse on it). For now, stood up in one piece where the body lies, its
-    /// capsule colliding; it becomes a limp hold, bound at the arms and chest.
+    /// Tied upright on the chain (a corpse on it): stood up in one piece where the body lies, its
+    /// capsule colliding, for the rope to move.
     /// </summary>
     void Hold();
 
     /// <summary>
     /// Laid to rest (a settled corpse): frozen where it lies, colliders made triggers so nothing
-    /// collides with it. Ragdoll, Spin, Hold and Recover all bring it back.
+    /// collides with it. Ragdoll, Hold and Recover all bring it back.
     /// </summary>
     void Rest();
 

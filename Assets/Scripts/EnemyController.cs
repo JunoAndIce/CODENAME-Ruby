@@ -129,7 +129,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         RearmState => _intendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
         GrabbedState => AnimStance.Restrained,
         RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen,
-        DeadState => AnimStance.Frozen,
+        // Tied upright on the chain, a corpse is restrained like the living; off it, it keeps its pose.
+        DeadState => IsHeld ? AnimStance.Restrained : AnimStance.Frozen,
         _ => AnimStance.Rest,
     };
 

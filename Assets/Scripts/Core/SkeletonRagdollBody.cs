@@ -170,9 +170,10 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
         return nearest;
     }
 
-    // Interim: stood up in one piece, because the chain still pulls the root and sizes its hold from
-    // the root's capsule, and a limp body is neither. The limp hold, pulled by the chest with the
-    // arms bound to it, replaces this (enemy ragdoll plan, Task 3).
+    // Tied upright on the chain: stood up in one piece on the capsule, posed by the Animator, as a
+    // living officer on the chain is. A limp body was tried and dropped: the chain pulls one body,
+    // and a limp one dragged its limbs along the floor, ground the spin down, and stretched when
+    // driven round fast enough to clear the floor.
     public void Hold() => Recover();
 
     public void Rest()
