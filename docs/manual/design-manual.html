@@ -145,7 +145,7 @@ a { color: var(--accent); }
     <tr><td>Enemy</td><td>Police officer</td><td>Built</td></tr>
     <tr><td>Enemy</td><td>Police boss</td><td><span class="planned">Planned</span></td></tr>
     <tr><td>Level</td><td>Police Station (one floor)</td><td>Test floor built; final layout <span class="planned">Planned</span></td></tr>
-    <tr><td>Art direction</td><td>Not decided. Ruby uses a placeholder humanoid model; officers are placeholder capsules.</td><td><span class="planned">Planned</span></td></tr>
+    <tr><td>Art direction</td><td>Not decided. Ruby and officers use placeholder humanoid models (officers in pink), animated with stand-in clips until real ones exist.</td><td><span class="planned">Planned</span></td></tr>
   </tbody>
 </table>
 </div>
@@ -179,17 +179,19 @@ a { color: var(--accent); }
     <tr><td>Move Speed</td><td class="where">PlayerController</td><td class="num">15 m/s</td></tr>
     <tr><td>Gamepad Aim Distance</td><td class="where">PlayerController</td><td class="num">6 m</td></tr>
     <tr><td>Knockback Deceleration (how fast a push fades)</td><td class="where">PlayerController</td><td class="num">20 m/s²</td></tr>
+    <tr><td>Revive Delay (lying dead before she comes back)</td><td class="where">PlayerController</td><td class="num">2 s</td></tr>
     <tr><td>Settle Speed / Settle Angular Speed / Settle Time (getting up)</td><td class="where">SkeletonRagdollBody</td><td class="num">0.4 m/s / 0.5 rad/s / 0.75 s</td></tr>
     <tr><td>Hit Local Share (share of a shot on the limb it hits)</td><td class="where">SkeletonRagdollBody</td><td class="num">0.3</td></tr>
+    <tr><td>Twist Limit / Turn Speed (her legs follow her aim)</td><td class="where">Red model · CharacterAnimator</td><td class="num">60° / 720°/s</td></tr>
     <tr class="group"><td colspan="3">Revolver</td></tr>
     <tr><td>Bullet Count</td><td class="where">PlayerController</td><td class="num">6</td></tr>
     <tr><td>Bullet Speed</td><td class="where">GunController</td><td class="num">18 m/s</td></tr>
     <tr><td>Bullet Life Time</td><td class="where">GunController</td><td class="num">2 s</td></tr>
     <tr class="group"><td colspan="3">Chain whip</td></tr>
-    <tr><td>Max / Min Chain Length</td><td class="where">GrappleController</td><td class="num">8 m / 1.2 m</td></tr>
+    <tr><td>Max / Min Chain Length</td><td class="where">GrappleController</td><td class="num">7 m / 1 m</td></tr>
     <tr><td>Snap Radius</td><td class="where">GrappleController</td><td class="num">3 m</td></tr>
     <tr><td>Pull Impulse (reel speed)</td><td class="where">GrappleController</td><td class="num">8.5 m/s</td></tr>
-    <tr><td>Spin Speed</td><td class="where">GrappleController</td><td class="num">40 m/s</td></tr>
+    <tr><td>Spin Speed</td><td class="where">GrappleController</td><td class="num">32 m/s</td></tr>
     <tr><td>Spin Up Time</td><td class="where">GrappleController</td><td class="num">1 s</td></tr>
     <tr><td>Spin Bounce</td><td class="where">GrappleController</td><td class="num">0.7</td></tr>
     <tr><td>Throw Impulse</td><td class="where">GrappleController</td><td class="num">120</td></tr>
@@ -221,11 +223,12 @@ a { color: var(--accent); }
     <tr><td>Rearm Radius</td><td class="where">EnemyController</td><td class="num">10 m</td></tr>
     <tr><td>Node Pause Time / Route Retry Time</td><td class="where">EnemyController</td><td class="num">2.5 s / 3 s</td></tr>
     <tr><td>Wander Span (a lone stop this far across is wandered)</td><td class="where">PatrolRoute (fixed)</td><td class="num">4 m</td></tr>
-    <tr><td>Drop Fling Speed / Drop Spin Speed</td><td class="where">EnemyController</td><td class="num">60 / 10</td></tr>
-    <tr><td>Drop Spin Time</td><td class="where">EnemyController</td><td class="num">2.5 s</td></tr>
-    <tr><td>Top Bounce</td><td class="where">EnemyController</td><td class="num">0.6</td></tr>
     <tr><td>Corpse Brightness</td><td class="where">EnemyController</td><td class="num">0.35</td></tr>
-    <tr><td>Settle Speed / Settle Time (getting up)</td><td class="where">CapsuleRagdollBody</td><td class="num">0.4 m/s / 0.75 s</td></tr>
+    <tr><td>Grab Pop Up / Grab Pop Out (the gun hops out of his hand)</td><td class="where">EnemyController</td><td class="num">3 / 2 m/s</td></tr>
+    <tr><td>Get Up Time (standing still after a fall)</td><td class="where">EnemyController</td><td class="num">1 s</td></tr>
+    <tr><td>Twist Limit / Turn Speed (his legs follow his aim)</td><td class="where">officer model · CharacterAnimator</td><td class="num">70° / 360°/s</td></tr>
+    <tr><td>Carry Point (gun held low, not aiming)</td><td class="where">officer model · CharacterAnimator</td><td class="num">0.2, 1, 0.35 m</td></tr>
+    <tr><td>Settle Speed / Settle Time (getting up)</td><td class="where">officer · SkeletonRagdollBody</td><td class="num">0.4 m/s / 0.75 s</td></tr>
     <tr class="group"><td colspan="3">Weight table</td></tr>
     <tr><td>Tiny / Small / Medium</td><td class="where">WeightTable asset</td><td class="num">10 / 20 / 30 kg</td></tr>
     <tr><td>Large / Huge</td><td class="where">WeightTable asset</td><td class="num">40 / 50 kg</td></tr>
@@ -246,16 +249,27 @@ a { color: var(--accent); }
   <li><strong>Movement and shooting are always on.</strong> Ruby can walk and fire while grabbing, pulling, spinning or charging a throw.</li>
   <li><strong>Nothing she does moves her.</strong> The chain never pulls or drags her. When a held object can't follow her, the chain stops her walk instead.</li>
   <li><strong>She feels weight when she walks into things.</strong> She pushes an object at her drag fraction (see <a href="#drag">Drag fraction</a>), so light crates slide away, heavy ones barely move, and anything 60 kg or heavier blocks her.</li>
-  <li><strong>She can be knocked down.</strong> Any hit at Knockdown Speed or faster ragdolls her: her whole body goes limp and tumbles, and she loses control. Once every part of her has come to rest, she gets up where she lies. If the hit kills her, she stays down.</li>
+  <li><strong>She can be knocked down.</strong> Any hit at Knockdown Speed or faster ragdolls her: her whole body goes limp and tumbles, and she loses control. Once every part of her has come to rest, she gets up where she lies.</li>
+  <li><strong>She comes back when she dies</strong> (an early revive, until a proper death and restart exist). She lies where she fell for 2 s (Revive Delay), then stands at her Revive Point, or where she started the level if none is set, with full health and the bullets she started with. The camera jumps there with her. The level is left as it is: dead officers stay dead, and those hunting her lose sight of her and search.</li>
   <li><strong>Bullets push her.</strong> An officer's shot shoves her away from the shooter. A shot she survives pushes her back about 4 m/s, fading within a fifth of a second, and she keeps full control; a wall or the chain stops the push like a step. A killing shot lands the push on the part of her body it hit, so a chest shot knocks her over backward and a shoulder shot twists her as she falls. Today every pistol shot kills her, so only the second case shows.</li>
 </ul>
 
-<h3 id="ruby-ragdoll">Ruby's ragdoll</h3>
-<p>Ruby falls on her model's own skeleton, not a capsule. Standing, she's a slim capsule driven by her animation. Knocked down, her limbs take over, and the capsule follows her hips, so the camera and officers keep track of her. The limbs share her 60 kg in fixed proportions from Unity's Ragdoll Wizard (the hips heaviest, the arms and head lightest), so whatever meets her body meets one limb at a time, at that limb's weight. An officer walking into her shoves her limbs aside instead of being blocked.</p>
+<h3 id="ruby-ragdoll">Ruby's and the officers' ragdolls</h3>
+<p>Ruby falls on her model's own skeleton, not a capsule, and so do officers. Standing, she's a slim capsule driven by her animation. Knocked down, her limbs take over, and the capsule follows her hips, so the camera and officers keep track of her. The limbs share her 60 kg in fixed proportions from Unity's Ragdoll Wizard (the hips heaviest, the arms and head lightest), so whatever meets her body meets one limb at a time, at that limb's weight. An officer walking into her shoves her limbs aside instead of being blocked.</p>
 <ul>
   <li><strong>Any humanoid model works.</strong> Import it with a Humanoid rig and Optimize Game Objects off, run Unity's Ragdoll Wizard on the model prefab, and give each bone an Impact Damage. <code>SkeletonRagdollBody</code>, on Ruby's root beside her capsule, finds the rest itself; there's nothing to wire.</li>
   <li><strong>Her limbs take hits.</strong> While she's down, each limb is hurt by impacts like any body, at its own weight and once per contact, so a crate striking two limbs hits her twice. Her own limbs striking each other as she falls don't count.</li>
-  <li>Officers still ragdoll as capsules, because a spinning top isn't a limp body. Giving them skeletons is a separate piece of work.</li>
+  <li><strong>The wizard strips colliders.</strong> Unity's Ragdoll Wizard deletes every collider, Rigidbody and joint under the bones it sets up, so a gun held in a hand loses its collider and later falls through the floor. After running it, restore the gun's collider.</li>
+  <li><strong>Officers fall limp</strong> when thrown, knocked down or killed, the same way. On the chain, though, an officer is tied upright in one piece (see <a href="#ragdoll">Grabbed</a>).</li>
+</ul>
+
+<h3 id="ruby-turning">How Ruby turns</h3>
+<p>Ruby's body, shots and whip turn to the cursor the instant it moves; only her pose follows a moment behind, to read naturally.</p>
+<ul>
+  <li><strong>Standing still,</strong> her head and chest twist toward where she aims. Once that's more than 60° from her feet, her chest pulls her legs round with it, and her feet step round the rest of the way. Running, her legs swing to face where she aims, and she strafes or backpedals when she moves another way.</li>
+  <li><strong>Her left arm points her gun</strong> straight out where she aims, level, however close or far the cursor is. It swings round a moment after her aim, but the instant she fires it snaps onto the cursor, so every bullet leaves the barrel and flies along it. Her left hand is closed around the gun.</li>
+  <li><strong>She never looks down.</strong> Her pose aims along a level heading, never at the floor under the cursor, and it holds steady while the cursor is within 1.5 m of her, so small mouse moves close to her don't set her twisting.</li>
+  <li><strong>Turning right round,</strong> she turns the way her gun hand leads (left), so her arm sweeps round in front of her instead of crossing her body.</li>
 </ul>
 
 <h3 id="drag">Drag fraction</h3>
@@ -297,13 +311,13 @@ a { color: var(--accent); }
 <h4>Grabbing</h4>
 <ul>
   <li><strong>Right click</strong> launches the whip at the node marked by the white aim orb.</li>
-  <li>The orb marks the free node <strong>nearest the cursor</strong>, within 3 m of it (Snap Radius) and within 8 m of Ruby. Clicking far from every node grabs nothing.</li>
+  <li>The orb marks the free node <strong>nearest the cursor</strong>, within 3 m of it (Snap Radius) and within 7 m of Ruby. Clicking far from every node grabs nothing.</li>
   <li><strong>The whip can't grab through walls.</strong> Only walls and Immovable objects block it. Crates and enemies don't, though the chain catches on them once attached.</li>
   <li>The chain wraps around corners. Ruby's limit is measured along the wrapped chain.</li>
 </ul>
 
 <h4>Walking on the chain</h4>
-<p>Walking toward the node gives the chain slack. Walking away tightens it until it reaches its limit: the current length while Pull is held, or the full 8 m when it isn't. At the limit Ruby drags the object behind her at her drag fraction. If the object can't follow, because it's fixed, wedged against a wall or too heavy, she stops.</p>
+<p>Walking toward the node gives the chain slack. Walking away tightens it until it reaches its limit: the current length while Pull is held, or the full 7 m when it isn't. At the limit Ruby drags the object behind her at her drag fraction. If the object can't follow, because it's fixed, wedged against a wall or too heavy, she stops.</p>
 <div class="eq-name">Ruby's speed away from the node</div>
 <div class="eq">
 <math display="block">
@@ -368,13 +382,13 @@ a { color: var(--accent); }
 <p>The throw replaces whatever speed the object had, so the same cursor position always sends it the same way, wherever it is in a swing.</p>
 
 <h4>Spinning</h4>
-<p>Holding Pull reels the object all the way in to the minimum length (1.2 m, or more for a big object so it clears Ruby). If it weighs <strong>60 kg or less</strong>, it then spins around her. Ruby is the pivot: she keeps walking freely and carries the spin with her, and the spinning object passes through her.</p>
+<p>Holding Pull reels the object all the way in to the minimum length (1 m, or more for a big object so it clears Ruby). If it weighs <strong>60 kg or less</strong>, it then spins around her. Ruby is the pivot: she keeps walking freely and carries the spin with her, and the spinning object passes through her.</p>
 <div class="eq-name">Spin rev-up, every physics step</div>
 <div class="eq">
 <math display="block"><mrow><mtext>New Spin</mtext><mo>=</mo> <mtext>Current Spin</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mo>(</mo><mtext>Spin Speed</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><mtext>Current Spin</mtext><mo>)</mo><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Rev Share</mtext></mrow></math>
 <math display="block"><mrow><mtext>Rev Share</mtext><mo>=</mo> <mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">−</mo><mspace width="0.22em"/><msup><mi>e</mi><mrow><mo>−</mo><mn>3</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Physics Step</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">÷</mo><mspace width="0.22em"/><mtext>Spin Up Time</mtext></mrow></msup></mrow></math>
 </div>
-<p>The spin closes about 3% of the gap to Spin Speed every step and reaches 95% of 40 m/s after one second, like an arm winding up. At full speed on a 1.2 m chain, the object goes round about <strong>5.3 times a second</strong>. Spin speed doesn't depend on weight, and the spin ignores where Ruby aims.</p>
+<p>The spin closes about 3% of the gap to Spin Speed every step and reaches 95% of 32 m/s after one second, like an arm winding up. At full speed on a 1 m chain, the object goes round about <strong>5.1 times a second</strong>. Spin speed doesn't depend on weight, and the spin ignores where Ruby aims.</p>
 <div class="eq-name">Holding the spin on its circle</div>
 <div class="eq">
 <math display="block">
@@ -384,7 +398,7 @@ a { color: var(--accent); }
   </mrow>
 </math>
 </div>
-<p>While spinning, the chain's correction limit is raised by exactly this much, so a fast spin never stretches loose. At 40 m/s on a 1.2 m chain that's 13.3 m/s, on top of the normal 20 m/s limit.</p>
+<p>While spinning, the chain's correction limit is raised by exactly this much, so a fast spin never stretches loose. At 32 m/s on a 1 m chain that's 10.2 m/s, on top of the normal 20 m/s limit.</p>
 <div class="eq-name">Bouncing off walls</div>
 <div class="eq">
 <math display="block"><mrow><mtext>Expected Speed</mtext><mo>=</mo> <mfrac><mtext>Current Spin</mtext><msqrt><mrow><mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><msup><mrow><mo>(</mo><mtext>Current Spin</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Physics Step</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">÷</mo><mspace width="0.22em"/><mtext>Chain Length</mtext><mo>)</mo></mrow><mn>2</mn></msup></mrow></msqrt></mfrac></mrow></math>
@@ -393,10 +407,10 @@ a { color: var(--accent); }
 <p>A spinning object bounces when, in one step, it keeps <strong>less than half</strong> of its expected speed <strong>and</strong> touches something wall-like: a wall, the side of a crate or an enemy. Scraping the floor doesn't count. It reverses direction, keeps 70% of its speed and revs back up. A swung enemy that hits a wall at Knockdown Speed or faster takes impact damage.</p>
 
 <h4>Letting go of a spin</h4>
-<p>A right-click tap while spinning lets go. The object keeps its speed but is turned onto Ruby's aim, so it flies where she points. A spun enemy flies out as a spinning top (see <a href="#ragdoll">Ragdoll</a>). At 40 m/s it's well above Knockdown Speed and hurts whatever it hits.</p>
+<p>A right-click tap while spinning lets go. The object keeps its speed but is turned onto Ruby's aim, so it flies where she points. A spun officer flies out limp, tumbling (see <a href="#ragdoll">Ragdoll</a>). At 32 m/s it's well above Knockdown Speed and hurts whatever it hits.</p>
 
 <h3>Revolver</h3>
-<p>For now Ruby carries the officers' pistol model in her left hand. Shots leave its muzzle and fly flat toward the cursor, wherever her hand is in its swing. The gun stays in her hand when she's knocked down.</p>
+<p>For now Ruby carries the officers' pistol model in her left hand. Pulling the trigger snaps her gun arm onto the cursor, and the shot leaves the muzzle in that same frame and flies flat to the cursor: a bullet always comes out of the barrel and goes where she aims, however fast the cursor moved. There's no delay. The gun stays in her hand when she's knocked down.</p>
 <p>Semi-automatic: one shot per pull of the trigger, and holding it does nothing. It holds six bullets (Bullet Count) and stops firing when they run out. The revolver fires at all times, including while the chain is holding something. The one exception is charging a throw: while right click is held, left click throws instead of firing.</p>
 <div class="placeholder">
   <p><strong>Placeholder: revolver data.</strong> <span class="planned">Planned</span> To be filled in when the revolver is reworked:</p>
@@ -409,7 +423,8 @@ a { color: var(--accent); }
 </div>
 
 <h2 id="damage"><span class="num">6</span>Impact damage</h2>
-<p>Every hit in the game uses one formula: a thrown crate, an enemy swung into a wall, a spinning enemy hitting another, or anything fast hitting Ruby. Both bodies in a hit take damage. Walls and props have no health, so they only deal it. A hit counts once, when the contact begins.</p>
+<p>Every hit in the game uses one formula: a thrown crate, an enemy swung into a wall, a flung enemy hitting another, or anything fast hitting Ruby. Both bodies in a hit take damage. Walls and props have no health, so they only deal it. A hit counts once, when the contact begins.</p>
+<p><strong>Nothing on Ruby's chain hurts her.</strong> While she holds something, it can bump her but never damages or knocks her down, and she doesn't hurt it either: reeled in fast, or slipping out of her spin into her, it would otherwise hit hard enough. Once the chain lets go, it's an ordinary object again.</p>
 
 <div class="eq-name">Impact speed</div>
 <div class="eq">
@@ -453,7 +468,7 @@ a { color: var(--accent); }
     <tr><td>Tiny crate (10 kg)</td><td class="num">25 m/s</td><td class="num">0.41</td><td class="num">10.2</td><td>Knocked down, survives</td></tr>
     <tr><td>Small crate (20 kg)</td><td class="num">40 m/s</td><td class="num">0.58</td><td class="num">23.1</td><td>Dies</td></tr>
     <tr><td>Another officer (50 kg)</td><td class="num">25 m/s</td><td class="num">0.91</td><td class="num">22.8</td><td>Dies</td></tr>
-    <tr><td>A wall, swung at full spin (its own 50 kg)</td><td class="num">40 m/s</td><td class="num">0.91</td><td class="num">36.5</td><td>Dies</td></tr>
+    <tr><td>A wall, swung at full spin (its own 50 kg)</td><td class="num">32 m/s</td><td class="num">0.91</td><td class="num">29.2</td><td>Dies</td></tr>
   </tbody>
 </table>
 </div>
@@ -464,7 +479,29 @@ a { color: var(--accent); }
 <h2 id="enemies"><span class="num">7</span>Enemies</h2>
 
 <h3>Police officer</h3>
-<p>The demo's only enemy. Weighs 50 kg and has 20 health, and carries a pistol. Officers are placeholder capsules until real models arrive.</p>
+<p>The demo's only enemy. Weighs 50 kg and has 20 health, and carries a pistol in his right hand.</p>
+
+<h3 id="officer-animation">How an officer moves</h3>
+<p>Each moment has its own animation slot. Most hold stand-in animations from the current pack until real ones are made; the moments themselves are set.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Moment</th><th>His body</th><th>For now</th></tr></thead>
+  <tbody>
+    <tr><td>Patrolling, searching, holding a post</td><td>Gun at rest: a crouched raid walk, pistol held low</td><td>An ordinary walk, gun held low in front of him</td></tr>
+    <tr><td>Firing at Ruby (in sight and in range)</td><td>Upright, aiming, walking or backpedalling as he moves</td><td>A walk; his arm points the gun at Ruby</td></tr>
+    <tr><td>Closing in out of range, or out of sight</td><td>Running with the gun pointed down</td><td>A run, gun held low</td></tr>
+    <tr><td>Grabbed, alive or dead</td><td>Tied upright: pinned arms, wriggling (still, if dead)</td><td>Standing idle</td></tr>
+    <tr><td>Thrown, let go, knocked down, or dead</td><td>Limp, tumbling</td><td>Same</td></tr>
+    <tr><td>Getting up after a fall</td><td>A get-up</td><td>Standing still for 1 s</td></tr>
+    <tr><td>Unarmed</td><td>An ordinary walk and run</td><td>Same</td></tr>
+  </tbody>
+</table>
+</div>
+<ul>
+  <li><strong>Turning to aim:</strong> standing and firing, his chest twists toward Ruby as she moves, up to 70°; past that his chest pulls his legs round with it, and his feet step round to face her.</li>
+  <li><strong>The grab:</strong> the chain knocks his pistol out of his hand with a small hop.</li>
+  <li><strong>Getting up:</strong> after a fall he stands still for a second, unable to move or shoot, then hunts again. A hard enough hit during that second puts him down again.</li>
+</ul>
 
 <h3>Pistol</h3>
 <ul>
@@ -472,7 +509,7 @@ a { color: var(--accent); }
   <li><strong>Fires on the move.</strong> An armed officer keeps hunting and fires every 0.6 s whenever Ruby is in sight within 12.5 m and on her feet. There's no wind-up. Once she's down, officers lower their guns.</li>
   <li><strong>Keeps its distance.</strong> With Ruby in sight, an armed officer closes in only to 5 m and holds between 5 and 6 m. If she comes closer it backs away, still facing her and firing. Cornered, it holds its ground. Ruby walks faster than it backs off, so she can still run a gunman down.</li>
   <li><strong>What stops a bullet:</strong> walls, crates and props, Ruby, and anything Ruby holds on the chain. A held officer or corpse is a shield. Free officers and resting corpses let bullets through, so there's no friendly fire.</li>
-  <li><strong>Drops.</strong> An officer drops its pistol when the chain grabs it, when it's knocked down, and when it dies. The gun keeps the officer's momentum and skids, so a knockdown sends it flying. It never starts inside or passes through a wall.</li>
+  <li><strong>Drops.</strong> An officer drops its pistol when it's knocked down and when it dies; the gun keeps the officer's momentum and skids, so a knockdown sends it flying. When the chain grabs him, it pops out of his hand with a small hop instead. It never starts inside or passes through a wall.</li>
   <li><strong>A dropped pistol is a prop.</strong> The chain can grab, reel and throw it, but never take one out of a hand. Ruby can't pick one up or fire it.</li>
 </ul>
 <p>Officers see in a straight line from eye height. Walls, crates and tables block their sight; other characters don't. Windows are <span class="planned">Planned</span>.</p>
@@ -489,7 +526,7 @@ a { color: var(--accent); }
     <tr><td>Searching</td><td>AI</td><td>Lost Ruby</td><td>Sees Ruby → Aggro; 10 s pass → Idle or Patrol</td></tr>
     <tr><td>Rearm</td><td>AI</td><td>Unarmed, with a free gun within 10 m</td><td>Picks one up, or none left → Aggro</td></tr>
     <tr><td>Grabbed</td><td>Imposed</td><td>The whip lands on it</td><td>Thrown or dropped → Ragdoll</td></tr>
-    <tr><td>Ragdoll</td><td>Imposed</td><td>Knocked down, thrown or dropped</td><td>Settles → Aggro</td></tr>
+    <tr><td>Ragdoll</td><td>Imposed</td><td>Knocked down, thrown or dropped</td><td>Settles, gets up (1 s) → Aggro</td></tr>
     <tr><td>Dead</td><td>Imposed</td><td>Health reaches 0</td><td>Never</td></tr>
   </tbody>
 </table>
@@ -531,27 +568,15 @@ a { color: var(--accent); }
 
 <h4>Grabbed</h4>
 <ul>
-  <li>Held by Ruby's chain. It drops its pistol, and can't move on its own: it's dragged, reeled, spun and thrown like any object. While held it stops bullets, so Ruby can use it as a shield.</li>
-  <li>Thrown, it ragdolls and hits whatever it flies into.</li>
-  <li>Dropped with a quick right-click tap, it spins upright in place, winding down over 2.5 s. If Ruby was spinning it, it flies out along her aim as a spinning top instead.</li>
+  <li>Held by Ruby's chain, tied upright in one piece, even if it was already down or dead. Its pistol pops out of its hand, and it can't move on its own: it's dragged, reeled, spun and thrown like any object. While held it stops bullets, so Ruby can use it as a shield.</li>
+  <li>Thrown, it goes limp and hits whatever it flies into.</li>
+  <li>Dropped with a quick right-click tap, it falls limp where it is. If Ruby was spinning it, it flies out limp along her aim instead.</li>
 </ul>
 
 <h4 id="ragdoll">Ragdoll</h4>
 <ul>
-  <li>Knocked down, thrown or flung, the officer tumbles under physics. Once it settles, it gets up into Aggro.</li>
-  <li>A <strong>spinning</strong> officer is a top. When it hits another officer, the two trade momentum by weight: the top bounces off and keeps spinning, and the other is sent flying.</li>
+  <li>Knocked down, thrown or let go, the officer goes limp and tumbles on its own skeleton. Once it settles, it stands still for Get Up Time (1 s), then hunts in Aggro. A hit at Knockdown Speed during the get-up knocks it down again.</li>
 </ul>
-<div class="eq-name">Spinning top hit</div>
-<div class="eq">
-<math display="block">
-  <mrow>
-    <mtext>Struck Officer's Speed Change</mtext><mo>=</mo>
-    <mo>(</mo><mn>1</mn><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mtext>Top Bounce</mtext><mo>)</mo><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/>
-    <mfrac><mtext>Top's Weight</mtext><mrow><mtext>Top's Weight</mtext><mspace width="0.22em"/><mo lspace="0" rspace="0">+</mo><mspace width="0.22em"/><mtext>Struck Officer's Weight</mtext></mrow></mfrac><mspace width="0.22em"/><mo lspace="0" rspace="0">×</mo><mspace width="0.22em"/><mtext>Closing Speed</mtext>
-  </mrow>
-</math>
-</div>
-<p>Whether the struck officer is knocked down is decided by Knockdown Speed, like any other hit, so a slow graze only shoves it.</p>
 
 <h4>Dead</h4>
 <ul>

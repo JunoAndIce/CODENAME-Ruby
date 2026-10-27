@@ -16,6 +16,19 @@ static class Footprint
         return solid.ToArray();
     }
 
+    /// <summary>
+    /// Every collider the body collides through right now: enabled, solid and active, child bodies'
+    /// included. A limp character collides through its bones, which are child bodies, rather than
+    /// its own capsule.
+    /// </summary>
+    public static Collider[] BodyColliders(Rigidbody body)
+    {
+        var colliders = new List<Collider>();
+        foreach (Collider collider in body.GetComponentsInChildren<Collider>())
+            if (collider.enabled && !collider.isTrigger) colliders.Add(collider);
+        return colliders.ToArray();
+    }
+
     /// <summary>How far colliders reach across the floor from a point: each collider's
     /// footprint radius, plus how far its centre sits from the point.</summary>
     public static float Reach(Collider[] colliders, Vector3 from)

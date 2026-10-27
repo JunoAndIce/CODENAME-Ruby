@@ -3,6 +3,11 @@ using UnityEngine;
 /// <summary>
 /// A semi-auto revolver: it fires on the trigger's rising edge, so holding does nothing. Shots
 /// leave the Fire Point (the muzzle of the gun in her hand) and fly flat toward her aim.
+///
+/// The pull snaps her arm onto the cursor (CharacterAnimator.SnapToTarget) and the bullet leaves in
+/// LateUpdate, once that frame's pose is on. Her arm otherwise swings after her aim, and a shot from
+/// wherever the muzzle had got to left from her side or behind her, crossing the barrel, so the
+/// player couldn't tell where a bullet would come from or go.
 /// </summary>
 public class GunController : MonoBehaviour
 {
@@ -17,8 +22,10 @@ public class GunController : MonoBehaviour
     public float _timeBetweenShots;
     public Transform _firePoint;
 
+    private CharacterAnimator _pose;
     private float _shotsCounter;
     private bool _triggerWasPressed;
+    private bool _firing;   // pulled this frame: the bullet leaves in LateUpdate
 
     void Awake()
     {
@@ -28,7 +35,10 @@ public class GunController : MonoBehaviour
         {
             Debug.LogError($"{name}: GunController needs a PlayerController above it (or in Player) and a Fire Point — it can't fire.", this);
             enabled = false;
+            return;
         }
+        // Her model, which the hand bone is under. Without one, shots leave the muzzle where it is.
+        _pose = GetComponentInParent<CharacterAnimator>();
     }
 
     void Update()
@@ -41,6 +51,15 @@ public class GunController : MonoBehaviour
         // A pull during a charge is dropped, not queued: semi-auto means pulling again after.
         if (!pulled || _shotsCounter > 0f || _player._bulletCount <= 0 || !_player.CanShoot) return;
 
+        // Before the animation runs this frame, so the arm is on the cursor when the bullet leaves.
+        if (_pose != null) _pose.SnapToTarget();
+        _firing = true;
+    }
+
+    void LateUpdate()
+    {
+        if (!_firing) return;
+        _firing = false;
         Fire();
     }
 

@@ -3,7 +3,7 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(CapsuleCollider))]
 [RequireComponent(typeof(Health))]
-public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown, IBulletTarget
+public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown, IBulletTarget, IAnimatedCharacter
 {
     [Header("Movement")]
     [SerializeField] private float _chaseSpeed = 2f;
@@ -21,15 +21,15 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _eyeHeight = 0.5f;
     [SerializeField] private float _searchDuration = 5f;
 
-    [Header("Dropped")]
-    [Tooltip("An enemy let go while being spun always flings out. One that wasn't (being dragged, say) flings if it's moving at least this fast across the floor, and otherwise spins in place.")]
-    [SerializeField, Min(0f)] private float _dropFlingSpeed = 3f;
-    [Tooltip("How fast a dropped enemy starts spinning, upright, in radians per second.")]
-    [SerializeField, Min(0f)] private float _dropSpinSpeed = 12f;
-    [Tooltip("Seconds the spin takes to wind down to a stop, after which the enemy is back in Aggro.")]
-    [SerializeField, Min(0f)] private float _dropSpinTime = 3f;
-    [Tooltip("How bouncy a spinning enemy's hit on another enemy is: 0 stops dead along the hit, 1 keeps all the speed.")]
-    [SerializeField, Range(0f, 1f)] private float _topBounce = 0.6f;
+    [Header("Grabbed")]
+    [Tooltip("How fast the gun pops up out of the officer's hand when the chain grabs him, in m/s: a small hop, to sell the grab.")]
+    [SerializeField, Min(0f)] private float _grabPopUp = 3f;
+    [Tooltip("How fast the popped gun moves away from his body, in m/s, so it clears his hands.")]
+    [SerializeField, Min(0f)] private float _grabPopOut = 2f;
+
+    [Header("Getting up")]
+    [Tooltip("Seconds a surviving enemy stands getting up after a fall, unable to move or shoot, before it hunts again.")]
+    [SerializeField, Min(0f)] private float _getUpTime = 1f;
 
     [Header("Dead")]
     [Tooltip("How bright a corpse's colours are, as a share of the living enemy's, so the dead read at a glance.")]
@@ -54,13 +54,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private readonly StateMachine _state = new();
     private CapsuleCollider _capsule;
-    // Velocity going into this physics step. Collision callbacks arrive after the solver has
-    // already spent the speed, so a hit is worked out from this, not from the body.
-    private Vector3 _preStepVelocity;
+    private float _intendedSpeed;   // the last move's speed, 0 once stopped
     private float _nextRearm;   // after giving up on a gun, no new attempt before this time
-    // Creation order, so exactly one of two colliding tops handles their hit.
-    private static int _created;
-    private int _order;
 
     public Rigidbody Body { get; private set; }
     public Health Health { get; private set; }
@@ -88,6 +83,17 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (Arms != null) Arms.Drop(Body.linearVelocity);
     }
 
+    // The grab knocks the gun out of his hand: a small hop up and away from his body, on top of
+    // how he was moving.
+    private void PopGun()
+    {
+        if (!IsArmed) return;
+        Vector3 outward = Arms.HeldGun.transform.position - transform.position;
+        outward.y = 0f;
+        outward = outward.sqrMagnitude > 0.0001f ? outward.normalized : transform.forward;
+        Arms.Drop(Body.linearVelocity + outward * _grabPopOut + Vector3.up * _grabPopUp);
+    }
+
     /// <summary>
     /// After giving up on every gun in reach, wait Route Retry Time before looking again. Without
     /// it, an enemy with only unreachable guns around would flicker between hunting and re-arming.
@@ -101,19 +107,39 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float SearchSpeed => _searchSpeed;
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
-    public float DropSpinSpeed => _dropSpinSpeed;
-    public float DropSpinTime => _dropSpinTime;
     public PatrolRoute SafeRoute => _safeRoute;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
     public float RearmRadius => _rearmRadius;
+    public float GetUpTime => _getUpTime;
     /// <summary>The body capsule's radius in world units: how far its surface sits from its centre.</summary>
     public float BodyRadius => _capsule.radius * Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.z));
     public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
-    /// <summary>Ragdolling in an upright spin: a spinning top that knocks other enemies away.</summary>
-    public bool IsTop => _state.Current == Ragdoll && RagdollBody.IsSpinning;
+
+    /// <summary>The speed of the last move it was told to make, 0 once stopped: how fast it's trying to go.</summary>
+    public float MoveSpeed => _intendedSpeed;
+    public WeaponHold Weapon => IsArmed ? WeaponHold.Pistol : WeaponHold.None;
+
+    /// <summary>What its body is doing, for its animation. Firing, it aims; moving otherwise, it runs.</summary>
+    public AnimStance Stance => _state.Current switch
+    {
+        AggroState => Aggro.Firing ? AnimStance.Aim : _intendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
+        RearmState => _intendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
+        GrabbedState => AnimStance.Restrained,
+        RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen,
+        // Tied upright on the chain, a corpse is restrained like the living; off it, it keeps its pose.
+        DeadState => IsHeld ? AnimStance.Restrained : AnimStance.Frozen,
+        _ => AnimStance.Rest,
+    };
+
+    /// <summary>Ruby, while it's aiming at her.</summary>
+    public bool TryFindTarget(out Vector3 point)
+    {
+        point = _player != null ? _player.transform.position : default;
+        return _player != null && Stance == AnimStance.Aim;
+    }
     /// <summary>
     /// Where the hunt was leading when aggro ended, which is where search goes. Aggro keeps
     /// tracking the player for Aggro Time after losing contact, so this is where they went, not
@@ -133,7 +159,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     {
         Body = GetComponent<Rigidbody>();
         _capsule = GetComponent<CapsuleCollider>();
-        _order = ++_created;
         Health = GetComponent<Health>();
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
@@ -173,7 +198,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         At(Searching, Patrol, new FuncPredicate(() => Searching.SearchExpired && HasPatrolRoute));
         At(Searching, Idle, new FuncPredicate(() => Searching.SearchExpired && !HasPatrolRoute));
 
-        At(Ragdoll, Aggro, new FuncPredicate(() => RagdollBody.IsSettled && !Health.IsDead));
+        At(Ragdoll, Aggro, new FuncPredicate(() => Ragdoll.GotUp && !Health.IsDead));
 
         Any(Dead, new FuncPredicate(() => Health.IsDead));
     }
@@ -203,48 +228,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private void FixedUpdate()
     {
         _state.FixedTick();
-        _preStepVelocity = Body.linearVelocity;
-    }
-
-    // A spinning top that hits another enemy trades momentum with it along the line between them,
-    // by weight, at Top Bounce: it bounces off and keeps spinning, and the one it hit is sent off
-    // at its share. Whether that knocks it down is ImpactDamage's call, by the shared Knockdown
-    // Speed, so a slow graze only shoves. Each pair is handled once: the top, or of two tops, the
-    // one created first.
-    private void OnCollisionEnter(Collision collision)
-    {
-        if (!IsTop || collision.rigidbody == null) return;
-        if (!collision.rigidbody.TryGetComponent(out EnemyController other)) return;
-        if (other.Health.IsDead || other._state.Current == other.Grabbed) return;
-        if (other.IsTop && other._order < _order) return;
-
-        Vector3 n = other.Body.position - Body.position;
-        n.y = 0f;
-        if (n.sqrMagnitude < 0.0001f) return;
-        n.Normalize();
-
-        Vector3 vTop = _preStepVelocity;
-        Vector3 vOther = other._preStepVelocity;
-        float approach = Vector3.Dot(vTop - vOther, n);
-        if (approach <= 0f) return;
-
-        float mTop = Body.mass;
-        float mOther = other.Body.mass;
-        float exchange = (1f + _topBounce) * approach / (mTop + mOther);
-        Vector3 topAfter = vTop - n * (exchange * mOther);
-        Vector3 otherAfter = vOther + n * (exchange * mTop);
-
-        RagdollBody.Push(new Vector3(topAfter.x, Body.linearVelocity.y, topAfter.z));
-        other.TakeHit(new Vector3(otherAfter.x, other.Body.linearVelocity.y, otherAfter.z));
-    }
-
-    // Already ragdolling (a top or a tumble), it keeps doing that at the new velocity. On its feet
-    // it's shoved: its AI takes the body back next step, unless the hit also knocked it down, in
-    // which case the knockdown launches it at this velocity, whichever callback runs first.
-    private void TakeHit(Vector3 velocity)
-    {
-        if (_state.Current == Ragdoll) RagdollBody.Push(velocity);
-        else Body.linearVelocity = velocity;
     }
 
     /// <summary>
@@ -254,7 +237,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public void KnockDown()
     {
-        if (Health.IsDead || _state.Current is GrabbedState or RagdollState or DeadState) return;
+        if (Health.IsDead || _state.Current is GrabbedState or DeadState) return;
+        if (_state.Current == Ragdoll)
+        {
+            // Getting up, it's on its feet, so a hard enough hit floors it again, as it would anyone
+            // standing. SetState can't re-enter Ragdoll, so the state is relaunched instead.
+            if (Ragdoll.Standing) Ragdoll.Relaunch(VelocityUtil.Flatten(Body.linearVelocity));
+            return;
+        }
         DropGun();
         Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity));
         _state.SetState(Ragdoll);
@@ -275,16 +265,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     public void EnterGrabbed()
     {
-        DropGun();
+        PopGun();
         IsHeld = true;
         if (Health.IsDead) Dead.Grab();
         else _state.SetState(Grabbed);
     }
 
     /// <summary>
-    /// Rope let go without a throw (dropped, or the node destroyed): the enemy spins upright until
-    /// the spin winds down, then is back in Aggro. A spun enemy flings out on its momentum while it
-    /// spins, turning the way it orbited; a slower one spins where it stands. A corpse just tumbles.
+    /// Rope let go without a throw (dropped, or the node destroyed): it falls, limp, at the speed it
+    /// had. Let go while spun (`wasSpun`), the grapple has already turned that speed onto Ruby's aim,
+    /// so it flies out along it; otherwise it crumples. A corpse just tumbles.
     /// </summary>
     public void EndGrab(bool wasSpun)
     {
@@ -296,19 +286,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         }
         if (_state.Current != Grabbed) return;
 
-        // Being spun always flings: a speed test alone would be a coin flip whenever Drop Fling
-        // Speed sits near Spin Speed, since the spin's measured speed wobbles each step.
-        Vector3 velocity = VelocityUtil.Flatten(Body.linearVelocity);
-        bool flung = wasSpun || velocity.magnitude >= _dropFlingSpeed;
-        float direction = 1f;
-        if (flung && _player != null)
-        {
-            // For a body orbiting a point, (offset × velocity).y has the sign of its turn.
-            Vector3 offset = transform.position - _player.transform.position;
-            direction = Vector3.Cross(offset, velocity).y >= 0f ? 1f : -1f;
-        }
-
-        Ragdoll.Spin(flung ? velocity : Vector3.zero, direction);
+        Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity));
         _state.SetState(Ragdoll);
     }
 
@@ -357,6 +335,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     public void MoveToward(Vector3 target, float speed)
     {
+        _intendedSpeed = speed;
         Vector3 direction = target - transform.position;
         direction.y = 0f;
 
@@ -371,6 +350,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public void StepAway(Vector3 spot, float speed)
     {
+        _intendedSpeed = speed;
         FaceTarget();
         Vector3 direction = spot - transform.position;
         direction.y = 0f;
@@ -423,7 +403,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (_player != null) Navigator.ChaseTo(_player.transform, speed);
     }
 
-    public void Stop() => VelocityUtil.SetFlatVelocity(Body, Vector3.zero);
+    public void Stop()
+    {
+        _intendedSpeed = 0f;
+        VelocityUtil.SetFlatVelocity(Body, Vector3.zero);
+    }
 
     private Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
 

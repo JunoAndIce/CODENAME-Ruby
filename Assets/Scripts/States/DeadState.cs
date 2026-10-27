@@ -26,7 +26,7 @@ public class DeadState : EnemyStateBase
             return;
         }
 
-        // Killed while already tumbling or spinning, it carries on; standing, it falls where the hit left it.
+        // Killed while already tumbling, it carries on; standing, it falls where the hit left it.
         if (!Enemy.RagdollBody.IsRagdolling) Enemy.RagdollBody.Ragdoll(VelocityUtil.Flatten(Enemy.Body.linearVelocity));
         _body = Body.Loose;
     }
@@ -39,7 +39,7 @@ public class DeadState : EnemyStateBase
         _body = Body.AtRest;
     }
 
-    /// <summary>The chain has it: solid and limp, for the rope to move.</summary>
+    /// <summary>The chain has it: stood up, tied upright in one piece, for the rope to move.</summary>
     public void Grab()
     {
         Enemy.RagdollBody.Hold();

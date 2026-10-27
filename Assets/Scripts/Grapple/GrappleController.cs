@@ -423,19 +423,10 @@ public class GrappleController : MonoBehaviour
     void Detach(string reason, bool trail = false, bool thrown = false)
     {
         _tether.End();
-        // Knocked down, she's about to lie on her limbs, not the capsule a pass-through would cover.
-        bool passThrough = _user.CanAct;
-        if (thrown)
-        {
-            if (passThrough) _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
-        }
-        else if (_tether.IsParked)
-        {
-            // Letting go of a spin sends the host along the aim, as a throw would, and like a throw
-            // it may start behind her, so it passes through her for a moment too.
-            _tether.AimRelease(AimDirection());
-            if (passThrough) _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
-        }
+        bool parked = _tether.IsParked;
+        // Letting go of a spin sends the host along the aim, as a throw would, and like a throw
+        // it may start behind her, so it passes through her for a moment too (below).
+        if (!thrown && parked) _tether.AimRelease(AimDirection());
         // Without this, a pull crack pending at detach would bite the next chain.
         _crackTimer = 0f;
         _charging = false;
@@ -447,9 +438,14 @@ public class GrappleController : MonoBehaviour
         {
             // Tether.Throw has already set the host's velocity, so that velocity is the throw.
             if (thrown) _grabbed.Release(_grabbed.Body.linearVelocity);
-            else _grabbed.EndGrab(_tether.IsParked);
+            else _grabbed.EndGrab(parked);
             _grabbed = null;
         }
+        // Only now, once the host has been let go: an officer goes limp there, and his bones only
+        // switch on then. Unity drops an ignore pair set while a collider was off, so a window
+        // started before the let-go missed his limbs, and her own throw could knock her down.
+        // Knocked down, she's about to lie on her limbs, not the capsule a pass-through would cover.
+        if (_user.CanAct && (thrown || parked)) _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
         if (_tether.Node != null) _tether.Node.IsOccupied = false;
 
         TetherLog.Event($"DETACH  ({reason}) {_tether.Describe()}");
