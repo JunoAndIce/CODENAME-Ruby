@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(CapsuleCollider))]
@@ -11,9 +12,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _searchSpeed = 1.5f;
 
     [Header("Awareness")]
-    [Tooltip("Detects the player inside this radius, if in sight.")]
-    [SerializeField] private float _alertRadius = 12f;
-    [Tooltip("Aggro keeps contact inside this radius, if in sight.")]
+    [Tooltip("How far he sees in front of him, within View Angle, if in sight.")]
+    [FormerlySerializedAs("_alertRadius")] [SerializeField, Min(0f)] private float _viewRange = 12f;
+    [Tooltip("How wide the view in front of him is, in degrees, centred on his facing.")]
+    [SerializeField, Range(1f, 360f)] private float _viewAngle = 100f;
+    [Tooltip("Whichever way he faces, he notices Ruby this close, if in sight, so she can't stand right behind him.")]
+    [SerializeField, Min(0f)] private float _closeRadius = 2f;
+    [Tooltip("Aggro keeps contact inside this radius, if in sight. Sits outside View Range.")]
     [SerializeField] private float _giveUpRadius = 18f;
     [Tooltip("Seconds out of contact (out of sight, or beyond Give Up Radius) before aggro turns to searching.")]
     [SerializeField] private float _aggroTime = 1.5f;
@@ -182,6 +187,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // The whole transition graph, in one place. States never name each other.
     private void BuildTransitions()
     {
+        At(Idle, Aggro, new FuncPredicate(DetectsPlayer));
         At(Patrol, Aggro, new FuncPredicate(DetectsPlayer));
         At(Searching, Aggro, new FuncPredicate(DetectsPlayer));
 
@@ -411,8 +417,27 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
 
-    // Detection: close enough to notice, and in sight.
-    private bool DetectsPlayer() => DistanceToPlayer() <= _alertRadius && CanSeePlayer();
+    // Detection: noticed means in his view, and in sight.
+    private bool DetectsPlayer() => _player != null && InView(_player.transform.position) && CanSeePlayer();
+
+    /// <summary>
+    /// Whether a point is in his view: the cone in front of him out to View Range, or the close
+    /// circle all round, which is there so nobody can stand right behind him unnoticed. Measured
+    /// flat, and only the shape: whether anything blocks the line is CanSeePlayer's business.
+    /// </summary>
+    public bool InView(Vector3 point)
+    {
+        Vector3 offset = point - transform.position;
+        offset.y = 0f;
+        float distance = offset.magnitude;
+        if (distance <= _closeRadius) return true;
+        if (distance > _viewRange) return false;
+
+        // Flattened so a tilted body can't skew the angle; the same reason FaceTarget flattens.
+        Vector3 forward = transform.forward;
+        forward.y = 0f;
+        return Vector3.Angle(forward, offset) <= _viewAngle * 0.5f;
+    }
 
     /// <summary>Aggro's contact test: still within the give-up radius, and in sight.</summary>
     public bool InContactWithPlayer() => DistanceToPlayer() <= _giveUpRadius && CanSeePlayer();
@@ -470,8 +495,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private void OnValidate()
     {
-        // Give-up must sit outside alert, or the enemy aggros and de-aggros in the same frame.
-        _giveUpRadius = Mathf.Max(_giveUpRadius, _alertRadius + 1f);
+        // Give-up must sit outside view range, or the enemy aggros and de-aggros in the same frame.
+        _giveUpRadius = Mathf.Max(_giveUpRadius, _viewRange + 1f);
     }
 
     // Play-mode path overlay: visible in the Scene view without selecting the enemy.
@@ -486,8 +511,17 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private void OnDrawGizmosSelected()
     {
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, _alertRadius);
+        // The view, flat at eye height: green when the player is noticed, red when she's in the
+        // view but hidden, grey otherwise. Edit mode has no player to test, so it stays grey.
+        bool tracking = Application.isPlaying && _player != null;
+        bool inView = tracking && InView(_player.transform.position);
+        Gizmos.color = inView ? (CanSeePlayer() ? Color.green : Color.red) : Color.grey;
+        Vector3 eye = EyePosition;
+        Vector3 flatForward = transform.forward;
+        flatForward.y = 0f;
+        flatForward = flatForward.sqrMagnitude > 0.0001f ? flatForward.normalized : Vector3.forward;
+        DrawFlatCircle(eye, _closeRadius);
+        DrawFlatArc(eye, flatForward, _viewAngle, _viewRange);
 
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, _giveUpRadius);
@@ -538,6 +572,22 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             Gizmos.DrawWireCube(area.Centre, new Vector3(area.HalfSize.x * 2f, 0f, area.HalfSize.y * 2f));
         else
             DrawFlatCircle(area.Centre, area.HalfSize.x);
+    }
+
+    // A pie slice: the two edges and the rim between them, centred on forward.
+    private static void DrawFlatArc(Vector3 centre, Vector3 forward, float angle, float radius)
+    {
+        const int segments = 24;
+        Vector3 previous = centre + Quaternion.AngleAxis(-angle * 0.5f, Vector3.up) * forward * radius;
+        Gizmos.DrawLine(centre, previous);
+        for (int i = 1; i <= segments; i++)
+        {
+            float step = -angle * 0.5f + angle * i / segments;
+            Vector3 next = centre + Quaternion.AngleAxis(step, Vector3.up) * forward * radius;
+            Gizmos.DrawLine(previous, next);
+            previous = next;
+        }
+        Gizmos.DrawLine(centre, previous);
     }
 
     private static void DrawFlatCircle(Vector3 centre, float radius)
