@@ -90,6 +90,9 @@ public class Tether
     /// <summary>Whether the far end can move, and so can be thrown.</summary>
     public bool HasHost => _host != null;
 
+    /// <summary>The body on the far end, or null for the static world.</summary>
+    public Rigidbody Host => _host;
+
     /// <summary>The last solve had the host parked: held at min length, spinning around the player.</summary>
     public bool IsParked { get; private set; }
 
