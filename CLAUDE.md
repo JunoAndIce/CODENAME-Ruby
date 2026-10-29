@@ -369,8 +369,9 @@ through the player never slows the walk.
 - **Detection**: idle, patrolling or searching, with Ruby in his view **and** in sight → Aggro
   (`EnemyController.InView`, then `CanSeePlayer`). His view is a 100° cone out to View Range
   (12.5 m) in front of him, plus a 2 m Close Radius circle all round so she can't stand right
-  behind him; a body pitched straight up or down, off his feet, has no facing and so no cone, only
-  the circle. Idle officers aggro on sight like the rest; an unarmed one also goes for a free
+  behind him; with no horizontal facing there's no cone, only the circle. An officer's root never
+  pitches in play (its rotation is frozen and only ever turned about Y), so this only covers one
+  placed pitched in the scene. Idle officers aggro on sight like the rest; an unarmed one also goes for a free
   gun in reach. Aggro keeps contact all round, within Give Up Radius. Damage and getting up from
   a ragdoll (thrown or dropped) enter Aggro from any AI state.
 - **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
@@ -695,7 +696,7 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
   no colliders: a protruding child collider snags corners and makes the body far wider than it looks.
   The model can be big for readability; the capsule stays slim. The one exception is a ragdolled
   character: its bones' colliders take over while the capsule is off, never both at once.
-- `OnValidate` enforces invariants between serialized values (give-up radius outside alert radius, etc.).
+- `OnValidate` enforces invariants between serialized values (give-up radius outside view range and the close circle, etc.).
 - `OnDrawGizmosSelected` visualises radii, routes, paths and camera lead. Add gizmos for anything
   spatial you introduce.
 - Comments explain **why**, not what, and often name the failure mode being avoided. Match that.

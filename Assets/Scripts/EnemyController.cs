@@ -424,8 +424,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// Whether a point is in his view: the cone in front of him out to View Range, or the close
     /// circle all round, which is there so nobody can stand right behind him unnoticed. Measured
     /// flat, and only the shape: whether anything blocks the line is CanSeePlayer's business.
-    /// Pitched straight up or down, off his feet, he has no facing, so no cone: only the close
-    /// circle counts.
+    /// With no horizontal facing there's no cone: only the close circle counts. His root never
+    /// pitches in play (its rotation is frozen and only turned about Y), so this only covers an
+    /// officer placed pitched in the scene.
     /// </summary>
     public bool InView(Vector3 point)
     {
@@ -508,8 +509,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private void OnValidate()
     {
-        // Give-up must sit outside view range, or the enemy aggros and de-aggros in the same frame.
-        _giveUpRadius = Mathf.Max(_giveUpRadius, _viewRange + 1f);
+        // Give-up must sit outside both view range and the close circle, or the enemy aggros and
+        // de-aggros in the same frame.
+        _giveUpRadius = Mathf.Max(_giveUpRadius, Mathf.Max(_viewRange, _closeRadius) + 1f);
     }
 
     // Play-mode path overlay: visible in the Scene view without selecting the enemy.
