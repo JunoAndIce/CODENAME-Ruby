@@ -169,7 +169,7 @@ big circle. *(User: "Officers still have a small circle of aggro range around th
 Ruby can't sit directly behind them.")*
 
 - **The cone:** View Angle wide (default 100°, centred on the body's facing, `transform.forward`)
-  and View Range long (the current Alert Radius, 12 m), with a rounded far edge (every point at
+  and View Range long (the current Alert Radius, 12.5 m), with a rounded far edge (every point at
   View Range from him).
 - **The close circle:** Close Radius (default 2 m, *my call on the size*) all round him. Inside
   it he notices Ruby whichever way he faces. She can sneak up from behind, but she can't sit right
@@ -757,7 +757,7 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
 
 ## Progress
 
-- [ ] 1. The pie-shaped view
+- [x] 1. The pie-shaped view
 - [ ] 2. Knowledge: memory and the shared pool
 - [ ] 3. Senses and what they weigh
 - [ ] 4. Smaller states inside the main ones

@@ -366,10 +366,13 @@ through the player never slows the walk.
   never hide her). Unlike paths, sight is
   checked fresh every frame, so a crate or table can hide the player, while a prop lower than the eye
   line can't. Cached once per frame.
-- **Detection**: patrolling or searching, within Alert Radius **and** in sight → Aggro. **Idle
-  officers hold their post**: seeing Ruby doesn't move them, and only damage (or, unarmed, a free
-  gun in reach) does. That includes an officer with no route that went back to Idle after a search.
-  Damage and getting up from a ragdoll (thrown or dropped) enter Aggro from any AI state.
+- **Detection**: idle, patrolling or searching, with Ruby in his view **and** in sight → Aggro
+  (`EnemyController.InView`, then `CanSeePlayer`). His view is a 100° cone out to View Range
+  (12.5 m) in front of him, plus a 2 m Close Radius circle all round so she can't stand right
+  behind him; a body pitched straight up or down, off his feet, has no facing and so no cone, only
+  the circle. Idle officers aggro on sight like the rest; an unarmed one also goes for a free
+  gun in reach. Aggro keeps contact all round, within Give Up Radius. Damage and getting up from
+  a ragdoll (thrown or dropped) enter Aggro from any AI state.
 - **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
   sight, it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
   backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyController.StepAway`),

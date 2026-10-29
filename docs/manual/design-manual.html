@@ -217,7 +217,7 @@ a { color: var(--accent); }
     <tr><td>Weight</td><td class="where">WeightTable · Enemy</td><td class="num">50 kg</td></tr>
     <tr><td>Health</td><td class="where">Enemy prefab · Health</td><td class="num">20</td></tr>
     <tr><td>Chase / Patrol / Search Speed</td><td class="where">EnemyController</td><td class="num">10 / 7 / 6 m/s</td></tr>
-    <tr><td>Alert Radius / Give Up Radius</td><td class="where">EnemyController</td><td class="num">12.5 m / 16.5 m</td></tr>
+    <tr><td>View Range / View Angle / Close Radius / Give Up Radius</td><td class="where">EnemyController</td><td class="num">12.5 m / 100° / 2 m / 16.5 m</td></tr>
     <tr><td>Aggro Time / Search Duration</td><td class="where">EnemyController</td><td class="num">1.5 s / 10 s</td></tr>
     <tr><td>Eye Height</td><td class="where">EnemyController</td><td class="num">0.5 m</td></tr>
     <tr><td>Rearm Radius</td><td class="where">EnemyController</td><td class="num">10 m</td></tr>
@@ -512,7 +512,7 @@ a { color: var(--accent); }
   <li><strong>Drops.</strong> An officer drops its pistol when it's knocked down and when it dies; the gun keeps the officer's momentum and skids, so a knockdown sends it flying. When the chain grabs him, it pops out of his hand with a small hop instead. It never starts inside or passes through a wall.</li>
   <li><strong>A dropped pistol is a prop.</strong> The chain can grab, reel and throw it, but never take one out of a hand. Ruby can't pick one up or fire it.</li>
 </ul>
-<p>Officers see in a straight line from eye height. Walls, crates and tables block their sight; other characters don't. Windows are <span class="planned">Planned</span>.</p>
+<p>Officers see in a straight line from eye height. Walls, crates and tables block their sight; other characters don't. They notice Ruby only inside their view: a 100° cone in front of them out to 12.5 m, plus a 2 m circle all round, so she can't stand right behind one unnoticed. An officer knocked flat, with no facing, has no cone, only the circle. Windows are <span class="planned">Planned</span>.</p>
 
 <h3>States</h3>
 <p>An officer is always in exactly one state. Five are AI states it chooses for itself; three are done <em>to</em> it.</p>
@@ -520,7 +520,7 @@ a { color: var(--accent); }
 <table>
   <thead><tr><th>State</th><th>Kind</th><th>Enters when</th><th>Leaves when</th></tr></thead>
   <tbody>
-    <tr><td>Idle</td><td>AI</td><td>No patrol route</td><td>Is hurt → Aggro</td></tr>
+    <tr><td>Idle</td><td>AI</td><td>No patrol route</td><td>Sees Ruby or is hurt → Aggro</td></tr>
     <tr><td>Patrol</td><td>AI</td><td>Has a patrol route</td><td>Sees Ruby → Aggro</td></tr>
     <tr><td>Aggro</td><td>AI</td><td>Sees Ruby, is hurt, or gets up</td><td>Loses Ruby for 1.5 s → Searching</td></tr>
     <tr><td>Searching</td><td>AI</td><td>Lost Ruby</td><td>Sees Ruby → Aggro; 10 s pass → Idle or Patrol</td></tr>
@@ -533,7 +533,7 @@ a { color: var(--accent); }
 </div>
 
 <h4>Idle</h4>
-<p>Holds its post. Seeing Ruby doesn't move it: only being hurt sends it into Aggro, and an unarmed officer still goes for a free gun nearby. That includes an officer with no route that went back to Idle after a search.</p>
+<p>Holds its post until it sees Ruby or is hurt, either of which sends it into Aggro; an unarmed officer also goes for a free gun nearby. That includes an officer with no route that went back to Idle after a search.</p>
 
 <h4>Patrol</h4>
 <ul>
