@@ -26,6 +26,9 @@ public class Intel : MonoBehaviour
     private bool _pendingAlert;
     private bool _alertLogged;
     private bool _warnedNoGrid;
+    // Each enemy warns once about a setup problem, however often he speaks or is spoken to.
+    private readonly HashSet<EnemyController> _warnedNoReach = new();
+    private readonly HashSet<EnemyController> _warnedListenerNoGrid = new();
     private float _nextPublish;
 
     /// <summary>The pool as of the last publish. A new object each time, so one in hand never changes.</summary>
@@ -100,12 +103,26 @@ public class Intel : MonoBehaviour
         }
 
         FlowField reach = grid.FloodFrom(speaker.transform.position, _speechRange);
+        if (!reach.HasGoal)
+        {
+            if (_warnedNoReach.Add(speaker))
+                Debug.LogWarning($"{speaker.name}'s speech reaches no one: no walkable ground is within reach of where he stands (against a blocked cell?).", speaker);
+            return;
+        }
         RubyFact told = fact.WithSource(KnowledgeSource.Told);
         int heard = 0;
         foreach (EnemyController listener in _enemies)
         {
             if (listener == speaker || listener.Health.IsDead) continue;
-            if (PathGrid.At(listener.transform.position) != grid) continue;
+            PathGrid listenerGrid = PathGrid.At(listener.transform.position);
+            if (listenerGrid == null)
+            {
+                if (_warnedListenerNoGrid.Add(listener))
+                    Debug.LogWarning($"{listener.name} is on no PathGrid, so he can't hear speech.", listener);
+                continue;
+            }
+            // Another grid is another floor: floors are independent by design, so he simply doesn't hear.
+            if (listenerGrid != grid) continue;
             if (!reach.TryGetDistance(listener.transform.position, out float metres) || metres > _speechRange) continue;
 
             listener.Memory.Learn(told);

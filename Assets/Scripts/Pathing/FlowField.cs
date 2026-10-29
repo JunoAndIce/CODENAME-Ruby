@@ -42,6 +42,9 @@ public class FlowField
 
     public PathGrid Grid => _grid;
 
+    /// <summary>Whether the last flood found walkable ground at its goal. False means nothing was reached, so every distance query fails.</summary>
+    public bool HasGoal => _hasGoal;
+
     /// <summary>Flood from goal out to the grid's Max Flow Distance.</summary>
     public void Flood(Vector3 goal) => Flood(goal, _grid.MaxFlowDistance);
 
