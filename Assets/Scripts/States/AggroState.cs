@@ -29,6 +29,8 @@ public class AggroState : EnemyStateBase
         Firing = false;
         _lostTimer = 0f;
         _hadSight = Enemy.CanSeePlayer();
+        // Null-guarded: with no Intel in the scene the enemy has already logged the error.
+        if (Enemy.Intel != null) Enemy.Intel.ReportAggro(Enemy);
     }
 
     // The hunt tracks the player right up to here, so this is where a search should start.

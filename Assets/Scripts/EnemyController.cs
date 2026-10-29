@@ -25,6 +25,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("Height above the enemy's centre that sight is cast from.")]
     [SerializeField] private float _eyeHeight = 0.5f;
     [SerializeField] private float _searchDuration = 5f;
+    [Tooltip("While he sees Ruby, he calls out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
+    [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
 
     [Header("Grabbed")]
     [Tooltip("How fast the gun pops up out of the officer's hand when the chain grabs him, in m/s: a small hop, to sell the grab.")]
@@ -63,6 +65,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private float _nextRearm;   // after giving up on a gun, no new attempt before this time
 
     public Rigidbody Body { get; private set; }
+    /// <summary>What he knows about Ruby: his own sightings and what he was told.</summary>
+    public EnemyMemory Memory { get; private set; }
+    /// <summary>The scene's shared pool, or null when there is none (an error was logged at Start).</summary>
+    public Intel Intel { get; private set; }
     public Health Health { get; private set; }
     public IRagdollBody RagdollBody { get; private set; }
     public GridNavigator Navigator { get; private set; }
@@ -159,12 +165,17 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private int _sightFrame = -1;
     private bool _canSeePlayer;
     private Collider _sightBlocker;
+    private int _seesFrame = -1;
+    private bool _seesPlayer;
+    private bool _wasSeeing;
+    private float _nextSpeak;
 
     private void Awake()
     {
         Body = GetComponent<Rigidbody>();
         _capsule = GetComponent<CapsuleCollider>();
         Health = GetComponent<Health>();
+        Memory = new EnemyMemory();
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
@@ -219,6 +230,15 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     {
         if (_player == null) _player = FindAnyObjectByType<PlayerController>();
         _state.SetState(HasPatrolRoute ? Patrol : (EnemyStateBase)Idle);
+
+        Intel = FindAnyObjectByType<Intel>();
+        if (Intel == null) Debug.LogError($"{name}: no Intel in the scene — officers can't share what they see or hear each other.", this);
+        else Intel.Register(this);
+    }
+
+    private void OnDestroy()
+    {
+        if (Intel != null) Intel.Unregister(this);
     }
 
     private void OnEnable() => Health.OnDamaged += HandleDamaged;
@@ -228,6 +248,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private void Update()
     {
         _state.Tick();
+        UpdateKnowledge();
         DebugDrawPath();
     }
 
@@ -416,6 +437,41 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     }
 
     private Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
+
+    /// <summary>
+    /// Whether he has Ruby in his eyes this frame: noticed, or already hunting her and in contact.
+    /// Alive and on his feet only: a corpse, a held or a tumbling officer sees and says nothing.
+    /// Cached per frame, like CanSeePlayer.
+    /// </summary>
+    public bool SeesPlayer
+    {
+        get
+        {
+            if (_seesFrame == Time.frameCount) return _seesPlayer;
+            _seesFrame = Time.frameCount;
+            _seesPlayer = !Health.IsDead && _state.Current is not (GrabbedState or RagdollState or DeadState)
+                && (DetectsPlayer() || (_state.Current == Aggro && InContactWithPlayer()));
+            return _seesPlayer;
+        }
+    }
+
+    // Remembering and speaking aren't states: they run beside the machine. What he sees he knows at
+    // once; calling it out is bounded by Speak Interval so a long sighting isn't a shout per frame.
+    private void UpdateKnowledge()
+    {
+        bool sees = SeesPlayer;
+        if (sees)
+        {
+            var fact = new RubyFact(_player.transform.position, Time.time, KnowledgeSource.Seen);
+            Memory.Learn(fact);
+            if (Intel != null && (!_wasSeeing || Time.time >= _nextSpeak))
+            {
+                _nextSpeak = Time.time + _speakInterval;
+                Intel.Say(this, fact);
+            }
+        }
+        _wasSeeing = sees;
+    }
 
     // Detection: noticed means in his view, and in sight.
     private bool DetectsPlayer() => _player != null && InView(_player.transform.position) && CanSeePlayer();

@@ -41,6 +41,7 @@ public class PathGrid : MonoBehaviour
     private int _depth;         // cells along Z (Vector2Int.y throughout)
     private Vector3 _origin;    // min corner of cell (0,0), at floor height
     private readonly Dictionary<Transform, FlowField> _targetFields = new();
+    private FlowField _scratchField;     // FloodFrom's, one per grid so a query allocates nothing after the first
     private GridPathfinder _pathfinder;   // one per grid: searches run one at a time, so all agents share its scratch arrays
 
     // RandomSpotInArea's flood: visited when _areaMark[i] == _areaGeneration, so no clearing.
@@ -92,6 +93,18 @@ public class PathGrid : MonoBehaviour
             _targetFields.Add(target, field);
         }
         return field;
+    }
+
+    /// <summary>
+    /// Floods out to maxDistance path metres from source and returns the grid's one scratch field.
+    /// For one-off questions (who can hear this shout?): read it at once, because the next
+    /// FloodFrom on this grid overwrites it. Don't hold it, and don't follow it as a route.
+    /// </summary>
+    public FlowField FloodFrom(Vector3 source, float maxDistance)
+    {
+        _scratchField ??= new FlowField(this);
+        _scratchField.Flood(source, maxDistance);
+        return _scratchField;
     }
 
     /// <summary>A* from a point to a goal cell, as straight-line corners. See GridPathfinder.</summary>

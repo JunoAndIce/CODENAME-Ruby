@@ -5,7 +5,8 @@ using UnityEngine;
 /// Dijkstra distance field over a PathGrid: one flood from a goal, and any number of agents find
 /// their next step from neighbouring costs with no search of their own. That is why chase uses it.
 /// A field with a target follows it, re-flooding when the target changes cell; either kind
-/// re-floods when the grid changes. Re-floods are throttled.
+/// re-floods when the grid changes. Re-floods are throttled and keep the bound of the last
+/// flood, so a short-range field (speech) stays short-range when the grid changes.
 /// </summary>
 public class FlowField
 {
@@ -27,6 +28,7 @@ public class FlowField
     private Vector2Int _goalCell;
     private Vector2Int _floodedFrom;
     private Vector3 _floodedGoal;
+    private float _floodedMax;
     private int _floodedVersion;
     private float _nextRefresh;
 
@@ -40,11 +42,18 @@ public class FlowField
 
     public PathGrid Grid => _grid;
 
-    /// <summary>Flood from goal: every cell within the grid's Max Flow Distance learns its cost.</summary>
-    public void Flood(Vector3 goal)
+    /// <summary>Flood from goal out to the grid's Max Flow Distance.</summary>
+    public void Flood(Vector3 goal) => Flood(goal, _grid.MaxFlowDistance);
+
+    /// <summary>
+    /// Flood from goal: every cell within maxDistance path metres learns its cost. A smaller bound
+    /// than the grid's makes a cheap local flood (how far a shout carries); re-floods reuse it.
+    /// </summary>
+    public void Flood(Vector3 goal, float maxDistance)
     {
         _flooded = true;
         _floodedGoal = goal;
+        _floodedMax = maxDistance;
         _floodedVersion = _grid.Version;
         _generation++;   // invalidates every cost from the last flood without clearing arrays
         _open.Clear();
@@ -53,7 +62,7 @@ public class FlowField
         _hasGoal = _grid.NearestWalkable(_floodedFrom, SnapRadius, out _goalCell);
         if (!_hasGoal) return;
 
-        int maxCost = Mathf.RoundToInt(_grid.MaxFlowDistance / _grid.CellSize * StraightCost);
+        int maxCost = Mathf.RoundToInt(maxDistance / _grid.CellSize * StraightCost);
         int start = _grid.Index(_goalCell);
         SetCost(start, 0);
         _open.Push(start, 0);
@@ -75,6 +84,19 @@ public class FlowField
                 _open.Push(next, nextCost);
             }
         }
+    }
+
+    /// <summary>
+    /// Path metres from the goal to point, snapping point to walkable ground like an agent's start
+    /// (anything hugging a wall stands in a blocked cell). Reads the last flood and never re-floods,
+    /// so a caller that wants a fresh answer floods first. False when the point wasn't reached.
+    /// </summary>
+    public bool TryGetDistance(Vector3 point, out float metres)
+    {
+        metres = 0f;
+        if (!_flooded || !TryGetStartCell(point, out Vector2Int cell)) return false;
+        metres = _cost[_grid.Index(cell)] / (float)StraightCost * _grid.CellSize;
+        return true;
     }
 
     /// <summary>True when position stands in the goal's cell: as close as the grid can get.</summary>
@@ -124,7 +146,7 @@ public class FlowField
     {
         if (!_flooded)
         {
-            if (_target != null) Flood(_target.position);
+            if (_target != null) Flood(_target.position, _grid.MaxFlowDistance);
             return;
         }
 
@@ -135,7 +157,7 @@ public class FlowField
         if ((!targetMoved && !gridChanged) || Time.time < _nextRefresh) return;
 
         _nextRefresh = Time.time + RefreshInterval;
-        Flood(_target != null ? _target.position : _floodedGoal);
+        Flood(_target != null ? _target.position : _floodedGoal, _floodedMax);
     }
 
     private bool TryGetStartCell(Vector3 from, out Vector2Int cell)
