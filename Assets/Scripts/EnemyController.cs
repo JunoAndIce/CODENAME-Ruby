@@ -367,7 +367,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// own facing, so the first step after a pause or a ragdoll doesn't jump. Only walking curves:
     /// FaceTarget and StepAway still turn at once, because Aggro's facing is aim, not a bend.
     /// </summary>
-    public void MoveToward(Vector3 target, float speed)
+    public void MoveToward(Vector3 target, float speed, bool mustReach)
     {
         Vector3 direction = target - transform.position;
         direction.y = 0f;
@@ -378,8 +378,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         // Closer than 10 cm there is no direction worth turning to: keep the heading and speed.
         if (direction.sqrMagnitude > 0.01f)
         {
+            // Fit the speed only to a point he must reach. A flow-field step rolls ahead every
+            // step, so there is nothing to orbit and the cap would only slow a chase on ordinary bends.
+            if (mustReach)
+                fitted = Steering.SpeedToFit(speed, _turnSpeed, direction.magnitude, Vector3.Angle(heading, direction));
             heading = Steering.TurnToward(heading, direction, _turnSpeed * Time.fixedDeltaTime);
-            fitted = Steering.SpeedToFit(speed, _turnSpeed, direction.magnitude, Vector3.Angle(transform.forward, direction));
             transform.rotation = Quaternion.LookRotation(heading, Vector3.up);
         }
         else if (heading.sqrMagnitude > 0.0001f)

@@ -318,7 +318,7 @@ public class GridNavigator
     {
         _followed = followed;
         _lastWarning = null;
-        _agent.MoveToward(target, speed);
+        _agent.MoveToward(target, speed, followed != Followed.Field);
     }
 
     private bool TryGetGrid(out PathGrid grid)
