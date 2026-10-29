@@ -486,7 +486,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         bool sees = SeesPlayer;
         if (sees)
         {
-            var fact = new RubyFact(_player.transform.position, Time.time, KnowledgeSource.Seen);
+            var fact = new RubyFact(_player.transform.position, Time.time, Knowledge.Seen);
             Memory.Learn(fact);
             if (Intel != null && (!_wasSeeing || Time.time >= _nextSpeak))
             {

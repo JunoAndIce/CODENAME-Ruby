@@ -109,7 +109,7 @@ public class Intel : MonoBehaviour
                 Debug.LogWarning($"{speaker.name}'s speech reaches no one: no walkable ground is within reach of where he stands (against a blocked cell?).", speaker);
             return;
         }
-        RubyFact told = fact.WithSource(KnowledgeSource.Told);
+        RubyFact told = fact.WithSource(Knowledge.Told);
         int heard = 0;
         foreach (EnemyController listener in _enemies)
         {

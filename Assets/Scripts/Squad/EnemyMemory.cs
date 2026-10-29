@@ -1,23 +1,23 @@
 using UnityEngine;
 
 /// <summary>How an enemy came to know a fact. Numbered and saved, so values never shift.</summary>
-public enum KnowledgeSource { Seen = 0, Heard = 1, Told = 2, Pool = 3 }
+public enum Knowledge { Seen = 0, Heard = 1, Told = 2, Pool = 3 }
 
 /// <summary>Where Ruby was, when, and how it is known. Immutable: a fact that is passed around never changes.</summary>
 public readonly struct RubyFact
 {
     public readonly Vector3 Position;
     public readonly float Time;
-    public readonly KnowledgeSource Source;
+    public readonly Knowledge Source;
 
-    public RubyFact(Vector3 position, float time, KnowledgeSource source)
+    public RubyFact(Vector3 position, float time, Knowledge source)
     {
         Position = position;
         Time = time;
         Source = source;
     }
 
-    public RubyFact WithSource(KnowledgeSource source) => new(Position, Time, source);
+    public RubyFact WithSource(Knowledge source) => new(Position, Time, source);
 }
 
 /// <summary>
@@ -60,7 +60,7 @@ public class EnemyMemory
     /// <summary>Takes in a fact if it is newer than what he has. An older report never overwrites a fresher one.</summary>
     public void Learn(RubyFact fact)
     {
-        if (fact.Source == KnowledgeSource.Seen) HasSeenRuby = true;
+        if (fact.Source == Knowledge.Seen) HasSeenRuby = true;
         if (_hasRuby && _ruby.Time >= fact.Time) return;
         _ruby = fact;
         _hasRuby = true;
@@ -80,7 +80,7 @@ public class EnemyMemory
         }
         if (poolHas)
         {
-            fact = pool.Ruby.WithSource(KnowledgeSource.Pool);
+            fact = pool.Ruby.WithSource(Knowledge.Pool);
             return true;
         }
         fact = default;
