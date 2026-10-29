@@ -152,9 +152,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         return _player != null && Stance == AnimStance.Aim;
     }
     /// <summary>
-    /// Where the hunt was leading when aggro ended, which is where search goes. Aggro keeps
-    /// tracking the player for Aggro Time after losing contact, so this is where they went, not
-    /// where they slipped out of view.
+    /// What he knew of Ruby's whereabouts when aggro ended (his own position when he knew nothing),
+    /// which is where search goes. Never her true position: a search that read it would track her
+    /// through walls.
     /// </summary>
     public Vector3 LastKnownPlayerPosition { get; private set; }
 
@@ -339,10 +339,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         }
     }
 
-    public void RecordTrailEnd()
-    {
-        if (_player != null) LastKnownPlayerPosition = _player.transform.position;
-    }
+    /// <summary>Sets where the search will start from; Aggro calls it on the way out.</summary>
+    public void SetLastKnownPlayerPosition(Vector3 point) => LastKnownPlayerPosition = point;
 
     public void Release(Vector3 velocity)
     {
@@ -423,6 +421,32 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     /// <summary>Walk until within reach of a point, along an A* route.</summary>
     public NavResult WalkTo(Vector3 point, float reach, float speed) => Navigator.MoveToArea(GridArea.Circle(point, reach), speed);
+
+    /// <summary>
+    /// Where Ruby most likely is, as far as he knows: the newer of his own memory and the published
+    /// pool. Works from memory alone when the scene has no Intel. False when he knows nothing.
+    /// </summary>
+    public bool TryGetNewestRuby(out Vector3 point)
+    {
+        IntelSnapshot pool = Intel != null ? Intel.Published : IntelSnapshot.Empty;
+        bool known = Memory.TryGetNewestRuby(pool, out RubyFact fact);
+        point = fact.Position;
+        return known;
+    }
+
+    /// <summary>
+    /// Chase the newest thing he knows of Ruby, not Ruby herself, so breaking sight can drop a fight.
+    /// Arrived when he is on the spot; Unreachable (and stopped) when he has nothing to go on.
+    /// </summary>
+    public NavResult ChaseKnown(float speed)
+    {
+        if (!TryGetNewestRuby(out Vector3 point))
+        {
+            Stop();
+            return NavResult.Unreachable;
+        }
+        return Navigator.MoveTo(point, speed);
+    }
 
     /// <summary>Chase the player along this floor's shared flow field.</summary>
     public void PathToPlayer(float speed)

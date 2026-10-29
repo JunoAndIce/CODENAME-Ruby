@@ -73,10 +73,13 @@ public class GridNavigator
         }
     }
 
-    /// <summary>Path to a fixed point (search) along this enemy's own field. Stops on arrival.</summary>
-    public void MoveTo(Vector3 point, float speed)
+    /// <summary>
+    /// Path to a fixed point (search, or a chase of what he knows) along this enemy's own field.
+    /// Stops on arrival and says so; Unreachable when no step can be taken (already warned).
+    /// </summary>
+    public NavResult MoveTo(Vector3 point, float speed)
     {
-        if (!TryGetGrid(out PathGrid grid)) return;
+        if (!TryGetGrid(out PathGrid grid)) return NavResult.Unreachable;
 
         bool newField = _pointField == null || _pointField.Grid != grid;
         if (newField) _pointField = new FlowField(grid);
@@ -86,7 +89,7 @@ public class GridNavigator
             _pointField.Flood(point);
         }
 
-        Follow(grid, _pointField, point, speed);
+        return Follow(grid, _pointField, point, speed);
     }
 
     /// <summary>Chase a moving target along its floor's shared field. Stops on top of it.</summary>
@@ -281,14 +284,14 @@ public class GridNavigator
         return _stuckTimer >= _agent.StuckTime;
     }
 
-    private void Follow(PathGrid grid, FlowField field, Vector3 goal, float speed)
+    private NavResult Follow(PathGrid grid, FlowField field, Vector3 goal, float speed)
     {
         Vector3 position = _agent.Body.position;
         if (FlatDistance(position, goal) <= ArriveDistance || field.IsAtGoal(position))
         {
             _followed = Followed.Nothing;
             _agent.Stop();
-            return;
+            return NavResult.Arrived;
         }
 
         // Clear line: the straight segment is the shortest path, so skip the field.
@@ -296,17 +299,18 @@ public class GridNavigator
         {
             _lineEnd = goal;
             Steer(Followed.Line, goal, speed);
-            return;
+            return NavResult.Moving;
         }
 
         if (!field.TryGetStep(position, out Vector3 steer))
         {
             Fail($"no path to {goal} on {grid.name} (walled off, or beyond Max Flow Distance) — standing still.");
-            return;
+            return NavResult.Unreachable;
         }
 
         _field = field;
         Steer(Followed.Field, steer, speed);
+        return NavResult.Moving;
     }
 
     // A successful move ends any failure episode, so the next failure warns again.
