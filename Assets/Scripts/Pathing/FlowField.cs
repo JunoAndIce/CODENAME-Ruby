@@ -20,6 +20,7 @@ public class FlowField
     private readonly PathGrid _grid;
     private readonly Transform _target;
     private readonly int[] _cost;
+    private readonly int[] _length;           // plain path length (no wall costs) along the cheapest route found; this is what maxDistance bounds
     private readonly int[] _stamp;             // a cell's cost is valid only when its stamp is this flood's
     private readonly CellHeap _open = new(256);
     private int _generation;
@@ -39,6 +40,7 @@ public class FlowField
         _target = target;
         _cost = new int[grid.CellCount];
         _stamp = new int[grid.CellCount];
+        _length = new int[grid.CellCount];
     }
 
     public PathGrid Grid => _grid;
@@ -58,10 +60,10 @@ public class FlowField
 
     /// <summary>
     /// With avoidWalls, cells inside the grid's wall margin cost extra, so routes keep off walls
-    /// and corners where there is room. The bound is on that penalised cost, so a wall-hugging
-    /// route reaches slightly less far than the same distance down the middle. Without it, cost
-    /// is plain path length: what hearing and speech need, so a corridor never sounds farther
-    /// than it is.
+    /// and corners where there is room. The bound stays on plain path length, carried along the
+    /// cheapest route: bounding the penalised cost cut a one-cell corridor's reach to a third and
+    /// dropped far doorways off the chase field. Without avoidWalls the cost is plain length too:
+    /// what hearing and speech need, so a corridor never sounds farther than it is.
     /// </summary>
     public void Flood(Vector3 goal, float maxDistance, bool avoidWalls)
     {
@@ -80,6 +82,7 @@ public class FlowField
         int maxCost = Mathf.RoundToInt(maxDistance / _grid.CellSize * StraightCost);
         int start = _grid.Index(_goalCell);
         SetCost(start, 0);
+        _length[start] = 0;
         _open.Push(start, 0);
 
         while (_open.TryPop(out int index, out int cost))
@@ -92,18 +95,21 @@ public class FlowField
                 if (!_grid.CanStep(cell, step)) continue;
 
                 int next = _grid.Index(cell + step);
-                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost);
+                int stepCost = step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost;
+                int nextLength = _length[index] + stepCost;
+                int nextCost = cost + stepCost;
                 if (avoidWalls) nextCost += _grid.WallPenalty(cell + step);
-                if (nextCost > maxCost || (IsReached(next) && _cost[next] <= nextCost)) continue;
+                if (nextLength > maxCost || (IsReached(next) && _cost[next] <= nextCost)) continue;
 
                 SetCost(next, nextCost);
+                _length[next] = nextLength;
                 _open.Push(next, nextCost);
             }
         }
     }
 
     /// <summary>
-    /// Path metres from the goal to point, snapping point to walkable ground like an agent's start
+    /// Plain path metres (wall costs excluded) from the goal to point, snapping point to walkable ground like an agent's start
     /// (anything hugging a wall stands in a blocked cell). Reads the last flood and never re-floods,
     /// so a caller that wants a fresh answer floods first. False when the point wasn't reached.
     /// </summary>
@@ -111,7 +117,7 @@ public class FlowField
     {
         metres = 0f;
         if (!_flooded || !TryGetStartCell(point, out Vector2Int cell)) return false;
-        metres = _cost[_grid.Index(cell)] / (float)StraightCost * _grid.CellSize;
+        metres = _length[_grid.Index(cell)] / (float)StraightCost * _grid.CellSize;
         return true;
     }
 
@@ -144,7 +150,7 @@ public class FlowField
             Vector3 point = _grid.CellToWorld(next);
             lowest = Mathf.Min(lowest, _grid.Clearance(next));
             // The first step is always taken: the agent itself may stand in a blocked cell.
-            if (i > 0 && !_grid.HasLineOfSight(from, point, Mathf.Min(_grid.MarginCells, lowest))) break;
+            if (i > 0 && !_grid.HasLineOfSight(from, point, Mathf.Min(_grid.MarginCells + 1, lowest))) break;
             steer = point;
             cell = next;
         }

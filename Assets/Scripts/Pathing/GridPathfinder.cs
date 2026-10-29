@@ -113,7 +113,8 @@ public class GridPathfinder
             _cells.Add(_grid.CellOf(index));
         _cells.Reverse();
 
-        // A pull must keep the lowest clearance among the cells it covers, up to the margin: where
+        // A pull must keep the lowest clearance among the cells it covers, up to the penalty-free
+        // clearance (MarginCells + 1, so it agrees with WallPenalty rather than accepting cells it charges for): where
         // the A* path had room the pulled line keeps it, and through a narrow gap it keeps only
         // what the gap allows (the rule, not a fallback). The start cell is left out, as sight
         // exempts it: the agent may be brushing a wall and can't do anything about it.
@@ -122,7 +123,7 @@ public class GridPathfinder
         for (int i = 1; i < _cells.Count; i++)
         {
             lowest = Mathf.Min(lowest, _grid.Clearance(_cells[i]));
-            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]), Mathf.Min(_grid.MarginCells, lowest))) continue;
+            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]), Mathf.Min(_grid.MarginCells + 1, lowest))) continue;
 
             anchor = _grid.CellToWorld(_cells[i - 1]);
             path.Add(anchor);

@@ -19,10 +19,10 @@ public class PathGrid : MonoBehaviour
     [SerializeField, Min(0.1f)] private float _agentHeight = 2f;
     [Tooltip("Gap between the floor and the bottom of the test capsule, so the floor itself never blocks a cell.")]
     [SerializeField, Min(0.01f)] private float _floorClearance = 0.1f;
-    [Tooltip("How far, in path metres, a flood spreads from its goal. Bounds the cost of each flood; an enemy further than this can't path to that goal.")]
+    [Tooltip("How far, in plain path metres (wall-avoidance costs don't count), a flood spreads from its goal. Bounds the cost of each flood; an enemy further than this can't path to that goal.")]
     [SerializeField, Min(1f)] private float _maxFlowDistance = 40f;
 
-    [Tooltip("Paths keep this far off walls and corners wherever there is room, so enemies don't graze them. A narrow gap keeps only the clearance it allows. 0 turns the margin off.")]
+    [Tooltip("Paths keep this far off walls and corners wherever there is room, so enemies don't graze them. A narrow gap keeps only the clearance it allows. 0 turns the margin off. Read at bake: change it with Play mode stopped.")]
     [SerializeField, Min(0f)] private float _cornerMargin = 0.5f;
     [Tooltip("Path cost, in tenths of a cell step, added for each cell of margin a step cuts into. Higher swings paths wider of walls; it never closes a route, only makes the middle of a gap cheaper.")]
     [SerializeField, Min(0)] private int _wallCost = 20;
@@ -42,6 +42,7 @@ public class PathGrid : MonoBehaviour
 
     private bool[] _walkable;   // static geometry, from the bake. x + z * _width
     private int[] _propBlocks;  // resting props (GridObstacle) blocking each cell; props can overlap
+    private int _marginCells;   // Corner Margin in cells, fixed at bake with the clearance cap it sizes; a live edit waits for the next bake
     private byte[] _clearance;  // cells to the nearest blocked cell or the edge, capped at MarginCells + 1; 0 when blocked
     private int[] _clearanceQueue;   // the bake's breadth-first fill, allocated once with the grid
     private int _width;         // cells along X
@@ -61,7 +62,7 @@ public class PathGrid : MonoBehaviour
     public int CellCount => _width * _depth;
     public float MaxFlowDistance => _maxFlowDistance;
     /// <summary>Cells of clearance paths try to keep, from Corner Margin. Rounded up, so the margin is never less than asked.</summary>
-    public int MarginCells => Mathf.Min(250, Mathf.CeilToInt(_cornerMargin / _cellSize - 0.001f));   // capped so Clearance + 1 fits a byte
+    public int MarginCells => _marginCells;
     /// <summary>Bumped whenever walkability changes, so flow fields know to re-flood.</summary>
     public int Version { get; private set; }
 
@@ -235,6 +236,8 @@ public class PathGrid : MonoBehaviour
         _origin = transform.position - new Vector3(_width * _cellSize, 0f, _depth * _cellSize) * 0.5f;
         _walkable = new bool[_width * _depth];
         _propBlocks = new int[_width * _depth];
+        // Rounded up, so the margin is never less than asked; capped so Clearance + 1 fits a byte.
+        _marginCells = Mathf.Clamp(Mathf.CeilToInt(_cornerMargin / _cellSize - 0.001f), 0, 250);
         _clearance = new byte[_width * _depth];
         _clearanceQueue = new int[_width * _depth];
         Version++;
@@ -507,14 +510,15 @@ public class PathGrid : MonoBehaviour
 
     /// <summary>
     /// A straight line that keeps the path margin, so a tidy path doesn't graze a corner on the
-    /// way. It asks for the margin, or less when the goal itself is nearer a wall than that, so
-    /// a goal by a wall can still be walked straight to. A goal in a blocked cell gets no
+    /// way. It asks for the clearance WallPenalty doesn't charge for (MarginCells + 1: a cell
+    /// inside the margin is one at or below MarginCells), or less when the goal itself is nearer
+    /// a wall than that, so a goal by a wall can still be walked straight to. A goal in a blocked cell gets no
     /// straight line: the field steps there.
     /// </summary>
     public bool HasClearLine(Vector3 from, Vector3 to)
     {
         WorldToCell(to, out Vector2Int goal);
-        return HasLineOfSight(from, to, Mathf.Min(MarginCells, Clearance(goal)));
+        return HasLineOfSight(from, to, Mathf.Min(MarginCells + 1, Clearance(goal)));
     }
 
     /// <summary>
