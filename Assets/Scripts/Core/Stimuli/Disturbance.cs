@@ -11,6 +11,7 @@ using UnityEngine;
 public class Disturbance : MonoBehaviour
 {
     private static bool _warnedNoRules;
+    private static readonly System.Collections.Generic.HashSet<Component> WarnedRootless = new();   // characters already named
 
     private Disturbance _root;   // the carrier that holds the record; this one, for the root itself
     private Vector3 _origin;
@@ -80,7 +81,14 @@ public class Disturbance : MonoBehaviour
         if (!character.IsRagdolling) return null;
         // A ragdolling one is stamped as a whole, from its root, so every bone shares one record,
         // one impact cooldown and one expiry; stamped from a bone, that limb alone would be the root.
-        return character is Component component && component.TryGetComponent(out Rigidbody root) ? root : other;
+        // Without a root body there is nothing to stamp it from, and stamping the limb alone would
+        // split the body's record, so nothing is stamped and the character is named once.
+        if (character is Component component && component.TryGetComponent(out Rigidbody root)) return root;
+
+        Component owner = character as Component;
+        if (owner == null || WarnedRootless.Add(owner))
+            Debug.LogWarning($"{(owner != null ? owner.name : "A character")}: its IRagdollBody has no Rigidbody on its own GameObject, so its knock-ons can't carry an origin.", owner);
+        return null;
     }
 
     private bool Expired(StimulusRules rules) => Time.time - _stamped > rules.OriginLifetime;
