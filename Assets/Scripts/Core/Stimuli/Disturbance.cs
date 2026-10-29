@@ -16,6 +16,7 @@ public class Disturbance : MonoBehaviour
     private Vector3 _origin;
     private float _stamped;      // Time.time of the stamp
     private float _nextImpact;   // root only: the earliest the next impact sound may be made
+    private bool _dying;         // cleared this frame; Destroy lands at its end
 
     /// <summary>Marks a body as set moving from an origin, now. Allocates only the first time.</summary>
     public static void Stamp(Rigidbody body, Vector3 origin) => Stamp(body, origin, Time.time);
@@ -46,10 +47,40 @@ public class Disturbance : MonoBehaviour
         origin = default;
         if (body == null || !body.TryGetComponent(out Disturbance carrier)) return false;
         Disturbance root = carrier._root;
-        if (root == null || !HasRules()) return false;
+        if (root == null || root._dying || !HasRules()) return false;
         if (root.Expired(Stimuli.Rules)) return false;
         origin = root._origin;
         return true;
+    }
+
+    /// <summary>
+    /// Forgets a character's record and removes its carriers, for when it is stood up. A character
+    /// on its feet is sensed by sight, not as a moving object, and a stale record would make it
+    /// thud at every wall it bumps while walking.
+    /// </summary>
+    public static void Clear(Transform root)
+    {
+        foreach (Disturbance carrier in root.GetComponentsInChildren<Disturbance>(true))
+        {
+            // Destroy waits for the end of the frame; until then the carrier must already be inert.
+            carrier._dying = true;
+            Destroy(carrier);
+        }
+    }
+
+    // Who a knock-on stamps, or null for nobody.
+    private static Rigidbody KnockOnTarget(Rigidbody other)
+    {
+        if (other == null || other.isKinematic) return null;
+        IRagdollBody character = other.GetComponentInParent<IRagdollBody>();
+        if (character == null) return other;   // a prop or a gun: stamped where it was hit
+
+        // A character on its feet is never stamped: it is sensed by sight, and its authored
+        // movement bumps walls at speeds that would sound like a thrown body (Ruby's walk is 15).
+        if (!character.IsRagdolling) return null;
+        // A ragdolling one is stamped as a whole, from its root, so every bone shares one record,
+        // one impact cooldown and one expiry; stamped from a bone, that limb alone would be the root.
+        return character is Component component && component.TryGetComponent(out Rigidbody root) ? root : other;
     }
 
     private bool Expired(StimulusRules rules) => Time.time - _stamped > rules.OriginLifetime;
@@ -74,7 +105,7 @@ public class Disturbance : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (_root == null || !HasRules()) return;
+        if (_dying || _root == null || _root._dying || !HasRules()) return;
         StimulusRules rules = Stimuli.Rules;
         if (_root.Expired(rules)) return;
 
@@ -87,9 +118,10 @@ public class Disturbance : MonoBehaviour
 
         // Hand the origin on, with the throw's own time, to anything free to move. A body already
         // carrying a newer record keeps it.
-        if (other != null && !other.isKinematic
-            && !(other.TryGetComponent(out Disturbance carried) && carried._root != null && carried._root._stamped >= _root._stamped))
-            Stamp(other, _root._origin, _root._stamped);
+        Rigidbody target = KnockOnTarget(other);
+        if (target != null
+            && !(target.TryGetComponent(out Disturbance carried) && carried._root != null && carried._root._stamped >= _root._stamped))
+            Stamp(target, _root._origin, _root._stamped);
 
         if (Time.time < _root._nextImpact) return;
         _root._nextImpact = Time.time + rules.ImpactCooldown;

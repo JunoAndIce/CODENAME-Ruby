@@ -200,6 +200,9 @@ public class SkeletonRagdollBody : MonoBehaviour, IRagdollBody
         Wake();
         _ragdolling = false;
         _slowTimer = 0f;
+        // Back on her feet she is sensed by sight, not as a moving object. A held body is stamped
+        // again by the chain every step, so a smash on the chain still makes noise.
+        Disturbance.Clear(transform);
         if (!_live) return;
         _live = false;
 
