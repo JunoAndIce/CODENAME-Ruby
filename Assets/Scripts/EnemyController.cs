@@ -424,6 +424,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// Whether a point is in his view: the cone in front of him out to View Range, or the close
     /// circle all round, which is there so nobody can stand right behind him unnoticed. Measured
     /// flat, and only the shape: whether anything blocks the line is CanSeePlayer's business.
+    /// Pitched straight up or down, off his feet, he has no facing, so no cone: only the close
+    /// circle counts.
     /// </summary>
     public bool InView(Vector3 point)
     {
@@ -433,10 +435,21 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (distance <= _closeRadius) return true;
         if (distance > _viewRange) return false;
 
-        // Flattened so a tilted body can't skew the angle; the same reason FaceTarget flattens.
-        Vector3 forward = transform.forward;
-        forward.y = 0f;
+        // No facing, no cone. Angle against a zero vector reads 0 and would put everything in range in front.
+        if (!TryFlatForward(out Vector3 forward)) return false;
         return Vector3.Angle(forward, offset) <= _viewAngle * 0.5f;
+    }
+
+    // Flattened so a tilted body can't skew the angle; the same reason FaceTarget flattens. False
+    // when the body points straight up or down, which leaves nothing to flatten. InView and its
+    // gizmo share this so they can't disagree about when the cone exists.
+    private bool TryFlatForward(out Vector3 forward)
+    {
+        forward = transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude <= 0.0001f) return false;
+        forward.Normalize();
+        return true;
     }
 
     /// <summary>Aggro's contact test: still within the give-up radius, and in sight.</summary>
@@ -517,11 +530,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         bool inView = tracking && InView(_player.transform.position);
         Gizmos.color = inView ? (CanSeePlayer() ? Color.green : Color.red) : Color.grey;
         Vector3 eye = EyePosition;
-        Vector3 flatForward = transform.forward;
-        flatForward.y = 0f;
-        flatForward = flatForward.sqrMagnitude > 0.0001f ? flatForward.normalized : Vector3.forward;
         DrawFlatCircle(eye, _closeRadius);
-        DrawFlatArc(eye, flatForward, _viewAngle, _viewRange);
+        // Pitched straight up or down he has no facing and no cone (see InView), so draw none
+        // rather than invent a direction.
+        if (TryFlatForward(out Vector3 flatForward)) DrawFlatArc(eye, flatForward, _viewAngle, _viewRange);
 
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, _giveUpRadius);
