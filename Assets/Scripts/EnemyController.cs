@@ -10,6 +10,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _chaseSpeed = 2f;
     [SerializeField] private float _patrolSpeed = 1f;
     [SerializeField] private float _searchSpeed = 1.5f;
+    [Tooltip("How fast the body turns while walking a path, in degrees a second: lower makes wider arcs round bends. The legs' own turn on the model (CharacterAnimator's Turn Speed) is separate.")]
+    [SerializeField, Min(1f)] private float _turnSpeed = 720f;
 
     [Header("Awareness")]
     [Tooltip("How far he sees in front of him, within View Angle, if in sight.")]
@@ -358,15 +360,34 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         _state.SetState(Ragdoll);
     }
 
+    /// <summary>
+    /// Walks toward a point along a curve: the heading turns toward it at Turn Speed instead of
+    /// snapping, so a bend is an arc, and the speed drops when the point is too close and too far
+    /// off to reach at that turn rate, so he never circles it. The heading starts from the body's
+    /// own facing, so the first step after a pause or a ragdoll doesn't jump. Only walking curves:
+    /// FaceTarget and StepAway still turn at once, because Aggro's facing is aim, not a bend.
+    /// </summary>
     public void MoveToward(Vector3 target, float speed)
     {
-        _intendedSpeed = speed;
         Vector3 direction = target - transform.position;
         direction.y = 0f;
 
+        Vector3 heading = transform.forward;
+        heading.y = 0f;
+        float fitted = speed;
+        // Closer than 10 cm there is no direction worth turning to: keep the heading and speed.
         if (direction.sqrMagnitude > 0.01f)
-            transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
-        VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, transform.forward * speed));
+        {
+            heading = Steering.TurnToward(heading, direction, _turnSpeed * Time.fixedDeltaTime);
+            fitted = Steering.SpeedToFit(speed, _turnSpeed, direction.magnitude, Vector3.Angle(transform.forward, direction));
+            transform.rotation = Quaternion.LookRotation(heading, Vector3.up);
+        }
+        else if (heading.sqrMagnitude > 0.0001f)
+            heading.Normalize();
+
+        // The fitted speed, so the animation sees him slow in a tight turn.
+        _intendedSpeed = fitted;
+        VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, heading * fitted));
     }
 
     /// <summary>
