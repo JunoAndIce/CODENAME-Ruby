@@ -119,4 +119,10 @@
 
   Tick this plan's steps in the same commit.
 
-- [ ] **Step 10: End-of-piece review, in the background.** Dispatch a fresh reviewer agent over the branch's piece 1 commits, with `run_in_background`, and tell the user it's running. Act on what it finds before piece 2's check-in.
+- [x] **Step 10: End-of-piece review, in the background.** Dispatch a fresh reviewer agent over the branch's piece 1 commits, with `run_in_background`, and tell the user it's running. Act on what it finds before piece 2's check-in.
+  - Done 2026-10-28: ready to move on, nothing Critical or Important. Fixed in `b1b07aa`: Give Up Radius now clears the close circle too, the docs no longer claim a knocked-down officer loses his cone (an officer's rotation never pitches), and CLAUDE.md's last "alert radius" became view range.
+  - Carried to later pieces:
+    - **Piece 3:** add `InView(point, range)` for Body Notice Range, generalise `CanSeePlayer` into a sight test toward any point, and settle whether loose guns use the close circle.
+    - **The next play-test:** stand behind an officer as he turns round at a patrol point. The cone turns at once, but the model takes up to about 0.5 s. If that reads as unfair, the cone can follow the model's facing, and piece 10's smoother turning narrows the gap.
+    - **Every later piece:** don't rely on declaration order in `BuildTransitions`, because `StateMachine` keeps transitions in a `HashSet`.
+    - **Piece 2's docs pass:** re-wrap the long line in CLAUDE.md's Detection bullet.
