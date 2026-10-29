@@ -22,6 +22,11 @@ public class PathGrid : MonoBehaviour
     [Tooltip("How far, in path metres, a flood spreads from its goal. Bounds the cost of each flood; an enemy further than this can't path to that goal.")]
     [SerializeField, Min(1f)] private float _maxFlowDistance = 40f;
 
+    [Tooltip("Paths keep this far off walls and corners wherever there is room, so enemies don't graze them. A narrow gap keeps only the clearance it allows. 0 turns the margin off.")]
+    [SerializeField, Min(0f)] private float _cornerMargin = 0.5f;
+    [Tooltip("Path cost, in tenths of a cell step, added for each cell of margin a step cuts into. Higher swings paths wider of walls; it never closes a route, only makes the middle of a gap cheaper.")]
+    [SerializeField, Min(0)] private int _wallCost = 20;
+
     private static readonly Collider[] OverlapHits = new Collider[32];
     private const float BelowFloorTolerance = 0.5f;
 
@@ -37,6 +42,8 @@ public class PathGrid : MonoBehaviour
 
     private bool[] _walkable;   // static geometry, from the bake. x + z * _width
     private int[] _propBlocks;  // resting props (GridObstacle) blocking each cell; props can overlap
+    private byte[] _clearance;  // cells to the nearest blocked cell or the edge, capped at MarginCells + 1; 0 when blocked
+    private int[] _clearanceQueue;   // the bake's breadth-first fill, allocated once with the grid
     private int _width;         // cells along X
     private int _depth;         // cells along Z (Vector2Int.y throughout)
     private Vector3 _origin;    // min corner of cell (0,0), at floor height
@@ -53,6 +60,8 @@ public class PathGrid : MonoBehaviour
     public float CellSize => _cellSize;
     public int CellCount => _width * _depth;
     public float MaxFlowDistance => _maxFlowDistance;
+    /// <summary>Cells of clearance paths try to keep, from Corner Margin. Rounded up, so the margin is never less than asked.</summary>
+    public int MarginCells => Mathf.Min(250, Mathf.CeilToInt(_cornerMargin / _cellSize - 0.001f));   // capped so Clearance + 1 fits a byte
     /// <summary>Bumped whenever walkability changes, so flow fields know to re-flood.</summary>
     public int Version { get; private set; }
 
@@ -103,7 +112,9 @@ public class PathGrid : MonoBehaviour
     public FlowField FloodFrom(Vector3 source, float maxDistance)
     {
         _scratchField ??= new FlowField(this);
-        _scratchField.Flood(source, maxDistance);
+        // Unpenalised: hearing and speech measure how far sound travels, and a corridor must not
+        // sound farther than it is just because paths keep off its walls.
+        _scratchField.Flood(source, maxDistance, avoidWalls: false);
         return _scratchField;
     }
 
@@ -224,6 +235,8 @@ public class PathGrid : MonoBehaviour
         _origin = transform.position - new Vector3(_width * _cellSize, 0f, _depth * _cellSize) * 0.5f;
         _walkable = new bool[_width * _depth];
         _propBlocks = new int[_width * _depth];
+        _clearance = new byte[_width * _depth];
+        _clearanceQueue = new int[_width * _depth];
         Version++;
 
         // Transforms moved since the last physics step aren't in the physics scene yet.
@@ -239,6 +252,8 @@ public class PathGrid : MonoBehaviour
                 if (!open) blocked++;
             }
         }
+
+        BakeClearance();
 
         // The same playtest switch as Core's DebugLog, which Pathing can't reference.
 #if RUBY_DEBUG_LOGS
@@ -331,13 +346,113 @@ public class PathGrid : MonoBehaviour
     public void AddPropBlocks(List<int> cells)
     {
         foreach (int index in cells) _propBlocks[index]++;
+        RefreshClearance(cells);
         Version++;
     }
 
     public void RemovePropBlocks(List<int> cells)
     {
         foreach (int index in cells) _propBlocks[index]--;
+        RefreshClearance(cells);
         Version++;
+    }
+
+    /// <summary>
+    /// 0 for a blocked cell, otherwise the distance in cells (diagonals count 1) to the nearest
+    /// blocked cell or the grid's edge, capped at MarginCells + 1. A cell by a wall reads 1.
+    /// </summary>
+    public int Clearance(Vector2Int cell) => InBounds(cell) ? _clearance[cell.x + cell.y * _width] : 0;
+
+    /// <summary>
+    /// Extra path cost for stepping onto a cell inside the margin: more the closer to a wall, none
+    /// from MarginCells + 1 out. It only raises costs, so the A* heuristic stays admissible. In a
+    /// narrow gap every cell is inside the margin, so the middle (the highest clearance) is the
+    /// cheapest line through, and the gap is never closed off.
+    /// </summary>
+    public int WallPenalty(Vector2Int cell) => Mathf.Max(0, MarginCells - Clearance(cell) + 1) * _wallCost;
+
+    // Multi-source breadth-first fill from every blocked cell, and from the border cells as if the
+    // void beyond them were blocked. Diagonals cost 1, so it measures in squares.
+    private void BakeClearance()
+    {
+        int cap = MarginCells + 1;
+        int tail = 0;
+        // Blocked cells queue first, then edge cells, so the queue stays in distance order and
+        // every cell is set once.
+        for (int index = 0; index < _clearance.Length; index++)
+        {
+            bool blocked = !IsWalkable(CellOf(index));
+            _clearance[index] = (byte)(blocked ? 0 : cap);
+            if (blocked) _clearanceQueue[tail++] = index;
+        }
+        for (int z = 0; z < _depth; z++)
+        {
+            for (int x = 0; x < _width; x++)
+            {
+                int index = x + z * _width;
+                bool edge = x == 0 || z == 0 || x == _width - 1 || z == _depth - 1;
+                if (!edge || _clearance[index] == 0) continue;
+                _clearance[index] = 1;
+                _clearanceQueue[tail++] = index;
+            }
+        }
+
+        for (int head = 0; head < tail; head++)
+        {
+            int index = _clearanceQueue[head];
+            Vector2Int cell = CellOf(index);
+            int next = _clearance[index] + 1;
+            if (next >= cap) continue;   // neighbours already hold the cap
+
+            foreach (Vector2Int step in Steps)
+            {
+                Vector2Int neighbour = cell + step;
+                if (!InBounds(neighbour)) continue;
+                int n = neighbour.x + neighbour.y * _width;
+                if (_clearance[n] <= next) continue;
+                _clearance[n] = (byte)next;
+                _clearanceQueue[tail++] = n;
+            }
+        }
+    }
+
+    // A prop landing or leaving changes clearance only within the cap of the cells it touched, so
+    // redo that box instead of the grid. Each cell is measured directly (the same square distance
+    // the bake's fill produces), which needs no scratch memory.
+    private void RefreshClearance(List<int> changed)
+    {
+        if (changed.Count == 0) return;
+        int cap = MarginCells + 1;
+        int minX = int.MaxValue, minZ = int.MaxValue, maxX = int.MinValue, maxZ = int.MinValue;
+        foreach (int index in changed)
+        {
+            Vector2Int cell = CellOf(index);
+            minX = Mathf.Min(minX, cell.x); maxX = Mathf.Max(maxX, cell.x);
+            minZ = Mathf.Min(minZ, cell.y); maxZ = Mathf.Max(maxZ, cell.y);
+        }
+
+        minX = Mathf.Max(0, minX - cap); maxX = Mathf.Min(_width - 1, maxX + cap);
+        minZ = Mathf.Max(0, minZ - cap); maxZ = Mathf.Min(_depth - 1, maxZ + cap);
+        for (int z = minZ; z <= maxZ; z++)
+            for (int x = minX; x <= maxX; x++)
+                _clearance[x + z * _width] = (byte)MeasureClearance(x, z, cap);
+    }
+
+    private int MeasureClearance(int x, int z, int cap)
+    {
+        if (!IsWalkable(new Vector2Int(x, z))) return 0;
+        for (int r = 1; r < cap; r++)
+        {
+            for (int dz = -r; dz <= r; dz++)
+            {
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) != r) continue;   // this ring only
+                    if (!IsWalkable(new Vector2Int(x + dx, z + dz))) return r;   // off the grid counts as blocked
+                }
+            }
+        }
+        return cap;
     }
 
     public int Index(Vector2Int cell) => cell.x + cell.y * _width;
@@ -388,8 +503,28 @@ public class PathGrid : MonoBehaviour
     /// True when every cell the straight line from→to passes through is walkable. Exact grid
     /// traversal (not sampling), so a line can't slip through the corner of a blocked cell.
     /// </summary>
-    public bool HasLineOfSight(Vector3 from, Vector3 to)
+    public bool HasLineOfSight(Vector3 from, Vector3 to) => HasLineOfSight(from, to, 1);
+
+    /// <summary>
+    /// A straight line that keeps the path margin, so a tidy path doesn't graze a corner on the
+    /// way. It asks for the margin, or less when the goal itself is nearer a wall than that, so
+    /// a goal by a wall can still be walked straight to. A goal in a blocked cell gets no
+    /// straight line: the field steps there.
+    /// </summary>
+    public bool HasClearLine(Vector3 from, Vector3 to)
     {
+        WorldToCell(to, out Vector2Int goal);
+        return HasLineOfSight(from, to, Mathf.Min(MarginCells, Clearance(goal)));
+    }
+
+    /// <summary>
+    /// HasLineOfSight where every cell after the first must also have at least minClearance.
+    /// Never below 1, whatever is asked: a blocked cell is never crossed. Callers lower it to
+    /// what a narrow gap allows; that is the rule, not a fallback.
+    /// </summary>
+    public bool HasLineOfSight(Vector3 from, Vector3 to, int minClearance)
+    {
+        minClearance = Mathf.Max(1, minClearance);
         float fx = (from.x - _origin.x) / _cellSize, fz = (from.z - _origin.z) / _cellSize;
         float tx = (to.x - _origin.x) / _cellSize, tz = (to.z - _origin.z) / _cellSize;
         var cell = new Vector2Int(Mathf.FloorToInt(fx), Mathf.FloorToInt(fz));
@@ -408,15 +543,15 @@ public class PathGrid : MonoBehaviour
             // The starting cell is wherever the agent already stands, often one the clearance
             // margin marks blocked because it's brushing a wall, so only cells it would move
             // into count. A line back into the wall still fails on the next cell.
-            if (i > 0 && !IsWalkable(cell)) return false;
+            if (i > 0 && !Passable(cell, minClearance)) return false;
             if (cell == end) return true;
 
             if (Mathf.Approximately(nextX, nextZ))
             {
                 // Passing exactly through a corner: both side cells must be open, or the
                 // line squeezes diagonally between two blocked cells.
-                if (!IsWalkable(new Vector2Int(cell.x + stepX, cell.y))
-                    || !IsWalkable(new Vector2Int(cell.x, cell.y + stepZ))) return false;
+                if (!Passable(new Vector2Int(cell.x + stepX, cell.y), minClearance)
+                    || !Passable(new Vector2Int(cell.x, cell.y + stepZ), minClearance)) return false;
                 cell.x += stepX; cell.y += stepZ;
                 nextX += deltaX; nextZ += deltaZ;
             }
@@ -425,6 +560,8 @@ public class PathGrid : MonoBehaviour
         }
         return false;
     }
+
+    private bool Passable(Vector2Int cell, int minClearance) => IsWalkable(cell) && Clearance(cell) >= minClearance;
 
     private void OnDrawGizmos()
     {
@@ -436,16 +573,24 @@ public class PathGrid : MonoBehaviour
     {
         if (!IsBaked) return;
 
-        // Red: static geometry. Orange: resting props.
+        // Red: static geometry. Orange: resting props. Yellow: open cells inside the path margin.
         var staticColour = new Color(1f, 0.15f, 0.1f, 0.5f);
         var propColour = new Color(1f, 0.6f, 0.1f, 0.5f);
+        var marginColour = new Color(1f, 0.9f, 0.2f, 0.25f);
+        int marginCells = MarginCells;
         var cellSize = new Vector3(_cellSize * 0.9f, 0.02f, _cellSize * 0.9f);
         for (int z = 0; z < _depth; z++)
         {
             for (int x = 0; x < _width; x++)
             {
                 int index = x + z * _width;
-                if (_walkable[index] && _propBlocks[index] == 0) continue;
+                if (_walkable[index] && _propBlocks[index] == 0)
+                {
+                    if (_clearance[index] > marginCells) continue;
+                    Gizmos.color = marginColour;
+                    Gizmos.DrawCube(CellToWorld(x, z), cellSize);
+                    continue;
+                }
 
                 Gizmos.color = _walkable[index] ? propColour : staticColour;
                 Gizmos.DrawCube(CellToWorld(x, z), cellSize);

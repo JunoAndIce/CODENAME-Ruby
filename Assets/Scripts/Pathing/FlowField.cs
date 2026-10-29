@@ -29,6 +29,7 @@ public class FlowField
     private Vector2Int _floodedFrom;
     private Vector3 _floodedGoal;
     private float _floodedMax;
+    private bool _floodedAvoidWalls;
     private int _floodedVersion;
     private float _nextRefresh;
 
@@ -45,18 +46,29 @@ public class FlowField
     /// <summary>Whether the last flood found walkable ground at its goal. False means nothing was reached, so every distance query fails.</summary>
     public bool HasGoal => _hasGoal;
 
-    /// <summary>Flood from goal out to the grid's Max Flow Distance.</summary>
+    /// <summary>Flood from goal out to the grid's Max Flow Distance, keeping off walls.</summary>
     public void Flood(Vector3 goal) => Flood(goal, _grid.MaxFlowDistance);
 
     /// <summary>
     /// Flood from goal: every cell within maxDistance path metres learns its cost. A smaller bound
     /// than the grid's makes a cheap local flood (how far a shout carries); re-floods reuse it.
+    /// Keeps off walls (see the other overload).
     /// </summary>
-    public void Flood(Vector3 goal, float maxDistance)
+    public void Flood(Vector3 goal, float maxDistance) => Flood(goal, maxDistance, true);
+
+    /// <summary>
+    /// With avoidWalls, cells inside the grid's wall margin cost extra, so routes keep off walls
+    /// and corners where there is room. The bound is on that penalised cost, so a wall-hugging
+    /// route reaches slightly less far than the same distance down the middle. Without it, cost
+    /// is plain path length: what hearing and speech need, so a corridor never sounds farther
+    /// than it is.
+    /// </summary>
+    public void Flood(Vector3 goal, float maxDistance, bool avoidWalls)
     {
         _flooded = true;
         _floodedGoal = goal;
         _floodedMax = maxDistance;
+        _floodedAvoidWalls = avoidWalls;
         _floodedVersion = _grid.Version;
         _generation++;   // invalidates every cost from the last flood without clearing arrays
         _open.Clear();
@@ -81,6 +93,7 @@ public class FlowField
 
                 int next = _grid.Index(cell + step);
                 int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost);
+                if (avoidWalls) nextCost += _grid.WallPenalty(cell + step);
                 if (nextCost > maxCost || (IsReached(next) && _cost[next] <= nextCost)) continue;
 
                 SetCost(next, nextCost);
@@ -122,11 +135,16 @@ public class FlowField
         if (!TryGetStartCell(from, out Vector2Int cell)) return false;
 
         steer = _grid.CellToWorld(cell);
+        // The lowest clearance among the cells walked: where the descent had room the shortcut
+        // keeps the margin, and through a narrow gap only the clearance the gap allows. The
+        // start cell is left out, since an agent hugging a wall stands in a low one.
+        int lowest = int.MaxValue;
         for (int i = 0; i < LookAhead && Descend(cell, out Vector2Int next); i++)
         {
             Vector3 point = _grid.CellToWorld(next);
+            lowest = Mathf.Min(lowest, _grid.Clearance(next));
             // The first step is always taken: the agent itself may stand in a blocked cell.
-            if (i > 0 && !_grid.HasLineOfSight(from, point)) break;
+            if (i > 0 && !_grid.HasLineOfSight(from, point, Mathf.Min(_grid.MarginCells, lowest))) break;
             steer = point;
             cell = next;
         }
@@ -160,7 +178,8 @@ public class FlowField
         if ((!targetMoved && !gridChanged) || Time.time < _nextRefresh) return;
 
         _nextRefresh = Time.time + RefreshInterval;
-        Flood(_target != null ? _target.position : _floodedGoal, _floodedMax);
+        // The same bound and wall rule as the last flood: a chase field must not lose its wall costs.
+        Flood(_target != null ? _target.position : _floodedGoal, _floodedMax, _floodedAvoidWalls);
     }
 
     private bool TryGetStartCell(Vector3 from, out Vector2Int cell)

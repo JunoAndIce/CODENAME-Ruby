@@ -74,7 +74,8 @@ public class GridPathfinder
                 int next = _grid.Index(nextCell);
                 if (_closed[next] == _generation) continue;
 
-                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost);
+                // The wall penalty only adds to a step, so the heuristic below never overestimates.
+                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost) + _grid.WallPenalty(nextCell);
                 if (_seen[next] == _generation && _cost[next] <= nextCost) continue;
 
                 Record(next, nextCost, index);
@@ -112,13 +113,20 @@ public class GridPathfinder
             _cells.Add(_grid.CellOf(index));
         _cells.Reverse();
 
+        // A pull must keep the lowest clearance among the cells it covers, up to the margin: where
+        // the A* path had room the pulled line keeps it, and through a narrow gap it keeps only
+        // what the gap allows (the rule, not a fallback). The start cell is left out, as sight
+        // exempts it: the agent may be brushing a wall and can't do anything about it.
         Vector3 anchor = from;
+        int lowest = int.MaxValue;
         for (int i = 1; i < _cells.Count; i++)
         {
-            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]))) continue;
+            lowest = Mathf.Min(lowest, _grid.Clearance(_cells[i]));
+            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]), Mathf.Min(_grid.MarginCells, lowest))) continue;
 
             anchor = _grid.CellToWorld(_cells[i - 1]);
             path.Add(anchor);
+            lowest = Mathf.Min(_grid.Clearance(_cells[i - 1]), _grid.Clearance(_cells[i]));   // the new run starts at the corner
         }
         path.Add(_grid.CellToWorld(_cells[_cells.Count - 1]));
     }

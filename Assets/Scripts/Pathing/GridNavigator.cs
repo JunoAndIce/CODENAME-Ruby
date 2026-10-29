@@ -133,7 +133,7 @@ public class GridNavigator
         {
             Plan(grid, area, position, resetWatchdog: true);
         }
-        else if (_routeOk && Time.fixedTime >= _nextReplan && !grid.HasLineOfSight(position, _route[_routeIndex]))
+        else if (_routeOk && Time.fixedTime >= _nextReplan && !grid.HasClearLine(position, _route[_routeIndex]))
         {
             // Knocked off the route (a collision, an overshoot, a slide along a wall): its next
             // corner is out of sight, and steering straight at it walks into the wall. Re-plan
@@ -158,7 +158,7 @@ public class GridNavigator
         // Move on once the next corner is in straight sight, not on getting near this one:
         // around the end of a thin wall, switching early aims the enemy straight into it.
         while (_routeIndex < _route.Count - 1
-               && (FlatDistance(position, _route[_routeIndex]) <= CornerReach || grid.HasLineOfSight(position, _route[_routeIndex + 1])))
+               && (FlatDistance(position, _route[_routeIndex]) <= CornerReach || grid.HasClearLine(position, _route[_routeIndex + 1])))
             _routeIndex++;
         Steer(Followed.Route, _route[_routeIndex], speed);
 
@@ -245,7 +245,7 @@ public class GridNavigator
         }
 
         // Clear line: the straight segment is the shortest path, so skip the search.
-        if (grid.HasLineOfSight(position, _goalPoint))
+        if (grid.HasClearLine(position, _goalPoint))
         {
             _route.Add(_goalPoint);
             _routeOk = true;
@@ -295,7 +295,7 @@ public class GridNavigator
         }
 
         // Clear line: the straight segment is the shortest path, so skip the field.
-        if (grid.HasLineOfSight(position, goal))
+        if (grid.HasClearLine(position, goal))
         {
             _lineEnd = goal;
             Steer(Followed.Line, goal, speed);
