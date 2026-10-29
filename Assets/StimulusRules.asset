@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc3506c3356d85741b73f5b85f166b7c, type: 3}
+  m_Name: StimulusRules
+  m_EditorClassIdentifier: Ruby.Core::StimulusRules
+  _noticeSpeed: 4
+  _alarmSpeed: 15
+  _originLifetime: 5
+  _gunshotLoudness: 25
+  _whipLoudness: 6
+  _impactLoudness: 10
+  _impactLoudnessPerSpeed: 0.5
+  _impactLoudnessMax: 20
+  _impactCooldown: 0.25
