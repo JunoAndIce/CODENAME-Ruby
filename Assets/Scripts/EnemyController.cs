@@ -32,6 +32,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(1f)] private float _searchTravelLimit = 20f;
     [Tooltip("While he sees Ruby, he calls out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
+    [Tooltip("How far he notices a loose body (thrown, tumbling or held) moving at Notice Speed or faster, with a clear line to it. Corpses and dropped guns aren't limited by this: see Body Notice Range and View Range.")]
+    [SerializeField, Min(0f)] private float _motionRadius = 15f;
+    [Tooltip("How close a corpse must be for him to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
+    [SerializeField, Min(0f)] private float _bodyNoticeRange = 6f;
+    [Tooltip("Seconds between his sweeps for moving bodies, corpses and loose guns. Each officer starts at a random offset so a squad doesn't sweep on the same step.")]
+    [SerializeField, Min(0.05f)] private float _scanInterval = 0.2f;
 
     [Header("Grabbed")]
     [Tooltip("How fast the gun pops up out of the officer's hand when the chain grabs him, in m/s: a small hop, to sell the grab.")]
@@ -61,10 +67,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("Unarmed, an enemy goes for a free dropped gun within this radius. 0 = never re-arms.")]
     [SerializeField, Min(0f)] private float _rearmRadius = 10f;
 
-    [Header("Senses")]
-    [Tooltip("How far he can notice a body moving fast, or a corpse or dropped gun lying around, with a clear line to it.")]
-    [SerializeField, Min(0f)] private float _motionRadius = 15f;
-
     [Header("References")]
     [SerializeField] private PlayerController _player;
 
@@ -79,6 +81,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>What he hears, and what else he notices without sight.</summary>
     public EnemySenses Senses { get; private set; }
     public float MotionRadius => _motionRadius;
+    public float BodyNoticeRange => _bodyNoticeRange;
+    public float ScanInterval => _scanInterval;
     /// <summary>The scene's shared pool, or null when there is none (an error was logged at Start).</summary>
     public Intel Intel { get; private set; }
     public Health Health { get; private set; }
@@ -303,24 +307,49 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     /// <summary>
     /// Told or heard something worth searching. Idle and patrolling officers start searching
-    /// there; one already searching moves only for a strictly higher priority, so a quiet sound
-    /// can't pull him off a spot he's already checking. Aggro and the states that can't act on
-    /// it ignore the call: he already knows where Ruby is.
+    /// there. One already searching moves for a higher priority at once, and for an equal one at
+    /// most once per Intel Interval, so a shootout's alternating shots can't swap his target on
+    /// every one (or re-flood his field per shot); a lower priority never moves him. Aggro and the
+    /// states that can't act on it ignore the call: he already knows where Ruby is. True when it
+    /// was taken; every decision is logged.
     /// </summary>
-    public void Investigate(Vector3 point, StimulusResponse reason, int priority)
+    public bool Investigate(Vector3 point, StimulusResponse reason, int priority)
     {
-        if (reason == StimulusResponse.Ignore) return;
-        if (_state.Current is GrabbedState or RagdollState or DeadState or RearmState or AggroState) return;
+        if (reason == StimulusResponse.Ignore)
+        {
+            DebugLog.Info($"{name} ignores {reason} at {point}: the map says to ignore it.", this);
+            return false;
+        }
+        if (_state.Current is GrabbedState or RagdollState or DeadState or RearmState or AggroState)
+        {
+            DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): he is in {_state.Current.GetType().Name}.", this);
+            return false;
+        }
 
         if (_state.Current is SearchingState)
         {
-            if (priority > Searching.Priority) Searching.Aim(point, reason, priority);
-            return;
+            if (priority < Searching.Priority)
+            {
+                DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): lower than his search at {Searching.Priority}.", this);
+                return false;
+            }
+            // Without an Intel (Start already reported it) the guard is the written default, 1 s.
+            float guard = Intel != null ? Intel.IntelInterval : 1f;
+            if (priority == Searching.Priority && Time.time - Searching.TargetSetAt < guard)
+            {
+                DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): equal to his search, which was set under {guard:0.#}s ago.", this);
+                return false;
+            }
+            Searching.Retarget(point, reason, priority);
+            DebugLog.Info($"{name} retargets his search to {point}: {reason} at priority {priority}.", this);
+            return true;
         }
 
-        // Aim before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
-        Searching.Aim(point, reason, priority);
+        // Stage before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
+        Searching.Stage(point, reason, priority);
         _state.SetState(Searching);
+        DebugLog.Info($"{name} starts a search at {point}: {reason} at priority {priority}.", this);
+        return true;
     }
 
     // Corpses too: a dead enemy stays a body the chain can swing and throw.
@@ -692,6 +721,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, _giveUpRadius);
+
+        // What the senses sweep: loose bodies moving out to Motion Radius, corpses within Body Notice Range.
+        Gizmos.color = new Color(0.6f, 0.2f, 1f);
+        Gizmos.DrawWireSphere(transform.position, _motionRadius);
+        Gizmos.color = new Color(1f, 0.4f, 0.8f);
+        Gizmos.DrawWireSphere(transform.position, _bodyNoticeRange);
 
         // The gun's engagement band: fires out to Range, closes in only to Min Distance. In edit
         // mode Arms isn't set yet, so read the gun under the hand directly.

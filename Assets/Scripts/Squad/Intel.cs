@@ -23,7 +23,7 @@ public class Intel : MonoBehaviour
 
     [Header("Debug")]
     [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
-    [SerializeField] private bool _showSoundRange = true;
+    [SerializeField] private bool _showSoundRange;
     [Tooltip("Seconds a sound's reach stays on screen, fading out.")]
     [SerializeField, Min(0.5f)] private float _soundTrailTime = 3f;
 
@@ -54,22 +54,41 @@ public class Intel : MonoBehaviour
     // Each enemy warns once about a setup problem, however often he speaks or is spoken to.
     private readonly HashSet<EnemyController> _warnedNoReach = new();
     private readonly HashSet<EnemyController> _warnedListenerNoGrid = new();
+    // A sound that nobody can hear warns once per source object, not once per shot.
+    private readonly HashSet<Object> _warnedNoHearing = new();
+    private readonly HashSet<EnemyController> _warnedListenerCantHear = new();
     private float _nextPublish;
 
     /// <summary>The pool as of the last publish. A new object each time, so one in hand never changes.</summary>
     public IntelSnapshot Published { get; private set; } = IntelSnapshot.Empty;
 
     public float SpeechRange => _speechRange;
+    public float IntelInterval => _intelInterval;
 
-    /// <summary>The behaviour map every officer reads. Null only when the asset is missing, which OnEnable reports.</summary>
+    /// <summary>
+    /// The behaviour map every officer reads. Null only when the asset is missing, which OnEnable
+    /// reports once; callers treat null as "no row", so nothing reacts and nothing throws.
+    /// </summary>
     public BehaviourMap MapAt(Vector3 point) => _defaultMap;
+
+    /// <summary>The row for a kind at a point. False when there's no map (reported once, at enable) or no row for the kind.</summary>
+    public bool TryGetRow(Vector3 point, StimulusKind kind, out BehaviourMap.Row row)
+    {
+        BehaviourMap map = MapAt(point);
+        if (map == null)
+        {
+            row = default;
+            return false;
+        }
+        return map.TryGetRow(kind, out row);
+    }
 
     // Enable and disable rather than Awake and destroy, so switching the component off also
     // silences the bus instead of leaving stale rules behind.
     private void OnEnable()
     {
         if (_defaultMap == null)
-            Debug.LogError($"{name}: Intel has no Default Map — officers react to nothing. Assign a Behaviour Map asset.", this);
+            Debug.LogError($"{name}: Intel has no Default Map — officers react to no sound, moving body, corpse or loose gun. Assign a Behaviour Map asset.", this);
 
         Stimuli.Emitted += Hear;
 
@@ -101,6 +120,9 @@ public class Intel : MonoBehaviour
 
     public void Unregister(EnemyController enemy) => _enemies.Remove(enemy);
 
+    /// <summary>Every registered officer, alive or dead. Read by index, never enumerated, so a scan allocates nothing.</summary>
+    public IReadOnlyList<EnemyController> Enemies => _enemies;
+
     /// <summary>Drops a sighting in the inbox. It reaches everyone at the next publish; the newest report wins.</summary>
     public void Report(RubyFact fact, EnemyController reporter)
     {
@@ -124,12 +146,6 @@ public class Intel : MonoBehaviour
 
     /// <summary>The squad has a loose gun on its books. True only the first time anyone reports it.</summary>
     public bool ReportGun(Gun gun) => _knownGuns.Add(gun);
-
-    /// <summary>The pool already holds this body, so the squad doesn't need to be told again.</summary>
-    public bool PoolKnowsBody(EnemyController body) => _knownBodies.Contains(body);
-
-    /// <summary>The pool already holds this gun, so the squad doesn't need to be told again.</summary>
-    public bool PoolKnowsGun(Gun gun) => _knownGuns.Contains(gun);
 
     /// <summary>
     /// A spoken report: every other living enemy within Speech Range along the floor learns it at
@@ -198,13 +214,30 @@ public class Intel : MonoBehaviour
         }
 
         FlowField reach = grid.FloodFrom(stimulus.Position, stimulus.Loudness);
+        if (!reach.HasGoal)
+        {
+            // Mirrors Say: no walkable ground within reach of the source is a setup problem, not silence.
+            Object source = stimulus.Source != null ? stimulus.Source : this;
+            if (_warnedNoHearing.Add(source))
+                Debug.LogWarning($"{source.name}'s {stimulus.Kind} reaches no one: no walkable ground is within reach of {stimulus.Position} (against a blocked cell, or off the floor?).", source);
+            return;
+        }
+        // Recording walks the whole grid, so it only happens while the overlay is on to show it.
         if (_showSoundRange) RecordSound(stimulus, reach);
         EnemyController sourceOwner = stimulus.Source != null ? stimulus.Source.GetComponentInParent<EnemyController>() : null;
 
         foreach (EnemyController listener in _enemies)
         {
             if (listener == sourceOwner || listener.Health.IsDead) continue;
-            if (PathGrid.At(listener.transform.position) != grid) continue;
+            PathGrid listenerGrid = PathGrid.At(listener.transform.position);
+            if (listenerGrid == null)
+            {
+                if (_warnedListenerCantHear.Add(listener))
+                    Debug.LogWarning($"{listener.name} is on no PathGrid, so he can't hear sounds.", listener);
+                continue;
+            }
+            // Another grid is another floor: floors are independent by design, so he simply doesn't hear.
+            if (listenerGrid != grid) continue;
             if (!reach.TryGetDistance(listener.transform.position, out float metres) || metres > stimulus.Loudness) continue;
 
             listener.Senses.Hear(stimulus);

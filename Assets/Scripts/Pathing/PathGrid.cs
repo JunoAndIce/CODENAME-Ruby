@@ -29,9 +29,9 @@ public class PathGrid : MonoBehaviour
 
     [Header("Debug")]
     [Tooltip("Draw this grid's cells in the Scene and Game views (Gizmos on) whether or not it's selected.")]
-    [SerializeField] private bool _alwaysShowGrid = true;
+    [SerializeField] private bool _alwaysShowGrid;
     [Tooltip("With Always Show Grid, also tint the open cells, so the whole floor reads as a map and not just its walls.")]
-    [SerializeField] private bool _showOpenCells = true;
+    [SerializeField] private bool _showOpenCells;
 
     private static readonly Collider[] OverlapHits = new Collider[32];
     private const float BelowFloorTolerance = 0.5f;

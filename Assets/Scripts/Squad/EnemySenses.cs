@@ -7,10 +7,6 @@ using UnityEngine;
 /// </summary>
 public class EnemySenses
 {
-    // A sweep every frame would be wasted: a body at notice speed moves a few centimetres in that
-    // time, and the sweep is the costly part. Each officer's first sweep is at a random offset so
-    // a squad doesn't scan on the same physics step.
-    private const float ScanInterval = 0.2f;
     private static readonly Collider[] Nearby = new Collider[64];
 
     private readonly EnemyController _enemy;
@@ -18,11 +14,15 @@ public class EnemySenses
     private readonly List<Rigidbody> _bodies = new();
     private readonly List<Rigidbody> _expired = new();
     private float _nextScan;
+    private bool _warnedFullBuffer;
 
     public EnemySenses(EnemyController enemy)
     {
         _enemy = enemy;
-        _nextScan = Time.time + Random.Range(0f, ScanInterval);
+        // A sweep every frame would be wasted: a body at notice speed moves a few centimetres in that
+        // time, and the sweep is the costly part. Each officer's first sweep is at a random offset so
+        // a squad doesn't scan on the same physics step.
+        _nextScan = Time.time + Random.Range(0f, enemy.ScanInterval);
     }
 
     /// <summary>
@@ -31,33 +31,53 @@ public class EnemySenses
     /// </summary>
     public void Hear(in Stimulus stimulus)
     {
-        bool fromRuby = stimulus.Source != null && stimulus.Source.GetComponentInParent<PlayerController>() != null;
-        if (fromRuby)
-            _enemy.Memory.Learn(new RubyFact(stimulus.Position, stimulus.Time, Knowledge.Heard));
+        PlayerController ruby = stimulus.Source != null ? stimulus.Source.GetComponentInParent<PlayerController>() : null;
+        // Where Ruby was when she fired or whipped, not where the sound landed: a whip's stimulus
+        // sits at its anchor (up to a chain's length from her, or on the enemy she grabbed), and
+        // teaching that would send the hunt to the wrong place.
+        if (ruby != null)
+            _enemy.Memory.Learn(new RubyFact(ruby.transform.position, stimulus.Time, Knowledge.Heard));
 
-        if (!_enemy.Intel.MapAt(stimulus.Origin).TryGetRow(stimulus.Kind, out BehaviourMap.Row row)) return;
+        if (!_enemy.Intel.TryGetRow(stimulus.Origin, stimulus.Kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} hears {stimulus.Kind} from {stimulus.Origin}: {row.Response} at priority {row.Priority}.", _enemy);
         _enemy.Investigate(stimulus.Origin, row.Response, row.Priority);
     }
 
     /// <summary>
-    /// Looks for bodies moving within Motion Radius that he can see clearly. A fast one is
-    /// FastObject, a slower one MovingObject; the map decides what each is worth. Each body is
-    /// reacted to once per Origin Lifetime, so a settled thrown body doesn't keep him searching.
+    /// Every Scan Interval: looks for bodies moving within Motion Radius that he can see clearly
+    /// (a fast one is FastObject, a slower one MovingObject), for corpses and for loose guns. The
+    /// map decides what each is worth. A moving body is reacted to once per Origin Lifetime, so a
+    /// settled thrown body doesn't keep him searching.
     /// </summary>
     public void Scan()
     {
         float now = Time.time;
         if (now < _nextScan) return;
-        _nextScan = now + ScanInterval;
+        _nextScan = now + _enemy.ScanInterval;
 
-        if (Stimuli.Rules == null || _enemy.Intel == null) return;
+        // No Intel was reported at Start; there is nothing to report to or read the map from.
+        if (_enemy.Intel == null) return;
 
+        // Only the motion scan needs the stimulus rules (Notice and Alarm Speed, Origin Lifetime).
+        // Intel reports their absence once, at enable; corpses and guns don't need them.
+        if (Stimuli.Rules != null) ScanMotion(now);
+        ScanCorpses();
+        ScanLooseGuns();
+    }
+
+    private void ScanMotion(float now)
+    {
         float lifetime = Stimuli.Rules.OriginLifetime;
         Forget(now, lifetime);
 
         int count = Physics.OverlapSphereNonAlloc(_enemy.transform.position, _enemy.MotionRadius, Nearby, ~0, QueryTriggerInteraction.Ignore);
+        if (count == Nearby.Length && !_warnedFullBuffer)
+        {
+            _warnedFullBuffer = true;
+            Debug.LogWarning($"{_enemy.name}: {Nearby.Length} colliders are within Motion Radius, which fills his sense buffer, so some nearby bodies weren't considered. Reduce Motion Radius or the clutter.", _enemy);
+        }
+
         _bodies.Clear();
         for (int i = 0; i < count; i++)
         {
@@ -69,29 +89,27 @@ public class EnemySenses
             _bodies.Add(key);
             Consider(key, now, lifetime);
         }
-
-        ScanCorpses();
-        ScanLooseGuns();
     }
 
-    // Corpses rest on trigger colliders, which the motion sweep above ignores, so they get their
-    // own sweep. Each body is looked at once: remembering it before the next collider of the same
-    // officer is reached stops the rest of his colliders from counting again.
+    // Corpses come from the squad's registered officers, not a physics sweep: a body at rest has
+    // trigger colliders, and the registry is short and needs no buffer to overflow. The cheap
+    // tests (dead, known) run first, so the one sight ray is only for a corpse he could notice.
     private void ScanCorpses()
     {
-        int count = Physics.OverlapSphereNonAlloc(_enemy.transform.position, _enemy.MotionRadius, Nearby, ~0, QueryTriggerInteraction.Collide);
-        for (int i = 0; i < count; i++)
+        IReadOnlyList<EnemyController> officers = _enemy.Intel.Enemies;
+        for (int i = 0; i < officers.Count; i++)
         {
-            EnemyController officer = Nearby[i].GetComponentInParent<EnemyController>();
-            if (officer == null || officer == _enemy || officer.Health == null || !officer.Health.IsDead) continue;
+            EnemyController officer = officers[i];
+            if (officer == null || officer == _enemy || !officer.Health.IsDead) continue;
             if (_enemy.Memory.KnowsBody(officer)) continue;
 
             Vector3 at = officer.transform.position;
-            if (!_enemy.InView(at, CorpseViewRange) || !_enemy.HasClearSight(at, officer.transform)) continue;
+            if (!_enemy.InView(at, _enemy.BodyNoticeRange) || !_enemy.HasClearSight(at, officer.transform)) continue;
 
             // Known to the squad but not to him: he learns it and doesn't go looking. Unknown to both:
-            // it goes on the squad's books and he searches where it lies.
-            bool squadKnows = _enemy.Intel.PoolKnowsBody(officer);
+            // it goes on the squad's books and he searches where it lies. The pool is read as
+            // published, a little stale, like everything else he reads from it.
+            bool squadKnows = _enemy.Intel.Published.KnowsBody(officer);
             _enemy.Intel.ReportBody(officer);
             _enemy.Memory.RememberBody(officer);
             if (squadKnows)
@@ -116,7 +134,7 @@ public class EnemySenses
             Vector3 at = gun.transform.position;
             if (!_enemy.InView(at, _enemy.ViewRange) || !_enemy.HasClearSight(at, gun.transform)) continue;
 
-            bool squadKnows = _enemy.Intel.PoolKnowsGun(gun);
+            bool squadKnows = _enemy.Intel.Published.KnowsGun(gun);
             _enemy.Intel.ReportGun(gun);
             _enemy.Memory.RememberGun(gun);
             if (squadKnows)
@@ -130,14 +148,11 @@ public class EnemySenses
 
     private void Notice(Vector3 origin, StimulusKind kind, string what)
     {
-        if (!_enemy.Intel.MapAt(origin).TryGetRow(kind, out BehaviourMap.Row row)) return;
+        if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} notices {what}: {row.Response} at priority {row.Priority}.", _enemy);
         _enemy.Investigate(origin, row.Response, row.Priority);
     }
-
-    // A corpse or a gun on the floor is looked at closer than Ruby is, so it's a shorter sight.
-    private const float CorpseViewRange = 6f;
 
     // A character is one body for this purpose, so a bone of a tumbling officer isn't a body of its
     // own. Ruby is never a body to react to: she's the one being hunted. Null means skip.
@@ -161,14 +176,14 @@ public class EnemySenses
         if (speed < Stimuli.Rules.NoticeSpeed) return;
         if (!_enemy.HasClearSight(body.worldCenterOfMass, body.transform)) return;
         if (_reactedAt.TryGetValue(body, out float reactedAt) && now - reactedAt < lifetime) return;
-        _reactedAt[body] = now;
 
         var kind = speed >= Stimuli.Rules.AlarmSpeed ? StimulusKind.FastObject : StimulusKind.MovingObject;
         Vector3 origin = Disturbance.TryGetOrigin(body, out Vector3 thrownFrom) ? thrownFrom : body.position;
-        if (!_enemy.Intel.MapAt(origin).TryGetRow(kind, out BehaviourMap.Row row)) return;
+        if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: {row.Response} at priority {row.Priority}.", _enemy);
-        _enemy.Investigate(origin, row.Response, row.Priority);
+        // Recorded only when he took it: one he ignored (mid-fight, say) may still send him later.
+        if (_enemy.Investigate(origin, row.Response, row.Priority)) _reactedAt[body] = now;
     }
 
     private static bool IsTumbling(Rigidbody body)

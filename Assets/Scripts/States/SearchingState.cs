@@ -15,8 +15,11 @@ public class SearchingState : EnemyStateBase
     private float _searchTimer;   // runs only from arrival: the walk there is not part of the search
     private float _travelTimer;
     private bool _arrived;
-    // Set by Aim before the transition into this state, so Enter keeps the staged target.
+    // The travel limit ran out: he stands and searches where he is, so the walk must stop too.
+    private bool _gaveUpWalking;
+    // Set by Stage before the transition into this state, so Enter keeps the staged target.
     private bool _staged;
+    private float _targetSetAt;
 
     public SearchingState(EnemyController enemy) : base(enemy) { }
 
@@ -25,15 +28,30 @@ public class SearchingState : EnemyStateBase
     public bool SearchExpired => _searchTimer >= Enemy.SearchDuration;
     public StimulusResponse Reason => _reason;
     public int Priority => _priority;
+    /// <summary>When the current target was set (entering the state or the last retarget), for the same-priority guard.</summary>
+    public float TargetSetAt => _targetSetAt;
 
-    /// <summary>Sets where to search and why. Restarts the search from the walk, so the new spot gets its full time on arrival.</summary>
-    public void Aim(Vector3 point, StimulusResponse reason, int priority)
+    /// <summary>
+    /// Sets the target for a search about to begin from Idle or Patrol. Only staging, never a
+    /// retarget: a search already running takes Retarget, which has no Enter to clear a stage, and
+    /// a stage left standing would later hijack the search that follows Aggro.
+    /// </summary>
+    public void Stage(Vector3 point, StimulusResponse reason, int priority)
     {
         _target = point;
         _reason = reason;
         _priority = priority;
-        ResetTimers();
         _staged = true;
+    }
+
+    /// <summary>Moves a search already in progress to a new spot and reason. Restarts it from the walk, so the new spot gets its full time on arrival.</summary>
+    public void Retarget(Vector3 point, StimulusResponse reason, int priority)
+    {
+        _target = point;
+        _reason = reason;
+        _priority = priority;
+        _targetSetAt = Time.time;
+        ResetTimers();
     }
 
     private void ResetTimers()
@@ -41,11 +59,13 @@ public class SearchingState : EnemyStateBase
         _searchTimer = 0f;
         _travelTimer = 0f;
         _arrived = false;
+        _gaveUpWalking = false;
     }
 
     public override void Enter()
     {
         ResetTimers();
+        _targetSetAt = Time.time;
         if (_staged)
         {
             _staged = false;
@@ -57,6 +77,8 @@ public class SearchingState : EnemyStateBase
         _reason = StimulusResponse.SearchForAttack;
         _priority = FromAggroPriority;
     }
+
+    public override void Exit() => _staged = false;
 
     public override void Tick()
     {
@@ -71,13 +93,21 @@ public class SearchingState : EnemyStateBase
         {
             DebugLog.Info($"{Enemy.name} hasn't reached his search spot in {Enemy.SearchTravelLimit:0.#}s; searching where he stands.", Enemy);
             _arrived = true;
+            _gaveUpWalking = true;
         }
     }
 
     // PathTo stops the enemy itself once it arrives. Unreachable (no path, already warned) counts
-    // as arrived too, or the search would never start and he'd stand there for good.
+    // as arrived too, or the search would never start and he'd stand there for good. Past the
+    // travel limit he stops pathing: calling PathTo again would keep him walking to a spot he gave up on.
     public override void FixedTick()
     {
+        if (_gaveUpWalking)
+        {
+            Enemy.Stop();
+            return;
+        }
+
         NavResult result = Enemy.PathTo(_target, Enemy.SearchSpeed);
         if (_arrived || result == NavResult.Moving) return;
 
