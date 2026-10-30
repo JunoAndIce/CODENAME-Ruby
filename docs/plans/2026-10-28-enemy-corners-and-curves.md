@@ -154,3 +154,11 @@
 - [x] **Step 2: The manual.** Add the values to the tuning table and a short paragraph on how enemies walk. Rebuild the PDF with headless Chrome, as before, and check that it wrote.
 - [x] **Step 3: Spec and plan.** Tick piece 10 in the spec's Progress, and tick this plan's steps. Commit these files only.
 - [ ] **Step 4: End-of-piece review, in the background,** over this plan's range, on the most capable model. Point it at the Review Focus. Fix what it says must change, in one fix wave, before going back to pieces 2-3's Task 4.
+
+  **End-of-piece review (2026-10-29).** Fixed in one wave:
+  - a flow field's last step (the goal cell) is now steered as a point he must reach: `TryGetStep` reports `atGoal` and `GridNavigator.Steer` takes `mustReach` explicitly, so a fast chase of Ruby against a wall arrives instead of circling;
+  - `FindPath` returns each corner's accepted clearance, and the navigator checks the off-route test and the corner advance at it, so a doorway run no longer re-plans every interval or turns late;
+  - `HasClearLine` relaxes to the goal's clearance only as a ramp near the goal, so the rest of the line keeps its margin;
+  - the speed floor is a tenth, keeping its turning circle inside `CornerReach`;
+  - editing Corner Margin in Play warns that it takes effect at the next bake;
+  - docs: the manual's "must reach" wording and PDF, and CLAUDE.md (mustReach, the ramp, per-corner clearance, `TryGetDistance`, the Play-mode warning).
