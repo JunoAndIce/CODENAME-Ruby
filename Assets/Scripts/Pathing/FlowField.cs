@@ -132,12 +132,15 @@ public class FlowField
     /// Where an agent at from should steer next. Follows the field downhill, then looks up to
     /// LookAhead cells further along and aims at the furthest one in straight sight, so agents
     /// walk straight lines instead of an 8-direction staircase. False when from is off the
-    /// field (walled off from the goal, or beyond Max Flow Distance).
+    /// field (walled off from the goal, or beyond Max Flow Distance). atGoal is true when the
+    /// steer cell is the goal cell: the descent ends there, so the point stops rolling ahead and a
+    /// fast agent could orbit it; the caller must treat it as a point to reach.
     /// </summary>
-    public bool TryGetStep(Vector3 from, out Vector3 steer)
+    public bool TryGetStep(Vector3 from, out Vector3 steer, out bool atGoal)
     {
         RefreshIfStale();
         steer = from;
+        atGoal = false;
         if (!TryGetStartCell(from, out Vector2Int cell)) return false;
 
         steer = _grid.CellToWorld(cell);
@@ -154,6 +157,7 @@ public class FlowField
             steer = point;
             cell = next;
         }
+        atGoal = cell == _goalCell;
         return true;
     }
 

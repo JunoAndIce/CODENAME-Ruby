@@ -28,6 +28,7 @@ public class GridNavigator
 
     // Patrol: an A* route to the area's resolved goal, cached per area.
     private readonly List<Vector3> _route = new();
+    private readonly List<int> _routeClearance = new();   // the clearance each corner's run was accepted at, beside _route
     private int _routeIndex;
     private bool _routeOk;
     private PathGrid _routeGrid;
@@ -133,7 +134,8 @@ public class GridNavigator
         {
             Plan(grid, area, position, resetWatchdog: true);
         }
-        else if (_routeOk && Time.fixedTime >= _nextReplan && !grid.HasClearLine(position, _route[_routeIndex]))
+        else if (_routeOk && Time.fixedTime >= _nextReplan
+                 && !grid.HasLineOfSight(position, _route[_routeIndex], _routeClearance[_routeIndex]))
         {
             // Knocked off the route (a collision, an overshoot, a slide along a wall): its next
             // corner is out of sight, and steering straight at it walks into the wall. Re-plan
@@ -156,11 +158,15 @@ public class GridNavigator
         }
 
         // Move on once the next corner is in straight sight, not on getting near this one:
-        // around the end of a thin wall, switching early aims the enemy straight into it.
+        // around the end of a thin wall, switching early aims the enemy straight into it. Sight at
+        // the clearance the pull accepted that corner at, as the off-route check above: asking for
+        // the corner's own clearance rejected a run through a doorway to a roomy corner, so he
+        // walked onto the corner before turning.
         while (_routeIndex < _route.Count - 1
-               && (FlatDistance(position, _route[_routeIndex]) <= CornerReach || grid.HasClearLine(position, _route[_routeIndex + 1])))
+               && (FlatDistance(position, _route[_routeIndex]) <= CornerReach
+                   || grid.HasLineOfSight(position, _route[_routeIndex + 1], _routeClearance[_routeIndex + 1])))
             _routeIndex++;
-        Steer(Followed.Route, _route[_routeIndex], speed);
+        Steer(Followed.Route, _route[_routeIndex], speed, mustReach: true);
 
         float remaining = RemainingRoute(position);
         if (!MadeNoProgress(remaining)) return NavResult.Moving;
@@ -235,6 +241,7 @@ public class GridNavigator
             _stuckTimer = 0f;
         }
         _route.Clear();
+        _routeClearance.Clear();
         _routeIndex = 0;
 
         if (!grid.ResolveArea(area, position, out Vector2Int goalCell, out _goalPoint))
@@ -248,11 +255,12 @@ public class GridNavigator
         if (grid.HasClearLine(position, _goalPoint))
         {
             _route.Add(_goalPoint);
+            _routeClearance.Add(Mathf.Min(grid.MarginCells + 1, grid.Clearance(goalCell)));   // the least HasClearLine asked, at the goal
             _routeOk = true;
             return;
         }
 
-        _routeOk = grid.FindPath(position, goalCell, _route);
+        _routeOk = grid.FindPath(position, goalCell, _route, _routeClearance);
         if (!_routeOk)
         {
             FailureReason = "no path to the area (walled off, or too far for one search)";
@@ -298,27 +306,29 @@ public class GridNavigator
         if (grid.HasClearLine(position, goal))
         {
             _lineEnd = goal;
-            Steer(Followed.Line, goal, speed);
+            Steer(Followed.Line, goal, speed, mustReach: true);
             return NavResult.Moving;
         }
 
-        if (!field.TryGetStep(position, out Vector3 steer))
+        if (!field.TryGetStep(position, out Vector3 steer, out bool atGoal))
         {
             Fail($"no path to {goal} on {grid.name} (walled off, or beyond Max Flow Distance) — standing still.");
             return NavResult.Unreachable;
         }
 
         _field = field;
-        Steer(Followed.Field, steer, speed);
+        // A step rolls ahead and can't be orbited, except the last, the goal cell: the descent
+        // ends there, so the point holds still and a fast body could circle it for good.
+        Steer(Followed.Field, steer, speed, mustReach: atGoal);
         return NavResult.Moving;
     }
 
     // A successful move ends any failure episode, so the next failure warns again.
-    private void Steer(Followed followed, Vector3 target, float speed)
+    private void Steer(Followed followed, Vector3 target, float speed, bool mustReach)
     {
         _followed = followed;
         _lastWarning = null;
-        _agent.MoveToward(target, speed, followed != Followed.Field);
+        _agent.MoveToward(target, speed, mustReach);
     }
 
     private bool TryGetGrid(out PathGrid grid)

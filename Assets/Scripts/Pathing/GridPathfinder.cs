@@ -34,11 +34,14 @@ public class GridPathfinder
 
     /// <summary>
     /// Shortest path from from to the goal cell, as straight-line corners ending at the goal
-    /// cell's centre. False when the goal is blocked, unreachable, or too far for one search.
+    /// cell's centre. clearances gets, beside each corner, the clearance the pull accepted the run
+    /// ending there at, so a follower can check sight at the clearance the route was pulled at.
+    /// False when the goal is blocked, unreachable, or too far for one search.
     /// </summary>
-    public bool FindPath(Vector3 from, Vector2Int goal, List<Vector3> path)
+    public bool FindPath(Vector3 from, Vector2Int goal, List<Vector3> path, List<int> clearances)
     {
         path.Clear();
+        clearances.Clear();
         if (!_grid.IsWalkable(goal)) return false;
         if (!_grid.WorldToCell(from, out Vector2Int raw) || !_grid.NearestWalkable(raw, SnapRadius, out Vector2Int start))
             return false;
@@ -59,7 +62,7 @@ public class GridPathfinder
 
             if (index == goalIndex)
             {
-                BuildPath(from, goalIndex, path);
+                BuildPath(from, goalIndex, path, clearances);
                 return true;
             }
             if (++expanded > MaxExpanded) return false;
@@ -106,7 +109,7 @@ public class GridPathfinder
 
     // String-pull the cell path into straight segments, adding a corner only where sight breaks,
     // so agents don't walk an 8-direction staircase.
-    private void BuildPath(Vector3 from, int goalIndex, List<Vector3> path)
+    private void BuildPath(Vector3 from, int goalIndex, List<Vector3> path, List<int> clearances)
     {
         _cells.Clear();
         for (int index = goalIndex; index != -1; index = _parent[index])
@@ -120,15 +123,24 @@ public class GridPathfinder
         // exempts it: the agent may be brushing a wall and can't do anything about it.
         Vector3 anchor = from;
         int lowest = int.MaxValue;
+        int accepted = _grid.MarginCells + 1;   // the clearance the current run's last accepted pull used
         for (int i = 1; i < _cells.Count; i++)
         {
             lowest = Mathf.Min(lowest, _grid.Clearance(_cells[i]));
-            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]), Mathf.Min(_grid.MarginCells + 1, lowest))) continue;
+            int asked = Mathf.Min(_grid.MarginCells + 1, lowest);
+            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]), asked))
+            {
+                accepted = asked;
+                continue;
+            }
 
             anchor = _grid.CellToWorld(_cells[i - 1]);
             path.Add(anchor);
+            clearances.Add(accepted);   // the run that ends at this corner
             lowest = Mathf.Min(_grid.Clearance(_cells[i - 1]), _grid.Clearance(_cells[i]));   // the new run starts at the corner
+            accepted = Mathf.Min(_grid.MarginCells + 1, lowest);
         }
         path.Add(_grid.CellToWorld(_cells[_cells.Count - 1]));
+        clearances.Add(accepted);
     }
 }

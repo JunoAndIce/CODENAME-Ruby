@@ -119,11 +119,14 @@ public class PathGrid : MonoBehaviour
         return _scratchField;
     }
 
-    /// <summary>A* from a point to a goal cell, as straight-line corners. See GridPathfinder.</summary>
-    public bool FindPath(Vector3 from, Vector2Int goal, List<Vector3> path)
+    /// <summary>
+    /// A* from a point to a goal cell, as straight-line corners, with the clearance each corner's
+    /// run was pulled at in clearances (one per corner). See GridPathfinder.
+    /// </summary>
+    public bool FindPath(Vector3 from, Vector2Int goal, List<Vector3> path, List<int> clearances)
     {
         _pathfinder ??= new GridPathfinder(this);
-        return _pathfinder.FindPath(from, goal, path);
+        return _pathfinder.FindPath(from, goal, path, clearances);
     }
 
     /// <summary>
@@ -229,6 +232,17 @@ public class PathGrid : MonoBehaviour
         return Mathf.Sqrt(dx * dx + dz * dz);
     }
 
+    // Rounded up, so the margin is never less than asked; capped so Clearance + 1 fits a byte.
+    private int MarginCellsFor(float margin) => Mathf.Clamp(Mathf.CeilToInt(margin / _cellSize - 0.001f), 0, 250);
+
+    // The margin is fixed at bake, with the clearance cap it sizes. A live edit would otherwise
+    // change nothing and say nothing, so name it.
+    private void OnValidate()
+    {
+        if (!Application.isPlaying || !IsBaked || MarginCellsFor(_cornerMargin) == _marginCells) return;
+        Debug.LogWarning($"{name}: Corner Margin {_cornerMargin:0.##} m is {MarginCellsFor(_cornerMargin)} cells but this grid baked {_marginCells}. The new margin takes effect at the next bake (next play).", this);
+    }
+
     private void Bake()
     {
         _width = Mathf.Max(1, Mathf.CeilToInt(_size.x / _cellSize));
@@ -236,8 +250,7 @@ public class PathGrid : MonoBehaviour
         _origin = transform.position - new Vector3(_width * _cellSize, 0f, _depth * _cellSize) * 0.5f;
         _walkable = new bool[_width * _depth];
         _propBlocks = new int[_width * _depth];
-        // Rounded up, so the margin is never less than asked; capped so Clearance + 1 fits a byte.
-        _marginCells = Mathf.Clamp(Mathf.CeilToInt(_cornerMargin / _cellSize - 0.001f), 0, 250);
+        _marginCells = MarginCellsFor(_cornerMargin);
         _clearance = new byte[_width * _depth];
         _clearanceQueue = new int[_width * _depth];
         Version++;
@@ -510,15 +523,18 @@ public class PathGrid : MonoBehaviour
 
     /// <summary>
     /// A straight line that keeps the path margin, so a tidy path doesn't graze a corner on the
-    /// way. It asks for the clearance WallPenalty doesn't charge for (MarginCells + 1: a cell
-    /// inside the margin is one at or below MarginCells), or less when the goal itself is nearer
-    /// a wall than that, so a goal by a wall can still be walked straight to. A goal in a blocked cell gets no
-    /// straight line: the field steps there.
+    /// way. Each cell after the first needs the clearance WallPenalty doesn't charge for
+    /// (MarginCells + 1: a cell inside the margin is one at or below MarginCells), relaxed only
+    /// near the goal as a ramp: at most the goal cell's clearance plus the cell's Chebyshev
+    /// distance from the goal cell, and never below 1. So a goal by a wall can still be walked
+    /// straight to, but the rest of the line keeps its margin and can't graze a pillar or jamb on
+    /// the way; a line that fails goes to the field or A*, which keep the margin. A goal in a
+    /// blocked cell gets no straight line: the field steps there.
     /// </summary>
     public bool HasClearLine(Vector3 from, Vector3 to)
     {
         WorldToCell(to, out Vector2Int goal);
-        return HasLineOfSight(from, to, Mathf.Min(MarginCells + 1, Clearance(goal)));
+        return Walk(from, to, MarginCells + 1, true, goal, Clearance(goal));
     }
 
     /// <summary>
@@ -527,6 +543,11 @@ public class PathGrid : MonoBehaviour
     /// what a narrow gap allows; that is the rule, not a fallback.
     /// </summary>
     public bool HasLineOfSight(Vector3 from, Vector3 to, int minClearance)
+        => Walk(from, to, minClearance, false, default, 0);
+
+    // The line walk. With ramp, minClearance is the cap and each cell asks for
+    // min(cap, goalClearance + its Chebyshev distance from goalCell); otherwise every cell asks minClearance.
+    private bool Walk(Vector3 from, Vector3 to, int minClearance, bool ramp, Vector2Int goalCell, int goalClearance)
     {
         minClearance = Mathf.Max(1, minClearance);
         float fx = (from.x - _origin.x) / _cellSize, fz = (from.z - _origin.z) / _cellSize;
@@ -547,15 +568,15 @@ public class PathGrid : MonoBehaviour
             // The starting cell is wherever the agent already stands, often one the clearance
             // margin marks blocked because it's brushing a wall, so only cells it would move
             // into count. A line back into the wall still fails on the next cell.
-            if (i > 0 && !Passable(cell, minClearance)) return false;
+            if (i > 0 && !Passable(cell, minClearance, ramp, goalCell, goalClearance)) return false;
             if (cell == end) return true;
 
             if (Mathf.Approximately(nextX, nextZ))
             {
                 // Passing exactly through a corner: both side cells must be open, or the
                 // line squeezes diagonally between two blocked cells.
-                if (!Passable(new Vector2Int(cell.x + stepX, cell.y), minClearance)
-                    || !Passable(new Vector2Int(cell.x, cell.y + stepZ), minClearance)) return false;
+                if (!Passable(new Vector2Int(cell.x + stepX, cell.y), minClearance, ramp, goalCell, goalClearance)
+                    || !Passable(new Vector2Int(cell.x, cell.y + stepZ), minClearance, ramp, goalCell, goalClearance)) return false;
                 cell.x += stepX; cell.y += stepZ;
                 nextX += deltaX; nextZ += deltaZ;
             }
@@ -565,7 +586,15 @@ public class PathGrid : MonoBehaviour
         return false;
     }
 
-    private bool Passable(Vector2Int cell, int minClearance) => IsWalkable(cell) && Clearance(cell) >= minClearance;
+    private bool Passable(Vector2Int cell, int minClearance, bool ramp, Vector2Int goalCell, int goalClearance)
+    {
+        if (ramp)
+        {
+            int distance = Mathf.Max(Mathf.Abs(cell.x - goalCell.x), Mathf.Abs(cell.y - goalCell.y));
+            minClearance = Mathf.Max(1, Mathf.Min(minClearance, goalClearance + distance));
+        }
+        return IsWalkable(cell) && Clearance(cell) >= minClearance;
+    }
 
     private void OnDrawGizmos()
     {

@@ -14,8 +14,9 @@ public interface IPathAgent
 
     /// <summary>
     /// Steer one physics step toward target. mustReach is true when the target is a point he must
-    /// actually reach (a goal on a clear line, a route corner) and false for a flow-field step,
-    /// which rolls ahead every step and can't be orbited.
+    /// actually reach (a goal on a clear line, a route corner, a field's last step into the goal
+    /// cell) and false for any other flow-field step, which rolls ahead every step and can't be
+    /// orbited.
     /// </summary>
     void MoveToward(Vector3 target, float speed, bool mustReach);
 

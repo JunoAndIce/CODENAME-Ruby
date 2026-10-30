@@ -375,7 +375,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (direction.sqrMagnitude > 0.01f)
         {
             // Fit the speed only to a point he must reach. A flow-field step rolls ahead every
-            // step, so there is nothing to orbit and the cap would only slow a chase on ordinary bends.
+            // step, so there is nothing to orbit and the cap would only slow a chase on ordinary
+            // bends; its last step, the goal cell, stops rolling and is a point he must reach.
             if (mustReach)
                 fitted = Steering.SpeedToFit(speed, _turnSpeed, direction.magnitude, Vector3.Angle(heading, direction));
             heading = Steering.TurnToward(heading, direction, _turnSpeed * Time.fixedDeltaTime);
