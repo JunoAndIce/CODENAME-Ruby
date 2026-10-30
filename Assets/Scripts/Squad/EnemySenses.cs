@@ -106,15 +106,16 @@ public class EnemySenses
             Vector3 at = officer.transform.position;
             if (!_enemy.InView(at, _enemy.BodyNoticeRange) || !_enemy.HasClearSight(at, officer.transform)) continue;
 
-            // Known to the squad but not to him: he learns it and doesn't go looking. Unknown to both:
-            // it goes on the squad's books and he searches where it lies. The pool is read as
-            // published, a little stale, like everything else he reads from it.
+            // Known to the squad but not to him: he stops and looks at it where he stands, and is wary
+            // from then on, but doesn't go to it: someone has already been. Unknown to both: it goes
+            // on the squad's books and he searches where it lies. The pool is read as published, a
+            // little stale, like everything else he reads from it.
             bool squadKnows = _enemy.Intel.Published.KnowsBody(officer);
             _enemy.Intel.ReportBody(officer);
             _enemy.Memory.RememberBody(officer);
             if (squadKnows)
             {
-                DebugLog.Info($"{_enemy.name} sees {officer.name} down, already on the squad's books; not searching.", _enemy);
+                Glance(at, StimulusKind.Body, $"the body of {officer.name}, already on the squad's books");
                 continue;
             }
             Notice(at, StimulusKind.Body, $"the body of {officer.name}");
@@ -144,6 +145,18 @@ public class EnemySenses
             }
             Notice(at, StimulusKind.LooseGun, $"the loose gun {gun.name}");
         }
+    }
+
+    // A look from where he stands at something the squad already knows about: it isn't worth a
+    // walk, but he mustn't pass it by, and it tells him she's about. Checked as a problem at the
+    // kind's own priority, so it can't pull him off anything that outranks it.
+    private void Glance(Vector3 at, StimulusKind kind, string what)
+    {
+        _enemy.Memory.BecomeWary();
+        if (!_enemy.Intel.TryGetRow(at, kind, out BehaviourMap.Row row)) return;
+
+        DebugLog.Info($"{_enemy.name} sees {what}: he looks at it from where he stands and is wary.", _enemy);
+        _enemy.Investigate(at, StimulusResponse.SearchForProblem, row.Priority, walkThere: false);
     }
 
     private void Notice(Vector3 origin, StimulusKind kind, string what)

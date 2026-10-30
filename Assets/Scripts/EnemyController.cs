@@ -39,6 +39,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("Seconds between his sweeps for moving bodies, corpses and loose guns. Each officer starts at a random offset so a squad doesn't sweep on the same step.")]
     [SerializeField, Min(0.05f)] private float _scanInterval = 0.2f;
 
+    [Header("Looking")]
+    [Tooltip("How long he looks around a spot he went to check, in seconds, before standing down. A search for an attack looks for Search Duration instead.")]
+    [SerializeField, Min(0.1f)] private float _lookTime = 1.5f;
+    [Tooltip("How long he holds still after finding nothing, in seconds: the gesture, until there is an animation for it.")]
+    [SerializeField, Min(0f)] private float _standDownTime = 1f;
+    [Tooltip("How far, in degrees, his body turns to each side of where he was facing while he looks around.")]
+    [SerializeField, Range(0f, 180f)] private float _lookSweepAngle = 70f;
+    [Tooltip("Seconds for one full sweep, left to right and back.")]
+    [SerializeField, Min(0.2f)] private float _lookSweepPeriod = 2f;
+
     [Header("Grabbed")]
     [Tooltip("How fast the gun pops up out of the officer's hand when the chain grabs him, in m/s: a small hop, to sell the grab.")]
     [SerializeField, Min(0f)] private float _grabPopUp = 3f;
@@ -135,6 +145,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
     public float SearchTravelLimit => _searchTravelLimit;
+    public float LookTime => _lookTime;
+    public float StandDownTime => _standDownTime;
     public PatrolRoute SafeRoute => _safeRoute;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
@@ -230,8 +242,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         // Always back to the hunt: an enemy only loses its gun to Ruby, so it knows she's around.
         At(Rearm, Aggro, new FuncPredicate(() => Rearm.Armed || Rearm.GaveUp));
 
-        At(Searching, Patrol, new FuncPredicate(() => Searching.SearchExpired && HasPatrolRoute));
-        At(Searching, Idle, new FuncPredicate(() => Searching.SearchExpired && !HasPatrolRoute));
+        At(Searching, Patrol, new FuncPredicate(() => Searching.Finished && HasPatrolRoute));
+        At(Searching, Idle, new FuncPredicate(() => Searching.Finished && !HasPatrolRoute));
 
         At(Ragdoll, Aggro, new FuncPredicate(() => Ragdoll.GotUp && !Health.IsDead));
 
@@ -311,15 +323,18 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// does, so a shootout's alternating shots can't swap his target or re-flood his field, and a
     /// quiet sound can't pull him off a spot he's checking. Aggro and the
     /// states that can't act on it ignore the call: he already knows where Ruby is. True when it
-    /// was taken; every decision is logged.
+    /// was taken; every decision is logged. A search for an attack makes him wary for good, taken
+    /// or not, so it always ends on an aggressive patrol. With walkThere false he looks from where
+    /// he stands instead of going to the point (a glance at a body the squad already knows).
     /// </summary>
-    public bool Investigate(Vector3 point, StimulusResponse reason, int priority)
+    public bool Investigate(Vector3 point, StimulusResponse reason, int priority, bool walkThere = true)
     {
         if (reason == StimulusResponse.Ignore)
         {
             DebugLog.Info($"{name} ignores {reason} at {point}: the map says to ignore it.", this);
             return false;
         }
+        if (reason == StimulusResponse.SearchForAttack) Memory.BecomeWary();
         if (_state.Current is GrabbedState or RagdollState or DeadState or RearmState or AggroState)
         {
             DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): he is in {_state.Current.GetType().Name}.", this);
@@ -333,13 +348,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
                 DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): equal or lower than his search at {Searching.Priority}.", this);
                 return false;
             }
-            Searching.Retarget(point, reason, priority);
+            Searching.Retarget(point, reason, priority, walkThere);
             DebugLog.Info($"{name} retargets his search to {point}: {reason} at priority {priority}.", this);
             return true;
         }
 
         // Stage before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
-        Searching.Stage(point, reason, priority);
+        Searching.Stage(point, reason, priority, walkThere);
         _state.SetState(Searching);
         DebugLog.Info($"{name} starts a search at {point}: {reason} at priority {priority}.", this);
         return true;
@@ -465,6 +480,27 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             return;
         }
         VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, direction.normalized * speed));
+    }
+
+    /// <summary>Face a point at once, ignoring height: forward must never tilt, or the body drives vertically.</summary>
+    public void FaceToward(Vector3 point)
+    {
+        Vector3 direction = point - transform.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.0001f) return;
+        transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+    }
+
+    /// <summary>
+    /// Stops and turns his body side to side about where he was facing, baseYaw, so a look reads as
+    /// looking about. It sets the heading about Y alone: his root never pitches in play, and a tilt
+    /// would drive him off the floor. For FixedTick, where the walk also writes the heading.
+    /// </summary>
+    public void LookAround(float baseYaw, float elapsed)
+    {
+        Stop();
+        float sweep = _lookSweepAngle * Mathf.Sin(elapsed * Mathf.PI * 2f / _lookSweepPeriod);
+        transform.rotation = Quaternion.Euler(0f, baseYaw + sweep, 0f);
     }
 
     /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>

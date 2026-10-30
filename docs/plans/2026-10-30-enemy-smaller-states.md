@@ -92,11 +92,11 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - `public bool Finished => Step == SearchStep.Done`, which replaces `SearchExpired`.
   - `Stage(point, reason, priority, bool walk)` and `Retarget(point, reason, priority, bool walk)`.
 
-- [ ] **Step 1: `Wary`.** The latch on `EnemyMemory`, with a summary saying why it exists: it is how an officer who has been after Ruby stays wary for good, beside `HasSeenRuby`.
+- [x] **Step 1: `Wary`.** The latch on `EnemyMemory`, with a summary saying why it exists: it is how an officer who has been after Ruby stays wary for good, beside `HasSeenRuby`.
 
-- [ ] **Step 2: The looking tuning and moves.** The fields, `FaceToward` and `LookAround` above. A summary on `LookAround` says it turns about Y only and why: the officer's root never pitches in play.
+- [x] **Step 2: The looking tuning and moves.** The fields, `FaceToward` and `LookAround` above. A summary on `LookAround` says it turns about Y only and why: the officer's root never pitches in play.
 
-- [ ] **Step 3: Steps in `SearchingState`.** Replace the arrival flags with a step.
+- [x] **Step 3: Steps in `SearchingState`.** Replace the arrival flags with a step.
   - **Walk:** as now. `PathTo` the target; `Arrived`, `Unreachable` or the travel limit ends it (the limit still logs and stops him walking). `Moving` continues. When `walkThere` is false he starts at Look.
   - **Look:** on entering, `FaceToward` the target if he didn't walk (a glance), and record his heading as the sweep's base. `FixedTick` calls `LookAround`.
     - Searching for **Attack** looks for Search Duration. It is the same count from arrival as before, and the sweep is what "searches the area" means until piece 8.
@@ -106,13 +106,13 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - `Retarget` restarts from Walk (or Look when `walkThere` is false) and resets every timer. `Enter`, `Exit` and the staging rules from the last plan are unchanged, and `Exit` still clears a stage.
   - Each step change logs once with `DebugLog.Info`.
 
-- [ ] **Step 4: Update the table.** In `BuildTransitions`, the two `Searching` exits read `Searching.Finished` instead of `SearchExpired`. Nothing else in the table changes this task.
+- [x] **Step 4: Update the table.** In `BuildTransitions`, the two `Searching` exits read `Searching.Finished` instead of `SearchExpired`. Nothing else in the table changes this task.
 
-- [ ] **Step 5: Becoming wary, and the glance.**
+- [x] **Step 5: Becoming wary, and the glance.**
   - `Investigate` calls `Memory.BecomeWary()` when the reason is `SearchForAttack`, accepted or not, so every attack search ends on an Aggressive patrol. Passes `walkThere` on to `Stage` and `Retarget`.
-  - In `EnemySenses.ScanCorpses`, the known-to-the-squad branch (the pool has the body and he hasn't seen it) does `Memory.BecomeWary()` and `Investigate(his own position, SearchForProblem, the Body row's priority, walkThere: false)` after `FaceToward`-ing it, replacing the "logs only" interim rule. He still doesn't walk to it. The log line says so.
+  - In `EnemySenses.ScanCorpses`, the known-to-the-squad branch (the pool has the body and he hasn't seen it) does `Memory.BecomeWary()` and `Investigate(the body's position, SearchForProblem, the Body row's priority, walkThere: false)`, replacing the "logs only" interim rule. He faces the body and looks from where he stands; he doesn't walk to it. The log line says so.
 
-- [ ] **Step 6: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-authored-by line.
+- [x] **Step 6: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-authored-by line.
 
 - [ ] **Step 7: Play-test gate (the user).** No Inspector work. In play, watching the Console:
   - **A thud (Problem):** throw a crate near an unaware officer. He walks to the origin, sweeps side to side for about 1.5 s, logs "stands down", holds for a second, then goes back to his patrol or post.

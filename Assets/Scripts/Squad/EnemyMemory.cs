@@ -73,6 +73,15 @@ public class EnemyMemory
     /// <summary>He has seen her with his own eyes at least once. Never cleared: it is what makes him wary for good.</summary>
     public bool HasSeenRuby { get; private set; }
 
+    /// <summary>
+    /// He has been after her, or has been shown she's about (a search for an attack, a body he was
+    /// told of): from then on he patrols aggressively. Never cleared, like HasSeenRuby, because the
+    /// level doesn't relax once an officer has gone looking for her.
+    /// </summary>
+    public bool Wary { get; private set; }
+
+    public void BecomeWary() => Wary = true;
+
     public bool KnowsBody(EnemyController body) => _bodies.Contains(body);
     public void RememberBody(EnemyController body) => _bodies.Add(body);
 
