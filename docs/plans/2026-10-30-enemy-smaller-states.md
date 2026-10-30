@@ -180,7 +180,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 
 - [x] **Step 4: Compile and commit,** as in Task 1.
 
-- [ ] **Step 5: Play-test gate (the user).** Inspector work only, no Play mode:
+- [x] **Step 5: Play-test gate (the user).** Inspector work only, no Play mode:
   - Select an officer. The Inspector has the new Aggressive route and the toggle.
   - Add points to each route. Dragging, resizing and the clearance colours work on whichever one is chosen, and an orange route shows when nothing is selected.
   - The help box names the right rule for an officer with and without an Aggressive route.
@@ -206,23 +206,24 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 - **Produces, in `PatrolState`:** reads `Enemy.ActiveRoute`. On a change of `Enemy.IsAggressive` while patrolling it restarts: back to the nearest point of the new route, `_cameFrom` cleared, pause and wander spot dropped. Aggressive, he walks at `CurrentPatrolSpeed`, and at each point he sweeps his look for the point's pause (its own override, else Look Time) instead of standing.
 - **Produces, in `IdleState`:** walks back to `PostPosition` at `CurrentPatrolSpeed` when farther than the tolerance, then turns to `PostYaw` at Turn Speed and stands.
 
-- [ ] **Step 1: Aggression and the active route.** The derived properties and the speed factor. `Start` records the post before choosing Idle or Patrol, and chooses by `HasActiveRoute`.
+- [x] **Step 1: Aggression and the active route.** The derived properties and the speed factor. `Start` records the post before choosing Idle or Patrol, and chooses by `HasActiveRoute`.
 
-- [ ] **Step 2: The table.** In `BuildTransitions`:
+- [x] **Step 2: The table.** In `BuildTransitions`:
   - `Searching` exits go to Patrol when `Finished && HasActiveRoute`, and to Idle when `Finished && !HasActiveRoute`;
   - add `At(Idle, Patrol, HasActiveRoute)` and `At(Patrol, Idle, !HasActiveRoute)`, so an alert that gives an idle officer an Aggressive route sends him to walk it, and an officer with no route for his mode stops at his post.
 
-- [ ] **Step 3: `PatrolState`.**
+- [x] **Step 3: `PatrolState`.**
   - Read the route from `Enemy.ActiveRoute` through the state's `Route` property, and detect a mode change in `Tick` (a remembered `_wasAggressive`).
   - Speed: `Enemy.CurrentPatrolSpeed` for walking and wandering.
   - Aggressive pauses: `Arrive` starts a look sweep (`LookAround` in `FixedTick`, with the heading at arrival as its base) for the point's pause override, else `Look Time`. Safe pauses are unchanged. A single wandered point looks at each spot the same way.
 
-- [ ] **Step 4: `IdleState`.**
+- [x] **Step 4: `IdleState`.**
   - `FixedTick` walks home with `PathTo`, and on `Arrived` turns to the post's facing and stops. `Unreachable` is the navigator's one warning and he stands.
   - An idle officer with an Aggressive route, once aggressive, is sent by the table, so Idle does nothing for it.
   - `Enter` no longer just stops: he walks home if away.
+  - **Added in building:** the walk home gives up after Search Travel Limit (20 s) with a log line, and starts again the next time he's at his post, so a post another officer stands on can't have him pushing at it for good.
 
-- [ ] **Step 5: Compile and commit,** as in Task 1.
+- [x] **Step 5: Compile and commit,** as in Task 1.
 
 - [ ] **Step 6: Play-test gate (the user).** Inspector work first:
   - give a patrolling officer an Aggressive route, and one more officer with no Aggressive route;

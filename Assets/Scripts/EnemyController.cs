@@ -68,10 +68,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Range(0f, 1f)] private float _corpseBrightness = 0.35f;
 
     [Header("Patrol")]
-    [Tooltip("Walked while unaware. Empty = idle in place. One point 4 m or more across (a circle's diameter, a rectangle's longer side) is wandered rather than stood on. Edit with the Scene-view handles when this enemy is selected.")]
+    [Tooltip("Walked while unaware. Empty = he idles at his post. One point 4 m or more across (a circle's diameter, a rectangle's longer side) is wandered rather than stood on. Edit with the Scene-view handles when this enemy is selected.")]
     [SerializeField] private PatrolRoute _safeRoute = new();
-    [Tooltip("Walked instead of the Safe route once he's aggressive: after the level goes on alert, or he has seen Ruby or been sent after her. Edit it with the same Scene-view handles (the Editing toggle below picks which route they edit). Empty: a patroller keeps walking his Safe route, and an idle officer stays at his post, alert.")]
+    [Tooltip("Walked instead of the Safe route once he's aggressive: after the level goes on alert, or he has seen Ruby or been sent after her. Edit it with the same Scene-view handles (the toggle below picks which route they edit). Empty: a patroller keeps walking his Safe route, and an idle officer stays at his post, alert.")]
     [SerializeField] private PatrolRoute _aggressiveRoute = new();
+    [Tooltip("How much faster he patrols once he's aggressive, as a multiple of Patrol Speed. Applies to whichever route he walks, and to an idle officer walking back to his post.")]
+    [SerializeField, Min(1f)] private float _aggressiveSpeedFactor = 1.25f;
+    [Tooltip("An idle officer this close to his post, in metres, counts as at it. Where he starts is his post.")]
+    [SerializeField, Min(0.1f)] private float _postTolerance = 1f;
     [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
     [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
     [Tooltip("Seconds without getting closer before a patrol move counts as blocked (another enemy on the spot, a prop, a jammed doorway).")]
@@ -156,6 +160,26 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public PatrolRoute SafeRoute => _safeRoute;
     public PatrolRoute AggressiveRoute => _aggressiveRoute;
     public bool HasAggressiveRoute => _aggressiveRoute != null && _aggressiveRoute.Count > 0;
+
+    /// <summary>
+    /// Whether he patrols aggressively: he has been after Ruby, has seen her, or the level is on
+    /// alert. Derived on every read and never stored, so a level alert flips every patroller at the
+    /// next pool update with no transition. None of the three is ever cleared, so he never goes back.
+    /// </summary>
+    public bool IsAggressive => Memory.Wary || Memory.HasSeenRuby || (Intel != null && Intel.Published.LevelOnAlert);
+
+    /// <summary>
+    /// The route he walks now: the Aggressive one when he's aggressive and has one, else the Safe
+    /// one. An aggressive officer with no Aggressive route walking his Safe route is a rule, not a
+    /// fallback, and the Inspector says so.
+    /// </summary>
+    public PatrolRoute ActiveRoute => IsAggressive && HasAggressiveRoute ? _aggressiveRoute : _safeRoute;
+    public bool HasActiveRoute => ActiveRoute != null && ActiveRoute.Count > 0;
+    public float CurrentPatrolSpeed => IsAggressive ? _patrolSpeed * _aggressiveSpeedFactor : _patrolSpeed;
+    /// <summary>Where he started: where an idle officer stands, and goes back to after a search or a fall.</summary>
+    public Vector3 PostPosition { get; private set; }
+    public float PostYaw { get; private set; }
+    public float PostTolerance => _postTolerance;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
@@ -163,7 +187,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float GetUpTime => _getUpTime;
     /// <summary>The body capsule's radius in world units: how far its surface sits from its centre.</summary>
     public float BodyRadius => _capsule.radius * Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.z));
-    public bool HasPatrolRoute => _safeRoute != null && _safeRoute.Count > 0;
     public Transform PlayerTransform => _player == null ? null : _player.transform;
 
     /// <summary>The speed of the last move it was told to make, 0 once stopped: how fast it's trying to go.</summary>
@@ -250,8 +273,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         // Always back to the hunt: an enemy only loses its gun to Ruby, so it knows she's around.
         At(Rearm, Aggro, new FuncPredicate(() => Rearm.Armed || Rearm.GaveUp));
 
-        At(Searching, Patrol, new FuncPredicate(() => Searching.Finished && HasPatrolRoute));
-        At(Searching, Idle, new FuncPredicate(() => Searching.Finished && !HasPatrolRoute));
+        At(Searching, Patrol, new FuncPredicate(() => Searching.Finished && HasActiveRoute));
+        At(Searching, Idle, new FuncPredicate(() => Searching.Finished && !HasActiveRoute));
+
+        // The route he walks follows how aggressive he is (IsAggressive), so an alert can hand an idle
+        // officer a route to walk, or leave a patroller with none for his mode and send him to his post.
+        At(Idle, Patrol, new FuncPredicate(() => HasActiveRoute));
+        At(Patrol, Idle, new FuncPredicate(() => !HasActiveRoute));
 
         At(Ragdoll, Aggro, new FuncPredicate(() => Ragdoll.GotUp && !Health.IsDead));
 
@@ -267,7 +295,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private void Start()
     {
         if (_player == null) _player = FindAnyObjectByType<PlayerController>();
-        _state.SetState(HasPatrolRoute ? Patrol : (EnemyStateBase)Idle);
+        PostPosition = transform.position;
+        PostYaw = transform.eulerAngles.y;
+        _state.SetState(HasActiveRoute ? Patrol : (EnemyStateBase)Idle);
 
         Intel = FindAnyObjectByType<Intel>();
         if (Intel == null) Debug.LogError($"{name}: no Intel in the scene — officers can't share what they see or hear each other.", this);
@@ -493,6 +523,22 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             return;
         }
         VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, direction.normalized * speed));
+    }
+
+    /// <summary>
+    /// Turns his body toward a heading about Y, at Turn Speed, and says whether he's facing it.
+    /// For standing at his post: facing the way he started once he's back.
+    /// </summary>
+    public bool TurnToYaw(float yaw)
+    {
+        Vector3 goal = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+        Vector3 heading = transform.forward;
+        heading.y = 0f;
+        if (heading.sqrMagnitude > 0.0001f && Vector3.Angle(heading, goal) < 1f) return true;
+
+        heading = Steering.TurnToward(heading, goal, _turnSpeed * Time.fixedDeltaTime);
+        transform.rotation = Quaternion.LookRotation(heading, Vector3.up);
+        return false;
     }
 
     /// <summary>Face a point at once, ignoring height: forward must never tilt, or the body drives vertically.</summary>
