@@ -153,7 +153,7 @@
   Add `Steering` to `Ruby.Pathing`'s row in the assemblies table.
 - [x] **Step 2: The manual.** Add the values to the tuning table and a short paragraph on how enemies walk. Rebuild the PDF with headless Chrome, as before, and check that it wrote.
 - [x] **Step 3: Spec and plan.** Tick piece 10 in the spec's Progress, and tick this plan's steps. Commit these files only.
-- [ ] **Step 4: End-of-piece review, in the background,** over this plan's range, on the most capable model. Point it at the Review Focus. Fix what it says must change, in one fix wave, before going back to pieces 2-3's Task 4.
+- [x] **Step 4: End-of-piece review, in the background,** over this plan's range, on the most capable model. Point it at the Review Focus. Fix what it says must change, in one fix wave, before going back to pieces 2-3's Task 4.
 
   **End-of-piece review (2026-10-29).** Fixed in one wave:
   - a flow field's last step (the goal cell) is now steered as a point he must reach: `TryGetStep` reports `atGoal` and `GridNavigator.Steer` takes `mustReach` explicitly, so a fast chase of Ruby against a wall arrives instead of circling;
@@ -162,3 +162,12 @@
   - the speed floor is a tenth, keeping its turning circle inside `CornerReach`;
   - editing Corner Margin in Play warns that it takes effect at the next bake;
   - docs: the manual's "must reach" wording and PDF, and CLAUDE.md (mustReach, the ramp, per-corner clearance, `TryGetDistance`, the Play-mode warning).
+
+  Left for a later pathing pass. Each is small, and the user's play-tests passed without them:
+  - **One narrow cell relaxes the rest of a pulled run,** so the far side of a jamb can be grazed. Add a corner at the exit of a narrow stretch, or leave the corner's own cell out of the minimum.
+  - **Wander spots ignore the margin,** so a wanderer can stop facing a wall. Prefer cells with clearance above Margin Cells when the area has any.
+  - **A failed first pull for an enemy brushing a wall** records the full margin for its first corner, so he re-plans every interval until he walks clear. Seed that corner from `min(cap, Clearance(start cell))`.
+  - **The Play-mode Corner Margin warning repeats while the value is dragged,** and blames Corner Margin even when Cell Size changed. Remember the last warned cell count.
+  - **A single straight-line route's off-route check uses the goal's own clearance,** which is looser than the ramp the line was accepted with. Check it with `HasClearLine`.
+  - **One officer's redundant Turn Speed 720 override** in `SampleScene` is the user's to revert in the Inspector.
+  - **Officers dropping aggro early** isn't piece 10's, which can't make an enemy arrive sooner or lose sight. It's pieces 2-3's `AggroState`, fixed at that plan's Task 3 gate.
