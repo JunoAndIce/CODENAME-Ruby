@@ -26,7 +26,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _aggroTime = 1.5f;
     [Tooltip("Height above the enemy's centre that sight is cast from.")]
     [SerializeField] private float _eyeHeight = 0.5f;
+    [Tooltip("How long he searches once he has reached the spot, in seconds. The walk there doesn't count.")]
     [SerializeField] private float _searchDuration = 5f;
+    [Tooltip("The longest he walks to a search spot before searching wherever he has got to, in seconds. Keeps one he can't reach (blocked, or a crowded doorway) from walking forever.")]
+    [SerializeField, Min(1f)] private float _searchTravelLimit = 20f;
     [Tooltip("While he sees Ruby, he calls out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
 
@@ -127,6 +130,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float SearchSpeed => _searchSpeed;
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
+    public float SearchTravelLimit => _searchTravelLimit;
     public PatrolRoute SafeRoute => _safeRoute;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
@@ -452,7 +456,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     }
 
     /// <summary>Pathfind to a fixed point around walls; stops on arrival.</summary>
-    public void PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
+    public NavResult PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
 
     /// <summary>Walk to a patrol point's area along an A* route.</summary>
     public NavResult PatrolTo(PatrolPoint point, float speed) => Navigator.MoveToArea(point.Area, speed);

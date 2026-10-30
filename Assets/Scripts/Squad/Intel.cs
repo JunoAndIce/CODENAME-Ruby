@@ -21,6 +21,26 @@ public class Intel : MonoBehaviour
     [Tooltip("Which stimuli the squad reacts to and how. Without it officers react to no stimulus.")]
     [SerializeField] private BehaviourMap _defaultMap;
 
+    [Header("Debug")]
+    [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
+    [SerializeField] private bool _showSoundRange = true;
+    [Tooltip("Seconds a sound's reach stays on screen, fading out.")]
+    [SerializeField, Min(0.5f)] private float _soundTrailTime = 3f;
+
+    // One sound's reach, copied out of the grid's scratch field the moment it was made.
+    private class SoundMark
+    {
+        public StimulusKind Kind;
+        public Vector3 Position;
+        public float Loudness;
+        public float Time;
+        public readonly List<Vector3> Cells = new();
+        public readonly List<float> Metres = new();
+    }
+
+    private const int MaxSoundMarks = 8;
+    private readonly List<SoundMark> _soundMarks = new();
+
     private readonly List<EnemyController> _enemies = new();
     // The squad's books on dead officers and loose guns. Only ever added to within a level.
     private readonly HashSet<EnemyController> _knownBodies = new();
@@ -178,6 +198,7 @@ public class Intel : MonoBehaviour
         }
 
         FlowField reach = grid.FloodFrom(stimulus.Position, stimulus.Loudness);
+        if (_showSoundRange) RecordSound(stimulus, reach);
         EnemyController sourceOwner = stimulus.Source != null ? stimulus.Source.GetComponentInParent<EnemyController>() : null;
 
         foreach (EnemyController listener in _enemies)
@@ -188,6 +209,26 @@ public class Intel : MonoBehaviour
 
             listener.Senses.Hear(stimulus);
         }
+    }
+
+    private void RecordSound(Stimulus stimulus, FlowField reach)
+    {
+        SoundMark mark;
+        if (_soundMarks.Count >= MaxSoundMarks)
+        {
+            mark = _soundMarks[0];
+            _soundMarks.RemoveAt(0);
+            mark.Cells.Clear();
+            mark.Metres.Clear();
+        }
+        else mark = new SoundMark();
+
+        mark.Kind = stimulus.Kind;
+        mark.Position = stimulus.Position;
+        mark.Loudness = stimulus.Loudness;
+        mark.Time = Time.time;
+        reach.CollectReached(mark.Cells, mark.Metres);
+        _soundMarks.Add(mark);
     }
 
     private void Publish()
@@ -212,11 +253,53 @@ public class Intel : MonoBehaviour
             : $"Intel published: {Published.Bodies.Count} bod{(Published.Bodies.Count == 1 ? "y" : "ies")}, {Published.Guns.Count} loose gun(s).", this);
     }
 
+    // Cells a sound reached, brightest at the source and fading with distance, and the whole mark
+    // fading with age. The plain circle beside it is what the same loudness would cover in open
+    // air, so the gap between them is what the walls took.
+    private void DrawSounds()
+    {
+        foreach (SoundMark mark in _soundMarks)
+        {
+            float age = Time.time - mark.Time;
+            if (age > _soundTrailTime) continue;
+            float fade = 1f - age / _soundTrailTime;
+
+            var cell = new Vector3(0.45f, 0.02f, 0.45f);
+            for (int i = 0; i < mark.Cells.Count; i++)
+            {
+                float reach = mark.Loudness > 0f ? mark.Metres[i] / mark.Loudness : 1f;
+                Gizmos.color = new Color(1f, Mathf.Lerp(0.9f, 0.2f, reach), Mathf.Lerp(0.2f, 0.8f, reach), Mathf.Lerp(0.55f, 0.2f, reach) * fade);
+                Gizmos.DrawCube(mark.Cells[i] + Vector3.up * 0.05f, cell);
+            }
+
+            Gizmos.color = new Color(1f, 1f, 1f, 0.6f * fade);
+            DrawCircle(mark.Position, mark.Loudness);
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(mark.Position + Vector3.up * 1.2f, $"{mark.Kind} {mark.Loudness:0.#} m");
+#endif
+        }
+    }
+
+    private static void DrawCircle(Vector3 centre, float radius)
+    {
+        const int Segments = 48;
+        Vector3 previous = centre + new Vector3(radius, 0.05f, 0f);
+        for (int i = 1; i <= Segments; i++)
+        {
+            float angle = i * Mathf.PI * 2f / Segments;
+            Vector3 next = centre + new Vector3(Mathf.Cos(angle) * radius, 0.05f, Mathf.Sin(angle) * radius);
+            Gizmos.DrawLine(previous, next);
+            previous = next;
+        }
+    }
+
     // Ruby's last reported spot and how stale it is: the picture the squad is working from. Bodies
     // and loose guns the squad has on its books are marked too.
     private void OnDrawGizmos()
     {
         if (!Application.isPlaying) return;
+
+        if (_showSoundRange) DrawSounds();
 
         if (Published.RubyReported)
         {

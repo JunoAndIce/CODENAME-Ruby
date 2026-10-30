@@ -12,7 +12,9 @@ public class SearchingState : EnemyStateBase
     private Vector3 _target;
     private StimulusResponse _reason;
     private int _priority;
-    private float _searchTimer;
+    private float _searchTimer;   // runs only from arrival: the walk there is not part of the search
+    private float _travelTimer;
+    private bool _arrived;
     // Set by Aim before the transition into this state, so Enter keeps the staged target.
     private bool _staged;
 
@@ -24,19 +26,26 @@ public class SearchingState : EnemyStateBase
     public StimulusResponse Reason => _reason;
     public int Priority => _priority;
 
-    /// <summary>Sets where to search and why. Restarts the search, so the new spot gets its full time.</summary>
+    /// <summary>Sets where to search and why. Restarts the search from the walk, so the new spot gets its full time on arrival.</summary>
     public void Aim(Vector3 point, StimulusResponse reason, int priority)
     {
         _target = point;
         _reason = reason;
         _priority = priority;
-        _searchTimer = 0f;
+        ResetTimers();
         _staged = true;
+    }
+
+    private void ResetTimers()
+    {
+        _searchTimer = 0f;
+        _travelTimer = 0f;
+        _arrived = false;
     }
 
     public override void Enter()
     {
-        _searchTimer = 0f;
+        ResetTimers();
         if (_staged)
         {
             _staged = false;
@@ -49,8 +58,30 @@ public class SearchingState : EnemyStateBase
         _priority = FromAggroPriority;
     }
 
-    public override void Tick() => _searchTimer += Time.deltaTime;
+    public override void Tick()
+    {
+        if (_arrived)
+        {
+            _searchTimer += Time.deltaTime;
+            return;
+        }
 
-    // PathTo stops the enemy itself once it arrives, so arrival needs no handling here.
-    public override void FixedTick() => Enemy.PathTo(_target, Enemy.SearchSpeed);
+        _travelTimer += Time.deltaTime;
+        if (_travelTimer >= Enemy.SearchTravelLimit)
+        {
+            DebugLog.Info($"{Enemy.name} hasn't reached his search spot in {Enemy.SearchTravelLimit:0.#}s; searching where he stands.", Enemy);
+            _arrived = true;
+        }
+    }
+
+    // PathTo stops the enemy itself once it arrives. Unreachable (no path, already warned) counts
+    // as arrived too, or the search would never start and he'd stand there for good.
+    public override void FixedTick()
+    {
+        NavResult result = Enemy.PathTo(_target, Enemy.SearchSpeed);
+        if (_arrived || result == NavResult.Moving) return;
+
+        DebugLog.Info($"{Enemy.name} {(result == NavResult.Arrived ? "reaches" : "can't reach")} his search spot; searching for {Enemy.SearchDuration:0.#}s.", Enemy);
+        _arrived = true;
+    }
 }

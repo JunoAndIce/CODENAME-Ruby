@@ -27,6 +27,12 @@ public class PathGrid : MonoBehaviour
     [Tooltip("Path cost, in tenths of a cell step, added for each cell of margin a step cuts into. Higher swings paths wider of walls; it never closes a route, only makes the middle of a gap cheaper.")]
     [SerializeField, Min(0)] private int _wallCost = 20;
 
+    [Header("Debug")]
+    [Tooltip("Draw this grid's cells in the Scene and Game views (Gizmos on) whether or not it's selected.")]
+    [SerializeField] private bool _alwaysShowGrid = true;
+    [Tooltip("With Always Show Grid, also tint the open cells, so the whole floor reads as a map and not just its walls.")]
+    [SerializeField] private bool _showOpenCells = true;
+
     private static readonly Collider[] OverlapHits = new Collider[32];
     private const float BelowFloorTolerance = 0.5f;
 
@@ -600,9 +606,16 @@ public class PathGrid : MonoBehaviour
     {
         Gizmos.color = new Color(1f, 1f, 1f, 0.3f);
         Gizmos.DrawWireCube(transform.position + Vector3.up * (_height * 0.5f), new Vector3(_size.x, _height, _size.y));
+        if (_alwaysShowGrid) DrawCells(_showOpenCells);
     }
 
     private void OnDrawGizmosSelected()
+    {
+        // OnDrawGizmos already drew the cells when the grid is always shown.
+        if (!_alwaysShowGrid) DrawCells(false);
+    }
+
+    private void DrawCells(bool showOpen)
     {
         if (!IsBaked) return;
 
@@ -610,6 +623,7 @@ public class PathGrid : MonoBehaviour
         var staticColour = new Color(1f, 0.15f, 0.1f, 0.5f);
         var propColour = new Color(1f, 0.6f, 0.1f, 0.5f);
         var marginColour = new Color(1f, 0.9f, 0.2f, 0.25f);
+        var openColour = new Color(0.3f, 1f, 0.5f, 0.07f);
         int marginCells = MarginCells;
         var cellSize = new Vector3(_cellSize * 0.9f, 0.02f, _cellSize * 0.9f);
         for (int z = 0; z < _depth; z++)
@@ -619,7 +633,13 @@ public class PathGrid : MonoBehaviour
                 int index = x + z * _width;
                 if (_walkable[index] && _propBlocks[index] == 0)
                 {
-                    if (_clearance[index] > marginCells) continue;
+                    if (_clearance[index] > marginCells)
+                    {
+                        if (!showOpen) continue;
+                        Gizmos.color = openColour;
+                        Gizmos.DrawCube(CellToWorld(x, z), cellSize);
+                        continue;
+                    }
                     Gizmos.color = marginColour;
                     Gizmos.DrawCube(CellToWorld(x, z), cellSize);
                     continue;

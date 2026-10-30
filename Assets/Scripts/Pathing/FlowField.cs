@@ -121,6 +121,21 @@ public class FlowField
         return true;
     }
 
+    /// <summary>
+    /// Every cell the last flood reached, with its plain path metres from the goal. Appends to the
+    /// lists. For debug drawing: it walks the whole grid, so never call it per frame.
+    /// </summary>
+    public void CollectReached(List<Vector3> points, List<float> metres)
+    {
+        if (!_flooded || !_hasGoal) return;
+        for (int i = 0; i < _stamp.Length; i++)
+        {
+            if (!IsReached(i)) continue;
+            points.Add(_grid.CellToWorld(_grid.CellOf(i)));
+            metres.Add(_length[i] / (float)StraightCost * _grid.CellSize);
+        }
+    }
+
     /// <summary>True when position stands in the goal's cell: as close as the grid can get.</summary>
     public bool IsAtGoal(Vector3 position)
     {
