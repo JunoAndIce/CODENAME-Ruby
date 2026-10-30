@@ -50,12 +50,13 @@ public class Intel : MonoBehaviour
     private EnemyController _pendingReporter;
     private bool _pendingAlert;
     private bool _alertLogged;
-    private bool _warnedNoGrid;
     // Each enemy warns once about a setup problem, however often he speaks or is spoken to.
+    private readonly HashSet<EnemyController> _warnedNoGrid = new();
     private readonly HashSet<EnemyController> _warnedNoReach = new();
     private readonly HashSet<EnemyController> _warnedListenerNoGrid = new();
     // A sound that nobody can hear warns once per source object, not once per shot.
     private readonly HashSet<Object> _warnedNoHearing = new();
+    private readonly HashSet<Object> _warnedSoundNoGrid = new();
     private readonly HashSet<EnemyController> _warnedListenerCantHear = new();
     private float _nextPublish;
 
@@ -158,11 +159,8 @@ public class Intel : MonoBehaviour
         PathGrid grid = PathGrid.At(speaker.transform.position);
         if (grid == null)
         {
-            if (!_warnedNoGrid)
-            {
-                _warnedNoGrid = true;
+            if (_warnedNoGrid.Add(speaker))
                 Debug.LogWarning($"{speaker.name} is on no PathGrid, so nobody hears him: speech travels along the floor, which needs a grid.", speaker);
-            }
             return;
         }
 
@@ -208,7 +206,11 @@ public class Intel : MonoBehaviour
         PathGrid grid = PathGrid.At(stimulus.Position);
         if (grid == null)
         {
-            DebugLog.Info($"{stimulus.Kind} at {stimulus.Position} is on no PathGrid, so no one hears it.", this);
+            // Outside every grid, or above or below its height band: a setup problem, not silence,
+            // and without a grid nobody hears it or learns where Ruby was.
+            Object source = stimulus.Source != null ? stimulus.Source : this;
+            if (_warnedSoundNoGrid.Add(source))
+                Debug.LogWarning($"{stimulus.Kind} at {stimulus.Position} (from {source.name}) is on no PathGrid, so no one hears it: sound travels along the floor, which needs a grid.", source);
             return;
         }
 

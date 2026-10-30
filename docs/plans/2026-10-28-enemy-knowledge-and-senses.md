@@ -353,4 +353,14 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - A section on what officers notice and know, with the new values in the tuning table.
   - Rebuild the PDF with headless Chrome, as piece 1's plan did, and check that it wrote.
 - [x] **Step 3: Spec and plan.** Tick pieces 2 and 3 in the spec's Progress, and tick this plan's steps. Then commit these files only.
-- [ ] **Step 4: End-of-piece review, in the background,** over the range this plan added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before piece 4, in one fix wave.
+- [x] **Step 4: End-of-piece review, in the background,** over the range this plan added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before piece 4, in one fix wave.
+
+  **End-of-piece review (2026-10-30).** It found nothing wrong in the five Review Focus items, and the layering, scratch-field, `Stage`/`Retarget` and warn-once rules held. Fixed in one wave:
+  - the off-grid speech warning is now once per officer, not once per level;
+  - a sound with no grid under it now warns once per source, where it only logged under `RUBY_DEBUG_LOGS`.
+
+  **Decided: a refused body or gun still counts as seen.** An officer who sees a corpse or loose gun while hunting, rearming or searching at equal or higher priority books it and doesn't investigate. The review flagged that later officers then never check it, and that piece 4's "a body the pool knows that he hasn't seen" would meet bodies nobody looked at. The user chose to leave it, so revisit it in piece 4 if play shows bodies going unchecked.
+
+  Left for later. Each is small:
+  - **Static geometry shares the 64-slot motion buffer,** so a crowded sweep could miss a thrown body. It warns once if it fills; mask to dynamic layers if that fires in the real level.
+  - **A booked gun is known for good,** even if it's dropped somewhere else later. That follows the spec's "only ever added to".
