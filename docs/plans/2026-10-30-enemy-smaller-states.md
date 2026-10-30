@@ -225,7 +225,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 
 - [x] **Step 5: Compile and commit,** as in Task 1.
 
-- [ ] **Step 6: Play-test gate (the user).** Inspector work first:
+- [x] **Step 6: Play-test gate (the user).** Inspector work first:
   - give a patrolling officer an Aggressive route, and one more officer with no Aggressive route;
   - give an idle officer (no Safe route) an Aggressive route, and one with none.
 
@@ -237,6 +237,8 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - **An idle officer who was pulled away:** after a search he walks back to his post and turns the way he started. A hurt or thrown idle officer does the same once he's done with Aggro.
   - **An idle officer with an Aggressive route:** the alert sends him to walk it.
   - **A known body:** the officer who glances at it goes Aggressive afterward.
+
+  **Played (2026-10-30).** Everything passed except one thing, found in play: two officers sent to the same spot blocked each other. Officers of equal weight don't push each other (the push rule), so the second pushed at the first, who stood on the spot, until the first finished and left. **Fixed:** a search walks to an area, Search Reach (1.5 m), not a point, through the same `MoveToArea` patrol uses. It arrives once progress stalls inside the area, so the second officer looks from beside the first after about Stuck Time (1.5 s). No path at all warns, and a stall short of the area is logged. This is the single-officer answer. A checker with followers, so that one officer goes and the others hang back, is still piece 5.
 
 ---
 

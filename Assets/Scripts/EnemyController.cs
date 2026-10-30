@@ -28,6 +28,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _eyeHeight = 0.5f;
     [Tooltip("How long he searches once he has reached the spot, in seconds. The walk there doesn't count.")]
     [SerializeField] private float _searchDuration = 5f;
+    [Tooltip("How close he gets to a search spot, in metres. If something blocks the way once he's this near (another officer already standing on the spot, say), he looks from where he stands instead of pushing at it.")]
+    [SerializeField, Min(0.5f)] private float _searchReach = 1.5f;
     [Tooltip("The longest he walks to a search spot before searching wherever he has got to, in seconds. Keeps one he can't reach (blocked, or a crowded doorway) from walking forever.")]
     [SerializeField, Min(1f)] private float _searchTravelLimit = 20f;
     [Tooltip("While he sees Ruby, he calls out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
@@ -155,6 +157,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float AggroTime => _aggroTime;
     public float SearchDuration => _searchDuration;
     public float SearchTravelLimit => _searchTravelLimit;
+    public float SearchReach => _searchReach;
     public float LookTime => _lookTime;
     public float StandDownTime => _standDownTime;
     public PatrolRoute SafeRoute => _safeRoute;

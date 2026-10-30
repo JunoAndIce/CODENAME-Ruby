@@ -141,16 +141,26 @@ public class SearchingState : EnemyStateBase
         DebugLog.Info($"{Enemy.name} {what}.", Enemy);
     }
 
-    // PathTo stops the enemy itself once it arrives. Unreachable (no path, already warned) counts as
-    // arrived too, or the search would never start and he'd stand there for good.
+    // An area move, not a point: officers of equal weight block each other (the push rule), so two
+    // sent to one spot used to leave the second pushing at the first until the travel limit. The
+    // navigator arrives once progress stalls inside the area, which is how he ends up beside the
+    // first officer and looks from there. No path at all is a setup problem and warns; a stall
+    // outside the area is only crowding, and is logged.
     public override void FixedTick()
     {
         switch (_step)
         {
             case SearchStep.Walk:
-                NavResult result = Enemy.PathTo(_target, Enemy.SearchSpeed);
+                NavResult result = Enemy.WalkTo(_target, Enemy.SearchReach, Enemy.SearchSpeed);
                 if (result == NavResult.Moving) return;
-                BeginLook($"{Enemy.name} {(result == NavResult.Arrived ? "reaches" : "can't reach")} his search spot");
+                if (result == NavResult.Arrived)
+                {
+                    BeginLook($"{Enemy.name} reaches his search spot");
+                    break;
+                }
+                if (result == NavResult.Unreachable)
+                    Debug.LogWarning($"{Enemy.name} can't reach his search spot ({Enemy.Navigator.FailureReason}); he searches where he stands.", Enemy);
+                BeginLook($"{Enemy.name} {(result == NavResult.Blocked ? "is blocked short of his search spot" : "can't reach his search spot")}");
                 break;
 
             case SearchStep.Look:
