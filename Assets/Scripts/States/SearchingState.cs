@@ -164,7 +164,7 @@ public class SearchingState : EnemyStateBase
                 break;
 
             case SearchStep.Look:
-                Enemy.LookAround(_lookBaseYaw, _stepTimer);
+                Enemy.LookAround(_lookBaseYaw, _stepTimer, LookDuration);
                 break;
 
             default:

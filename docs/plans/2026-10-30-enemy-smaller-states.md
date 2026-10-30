@@ -255,4 +255,12 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - **Specs:** piece 4 built, piece 5 next.
 - [x] **Step 2: The manual.** The tuning table gains the new values. The States table, the Idle, Patrol and Searching text and the "What an officer hears, notices and knows" section change. Take the look-around and Patrol Aggressive out of the planned list. Rebuild the PDF with headless Chrome, as before, and check that it wrote.
 - [x] **Step 3: Spec and plan.** Tick piece 4 in the spec's Progress, and tick this plan's steps. Commit these files only.
-- [ ] **Step 4: End-of-piece review, in the background,** over the range this plan added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before piece 5, in one fix wave.
+- [x] **Step 4: End-of-piece review, in the background,** over the range this plan added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before piece 5, in one fix wave.
+
+  **End-of-piece review (2026-10-30).** Mode flips, retargets mid-step, the idle post, escalation by stale news and the search's re-planning all held. Fixed in one wave:
+  - **The look sweep ended off the spot.** A fixed 2 s period left a 1.5 s look 70° to one side, so a stand-down, a glance or an aggressive pause finished facing away. `LookAround` now takes the look's duration and fits a whole number of sweeps into it.
+  - **The editor cached the chosen route per Editor instance,** so a second Inspector could edit the wrong route after a toggle. It now looks the route up at each use.
+  - **Post Tolerance** has a floor of 0.6 m, above the navigator's 0.5 m arrival distance, so he can't be left "away" from a post he has reached.
+  - **A glance respects an Ignore row,** where it used to look at a body its map said to ignore.
+
+  Left for later: a search stalled short of its area is an Info log, not a warning, because crowding is normal and the plan says so. Revisit it if the Console shows searches ending short for a reason that isn't crowding.

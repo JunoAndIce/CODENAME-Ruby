@@ -508,7 +508,8 @@ through the player never slows the walk.
     to leave the second pushing at the first: the area move arrives once progress stalls inside it.
     No path at all warns. Search Travel Limit (20 s) ends a walk that never arrives.
   - **Look:** `LookAround` turns his body about Y, Look Sweep Angle (70°) each side of where he
-    faced, over Look Sweep Period (2 s). A search for an **attack** looks for Search Duration (10 s,
+    faced, in a whole number of sweeps of about Look Sweep Period (2 s) that fit the look, so he
+    ends facing the way he began. A search for an **attack** looks for Search Duration (10 s,
     from arrival), which stands in for searching the area. A search for a **problem** looks for
     Look Time (1.5 s).
   - **StandDown:** problem only. He holds Stand Down Time (1 s) and logs "all clear" (the gesture,

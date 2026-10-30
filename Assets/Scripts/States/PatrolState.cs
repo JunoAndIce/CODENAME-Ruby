@@ -27,6 +27,7 @@ public class PatrolState : EnemyStateBase
     private bool _paused;
     private float _lookBaseYaw;   // where he faced on arriving: an aggressive pause sweeps about it
     private float _lookElapsed;
+    private float _pauseDuration;   // how long this pause lasts, so the sweep fits it
     private int _failStreak;
     private float _holdTimer;
     private bool _holdReported;
@@ -93,7 +94,7 @@ public class PatrolState : EnemyStateBase
         if (_paused)
         {
             // Aggressive, he looks about at each point instead of standing.
-            if (Enemy.IsAggressive) Enemy.LookAround(_lookBaseYaw, _lookElapsed);
+            if (Enemy.IsAggressive) Enemy.LookAround(_lookBaseYaw, _lookElapsed, _pauseDuration);
             else Enemy.Stop();
             return;
         }
@@ -164,7 +165,8 @@ public class PatrolState : EnemyStateBase
         _lookBaseYaw = Enemy.transform.eulerAngles.y;
         _lookElapsed = 0f;
         // Aggressive, the pause is spent looking about, for as long as the point says or Look Time.
-        _pauseTimer = point.HasPauseOverride ? point.PauseTime : Enemy.IsAggressive ? Enemy.LookTime : Enemy.NodePauseTime;
+        _pauseDuration = point.HasPauseOverride ? point.PauseTime : Enemy.IsAggressive ? Enemy.LookTime : Enemy.NodePauseTime;
+        _pauseTimer = _pauseDuration;
     }
 
     private void Skip()

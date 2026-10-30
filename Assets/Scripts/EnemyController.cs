@@ -76,8 +76,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private PatrolRoute _aggressiveRoute = new();
     [Tooltip("How much faster he patrols once he's aggressive, as a multiple of Patrol Speed. Applies to whichever route he walks, and to an idle officer walking back to his post.")]
     [SerializeField, Min(1f)] private float _aggressiveSpeedFactor = 1.25f;
-    [Tooltip("An idle officer this close to his post, in metres, counts as at it. Where he starts is his post.")]
-    [SerializeField, Min(0.1f)] private float _postTolerance = 1f;
+    [Tooltip("An idle officer this close to his post, in metres, counts as at it. Where he starts is his post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave him 'away' from a post he has reached.")]
+    [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
     [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
     [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
     [Tooltip("Seconds without getting closer before a patrol move counts as blocked (another enemy on the spot, a prop, a jammed doorway).")]
@@ -555,13 +555,18 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     /// <summary>
     /// Stops and turns his body side to side about where he was facing, baseYaw, so a look reads as
-    /// looking about. It sets the heading about Y alone: his root never pitches in play, and a tilt
-    /// would drive him off the floor. For FixedTick, where the walk also writes the heading.
+    /// looking about. The look lasts duration, and the sweep is stretched to a whole number of
+    /// sweeps within it, so he ends facing the way he began: a fixed period left a 1.5 s look 70
+    /// degrees off the spot he'd been looking at. It sets the heading about Y alone: his root never
+    /// pitches in play, and a tilt would drive him off the floor. For FixedTick, where the walk also
+    /// writes the heading.
     /// </summary>
-    public void LookAround(float baseYaw, float elapsed)
+    public void LookAround(float baseYaw, float elapsed, float duration)
     {
         Stop();
-        float sweep = _lookSweepAngle * Mathf.Sin(elapsed * Mathf.PI * 2f / _lookSweepPeriod);
+        duration = Mathf.Max(duration, 0.01f);
+        float sweeps = Mathf.Max(1f, Mathf.Round(duration / _lookSweepPeriod));
+        float sweep = _lookSweepAngle * Mathf.Sin(Mathf.Min(elapsed, duration) * Mathf.PI * 2f * sweeps / duration);
         transform.rotation = Quaternion.Euler(0f, baseYaw + sweep, 0f);
     }
 

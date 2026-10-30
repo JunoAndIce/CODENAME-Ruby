@@ -39,13 +39,16 @@ public class EnemyControllerEditor : Editor
     // never saved on the enemy, and static so it holds when another enemy is selected.
     private static int s_editing;
 
-    private SerializedProperty _points;
+    // The chosen route's points, looked up at each use. The choice is static, so every Editor
+    // instance (a locked Inspector, a second window) sees a toggle made in another, and a cached
+    // property would go on editing the route that was chosen when it was built.
+    private SerializedProperty Points => serializedObject.FindProperty(RoutePaths[s_editing] + "._points");
+
     private PathGrid[] _grids;
     private BoxBoundsHandle _box;
 
     private void OnEnable()
     {
-        SelectRoute();
         // Edges only: an area has no height. Its outline is drawn in the clearance colour, so the
         // handle draws no wireframe of its own. One handle serves every rectangle: it takes fresh
         // control IDs on each draw.
@@ -57,8 +60,6 @@ public class EnemyControllerEditor : Editor
         };
     }
 
-    private void SelectRoute() => _points = serializedObject.FindProperty(RoutePaths[s_editing] + "._points");
-
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
@@ -69,7 +70,6 @@ public class EnemyControllerEditor : Editor
         if (EditorGUI.EndChangeCheck())
         {
             s_editing = chosen;
-            SelectRoute();
             SceneView.RepaintAll();
         }
 
@@ -91,7 +91,8 @@ public class EnemyControllerEditor : Editor
         _grids = FindObjectsByType<PathGrid>();
 
         var enemy = (EnemyController)target;
-        int count = _points.arraySize;
+        SerializedProperty points = Points;
+        int count = points.arraySize;
         Vector3 position;
         if (count == 0)
         {
@@ -100,13 +101,13 @@ public class EnemyControllerEditor : Editor
         else
         {
             // Continue the route's last heading, so a quick run of clicks lays out a line.
-            Vector3 last = PositionOf(count - 1).vector3Value;
-            Vector3 heading = count >= 2 ? Flat(last - PositionOf(count - 2).vector3Value) : Flat(enemy.transform.forward);
+            Vector3 last = PositionOf(points, count - 1).vector3Value;
+            Vector3 heading = count >= 2 ? Flat(last - PositionOf(points, count - 2).vector3Value) : Flat(enemy.transform.forward);
             position = last + heading * NewPointSpacing;
         }
 
-        _points.InsertArrayElementAtIndex(count);
-        SerializedProperty point = _points.GetArrayElementAtIndex(count);
+        points.InsertArrayElementAtIndex(count);
+        SerializedProperty point = points.GetArrayElementAtIndex(count);
         point.FindPropertyRelative("_position").vector3Value = OnFloor(position, position.y);
         // A new element copies the previous one; the first one gets zeros, not field defaults.
         if (count == 0)
@@ -124,9 +125,10 @@ public class EnemyControllerEditor : Editor
         serializedObject.Update();
         _grids = FindObjectsByType<PathGrid>();
 
-        for (int i = 0; i < _points.arraySize; i++)
+        SerializedProperty points = Points;
+        for (int i = 0; i < points.arraySize; i++)
         {
-            SerializedProperty point = _points.GetArrayElementAtIndex(i);
+            SerializedProperty point = points.GetArrayElementAtIndex(i);
             SerializedProperty position = point.FindPropertyRelative("_position");
             Vector3 centre = position.vector3Value;
             GridArea area = AreaOf(point);
@@ -245,8 +247,8 @@ public class EnemyControllerEditor : Editor
         return point;
     }
 
-    private SerializedProperty PositionOf(int index)
-        => _points.GetArrayElementAtIndex(index).FindPropertyRelative("_position");
+    private static SerializedProperty PositionOf(SerializedProperty points, int index)
+        => points.GetArrayElementAtIndex(index).FindPropertyRelative("_position");
 
     private static Vector3 Flat(Vector3 v)
     {

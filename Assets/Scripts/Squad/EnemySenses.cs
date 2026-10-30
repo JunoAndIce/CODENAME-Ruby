@@ -152,9 +152,11 @@ public class EnemySenses
     // kind's own priority, so it can't pull him off anything that outranks it.
     private void Glance(Vector3 at, StimulusKind kind, string what)
     {
-        _enemy.Memory.BecomeWary();
         if (!_enemy.Intel.TryGetRow(at, kind, out BehaviourMap.Row row)) return;
+        // A map that says to ignore this kind (an armory, a morgue) means no glance either.
+        if (row.Response == StimulusResponse.Ignore) return;
 
+        _enemy.Memory.BecomeWary();
         DebugLog.Info($"{_enemy.name} sees {what}: he looks at it from where he stands and is wary.", _enemy);
         _enemy.Investigate(at, StimulusResponse.SearchForProblem, row.Priority, walkThere: false);
     }
