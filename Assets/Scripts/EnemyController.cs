@@ -352,10 +352,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     // Externally driven transitions. Nothing can poll for these, so they bypass the table.
     // Investigate is one too: a sound happens once, so there is nothing for the table to poll.
-    public void Alert()
+    /// <summary>Sends him into Aggro (hurt, or told by an officer who sees Ruby). True when that moved him: not when he was already there, or can't act.</summary>
+    public bool Alert()
     {
-        if (_state.Current is GrabbedState or RagdollState or DeadState) return;
+        if (_state.Current is GrabbedState or RagdollState or DeadState) return false;
+        if (_state.Current == Aggro) return false;
         _state.SetState(Aggro);
+        return true;
     }
 
     /// <summary>

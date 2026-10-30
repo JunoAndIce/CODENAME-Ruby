@@ -84,9 +84,11 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 - **Consumes:** `Intel.Say(speaker, fact)` and `EnemyController.Alert()`, which already guards Grabbed, Ragdoll and Dead and does nothing to an officer already in Aggro (`SetState` to the current state is a no-op).
 - **Produces:** every hearer `Say` reaches is alerted as well as told. `Say` is only called while the speaker sees Ruby, so the speaker is in or entering Aggro. The log line says how many were told and how many joined.
 
-- [ ] **Step 1: Alert the hearers.** After `listener.Memory.Learn(told)` in `Say`, call `listener.Alert()`. Count the ones whose state actually became Aggro for the log line. A summary on `Say` says why: an officer in Aggro recruits all nearby officers whatever they're doing, and piece 6 will cap who fights.
+- [x] **Step 1: Alert the hearers.** After `listener.Memory.Learn(told)` in `Say`, call `listener.Alert()`. Count the ones whose state actually became Aggro for the log line. A summary on `Say` says why: an officer in Aggro recruits all nearby officers whatever they're doing, and piece 6 will cap who fights.
 
-- [ ] **Step 2: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-authored-by line.
+- [x] **Step 2: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-authored-by line.
+
+  **Built differently:** `Alert()` now returns whether it moved him into Aggro, so the log can count who joined, and it does nothing to an officer already there.
 
 - [ ] **Step 3: Play-test gate (the user).** No Inspector work. In play, watching the Console:
   - **Calling out:** let one officer see Ruby with others in the same room. Within about a second every one of them is in Aggro, and the Console logs how many joined.

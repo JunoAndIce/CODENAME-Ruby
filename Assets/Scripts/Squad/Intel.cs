@@ -150,7 +150,10 @@ public class Intel : MonoBehaviour
     /// <summary>
     /// A spoken report: every other living enemy within Speech Range along the floor learns it at
     /// once, as Told, and it goes in the inbox too. Measured in path metres, so a shout doesn't
-    /// carry through a wall to the room behind it.
+    /// carry through a wall to the room behind it. It is also **word of mouth**: an officer who sees
+    /// Ruby recruits everyone who hears him, whatever they were doing, so each one is alerted into
+    /// Aggro (not the grabbed, ragdolling or dead, which Alert refuses). Piece 6 will cap how many
+    /// of them fight; until then everyone told joins.
     /// </summary>
     public void Say(EnemyController speaker, RubyFact fact)
     {
@@ -173,6 +176,7 @@ public class Intel : MonoBehaviour
         }
         RubyFact told = fact.WithSource(Knowledge.Told);
         int heard = 0;
+        int joined = 0;
         foreach (EnemyController listener in _enemies)
         {
             if (listener == speaker || listener.Health.IsDead) continue;
@@ -189,8 +193,9 @@ public class Intel : MonoBehaviour
 
             listener.Memory.Learn(told);
             heard++;
+            if (listener.Alert()) joined++;
         }
-        DebugLog.Info($"{speaker.name} calls out Ruby's position: {heard} heard.", speaker);
+        DebugLog.Info($"{speaker.name} calls out Ruby's position: {heard} heard, {joined} joined the fight.", speaker);
     }
 
     /// <summary>
