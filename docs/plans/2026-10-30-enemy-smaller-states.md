@@ -146,11 +146,13 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 
 - [x] **Step 4: Compile and commit,** as in Task 1.
 
-- [ ] **Step 5: Play-test gate (the user).** No Inspector work. In play:
+- [x] **Step 5: Play-test gate (the user).** No Inspector work. In play:
   - **Never seen her:** a thud far from where Ruby last fired is a Problem search: it stands down after 1.5 s.
   - **Reported near:** fire a shot, then throw a crate within 20 m of it inside 15 s. The thud is logged as upgraded to Attack and searched for Search Duration.
   - **Reported long ago:** wait out Attack Near Time, then throw it. Back to Problem.
   - **An officer who has seen her:** a thud anywhere is an attack search for him.
+
+  **Played (2026-10-30).** It works. One consequence, by design until piece 5: two officers sent to the same sound can differ, one who has seen Ruby searching for an attack while one who hasn't checks a problem and signals all clear. Each decides alone. Piece 5's group job gives the pair one reason and one outcome.
 
 ---
 
@@ -170,13 +172,13 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - A route toggle ("Editing: Safe / Aggressive") in the Inspector, which picks the route the Scene handles edit and Add Patrol Point adds to. Which one is chosen is editor state, never serialized.
   - A help box under the Aggressive route saying what applies without one: a patroller walks his Safe route, an idle officer stays at his post, alert.
 
-- [ ] **Step 1: The field and its properties.**
+- [x] **Step 1: The field and its properties.**
 
-- [ ] **Step 2: Gizmos.** Both routes in `OnDrawGizmos`, so you can see who walks what without selecting each one. The index labels stay with the editor's handles.
+- [x] **Step 2: Gizmos.** Both routes in `OnDrawGizmos`, so you can see who walks what without selecting each one. The index labels stay with the editor's handles.
 
-- [ ] **Step 3: The editor.** Generalise `_points` to the chosen route's `_points` property, rebuilt whenever the toggle changes. The clearance colours, edge handles and rim dot work as before on whichever route is chosen. The Scene-view label reads the chosen route's `Wanders`. The route's colour in the Scene view follows the toggle.
+- [x] **Step 3: The editor.** Generalise `_points` to the chosen route's `_points` property, rebuilt whenever the toggle changes. The clearance colours, edge handles and rim dot work as before on whichever route is chosen. The Scene-view label reads the chosen route's `Wanders`, and numbers Aggressive points "A0", "A1" and so on, so a runtime warning maps back to the right route. The toggle is static editor state, so it holds when another enemy is selected.
 
-- [ ] **Step 4: Compile and commit,** as in Task 1.
+- [x] **Step 4: Compile and commit,** as in Task 1.
 
 - [ ] **Step 5: Play-test gate (the user).** Inspector work only, no Play mode:
   - Select an officer. The Inspector has the new Aggressive route and the toggle.

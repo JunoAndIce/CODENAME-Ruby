@@ -70,6 +70,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Header("Patrol")]
     [Tooltip("Walked while unaware. Empty = idle in place. One point 4 m or more across (a circle's diameter, a rectangle's longer side) is wandered rather than stood on. Edit with the Scene-view handles when this enemy is selected.")]
     [SerializeField] private PatrolRoute _safeRoute = new();
+    [Tooltip("Walked instead of the Safe route once he's aggressive: after the level goes on alert, or he has seen Ruby or been sent after her. Edit it with the same Scene-view handles (the Editing toggle below picks which route they edit). Empty: a patroller keeps walking his Safe route, and an idle officer stays at his post, alert.")]
+    [SerializeField] private PatrolRoute _aggressiveRoute = new();
     [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
     [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
     [Tooltip("Seconds without getting closer before a patrol move counts as blocked (another enemy on the spot, a prop, a jammed doorway).")]
@@ -152,6 +154,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float LookTime => _lookTime;
     public float StandDownTime => _standDownTime;
     public PatrolRoute SafeRoute => _safeRoute;
+    public PatrolRoute AggressiveRoute => _aggressiveRoute;
+    public bool HasAggressiveRoute => _aggressiveRoute != null && _aggressiveRoute.Count > 0;
     public float NodePauseTime => _nodePauseTime;
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
@@ -825,24 +829,31 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         }
     }
 
-    // Every enemy's route, faintly, so you can see who walks what without selecting each one.
+    // Every enemy's routes, faintly, so you can see who walks what without selecting each one:
+    // cyan for the Safe route, orange for the Aggressive one.
     private void OnDrawGizmos()
     {
-        if (!HasPatrolRoute) return;
+        DrawRoute(_safeRoute, new Color(0f, 1f, 1f, 0.35f));
+        DrawRoute(_aggressiveRoute, new Color(1f, 0.55f, 0.1f, 0.45f));
+    }
 
-        Gizmos.color = new Color(0f, 1f, 1f, 0.35f);
-        int count = _safeRoute.Count;
+    private static void DrawRoute(PatrolRoute route, Color colour)
+    {
+        if (route == null || route.Count == 0) return;
+
+        Gizmos.color = colour;
+        int count = route.Count;
         for (int i = 0; i < count; i++)
         {
-            PatrolPoint point = _safeRoute[i];
+            PatrolPoint point = route[i];
             DrawFlatArea(point.Area);
 
             // A random route has no order, so lines between its points would only mislead.
-            if (_safeRoute.Mode == PatrolMode.Random) continue;
+            if (route.Mode == PatrolMode.Random) continue;
 
             bool last = i == count - 1;
-            if (!last) Gizmos.DrawLine(point.Position, _safeRoute[i + 1].Position);
-            else if (_safeRoute.Mode == PatrolMode.Loop && count > 2) Gizmos.DrawLine(point.Position, _safeRoute[0].Position);
+            if (!last) Gizmos.DrawLine(point.Position, route[i + 1].Position);
+            else if (route.Mode == PatrolMode.Loop && count > 2) Gizmos.DrawLine(point.Position, route[0].Position);
         }
     }
 

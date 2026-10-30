@@ -3,10 +3,12 @@ using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 
 /// <summary>
-/// Patrol route authoring. With an enemy selected, each area of its Safe route gets a move
+/// Patrol route authoring. With an enemy selected, each area of the route being edited (the Safe
+/// route or the Aggressive one, picked with the toggle in the Inspector) gets a move
 /// handle in the Scene view, plus a rim dot for a circle's radius or edge handles for a
 /// rectangle, coloured by the same clearance test the PathGrid bake uses — so a point that
-/// would trap the enemy shows up while it's placed, not at runtime.
+/// would trap the enemy shows up while it's placed, not at runtime. Aggressive points are
+/// labelled "A0", "A1" and so on, so a warning about a point maps back to the right route.
 ///   Green: the centre is open.
 ///   Yellow: the centre is blocked, but part of the area is open; the enemy stops at the
 ///           nearest open spot.
@@ -30,13 +32,20 @@ public class EnemyControllerEditor : Editor
     private static readonly Color ClosedColour = new(1f, 0.2f, 0.15f);
     private static readonly Color NoGridColour = new(0.6f, 0.6f, 0.6f);
 
+    private static readonly string[] RouteNames = { "Safe", "Aggressive" };
+    private static readonly string[] RoutePaths = { "_safeRoute", "_aggressiveRoute" };
+
+    // Which route the handles and Add Patrol Point work on: 0 Safe, 1 Aggressive. Editor state only,
+    // never saved on the enemy, and static so it holds when another enemy is selected.
+    private static int s_editing;
+
     private SerializedProperty _points;
     private PathGrid[] _grids;
     private BoxBoundsHandle _box;
 
     private void OnEnable()
     {
-        _points = serializedObject.FindProperty("_safeRoute._points");
+        SelectRoute();
         // Edges only: an area has no height. Its outline is drawn in the clearance colour, so the
         // handle draws no wireframe of its own. One handle serves every rectangle: it takes fresh
         // control IDs on each draw.
@@ -48,12 +57,32 @@ public class EnemyControllerEditor : Editor
         };
     }
 
+    private void SelectRoute() => _points = serializedObject.FindProperty(RoutePaths[s_editing] + "._points");
+
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
 
         EditorGUILayout.Space();
-        if (GUILayout.Button("Add Patrol Point")) AddPoint();
+        EditorGUI.BeginChangeCheck();
+        int chosen = GUILayout.Toolbar(s_editing, RouteNames);
+        if (EditorGUI.EndChangeCheck())
+        {
+            s_editing = chosen;
+            SelectRoute();
+            SceneView.RepaintAll();
+        }
+
+        // Without an Aggressive route there is a rule, not a fallback: say which one applies.
+        var enemy = (EnemyController)target;
+        if (!enemy.HasAggressiveRoute)
+        {
+            EditorGUILayout.HelpBox(enemy.SafeRoute.Count > 0
+                ? "No Aggressive route: once aggressive, this officer keeps walking his Safe route."
+                : "No Aggressive route: once aggressive, this officer stays at his post, alert.", MessageType.Info);
+        }
+
+        if (GUILayout.Button($"Add Patrol Point ({RouteNames[s_editing]} route)")) AddPoint();
     }
 
     private void AddPoint()
@@ -109,7 +138,10 @@ public class EnemyControllerEditor : Editor
                 DrawOutline(area);
                 // The index is how runtime warnings ("point 3 skipped") map back to the scene.
                 // Read from the route itself, so the label can't disagree with what runs.
-                string label = ((EnemyController)target).SafeRoute.Wanders ? $"{i} · wander" : i.ToString();
+                var enemy = (EnemyController)target;
+                PatrolRoute route = s_editing == 0 ? enemy.SafeRoute : enemy.AggressiveRoute;
+                string number = s_editing == 0 ? i.ToString() : $"A{i}";
+                string label = route.Wanders ? $"{number} · wander" : number;
                 Handles.Label(centre + Vector3.up * 0.6f, label, EditorStyles.boldLabel);
             }
 
