@@ -220,6 +220,12 @@ a { color: var(--accent); }
     <tr><td>View Range / View Angle / Close Radius / Give Up Radius</td><td class="where">EnemyController</td><td class="num">12.5 m / 135° / 3 m / 18.5 m</td></tr>
     <tr><td>Aggro Time (also how long he holds at the last spot he knew)</td><td class="where">EnemyController</td><td class="num">1.5 s</td></tr>
     <tr><td>Search Duration (counted from arrival) / Search Travel Limit</td><td class="where">EnemyController</td><td class="num">10 s / 20 s</td></tr>
+    <tr><td>Search Reach (how close he gets to a search spot)</td><td class="where">EnemyController</td><td class="num">1.5 m</td></tr>
+    <tr><td>Look Time / Stand Down Time (checking a problem)</td><td class="where">EnemyController</td><td class="num">1.5 s / 1 s</td></tr>
+    <tr><td>Look Sweep Angle / Period (his body turns side to side)</td><td class="where">EnemyController</td><td class="num">70° / 2 s</td></tr>
+    <tr><td>Attack Near Radius / Time (a thud near a recent report of Ruby is an attack)</td><td class="where">EnemyController</td><td class="num">20 m / 15 s</td></tr>
+    <tr><td>Aggressive Speed Factor (patrol speed once he's aggressive)</td><td class="where">EnemyController</td><td class="num">1.25×</td></tr>
+    <tr><td>Post Tolerance (how near his post counts as at it)</td><td class="where">EnemyController</td><td class="num">1 m</td></tr>
     <tr><td>Motion Radius / Body Notice Range (how far he notices moving bodies and corpses)</td><td class="where">EnemyController</td><td class="num">12.5 m / 12.5 m</td></tr>
     <tr><td>Scan Interval (how often he looks)</td><td class="where">EnemyController</td><td class="num">0.2 s</td></tr>
     <tr><td>Speak Interval (calling out Ruby while he sees her)</td><td class="where">EnemyController</td><td class="num">1 s</td></tr>
@@ -537,12 +543,13 @@ a { color: var(--accent); }
   <li><strong>Sounds travel along the floor.</strong> A gunshot carries 25 m, the whip landing 6 m, and an impact 10 m, growing with how hard the hit was up to 20 m. It's measured along the walkable floor, so it doesn't carry through a wall, or to another floor.</li>
   <li><strong>What a sound is worth.</strong> Each kind has a priority: a body or a fast object 50, a gunshot 40, an impact or the whip landing 30, a slow-moving object or a loose gun 20. He treats a body, a fast object and a gunshot as an attack, and the rest as a problem to check. He ignores his own shot. An officer who is already fighting, rearming, held, down or dead ignores everything.</li>
   <li><strong>A thrown body leads back to Ruby.</strong> Anything she holds on the chain remembers where she stood, for 5 seconds after she lets go, and passes that on to whatever it hits. An officer who sees it fly, or hears it hit, goes to where it was thrown from, not where it landed.</li>
-  <li><strong>He notices what moves and what lies there.</strong> Within 12.5 m, in clear sight, a body moving at 4 m/s or more is worth a glance and one at 15 m/s or more is cause for alarm. An officer standing and walking never counts, only one held on the chain or tumbling. Corpses within 12.5 m in his view, and loose guns if he's armed, are noticed the same way. A body or gun the squad has never reported goes on its books. Each moving body is reacted to once every 5 seconds.</li>
+  <li><strong>He notices what moves and what lies there.</strong> Within 12.5 m, in clear sight, a body moving at 4 m/s or more is worth a glance and one at 15 m/s or more is cause for alarm. An officer standing and walking never counts, only one held on the chain or tumbling. Corpses within 12.5 m in his view, and loose guns if he's armed, are noticed the same way. A body or gun the squad has never reported goes on its books and he goes to check it. One the squad already knows about he only <strong>glances</strong> at: he faces it, looks for a moment from where he stands without walking to it, and is wary from then on. Each moving body is reacted to once every 5 seconds.</li>
+  <li><strong>A thud can be an attack.</strong> A sound that's only a problem to check (an impact, a moving object) is searched for as an attack instead when the officer has seen Ruby, or when the newest news of her is under 15 seconds old and within 20 m of it.</li>
   <li><strong>Ruby's own sounds teach him where she is.</strong> A gunshot or the whip tells everyone who hears it where she stood, and he'll hunt that spot.</li>
   <li><strong>He never forgets her face.</strong> Once an officer has seen Ruby with his own eyes, he knows she's in the building. That memory is for good.</li>
   <li><strong>What he knows beats what's true.</strong> Out of sight, an officer chases the newest thing he knows of Ruby: what he saw, heard or was told, or the squad's shared picture, whichever is newer. The squad's picture updates once a second, so a fight she leaves doesn't end the instant she's out of sight.</li>
   <li><strong>He calls out what he sees.</strong> While he sees Ruby he shouts her position at once and then every second. Officers within 15 m along the floor learn it immediately. A shout doesn't carry through a wall.</li>
-  <li><strong>The level's alert.</strong> The first officer to go to Aggro puts the level on alert for good. Nothing acts on it yet <span class="planned">Planned</span>.</li>
+  <li><strong>The level's alert.</strong> The first officer to go to Aggro puts the level on alert for good. Within about a second every patrolling officer walks his Aggressive route, and none goes back to his Safe one.</li>
 </ul>
 
 <h3>States</h3>
@@ -551,10 +558,10 @@ a { color: var(--accent); }
 <table>
   <thead><tr><th>State</th><th>Kind</th><th>Enters when</th><th>Leaves when</th></tr></thead>
   <tbody>
-    <tr><td>Idle</td><td>AI</td><td>No patrol route</td><td>Sees Ruby or is hurt → Aggro; hears or notices something → Searching</td></tr>
-    <tr><td>Patrol</td><td>AI</td><td>Has a patrol route</td><td>Sees Ruby → Aggro; hears or notices something → Searching</td></tr>
+    <tr><td>Idle</td><td>AI</td><td>No route for his mode</td><td>Sees Ruby or is hurt → Aggro; hears or notices something → Searching; a route appears for his mode → Patrol</td></tr>
+    <tr><td>Patrol</td><td>AI</td><td>Has a route for his mode</td><td>Sees Ruby → Aggro; hears or notices something → Searching; no route for his mode → Idle</td></tr>
     <tr><td>Aggro</td><td>AI</td><td>Sees Ruby, is hurt, or gets up</td><td>Loses Ruby for 1.5 s, or holds 1.5 s at the last spot he knew → Searching</td></tr>
-    <tr><td>Searching</td><td>AI</td><td>Lost Ruby, or heard or noticed something</td><td>Sees Ruby → Aggro; 10 s pass after he arrives → Idle or Patrol</td></tr>
+    <tr><td>Searching</td><td>AI</td><td>Lost Ruby, or heard or noticed something</td><td>Sees Ruby → Aggro; the search finishes → Idle or Patrol</td></tr>
     <tr><td>Rearm</td><td>AI</td><td>Unarmed, with a free gun within 10 m</td><td>Picks one up, or none left → Aggro</td></tr>
     <tr><td>Grabbed</td><td>Imposed</td><td>The whip lands on it</td><td>Thrown or dropped → Ragdoll</td></tr>
     <tr><td>Ragdoll</td><td>Imposed</td><td>Knocked down, thrown or dropped</td><td>Settles, gets up (1 s) → Aggro</td></tr>
@@ -564,7 +571,7 @@ a { color: var(--accent); }
 </div>
 
 <h4>Idle</h4>
-<p>Holds its post until it sees Ruby or is hurt, either of which sends it into Aggro; an unarmed officer also goes for a free gun nearby. A sound or something it notices sends it to search the spot (see <a href="#officer-senses">What an officer hears, notices and knows</a>). That includes an officer with no route that went back to Idle after a search.</p>
+<p>Holds its post until it sees Ruby or is hurt, either of which sends it into Aggro; an unarmed officer also goes for a free gun nearby. A sound or something it notices sends it to search the spot (see <a href="#officer-senses">What an officer hears, notices and knows</a>). <strong>Where it starts is its post.</strong> After a search, a fall or a shove, it walks back and turns the way it started, faster once it's aggressive. If the way back takes more than 20 seconds (another officer standing on the post, say), it stays where it is and tries again once it's next at its post. An idle officer given an Aggressive route walks it once he's aggressive; without one he stays at his post, alert.</p>
 
 <h4>Patrol</h4>
 <ul>
@@ -573,6 +580,7 @@ a { color: var(--accent); }
   <li><strong>Mode</strong> sets the order: Loop (0, 1, 2, 0), Ping Pong (0, 1, 2, 1) or Random. Random picks any stop except the one the officer is at and the one it just came from. With two stops it goes back and forth; with three it can only go round.</li>
   <li><strong>A route with one stop 4 m or more across is wandered</strong>: a circle 4 m wide (2 m radius) or a rectangle whose longer side is 4 m. The officer walks to random open spots inside it, each at least a quarter of the way across, pausing at each, so a 2 × 10 m corridor gets paced along. It only picks ground it can reach without leaving the area, so an area drawn across a wall is wandered on its centre's side. A smaller single stop means "stand here". The Scene view labels a wandered stop "0 · wander".</li>
   <li>After being pulled off its route, it rejoins at the nearest stop, not the first.</li>
+  <li><strong>Aggressive.</strong> Once an officer has been after Ruby, has seen her, or the level is on alert, he patrols aggressively and never goes back. He walks his <strong>Aggressive route</strong> if he has one (a second route, placed the same way, with an A before each stop's number in the Scene view) and otherwise keeps walking his Safe route. He walks 25% faster and spends each pause looking around instead of standing, turning side to side. The Inspector says which rule applies to an officer with no Aggressive route.</li>
   <li>A stop it can't reach is skipped with a warning. If every stop fails, it waits 3 s and tries again.</li>
   <li>Routes are edited with handles in the Scene view, on the officer itself. Drag a circle's rim dot to size it, or a rectangle's edges, as on a Box Collider.</li>
 </ul>
@@ -588,10 +596,10 @@ a { color: var(--accent); }
 
 <h4>Searching</h4>
 <ul>
-  <li>Searches at 6 m/s. After a fight it goes where the chase was leading when it gave up, since that's where Ruby went, not where she slipped out of view. After a sound or a sight it goes to the spot that sent it there: where a thrown body was thrown from, a gunshot's muzzle, a body, a loose gun.</li>
-  <li>Once there it searches for <strong>10 seconds</strong>, counted from arrival and not from the sound, then goes back to Idle or Patrol. A spot it can't reach counts as arrived, and one it hasn't reached after 20 seconds it searches from where it stands.</li>
+  <li>Searches at 6 m/s. After a fight it goes where the chase was leading when it gave up, since that's where Ruby went, not where she slipped out of view. After a sound or a sight it goes to the spot that sent it there: where a thrown body was thrown from, a gunshot's muzzle, a body, a loose gun. It heads for within 1.5 m of the spot, so a second officer sent to the same place looks from beside the first instead of pushing at him.</li>
+  <li><strong>Once there he looks around</strong>, turning his body side to side, and how long depends on why he came. For an <strong>attack</strong> (a gunshot, a body, a fast object, a lost fight, or anything once he has seen Ruby) he searches for <strong>10 seconds</strong>, counted from arrival and not from the sound. For a <strong>problem</strong> (a thud) he looks for 1.5 seconds, gestures that all is clear, holds for a second, and goes back to his patrol. Either way he then returns to Idle or Patrol, and a spot he hasn't reached after 20 seconds he searches from where he stands.</li>
   <li><strong>A search gives way only to something worth more.</strong> A sound with a higher priority sends him there instead and restarts the search; an equal or lower one is ignored. A search after a lost fight outranks every sound.</li>
-  <li>Checking something and hunting Ruby look the same for now. He stands on the spot, even on a body, and doesn't look around <span class="planned">Planned</span>.</li>
+  <li>Each officer decides alone for now, so two sent to one sound can differ: one who has seen Ruby searches for an attack while one who hasn't checks a problem and stands down. Searching as a team, and searching a room and checking behind things, are <span class="planned">Planned</span>.</li>
 </ul>
 
 <h4>Rearm</h4>
@@ -623,10 +631,9 @@ a { color: var(--accent); }
 
 <h3>Planned behaviour <span class="planned">Planned</span></h3>
 <ul>
-  <li><strong>Looking around and standing down.</strong> Reaching a spot, an officer looks around it and, finding nothing from a minor sound, gestures and returns to his patrol. After a body or a gunshot he goes on alert instead.</li>
-  <li><strong>Patrol Aggressive.</strong> An officer that has seen Ruby, or whose level is on alert, walks a more careful route and never relaxes.</li>
+  <li><strong>A real gesture and look-around.</strong> Looking around and the all-clear gesture use a plain body turn and a pause for now. Animations for both come with the animation work.</li>
   <li><strong>Searching together.</strong> Up to three officers check a disturbance as a team: one goes to the spot while the others follow behind. Fights get squads, with fire lanes.</li>
-  <li><strong>Afraid.</strong> The step after cautious. It might hide in a corner with its gun, flee the building, hunt Ruby down or cower.</li>
+  <li><strong>Afraid.</strong> The step after aggressive. It might hide in a corner with its gun, flee the building, hunt Ruby down or cower.</li>
   <li><strong>Police boss.</strong> A second enemy with Aiming, Patrol, Searching, Firing, Grabbed and Ragdoll states.</li>
   <li><strong>Melee officers</strong>, once melee weapons exist.</li>
 </ul>

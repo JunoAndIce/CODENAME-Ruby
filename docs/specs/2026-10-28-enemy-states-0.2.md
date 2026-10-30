@@ -760,7 +760,7 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
 - [x] 1. The pie-shaped view
 - [x] 2. Knowledge: memory and the shared pool
 - [x] 3. Senses and what they weigh
-- [ ] 4. Smaller states inside the main ones
+- [x] 4. Smaller states inside the main ones
 - [ ] 5. Group jobs
 - [ ] 6. Fighting together: squads and fire lanes
 - [ ] 7. Rooms and behaviour maps: activities, firing ranges, armories and alarms
@@ -768,8 +768,10 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
 - [ ] 9. Breakables: light fixtures and props (much later)
 - [x] 10. Pathing: corners and curves
 
-2 and 3 are built together, since a pool with nothing feeding it can't be played. 9 comes much
-later. 10 can go anywhere in the order.
+2 and 3 are built together, since a pool with nothing feeding it can't be played. 4 is built apart
+from its group cases (an officer sent to Patrol Aggressive because a search team was full, and
+searching as a team), which wait for piece 5's jobs. 9 comes much later. 10 can go anywhere in the
+order.
 
 ## Open questions
 

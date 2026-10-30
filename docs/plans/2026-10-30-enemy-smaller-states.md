@@ -246,13 +246,13 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, `docs/specs/2026-10-28-enemy-states-0.2.md`, this plan.
 
-- [ ] **Step 1: CLAUDE.md.**
+- [x] **Step 1: CLAUDE.md.**
   - **Searching bullet:** the steps (walk, look, stand down), Problem against Attack, the search from Aggro, and the glance at a known body. Take out the "stands on the spot without looking about" sentence.
   - **Patrol bullet:** Normal and Aggressive, `IsAggressive`, `Wary`, the Aggressive route, the rules for an officer without one, and the speed factor and pauses.
   - **Idle** (in Detection and a new line): the post and the walk back.
   - **Senses and the behaviour map:** a Problem becomes an Attack for an officer who has seen Ruby or when she was reported near it. `Investigate`'s new `walkThere`.
   - **Debug overlays:** add the Attack Near Radius gizmo. Conventions: the route colours.
   - **Specs:** piece 4 built, piece 5 next.
-- [ ] **Step 2: The manual.** The tuning table gains the new values. The States table, the Idle, Patrol and Searching text and the "What an officer hears, notices and knows" section change. Take the look-around and Patrol Aggressive out of the planned list. Rebuild the PDF with headless Chrome, as before, and check that it wrote.
-- [ ] **Step 3: Spec and plan.** Tick piece 4 in the spec's Progress, and tick this plan's steps. Commit these files only.
+- [x] **Step 2: The manual.** The tuning table gains the new values. The States table, the Idle, Patrol and Searching text and the "What an officer hears, notices and knows" section change. Take the look-around and Patrol Aggressive out of the planned list. Rebuild the PDF with headless Chrome, as before, and check that it wrote.
+- [x] **Step 3: Spec and plan.** Tick piece 4 in the spec's Progress, and tick this plan's steps. Commit these files only.
 - [ ] **Step 4: End-of-piece review, in the background,** over the range this plan added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before piece 5, in one fix wave.

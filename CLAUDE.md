@@ -418,8 +418,29 @@ through the player never slows the walk.
   side. Routes are edited with Scene-view handles (`EnemyControllerEditor`): a rim dot sizes a
   circle, and edge handles size a rectangle, as on a Box Collider. Each area is coloured by the
   bake's own clearance test, and a wandered point is labelled "0 · wander". In the Inspector,
-  `PatrolPointDrawer` shows only the size field a point's shape uses. No route means Idle in
-  place.
+  `PatrolPointDrawer` shows only the size field a point's shape uses. Labels number the Safe
+  route 0, 1, 2 and the Aggressive one A0, A1, A2, so a runtime warning maps back to the right
+  route. No route for his mode means he idles at his post (see **Idle**).
+- **Idle** (`IdleState`). Where an officer starts is his **post** (`PostPosition`, `PostYaw`,
+  recorded in `Start`). After a search, a fall or a shove, farther than Post Tolerance (1 m) from it,
+  he walks back at the current patrol speed and turns the way he started, so an idle officer is
+  never left wherever his last job ended. The walk gives up after Search Travel Limit with a log
+  line and starts again the next time he's at his post, so a post another officer stands on can't
+  have him pushing at it for good. Idle activities (a desk, a TV) are a later piece.
+- **Patrol Normal and Aggressive.** These are modes of Patrol, not states. `IsAggressive` is
+  **derived on every read, never stored**: he has been after Ruby (`EnemyMemory.Wary`, set by any
+  search for an attack and by a glance at a known body), has seen her (`HasSeenRuby`), or the
+  level is on alert (`Intel.Published.LevelOnAlert`, latched by the first Aggro). None is ever
+  cleared, so he never goes back. A level alert flips every patroller at the next pool update with
+  no transition. `ActiveRoute` is the Aggressive route when he's aggressive and has one, else the
+  Safe route: **an aggressive officer with no Aggressive route keeps walking his Safe route, and
+  an idle one stays at his post, alert**. That is a rule and not a fallback, and the Inspector
+  says which applies. `PatrolState` reads `ActiveRoute`, and starts over on the nearest point of a
+  new one when it changes. Aggressive, he walks at Aggressive Speed Factor (1.25) times Patrol
+  Speed, and spends each pause looking around (the point's pause override, else Look Time)
+  instead of standing. The table has `Idle` to `Patrol` when `HasActiveRoute`, and `Patrol` to
+  `Idle` when not, so an alert can hand an idle officer a route to walk. Nothing may ask "does he
+  patrol?" without saying for which mode: `HasPatrolRoute` is gone.
 - **Knowledge** (`Squad/`). An officer's memory (`EnemyMemory`) holds the newest fact about Ruby
   (`RubyFact`: position, time and a `Knowledge` source, Seen, Heard, Told or Pool), whether he has
   **ever seen her** (`HasSeenRuby`, never cleared), and the bodies and loose guns he has already
@@ -460,32 +481,49 @@ through the player never slows the walk.
   `StimulusKind`: a **priority** and a **response**: Ignore, SearchForProblem or SearchForAttack.
   Defaults: body and fast object 50, gunshot 40 (attack); impact and whip landing 30, moving
   object and loose gun 20 (problem). A kind with no row, or a missing map, logs one warning and
-  is treated as no reaction. Problem and Attack both just search for now (see **Searching**).
+  is treated as no reaction. Problem and Attack differ in how he searches (see **Searching**), and
+  Investigate can upgrade a Problem to an Attack.
 - **Senses** (`EnemySenses`, one per officer, scanned from `FixedUpdate` every Scan Interval at a
   staggered phase). He notices **bodies in motion** within Motion Radius that he can see clearly:
   at Notice Speed a MovingObject, at Alarm Speed a FastObject, once per Origin Lifetime for each
   body, and only a *taken* reaction counts as one. An officer on his feet is never a moving body,
   only one held on the chain or tumbling. He notices **corpses** within Body Notice Range in his
   view and clear sight, and **loose guns** in view and sight if he is armed. A body or gun he
-  hasn't seen goes on the squad's books and he investigates it; one the squad already knows he
-  only learns, and keeps doing what he was doing. Ruby is never a moving body: she's the one being
-  hunted, and sight of her is Aggro.
-- **Searching** (`SearchingState`, entered by `Investigate`). `Investigate(point, reason, priority)`
-  ignores Grabbed, Ragdoll, Dead, Rearm and Aggro. From Idle or Patrol it **stages** the target
-  (`Stage`) and enters Searching. Already searching, it **retargets** (`Retarget`) only for a
-  *strictly higher* priority: equal or lower is ignored, which is what stops flicker. A search from
-  Aggro has priority 100, above every map row, so a sound can't pull him off a lost player. He walks
-  to the spot at Search Speed, and **Search Duration (10 s) counts from arrival**, not from the
-  sound. An unreachable spot counts as arrived (the navigator has warned), and Search Travel Limit
-  (20 s) makes him search where he stands if he hasn't arrived by then. Nothing yet separates
-  Searching for Problem from Searching for Attack beyond the reason carried and logged, and he
-  stands on the spot, even a body, without looking about: both are later pieces of
-  `docs/specs/2026-10-28-enemy-states-0.2.md`.
+  hasn't seen goes on the squad's books and he investigates it. One the squad already knows he
+  **glances** at: he faces it and looks from where he stands without walking to it, and is wary
+  from then on. A booked body or gun counts as seen even when he's too busy to investigate it
+  (Aggro, Rearm, or a search at equal or higher priority). Ruby is never a moving body: she's the
+  one being hunted, and sight of her is Aggro.
+- **Searching** (`SearchingState`, entered by `Investigate`). `Investigate(point, reason, priority,
+  walkThere = true)` first upgrades a SearchForProblem to **SearchForAttack** when he has seen Ruby
+  or the newest news of her (his memory or the pool) is at most Attack Near Time (15 s) old and
+  within Attack Near Radius (20 m) of the point, then makes him wary if it's an attack. It ignores
+  Grabbed, Ragdoll, Dead, Rearm and Aggro. From Idle or Patrol it **stages** the target (`Stage`)
+  and enters Searching. Already searching, it **retargets** (`Retarget`) only for a *strictly
+  higher* priority: equal or lower is ignored, which is what stops flicker. A search from Aggro has
+  priority 100, above every map row, so a sound can't pull him off a lost player. The state runs
+  **steps**, `Walk`, `Look`, `StandDown` and `Done`, and a retarget starts them over:
+  - **Walk:** to an *area* of Search Reach (1.5 m) round the spot, at Search Speed, with the same
+    area move patrol uses. Officers of equal weight block each other, so two sent to one spot used
+    to leave the second pushing at the first: the area move arrives once progress stalls inside it.
+    No path at all warns. Search Travel Limit (20 s) ends a walk that never arrives.
+  - **Look:** `LookAround` turns his body about Y, Look Sweep Angle (70°) each side of where he
+    faced, over Look Sweep Period (2 s). A search for an **attack** looks for Search Duration (10 s,
+    from arrival), which stands in for searching the area. A search for a **problem** looks for
+    Look Time (1.5 s).
+  - **StandDown:** problem only. He holds Stand Down Time (1 s) and logs "all clear" (the gesture,
+    until there is an animation), then is `Finished`.
+  - The table sends a finished search to Patrol when `HasActiveRoute`, else Idle. With `walkThere`
+    false he faces the point and looks from where he stands: that is the glance.
+  The search is one officer's. A checker with followers, searching a room and checking behind
+  things are later pieces of `docs/specs/2026-10-28-enemy-states-0.2.md`.
 - **Debug overlays**, all off by default and only in the editor: `PathGrid`'s Always Show Grid and
   Show Open Cells draw the whole floor, and `Intel`'s Show Sound Range draws each recent sound's
   reach (the cells its flood covered, shaded by distance, beside the circle the same loudness
   would cover in open air). Draw cost grows with the grid's cell count, so leave them off unless
-  you're looking at them.
+  you're looking at them. An officer selected in Play also draws Attack Near Radius round where
+  Ruby was last reported, orange, while the report is recent enough. Every officer's routes show
+  faintly, cyan for Safe and orange for Aggressive.
 
 ### Pathing
 
@@ -854,9 +892,10 @@ Melee and Ruby's revolver are still to come.
 
 Enemy States 0.2 (`2026-10-28-enemy-states-0.2.md`) is built piece by piece: pieces 1 (the view
 cone), 2 and 3 (knowledge, the pool, senses and the behaviour map, built to
-`docs/plans/2026-10-28-enemy-knowledge-and-senses.md`) and 10 (corners and curves) are done. Piece
-4 (the look-around and standing down, Patrol Aggressive, acting on the level's alert) is next,
-then group jobs, squads, rooms, hiding spots and breakables.
+`docs/plans/2026-10-28-enemy-knowledge-and-senses.md`), 4 (smaller states: search steps, Patrol
+Aggressive, the idle post, built to `docs/plans/2026-10-30-enemy-smaller-states.md`) and 10
+(corners and curves) are done. Group jobs are next, then squads, rooms, hiding spots and
+breakables.
 
 ## Unity/git
 
