@@ -5,9 +5,9 @@ using UnityEngine;
 /// field. Armed with her in sight, it keeps its gun's band: it closes in to Min Distance, holds in
 /// the metre above that, and backs away inside it, still facing her. Firing happens alongside all
 /// of these, not as its own state. Out of sight it chases what it knows of her (its memory and the
-/// squad's stale pool), never her true position. LostPlayer flips after Aggro Time out of contact,
-/// on arriving at the known spot without sight of her, or at once with nothing to go on; the table
-/// then sends the enemy to search.
+/// squad's stale pool), never her true position. LostPlayer flips, never while in contact, after
+/// Aggro Time out of contact, after holding Aggro Time at the known spot without sight of her, or at
+/// once with nothing to go on; the table then sends the enemy to search.
 /// </summary>
 public class AggroState : EnemyStateBase
 {
@@ -16,14 +16,30 @@ public class AggroState : EnemyStateBase
 
     private float _lostTimer;
     private bool _hadSight;
-    private bool _arrivedAtKnown;   // out of sight and standing on the spot he knew: nothing left to chase
-    private bool _nothingToGoOn;    // out of sight and he knows nothing of her
+    private bool _holdingAtKnown;   // out of sight and standing on the spot he knew
+    private float _dwellTimer;      // how long he has held there
+    private bool _loggedNothing;    // the nothing-to-go-on line is logged on its rising edge only
 
     public AggroState(EnemyController enemy) : base(enemy) { }
 
     public override EnemyState Id => EnemyState.Aggro;
 
-    public bool LostPlayer => _lostTimer >= Enemy.AggroTime || _arrivedAtKnown || _nothingToGoOn;
+    // The table reads this before the state's own Tick, so nothing here may rest on a flag a Tick or
+    // FixedTick wrote earlier: a stale one ended fights on a frame he could see her. Contact and
+    // sight are cached per frame, so the table and the state read the same fresh answer.
+    public bool LostPlayer
+    {
+        get
+        {
+            if (Enemy.InContactWithPlayer()) return false;
+            if (_lostTimer >= Enemy.AggroTime) return true;
+            if (Enemy.CanSeePlayer()) return false;
+            return NothingToGoOn || (_holdingAtKnown && _dwellTimer >= Enemy.AggroTime);
+        }
+    }
+
+    // Out of sight and he knows nothing of her: no rule but "search where he stands".
+    private bool NothingToGoOn => !Enemy.CanSeePlayer() && !Enemy.TryGetNewestRuby(out _);
 
     /// <summary>Armed, with Ruby in sight, in range and on her feet: it's shooting, so its body aims.</summary>
     public bool Firing { get; private set; }
@@ -32,8 +48,9 @@ public class AggroState : EnemyStateBase
     {
         Firing = false;
         _lostTimer = 0f;
-        _arrivedAtKnown = false;
-        _nothingToGoOn = false;
+        _holdingAtKnown = false;
+        _dwellTimer = 0f;
+        _loggedNothing = false;
         _hadSight = Enemy.CanSeePlayer();
         // Null-guarded: with no Intel in the scene the enemy has already logged the error.
         if (Enemy.Intel != null) Enemy.Intel.ReportAggro(Enemy);
@@ -54,12 +71,21 @@ public class AggroState : EnemyStateBase
             DebugLog.Info($"{Enemy.name} lost sight of {Enemy.PlayerTransform.name} — blocked by {(Enemy.SightBlocker != null ? Enemy.SightBlocker.name : "something")}.", Enemy);
         _hadSight = hasSight;
 
-        // Sight coming back means the fight carries on, so every lost condition but the timer clears.
-        bool nothing = !hasSight && !Enemy.TryGetNewestRuby(out _);
-        if (nothing && !_nothingToGoOn)
+        bool nothing = NothingToGoOn;
+        if (nothing && !_loggedNothing)
             DebugLog.Info($"{Enemy.name} has nothing to go on: he can't see Ruby and knows nothing of where she is, so he searches where he stands.", Enemy);
-        _nothingToGoOn = nothing;
-        if (hasSight) _arrivedAtKnown = false;
+        _loggedNothing = nothing;
+
+        // Sight coming back means the fight carries on: the dwell starts over.
+        if (hasSight)
+        {
+            _holdingAtKnown = false;
+            _dwellTimer = 0f;
+        }
+        else if (_holdingAtKnown)
+        {
+            _dwellTimer += Time.deltaTime;
+        }
 
         if (Enemy.InContactWithPlayer()) _lostTimer = 0f;
         else _lostTimer += Time.deltaTime;
@@ -81,7 +107,7 @@ public class AggroState : EnemyStateBase
             case Move.Chase:
                 // With her in sight he knows where she is; without, only what he has learned.
                 if (inSight) Enemy.PathToPlayer(Enemy.ChaseSpeed);
-                else _arrivedAtKnown = Enemy.ChaseKnown(Enemy.ChaseSpeed) == NavResult.Arrived;
+                else ChaseWhatHeKnows();
                 break;
 
             case Move.Hold:
@@ -104,6 +130,24 @@ public class AggroState : EnemyStateBase
         }
 
         Shoot();
+    }
+
+    // Reaching the spot doesn't end the hunt: giving up the instant he got there dropped fights while
+    // Ruby was a metre past it. He stands there for Aggro Time first. A look-around animation comes later.
+    private void ChaseWhatHeKnows()
+    {
+        bool arrived = Enemy.ChaseKnown(Enemy.ChaseSpeed) == NavResult.Arrived;
+        if (arrived && !_holdingAtKnown)
+        {
+            _dwellTimer = 0f;
+            DebugLog.Info($"{Enemy.name} reached where he last knew Ruby was and holds there for {Enemy.AggroTime:0.#}s.", Enemy);
+        }
+        // A newer fact that moves the point sends him off again, and the dwell starts over.
+        else if (!arrived)
+        {
+            _dwellTimer = 0f;
+        }
+        _holdingAtKnown = arrived;
     }
 
     private enum Move { Chase, Hold, BackAway }
