@@ -18,8 +18,13 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0.05f)] private float _intelInterval = 1f;
     [Tooltip("How far a spoken report carries, in path metres from the speaker (round walls, not through them).")]
     [SerializeField, Min(0f)] private float _speechRange = 15f;
+    [Tooltip("Which stimuli the squad reacts to and how. Without it officers react to no stimulus.")]
+    [SerializeField] private BehaviourMap _defaultMap;
 
     private readonly List<EnemyController> _enemies = new();
+    // The squad's books on dead officers and loose guns. Only ever added to within a level.
+    private readonly HashSet<EnemyController> _knownBodies = new();
+    private readonly HashSet<Gun> _knownGuns = new();
     private RubyFact _pendingRuby;
     private bool _hasPendingRuby;
     private EnemyController _pendingReporter;
@@ -36,10 +41,18 @@ public class Intel : MonoBehaviour
 
     public float SpeechRange => _speechRange;
 
+    /// <summary>The behaviour map every officer reads. Null only when the asset is missing, which OnEnable reports.</summary>
+    public BehaviourMap MapAt(Vector3 point) => _defaultMap;
+
     // Enable and disable rather than Awake and destroy, so switching the component off also
     // silences the bus instead of leaving stale rules behind.
     private void OnEnable()
     {
+        if (_defaultMap == null)
+            Debug.LogError($"{name}: Intel has no Default Map — officers react to nothing. Assign a Behaviour Map asset.", this);
+
+        Stimuli.Emitted += Hear;
+
         if (_stimulusRules == null)
         {
             Debug.LogError($"{name}: Intel has no Stimulus Rules — shots, hits and thrown bodies make no stimuli.", this);
@@ -48,7 +61,11 @@ public class Intel : MonoBehaviour
         Stimuli.Configure(_stimulusRules);
     }
 
-    private void OnDisable() => Stimuli.Configure(null);
+    private void OnDisable()
+    {
+        Stimuli.Emitted -= Hear;
+        Stimuli.Configure(null);
+    }
 
     private void Update()
     {
@@ -81,6 +98,18 @@ public class Intel : MonoBehaviour
         _alertLogged = true;
         DebugLog.Info($"The level is on alert ({enemy.name} went to aggro).", this);
     }
+
+    /// <summary>The squad has a dead officer on its books. True only the first time anyone reports him.</summary>
+    public bool ReportBody(EnemyController body) => _knownBodies.Add(body);
+
+    /// <summary>The squad has a loose gun on its books. True only the first time anyone reports it.</summary>
+    public bool ReportGun(Gun gun) => _knownGuns.Add(gun);
+
+    /// <summary>The pool already holds this body, so the squad doesn't need to be told again.</summary>
+    public bool PoolKnowsBody(EnemyController body) => _knownBodies.Contains(body);
+
+    /// <summary>The pool already holds this gun, so the squad doesn't need to be told again.</summary>
+    public bool PoolKnowsGun(Gun gun) => _knownGuns.Contains(gun);
 
     /// <summary>
     /// A spoken report: every other living enemy within Speech Range along the floor learns it at
@@ -131,32 +160,79 @@ public class Intel : MonoBehaviour
         DebugLog.Info($"{speaker.name} calls out Ruby's position: {heard} heard.", speaker);
     }
 
+    /// <summary>
+    /// A sound carries as far as its Loudness, in path metres on its own floor. The flood is made
+    /// once per sound and shared by every listener, so it must be read before anything else floods:
+    /// FloodFrom hands back one scratch field that the next flood overwrites. Hearing itself never
+    /// floods, so the distances stay valid through the loop.
+    /// </summary>
+    private void Hear(Stimulus stimulus)
+    {
+        if (stimulus.Loudness <= 0f) return;
+
+        PathGrid grid = PathGrid.At(stimulus.Position);
+        if (grid == null)
+        {
+            DebugLog.Info($"{stimulus.Kind} at {stimulus.Position} is on no PathGrid, so no one hears it.", this);
+            return;
+        }
+
+        FlowField reach = grid.FloodFrom(stimulus.Position, stimulus.Loudness);
+        EnemyController sourceOwner = stimulus.Source != null ? stimulus.Source.GetComponentInParent<EnemyController>() : null;
+
+        foreach (EnemyController listener in _enemies)
+        {
+            if (listener == sourceOwner || listener.Health.IsDead) continue;
+            if (PathGrid.At(listener.transform.position) != grid) continue;
+            if (!reach.TryGetDistance(listener.transform.position, out float metres) || metres > stimulus.Loudness) continue;
+
+            listener.Senses.Hear(stimulus);
+        }
+    }
+
     private void Publish()
     {
         bool rubyChanged = _hasPendingRuby && (!Published.RubyReported || _pendingRuby.Time > Published.Ruby.Time);
         bool alertChanged = _pendingAlert && !Published.LevelOnAlert;
-        if (!rubyChanged && !alertChanged) return;
+        // Bodies and guns are only ever added within a level, so a count change is a real change.
+        bool bodiesChanged = _knownBodies.Count != Published.Bodies.Count;
+        bool gunsChanged = _knownGuns.Count != Published.Guns.Count;
+        if (!rubyChanged && !alertChanged && !bodiesChanged && !gunsChanged) return;
 
         // Always a new object: an enemy mid-decision holds the old one and must see it unchanged.
         Published = new IntelSnapshot(
             Published.RubyReported || _hasPendingRuby,
             rubyChanged ? _pendingRuby : Published.Ruby,
-            Published.LevelOnAlert || _pendingAlert);
+            Published.LevelOnAlert || _pendingAlert,
+            _knownBodies,
+            _knownGuns);
 
         DebugLog.Info(rubyChanged
             ? $"Intel published: Ruby last at {Published.Ruby.Position} (reported by {(_pendingReporter != null ? _pendingReporter.name : "someone")}){(Published.LevelOnAlert ? ", level on alert" : "")}."
-            : "Intel published: the level is on alert.", this);
+            : $"Intel published: {Published.Bodies.Count} bod{(Published.Bodies.Count == 1 ? "y" : "ies")}, {Published.Guns.Count} loose gun(s).", this);
     }
 
-    // Ruby's last reported spot and how stale it is: the picture the squad is working from.
+    // Ruby's last reported spot and how stale it is: the picture the squad is working from. Bodies
+    // and loose guns the squad has on its books are marked too.
     private void OnDrawGizmos()
     {
-        if (!Application.isPlaying || !Published.RubyReported) return;
+        if (!Application.isPlaying) return;
 
-        Gizmos.color = Published.LevelOnAlert ? Color.red : Color.yellow;
-        Gizmos.DrawWireSphere(Published.Ruby.Position, 0.5f);
+        if (Published.RubyReported)
+        {
+            Gizmos.color = Published.LevelOnAlert ? Color.red : Color.yellow;
+            Gizmos.DrawWireSphere(Published.Ruby.Position, 0.5f);
 #if UNITY_EDITOR
-        UnityEditor.Handles.Label(Published.Ruby.Position + Vector3.up * 0.8f, $"Ruby reported {Time.time - Published.Ruby.Time:0.0}s ago");
+            UnityEditor.Handles.Label(Published.Ruby.Position + Vector3.up * 0.8f, $"Ruby reported {Time.time - Published.Ruby.Time:0.0}s ago");
 #endif
+        }
+
+        Gizmos.color = new Color(0.6f, 0.2f, 1f);
+        foreach (EnemyController body in Published.Bodies)
+            if (body != null) Gizmos.DrawWireCube(body.transform.position + Vector3.up * 0.2f, Vector3.one * 0.5f);
+
+        Gizmos.color = Color.cyan;
+        foreach (Gun gun in Published.Guns)
+            if (gun != null) Gizmos.DrawWireSphere(gun.transform.position, 0.3f);
     }
 }

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>How an enemy came to know a fact. Numbered and saved, so values never shift.</summary>
@@ -27,13 +29,18 @@ public readonly struct RubyFact
 /// </summary>
 public class IntelSnapshot
 {
-    public static readonly IntelSnapshot Empty = new(false, default, false);
+    public static readonly IntelSnapshot Empty = new(false, default, false, Array.Empty<EnemyController>(), Array.Empty<Gun>());
 
-    public IntelSnapshot(bool rubyReported, RubyFact ruby, bool levelOnAlert)
+    private readonly HashSet<EnemyController> _bodies;
+    private readonly HashSet<Gun> _guns;
+
+    public IntelSnapshot(bool rubyReported, RubyFact ruby, bool levelOnAlert, IEnumerable<EnemyController> bodies, IEnumerable<Gun> guns)
     {
         RubyReported = rubyReported;
         Ruby = ruby;
         LevelOnAlert = levelOnAlert;
+        _bodies = new HashSet<EnemyController>(bodies);
+        _guns = new HashSet<Gun>(guns);
     }
 
     /// <summary>Anyone has reported Ruby since the level began.</summary>
@@ -42,6 +49,13 @@ public class IntelSnapshot
     public RubyFact Ruby { get; }
     /// <summary>Latched: once anyone has gone to aggro, the level stays on alert.</summary>
     public bool LevelOnAlert { get; }
+    /// <summary>Dead officers the squad has reported. Never forgotten within a level.</summary>
+    public IReadOnlyCollection<EnemyController> Bodies => _bodies;
+    /// <summary>Loose guns the squad has reported.</summary>
+    public IReadOnlyCollection<Gun> Guns => _guns;
+
+    public bool KnowsBody(EnemyController body) => _bodies.Contains(body);
+    public bool KnowsGun(Gun gun) => _guns.Contains(gun);
 }
 
 /// <summary>
@@ -53,9 +67,17 @@ public class EnemyMemory
 {
     private RubyFact _ruby;
     private bool _hasRuby;
+    private readonly HashSet<EnemyController> _bodies = new();
+    private readonly HashSet<Gun> _guns = new();
 
     /// <summary>He has seen her with his own eyes at least once. Never cleared: it is what makes him wary for good.</summary>
     public bool HasSeenRuby { get; private set; }
+
+    public bool KnowsBody(EnemyController body) => _bodies.Contains(body);
+    public void RememberBody(EnemyController body) => _bodies.Add(body);
+
+    public bool KnowsGun(Gun gun) => _guns.Contains(gun);
+    public void RememberGun(Gun gun) => _guns.Add(gun);
 
     /// <summary>Takes in a fact if it is newer than what he has. An older report never overwrites a fresher one.</summary>
     public void Learn(RubyFact fact)

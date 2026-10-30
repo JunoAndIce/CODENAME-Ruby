@@ -58,6 +58,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("Unarmed, an enemy goes for a free dropped gun within this radius. 0 = never re-arms.")]
     [SerializeField, Min(0f)] private float _rearmRadius = 10f;
 
+    [Header("Senses")]
+    [Tooltip("How far he can notice a body moving fast, or a corpse or dropped gun lying around, with a clear line to it.")]
+    [SerializeField, Min(0f)] private float _motionRadius = 15f;
+
     [Header("References")]
     [SerializeField] private PlayerController _player;
 
@@ -69,6 +73,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public Rigidbody Body { get; private set; }
     /// <summary>What he knows about Ruby: his own sightings and what he was told.</summary>
     public EnemyMemory Memory { get; private set; }
+    /// <summary>What he hears, and what else he notices without sight.</summary>
+    public EnemySenses Senses { get; private set; }
+    public float MotionRadius => _motionRadius;
     /// <summary>The scene's shared pool, or null when there is none (an error was logged at Start).</summary>
     public Intel Intel { get; private set; }
     public Health Health { get; private set; }
@@ -178,6 +185,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         _capsule = GetComponent<CapsuleCollider>();
         Health = GetComponent<Health>();
         Memory = new EnemyMemory();
+        Senses = new EnemySenses(this);
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
@@ -257,6 +265,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private void FixedUpdate()
     {
         _state.FixedTick();
+        if (!Health.IsDead && _state.Current is not (GrabbedState or RagdollState or DeadState))
+            Senses.Scan();
     }
 
     /// <summary>
@@ -280,10 +290,33 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     }
 
     // Externally driven transitions. Nothing can poll for these, so they bypass the table.
+    // Investigate is one too: a sound happens once, so there is nothing for the table to poll.
     public void Alert()
     {
         if (_state.Current is GrabbedState or RagdollState or DeadState) return;
         _state.SetState(Aggro);
+    }
+
+    /// <summary>
+    /// Told or heard something worth searching. Idle and patrolling officers start searching
+    /// there; one already searching moves only for a strictly higher priority, so a quiet sound
+    /// can't pull him off a spot he's already checking. Aggro and the states that can't act on
+    /// it ignore the call: he already knows where Ruby is.
+    /// </summary>
+    public void Investigate(Vector3 point, StimulusResponse reason, int priority)
+    {
+        if (reason == StimulusResponse.Ignore) return;
+        if (_state.Current is GrabbedState or RagdollState or DeadState or RearmState or AggroState) return;
+
+        if (_state.Current is SearchingState)
+        {
+            if (priority > Searching.Priority) Searching.Aim(point, reason, priority);
+            return;
+        }
+
+        // Aim before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
+        Searching.Aim(point, reason, priority);
+        _state.SetState(Searching);
     }
 
     // Corpses too: a dead enemy stays a body the chain can swing and throw.
@@ -529,13 +562,18 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// pitches in play (its rotation is frozen and only turned about Y), so this only covers an
     /// officer placed pitched in the scene.
     /// </summary>
-    public bool InView(Vector3 point)
+    public bool InView(Vector3 point) => InView(point, _viewRange);
+
+    public float ViewRange => _viewRange;
+
+    /// <summary>The same cone and close circle, out to a range of the caller's choosing (a corpse is looked at closer than Ruby).</summary>
+    public bool InView(Vector3 point, float range)
     {
         Vector3 offset = point - transform.position;
         offset.y = 0f;
         float distance = offset.magnitude;
         if (distance <= _closeRadius) return true;
-        if (distance > _viewRange) return false;
+        if (distance > range) return false;
 
         // No facing, no cone. Angle against a zero vector reads 0 and would put everything in range in front.
         if (!TryFlatForward(out Vector3 forward)) return false;
@@ -571,22 +609,32 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (_sightFrame == Time.frameCount) return _canSeePlayer;
         _sightFrame = Time.frameCount;
 
-        Vector3 eye = EyePosition;
-        Vector3 toPlayer = _player.transform.position - eye;
-        float distance = toPlayer.magnitude;
-        _canSeePlayer = true;
-        _sightBlocker = null;
-        if (distance < 0.01f) return true;
+        _sightBlocker = FindSightBlocker(_player.transform.position, _player.transform);
+        _canSeePlayer = _sightBlocker == null;
+        return _canSeePlayer;
+    }
 
-        int count = Physics.RaycastNonAlloc(eye, toPlayer / distance, SightHits, distance, ~0, QueryTriggerInteraction.Ignore);
+    /// <summary>
+    /// Whether the line from his eyes to a point is clear. The target's own colliders don't block
+    /// it, so a body can be checked from its centre without its skin getting in the way.
+    /// </summary>
+    public bool HasClearSight(Vector3 point, Transform target) => FindSightBlocker(point, target) == null;
+
+    private Collider FindSightBlocker(Vector3 point, Transform target)
+    {
+        Vector3 eye = EyePosition;
+        Vector3 toPoint = point - eye;
+        float distance = toPoint.magnitude;
+        if (distance < 0.01f) return null;
+
+        int count = Physics.RaycastNonAlloc(eye, toPoint / distance, SightHits, distance, ~0, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < count; i++)
         {
-            if (IsCharacter(SightHits[i].collider)) continue;
-            _canSeePlayer = false;
-            _sightBlocker = SightHits[i].collider;
-            break;
+            Collider hit = SightHits[i].collider;
+            if (IsCharacter(hit) || (target != null && hit.transform.IsChildOf(target))) continue;
+            return hit;
         }
-        return _canSeePlayer;
+        return null;
     }
 
     // Characters see past each other, ragdoll bones included: each bone is a body of its own.
