@@ -38,6 +38,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _bodyNoticeRange = 6f;
     [Tooltip("Seconds between his sweeps for moving bodies, corpses and loose guns. Each officer starts at a random offset so a squad doesn't sweep on the same step.")]
     [SerializeField, Min(0.05f)] private float _scanInterval = 0.2f;
+    [Tooltip("A disturbance within this distance of where Ruby was last reported is searched for as an attack, not a problem, while that report is recent (Attack Near Time). Measured flat, in metres.")]
+    [SerializeField, Min(0f)] private float _attackNearRadius = 20f;
+    [Tooltip("How old the newest report of Ruby may be, in seconds, for a disturbance near it to count as an attack. Older and it's just a problem again. An officer who has seen her ignores this and treats everything as an attack.")]
+    [SerializeField, Min(0f)] private float _attackNearTime = 15f;
 
     [Header("Looking")]
     [Tooltip("How long he looks around a spot he went to check, in seconds, before standing down. A search for an attack looks for Search Duration instead.")]
@@ -334,6 +338,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             DebugLog.Info($"{name} ignores {reason} at {point}: the map says to ignore it.", this);
             return false;
         }
+        if (reason == StimulusResponse.SearchForProblem && ShouldSearchForAttack(point, out string why))
+        {
+            DebugLog.Info($"{name} treats the problem at {point} as an attack: {why}.", this);
+            reason = StimulusResponse.SearchForAttack;
+        }
         if (reason == StimulusResponse.SearchForAttack) Memory.BecomeWary();
         if (_state.Current is GrabbedState or RagdollState or DeadState or RearmState or AggroState)
         {
@@ -544,10 +553,42 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public bool TryGetNewestRuby(out Vector3 point)
     {
-        IntelSnapshot pool = Intel != null ? Intel.Published : IntelSnapshot.Empty;
-        bool known = Memory.TryGetNewestRuby(pool, out RubyFact fact);
+        bool known = TryGetNewestRubyFact(out RubyFact fact);
         point = fact.Position;
         return known;
+    }
+
+    /// <summary>The whole newest fact about Ruby, with when and how he knows it. False when he knows nothing.</summary>
+    public bool TryGetNewestRubyFact(out RubyFact fact)
+    {
+        IntelSnapshot pool = Intel != null ? Intel.Published : IntelSnapshot.Empty;
+        return Memory.TryGetNewestRuby(pool, out fact);
+    }
+
+    // A disturbance is an attack, not just a problem, to someone who knows she's about: he has seen
+    // her, or the newest news of her is recent and close to it. The age is the fact's own time, so
+    // an old report can't turn every later thud into an attack for good.
+    private bool ShouldSearchForAttack(Vector3 point, out string why)
+    {
+        if (Memory.HasSeenRuby)
+        {
+            why = "he has seen Ruby";
+            return true;
+        }
+
+        if (TryGetNewestRubyFact(out RubyFact fact))
+        {
+            float age = Time.time - fact.Time;
+            float distance = PathGrid.FlatDistance(fact.Position, point);
+            if (age <= _attackNearTime && distance <= _attackNearRadius)
+            {
+                why = $"Ruby was {fact.Source} {distance:0.#} m from it, {age:0.#}s ago";
+                return true;
+            }
+        }
+
+        why = null;
+        return false;
     }
 
     /// <summary>
@@ -756,6 +797,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Gizmos.DrawWireSphere(transform.position, _motionRadius);
         Gizmos.color = new Color(1f, 0.4f, 0.8f);
         Gizmos.DrawWireSphere(transform.position, _bodyNoticeRange);
+
+        // Around where he last heard or saw of Ruby, while that report is recent enough: a
+        // disturbance inside this circle is searched for as an attack.
+        if (Application.isPlaying && TryGetNewestRubyFact(out RubyFact news) && Time.time - news.Time <= _attackNearTime)
+        {
+            Gizmos.color = new Color(1f, 0.55f, 0.1f, 0.6f);
+            DrawFlatCircle(news.Position + Vector3.up * 0.1f, _attackNearRadius);
+        }
 
         // The gun's engagement band: fires out to Range, closes in only to Min Distance. In edit
         // mode Arms isn't set yet, so read the gun under the hand directly.

@@ -114,7 +114,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 
 - [x] **Step 6: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-authored-by line.
 
-- [ ] **Step 7: Play-test gate (the user).** No Inspector work. In play, watching the Console:
+- [x] **Step 7: Play-test gate (the user).** No Inspector work. In play, watching the Console:
   - **A thud (Problem):** throw a crate near an unaware officer. He walks to the origin, sweeps side to side for about 1.5 s, logs "stands down", holds for a second, then goes back to his patrol or post.
   - **A gunshot (Attack):** an unaware officer walks to the shot and sweeps for Search Duration, not 1.5 s.
   - **A search from Aggro:** break sight in a fight. He searches where the hunt was leading, sweeping for Search Duration.
@@ -138,13 +138,13 @@ Each of these is a rule until its piece lands. None of them is a fallback.
     - the newest fact about her is no older than Attack Near Time and within Attack Near Radius, flat, of the point.
   - The priority is the row's own. Only the response changes.
 
-- [ ] **Step 1: The newest fact.** Add `TryGetNewestRubyFact`, keeping `TryGetNewestRuby` as a thin wrapper so nothing else changes.
+- [x] **Step 1: The newest fact.** Add `TryGetNewestRubyFact`, keeping `TryGetNewestRuby` as a thin wrapper so nothing else changes.
 
-- [ ] **Step 2: The upgrade.** In `Investigate`, straight after the `Ignore` check and before the state guards, so an upgraded reason is the one the guards, the log and the priority comparison see. Log the upgrade once per call, naming why: "has seen Ruby" or "Ruby was reported N m away, S s ago".
+- [x] **Step 2: The upgrade.** In `Investigate`, straight after the `Ignore` check and before the state guards, so an upgraded reason is the one the guards, the log and the priority comparison see. Log the upgrade once per call, naming why: "has seen Ruby" or "Ruby was reported N m away, S s ago".
 
-- [ ] **Step 3: Gizmo.** `OnDrawGizmosSelected` draws Attack Near Radius, faintly, so the tuning can be seen.
+- [x] **Step 3: Gizmo.** `OnDrawGizmosSelected` draws Attack Near Radius, faintly, around where Ruby was last reported (in Play, while the report is recent enough), because that is what the radius is measured from.
 
-- [ ] **Step 4: Compile and commit,** as in Task 1.
+- [x] **Step 4: Compile and commit,** as in Task 1.
 
 - [ ] **Step 5: Play-test gate (the user).** No Inspector work. In play:
   - **Never seen her:** a thud far from where Ruby last fired is a Problem search: it stands down after 1.5 s.
