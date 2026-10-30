@@ -19,7 +19,6 @@ public class SearchingState : EnemyStateBase
     private bool _gaveUpWalking;
     // Set by Stage before the transition into this state, so Enter keeps the staged target.
     private bool _staged;
-    private float _targetSetAt;
 
     public SearchingState(EnemyController enemy) : base(enemy) { }
 
@@ -28,8 +27,6 @@ public class SearchingState : EnemyStateBase
     public bool SearchExpired => _searchTimer >= Enemy.SearchDuration;
     public StimulusResponse Reason => _reason;
     public int Priority => _priority;
-    /// <summary>When the current target was set (entering the state or the last retarget), for the same-priority guard.</summary>
-    public float TargetSetAt => _targetSetAt;
 
     /// <summary>
     /// Sets the target for a search about to begin from Idle or Patrol. Only staging, never a
@@ -50,7 +47,6 @@ public class SearchingState : EnemyStateBase
         _target = point;
         _reason = reason;
         _priority = priority;
-        _targetSetAt = Time.time;
         ResetTimers();
     }
 
@@ -65,7 +61,6 @@ public class SearchingState : EnemyStateBase
     public override void Enter()
     {
         ResetTimers();
-        _targetSetAt = Time.time;
         if (_staged)
         {
             _staged = false;

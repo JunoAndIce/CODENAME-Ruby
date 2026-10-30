@@ -63,7 +63,6 @@ public class Intel : MonoBehaviour
     public IntelSnapshot Published { get; private set; } = IntelSnapshot.Empty;
 
     public float SpeechRange => _speechRange;
-    public float IntelInterval => _intelInterval;
 
     /// <summary>
     /// The behaviour map every officer reads. Null only when the asset is missing, which OnEnable

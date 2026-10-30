@@ -307,9 +307,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     /// <summary>
     /// Told or heard something worth searching. Idle and patrolling officers start searching
-    /// there. One already searching moves for a higher priority at once, and for an equal one at
-    /// most once per Intel Interval, so a shootout's alternating shots can't swap his target on
-    /// every one (or re-flood his field per shot); a lower priority never moves him. Aggro and the
+    /// there. One already searching moves only for a strictly higher priority: an equal one never
+    /// does, so a shootout's alternating shots can't swap his target or re-flood his field, and a
+    /// quiet sound can't pull him off a spot he's checking. Aggro and the
     /// states that can't act on it ignore the call: he already knows where Ruby is. True when it
     /// was taken; every decision is logged.
     /// </summary>
@@ -328,16 +328,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
         if (_state.Current is SearchingState)
         {
-            if (priority < Searching.Priority)
+            if (priority <= Searching.Priority)
             {
-                DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): lower than his search at {Searching.Priority}.", this);
-                return false;
-            }
-            // Without an Intel (Start already reported it) the guard is the written default, 1 s.
-            float guard = Intel != null ? Intel.IntelInterval : 1f;
-            if (priority == Searching.Priority && Time.time - Searching.TargetSetAt < guard)
-            {
-                DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): equal to his search, which was set under {guard:0.#}s ago.", this);
+                DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): equal or lower than his search at {Searching.Priority}.", this);
                 return false;
             }
             Searching.Retarget(point, reason, priority);
