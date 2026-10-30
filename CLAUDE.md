@@ -71,7 +71,7 @@ The scripts are split into assembly definitions so the systems can be lifted int
 | Assembly | Folder (under `Assets/Scripts/`) | References | Holds |
 | --- | --- | --- | --- |
 | `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdolls (seam and skeleton), `IKnockback`, pooling, `DebugLog` |
-| `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, patrol routes |
+| `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, `Steering`, patrol routes |
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
 | `Ruby.Weapons` | `Weapons/` | Core | guns, bullets, gun hands |
@@ -421,9 +421,21 @@ A\* for individual ones**:
   editor. Dynamic bodies are skipped by the bake; props that should block carry **`GridObstacle`**,
   which marks a separate prop layer while they rest. Every change bumps `Version`, and fields re-plan.
   **Agent Radius must match the enemy collider's radius**, and doorways need about 1.5 m or more.
+  **Corner Margin and the clearance field.** A second field, baked after the cells and redone around
+  a prop's cells when it comes or goes, holds each cell's **clearance**: its distance in cells to the
+  nearest blocked cell or the grid's edge, capped at `MarginCells + 1`. A cell is *inside the margin*
+  when its clearance is at most `MarginCells` (Corner Margin 0.5 m, rounded up to whole cells). Paths
+  charge `WallPenalty` there, `(MarginCells - clearance + 1) x Wall Cost` (20, against 10 for a
+  straight step), so routes keep half a metre off corners and run down the middle of doorways instead
+  of hugging a jamb. It is a cost, not a block: a gap too narrow for the margin is still walked,
+  down its middle, and never reported blocked. `MarginCells` is read once at bake, so a Corner
+  Margin change takes effect on the next play, not live.
 - **`FlowField`** (Dijkstra): one flood from a goal, read by any number of agents. The chase field is
   **shared per floor** (`PathGrid.FieldToward(player)`), so chase cost doesn't grow with enemy count;
-  a searcher floods its own field once.
+  a searcher floods its own field once. Floods bound the **plain path length** (metres), never the
+  penalised cost, so wall costs can't shorten how far a chase reaches or drop a far doorway off the
+  field; `TryGetDistance` returns plain metres too. `PathGrid.FloodFrom` (hearing and speech) floods
+  without wall costs at all: sound doesn't care how close to a wall the route runs.
 - **`GridPathfinder`** (A\*, octile heuristic, integer costs 10/14, no corner cutting): patrol legs,
   cached and re-planned when the grid changes or the enemy is knocked off its route.
 - **`GridNavigator`** ties them together and moves any `IPathAgent`: it plans, and the agent steers
@@ -431,6 +443,25 @@ A\* for individual ones**:
   and log one warning saying why; area moves report Blocked/Unreachable, and patrol skips that point
   with a warning. Grid line of sight ignores the cell the agent already stands in, which near a wall
   is clearance-blocked.
+- **Lines keep the margin too.** `HasLineOfSight(from, to, minClearance)` needs every cell after the
+  first to have that clearance, and the navigator's straight-line checks (`HasClearLine`: shortcut,
+  beeline, next corner, off-route check) ask for `MarginCells + 1`, the clearance `WallPenalty`
+  doesn't charge for, so a pulled line can't graze a corner the flood routed round. A goal beside
+  a wall can still be walked straight to: the line asks for no more than the goal's own clearance.
+  String pulling (`GridPathfinder`) and the flow field's look-ahead use the lowest clearance
+  along the cells they skip, capped the same way: where the path had room the pulled line keeps the
+  margin, and through a narrow gap it keeps only what the gap has, which is its middle.
+  `TryFindSpotAway`, Aggro's backing off, keeps the plain test: a short step, and a margin would
+  leave a cornered enemy nowhere to go.
+- **`Steering`** is the turning maths: `TurnToward` rotates a flat heading at most so many degrees
+  (a zero direction returns the heading, a rule so a body standing on its point keeps its facing), and
+  `SpeedToFit` caps speed so a full-rate turn still reaches a point instead of orbiting it (never below
+  a fifth of the speed, or a point right behind would freeze him). `EnemyController.MoveToward` turns
+  its walking heading at Turn Speed (720 degrees a second, separate from `CharacterAnimator`'s 360
+  degree leg turn), so bends are arcs. **It slows to fit only for points he must reach** (a goal on a
+  clear line, a route corner: `IPathAgent.MoveToward`'s `mustReach`), never for a flow-field step,
+  which rolls ahead every step and can't be orbited. Aggro's facing (`FaceTarget`, `StepAway`) stays instant: he aims at Ruby, he isn't
+  walking a bend.
 
 ### Impact damage
 

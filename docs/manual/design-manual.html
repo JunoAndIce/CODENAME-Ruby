@@ -223,6 +223,8 @@ a { color: var(--accent); }
     <tr><td>Rearm Radius</td><td class="where">EnemyController</td><td class="num">10 m</td></tr>
     <tr><td>Node Pause Time / Route Retry Time</td><td class="where">EnemyController</td><td class="num">2.5 s / 3 s</td></tr>
     <tr><td>Wander Span (a lone stop this far across is wandered)</td><td class="where">PatrolRoute (fixed)</td><td class="num">4 m</td></tr>
+    <tr><td>Corner Margin / Wall Cost (paths keep off walls)</td><td class="where">PathGrid</td><td class="num">0.5 m / 20</td></tr>
+    <tr><td>Turn Speed (how fast he turns while walking)</td><td class="where">EnemyController</td><td class="num">720°/s</td></tr>
     <tr><td>Corpse Brightness</td><td class="where">EnemyController</td><td class="num">0.35</td></tr>
     <tr><td>Grab Pop Up / Grab Pop Out (the gun hops out of his hand)</td><td class="where">EnemyController</td><td class="num">3 / 2 m/s</td></tr>
     <tr><td>Get Up Time (standing still after a fall)</td><td class="where">EnemyController</td><td class="num">1 s</td></tr>
@@ -502,6 +504,8 @@ a { color: var(--accent); }
   <li><strong>The grab:</strong> the chain knocks his pistol out of his hand with a small hop.</li>
   <li><strong>Getting up:</strong> after a fall he stands still for a second, unable to move or shoot, then hunts again. A hard enough hit during that second puts him down again.</li>
 </ul>
+
+<p><strong>How he walks.</strong> An officer's route keeps half a metre off walls and corners and runs down the middle of a doorway, so he never scrapes a jamb. Where the way bends he turns in an arc, starting before the corner, instead of stopping to pivot. He slows only to reach a point he must stop at, such as a patrol point or the end of a search, so he never circles it. When he aims at Ruby he still turns to face her at once.</p>
 
 <h3>Pistol</h3>
 <ul>

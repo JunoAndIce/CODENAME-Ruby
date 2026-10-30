@@ -766,7 +766,7 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
 - [ ] 7. Rooms and behaviour maps: activities, firing ranges, armories and alarms
 - [ ] 8. Clearing hiding spots
 - [ ] 9. Breakables: light fixtures and props (much later)
-- [ ] 10. Pathing: corners and curves
+- [x] 10. Pathing: corners and curves
 
 2 and 3 are built together, since a pool with nothing feeding it can't be played. 9 comes much
 later. 10 can go anywhere in the order.
