@@ -87,8 +87,10 @@ public class AggroState : EnemyStateBase
             _dwellTimer += Time.deltaTime;
         }
 
+        // Suspended while he holds at the known spot: this timer only ends a hunt on its way there, and
+        // counting the walk toward the hold cut it short. A newer point resumes it where it was.
         if (Enemy.InContactWithPlayer()) _lostTimer = 0f;
-        else _lostTimer += Time.deltaTime;
+        else if (!_holdingAtKnown) _lostTimer += Time.deltaTime;
     }
 
     public override void FixedTick()
