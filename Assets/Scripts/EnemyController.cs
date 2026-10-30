@@ -361,11 +361,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     }
 
     /// <summary>
-    /// Walks toward a point along a curve: the heading turns toward it at Turn Speed instead of
-    /// snapping, so a bend is an arc, and the speed drops when the point is too close and too far
-    /// off to reach at that turn rate, so he never circles it. The heading starts from the body's
-    /// own facing, so the first step after a pause or a ragdoll doesn't jump. Only walking curves:
-    /// FaceTarget and StepAway still turn at once, because Aggro's facing is aim, not a bend.
+    /// Curved Movement for realism.
     /// </summary>
     public void MoveToward(Vector3 target, float speed, bool mustReach)
     {

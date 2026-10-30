@@ -4760,6 +4760,8 @@ MonoBehaviour:
   _agentHeight: 2
   _floorClearance: 0.1
   _maxFlowDistance: 90
+  _cornerMargin: 0.5
+  _wallCost: 20
 --- !u!1001 &617357067
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -8124,6 +8126,10 @@ PrefabInstance:
     - target: {fileID: 5628615328930268754, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
+      propertyPath: _turnSpeed
+      value: 720
       objectReference: {fileID: 0}
     - target: {fileID: 5741096090758091062, guid: 5ca63349b25794f46a7e9a26664815bf, type: 3}
       propertyPath: _viewAngle
