@@ -70,14 +70,14 @@ The scripts are split into assembly definitions so the systems can be lifted int
 
 | Assembly | Folder (under `Assets/Scripts/`) | References | Holds |
 | --- | --- | --- | --- |
-| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdolls (seam and skeleton), `IKnockback`, pooling, `DebugLog` |
-| `Ruby.Pathing` | `Pathing/` | none | grid, flow fields, A\*, `GridNavigator`, `Steering`, patrol routes |
+| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdolls (seam and skeleton), `IKnockback`, pooling, `DebugLog`, the stimulus bus (`Stimuli`, `StimulusRules`) and `Disturbance` |
+| `Ruby.Pathing` | `Pathing/` | none | grid, flow fields (bounded floods with a distance query), A\*, `GridNavigator`, `Steering`, patrol routes |
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
 | `Ruby.Weapons` | `Weapons/` | Core | guns, bullets, gun hands |
 | `Ruby.Animation` | `Animation/` | none | `IAnimatedCharacter`, `CharacterAnimator`, `CharacterAnimationSet`, the stance and weapon enums |
 | `Ruby.Animation.Editor` | `Animation/Editor/` | Animation | `CharacterControllerBuilder` and the set's Build Controller button |
-| `Ruby.Game` | the root and `States/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state |
+| `Ruby.Game` | the root, `States/` and `Squad/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state, and in `Squad/` the shared pool (`Intel`), each officer's memory and senses, and the behaviour map |
 | `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor` |
 
 The systems reach the game only through interfaces declared in their own assembly, which the
@@ -126,7 +126,8 @@ Two ways in:
   states.** A state exposes a bool (`AggroState.LostPlayer`, `SearchingState.SearchExpired`) and the
   table reads it.
 - **External `SetState`.** Things done *to* an actor can't be polled for, so they bypass the table:
-  `EnemyController.Alert()` (damaged), `EnterGrabbed()`, `EndGrab()` (rope let go without a throw: flings or spins in place),
+  `EnemyController.Alert()` (damaged), `Investigate()` (heard or noticed something: starts or
+  retargets a search), `EnterGrabbed()`, `EndGrab()` (rope let go without a throw: flings or spins in place),
   `Release()` (thrown), `KnockDown()` (a hit at Knockdown Speed). These guard on current state
   themselves.
 
@@ -367,21 +368,31 @@ through the player never slows the walk.
   checked fresh every frame, so a crate or table can hide the player, while a prop lower than the eye
   line can't. Cached once per frame.
 - **Detection**: idle, patrolling or searching, with Ruby in his view **and** in sight → Aggro
-  (`EnemyController.InView`, then `CanSeePlayer`). His view is a 100° cone out to View Range
-  (12.5 m) in front of him, plus a 2 m Close Radius circle all round so she can't stand right
-  behind him; with no horizontal facing there's no cone, only the circle. An officer's root never
-  pitches in play (its rotation is frozen and only ever turned about Y), so this only covers one
-  placed pitched in the scene. Idle officers aggro on sight like the rest; an unarmed one also goes for a free
-  gun in reach. Aggro keeps contact all round, within Give Up Radius. Damage and getting up from
-  a ragdoll (thrown or dropped) enter Aggro from any AI state.
+  (`EnemyController.InView`, then `CanSeePlayer`). His view is a cone (View Angle, 135° on the
+  officer prefab) out to View Range (12.5 m) in front of him, plus a Close Radius circle (3 m)
+  all round so she can't stand right behind him; with no horizontal facing there's no cone, only
+  the circle. An officer's root never pitches in play (its rotation is frozen and only ever turned
+  about Y), so this only covers one placed pitched in the scene. Idle officers aggro on sight like
+  the rest; an unarmed one also goes for a free gun in reach. Aggro keeps contact all round, within
+  Give Up Radius (18.5 m). Damage and getting up from a ragdoll (thrown or dropped) enter Aggro from
+  any AI state.
 - **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
   sight, it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
   backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyController.StepAway`),
   standing its ground when cornered. It fires alongside all of that, whenever she's in sight, in
   range and on her feet (`AggroState.Firing`); firing is not a state. It only aims within range:
   beyond it he runs with the gun down. Contact holds while the player is in sight within
-  Give Up Radius. After Aggro Time without it the enemy searches **where the hunt was leading when
-  it gave up** (recorded on Aggro's exit), not where the player slipped out of view.
+  Give Up Radius. Out of sight he chases **what he knows**, not where she really is (see
+  **Knowledge**), and the fight ends one of three ways, never while he can see her:
+  - Aggro Time (1.5 s) of walking without contact. The timer is suspended while he holds at the
+    spot, because counting the walk toward the hold cut it short.
+  - Arriving at the spot he knew and **holding there for Aggro Time**. Reaching it doesn't end the
+    hunt: giving up the instant he arrived dropped fights while Ruby was a metre past it. Sight
+    coming back, or a newer fact that moves the spot, restarts the hold.
+  - Knowing nothing about where she is: he searches where he stands, with a log line.
+
+  The search starts from where the hunt was leading (recorded on Aggro's exit), or where he stands
+  when he knew nothing.
 - **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
   Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
   up within 0.3 m of its body's surface, measured to the nearest point of the gun's colliders
@@ -409,6 +420,72 @@ through the player never slows the walk.
   bake's own clearance test, and a wandered point is labelled "0 · wander". In the Inspector,
   `PatrolPointDrawer` shows only the size field a point's shape uses. No route means Idle in
   place.
+- **Knowledge** (`Squad/`). An officer's memory (`EnemyMemory`) holds the newest fact about Ruby
+  (`RubyFact`: position, time and a `Knowledge` source, Seen, Heard, Told or Pool), whether he has
+  **ever seen her** (`HasSeenRuby`, never cleared), and the bodies and loose guns he has already
+  taken in. Between two things he knows, **the newer by time wins**, and on a tie his own beats the
+  pool's, because it needed no publish to reach him. `EnemyController.TryGetNewestRuby` combines his
+  memory with the pool's published snapshot and is what Aggro chases once she's out of sight.
+  Seeing, remembering and speaking aren't states: `UpdateKnowledge` runs beside the machine.
+- **The shared pool** (`Intel`, one per scene). Officers report into an inbox, and every Intel
+  Interval (1 s) the inbox is merged into a **new** immutable `IntelSnapshot` (`Published`) that
+  all of them read. It is stale on purpose: a fight Ruby has left doesn't end the instant she's out
+  of sight, and an officer mid-decision holds a snapshot that can't change under him. It holds her
+  newest reported spot, the level's **alert** (latched by the first Aggro, for good) and the bodies
+  and loose guns the squad has reported (only ever added to within a level). **Speech** is the
+  opposite: while an officer sees her he calls her position out at once on first sight and then
+  every Speak Interval, and every other living officer within Speech Range (15 m) learns it
+  immediately as Told. Range is **path metres along the floor** (`PathGrid.FloodFrom`), so a shout
+  doesn't carry through a wall. An enemy on no grid, or a scene with no `Intel`, gets one warning
+  saying so, never a silent fallback.
+- **Stimuli and hearing** (`Core/Stimuli/`). `Stimuli` is a static bus that weapons and the grapple
+  emit into without knowing officers exist: a gunshot (`Gun`, `GunController`), the whip landing
+  and an impact. A `Stimulus` carries a kind, a position, an **origin** (where the thing came
+  from), a loudness in metres and the object that made it. `Intel` floods the sound's grid **once**,
+  unpenalised, out to its loudness and lets every officer inside it hear (`EnemySenses.Hear`), so a
+  sound never crosses floors or goes through a wall, and nobody hears his own shot or, once dead,
+  anything at all. Read the flood at once: `FloodFrom` returns one scratch field that the next flood
+  overwrites. A sound from Ruby teaches the hearer where **she** was (Heard), never the whip's
+  anchor. Loudness and speeds live in the `StimulusRules` asset (see the manual's tuning table).
+- **Origins** (`Disturbance`). The grapple stamps whatever it holds with where Ruby is, every step
+  it's on the chain and once more as it leaves, so a throw's origin is where she stood at the
+  release. The stamp sits on the body's root and on every Rigidbody under it, so a thrown officer's
+  limbs carry it once they go live. A carrier that hits something at Notice Speed or more makes an Impact sound (one per
+  Impact Cooldown per stamped body, so a tumble is a few thuds and not dozens) and passes the
+  origin on, with the original time, to what it hit, so a knock-on leads back to the throw. A
+  record lasts Origin Lifetime (5 s), and a character that stands up is cleared, because one on
+  his feet is sensed by sight and a stale record would make him thud at every wall he bumps.
+  Officers react to an origin, not to where a thrown body landed.
+- **The behaviour map** (`BehaviourMap`, an asset assigned to `Intel`'s Default Map). One row per
+  `StimulusKind`: a **priority** and a **response**: Ignore, SearchForProblem or SearchForAttack.
+  Defaults: body and fast object 50, gunshot 40 (attack); impact and whip landing 30, moving
+  object and loose gun 20 (problem). A kind with no row, or a missing map, logs one warning and
+  is treated as no reaction. Problem and Attack both just search for now (see **Searching**).
+- **Senses** (`EnemySenses`, one per officer, scanned from `FixedUpdate` every Scan Interval at a
+  staggered phase). He notices **bodies in motion** within Motion Radius that he can see clearly:
+  at Notice Speed a MovingObject, at Alarm Speed a FastObject, once per Origin Lifetime for each
+  body, and only a *taken* reaction counts as one. An officer on his feet is never a moving body,
+  only one held on the chain or tumbling. He notices **corpses** within Body Notice Range in his
+  view and clear sight, and **loose guns** in view and sight if he is armed. A body or gun he
+  hasn't seen goes on the squad's books and he investigates it; one the squad already knows he
+  only learns, and keeps doing what he was doing. Ruby is never a moving body: she's the one being
+  hunted, and sight of her is Aggro.
+- **Searching** (`SearchingState`, entered by `Investigate`). `Investigate(point, reason, priority)`
+  ignores Grabbed, Ragdoll, Dead, Rearm and Aggro. From Idle or Patrol it **stages** the target
+  (`Stage`) and enters Searching. Already searching, it **retargets** (`Retarget`) only for a
+  *strictly higher* priority: equal or lower is ignored, which is what stops flicker. A search from
+  Aggro has priority 100, above every map row, so a sound can't pull him off a lost player. He walks
+  to the spot at Search Speed, and **Search Duration (10 s) counts from arrival**, not from the
+  sound. An unreachable spot counts as arrived (the navigator has warned), and Search Travel Limit
+  (20 s) makes him search where he stands if he hasn't arrived by then. Nothing yet separates
+  Searching for Problem from Searching for Attack beyond the reason carried and logged, and he
+  stands on the spot, even a body, without looking about: both are later pieces of
+  `docs/specs/2026-10-28-enemy-states-0.2.md`.
+- **Debug overlays**, all off by default and only in the editor: `PathGrid`'s Always Show Grid and
+  Show Open Cells draw the whole floor, and `Intel`'s Show Sound Range draws each recent sound's
+  reach (the cells its flood covered, shaded by distance, beside the circle the same loudness
+  would cover in open air). Draw cost grows with the grid's cell count, so leave them off unless
+  you're looking at them.
 
 ### Pathing
 
@@ -744,7 +821,8 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
 - `OnDrawGizmosSelected` visualises radii, routes, paths and camera lead. Add gizmos for anything
   spatial you introduce.
 - Comments explain **why**, not what, and often name the failure mode being avoided. Match that.
-- **Playtest logging is off by default.** Chatter (hits, lost sight, the tether's events) goes
+- **Playtest logging is off by default.** Chatter (hits, lost sight, the tether's events, what an
+  officer heard and why he searches) goes
   through `DebugLog.Info` or `TetherLog`, both `[Conditional("RUBY_DEBUG_LOGS")]`. Turn it on by
   adding `RUBY_DEBUG_LOGS` under Project Settings > Player > Scripting Define Symbols. Without
   the define the calls compile away, message and all. Pathing can't reference Core, so it gates
@@ -773,6 +851,12 @@ Ruby ragdolls on her own rig, and officers' bullets knock her back, built to
 through `Ruby.Animation`, built to `2026-10-20-enemy-animations.md`. Officers ragdoll limp on
 their skeletons too, and are tied upright on the chain, built to `2026-10-23-enemy-ragdolls.md`.
 Melee and Ruby's revolver are still to come.
+
+Enemy States 0.2 (`2026-10-28-enemy-states-0.2.md`) is built piece by piece: pieces 1 (the view
+cone), 2 and 3 (knowledge, the pool, senses and the behaviour map, built to
+`docs/plans/2026-10-28-enemy-knowledge-and-senses.md`) and 10 (corners and curves) are done. Piece
+4 (the look-around and standing down, Patrol Aggressive, acting on the level's alert) is next,
+then group jobs, squads, rooms, hiding spots and breakables.
 
 ## Unity/git
 

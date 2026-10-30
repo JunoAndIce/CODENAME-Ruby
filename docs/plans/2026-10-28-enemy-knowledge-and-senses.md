@@ -91,19 +91,19 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - `Disturbance` (MonoBehaviour, added at runtime): `static void Stamp(Rigidbody body, Vector3 origin)` and `static bool TryGetOrigin(Rigidbody body, out Vector3 origin)`.
 - **Produces, in Game:** `Intel` (MonoBehaviour) with `[SerializeField] StimulusRules _stimulusRules`. Its `Awake` calls `Stimuli.Configure`, and its `OnDestroy` calls `Configure(null)`.
 
-- [ ] **Step 1: The bus.** Write `StimulusKind`, `Stimulus` and `Stimuli` as in Interfaces.
+- [x] **Step 1: The bus.** Write `StimulusKind`, `Stimulus` and `Stimuli` as in Interfaces.
   - `Emit` logs every stimulus with `DebugLog.Info` (kind, position, origin, loudness, source name) and raises `Emitted`.
   - With no subscriber, or no rules for `Gunshot`/`WhipLanding`, it warns **once per play session** that stimuli are going nowhere because the scene has no `Intel`, and drops the stimulus.
   - `Gunshot` and `WhipLanding` take their loudness from the rules, with the origin set to `at`.
 
-- [ ] **Step 2: `StimulusRules`.** Serialized fields with tooltips, using the values in Global Constraints:
+- [x] **Step 2: `StimulusRules`.** Serialized fields with tooltips, using the values in Global Constraints:
   - `_noticeSpeed` 4, `_alarmSpeed` 15, `_originLifetime` 5;
   - `_gunshotLoudness` 25, `_whipLoudness` 6;
   - `_impactLoudness` 10, `_impactLoudnessPerSpeed` 0.5, `_impactLoudnessMax` 20, `_impactCooldown` 0.25.
   - `ImpactLoudness(speed) = min(max, base + perSpeed × max(0, speed − noticeSpeed))`.
   - `OnValidate` keeps Alarm Speed above Notice Speed.
 
-- [ ] **Step 3: `Disturbance`.** The origin tracking.
+- [x] **Step 3: `Disturbance`.** The origin tracking.
   - **Stamping:** `Stamp(body, origin)` gives the body's root a record (origin, stamp time). The root is the body's transform, and every Rigidbody under it gets a `Disturbance` carrier, including ragdoll bones, so a thrown officer's limbs carry it once they go live. The carriers are added on the first stamp only. Later stamps only refresh the record's origin and time, so stamping every physics step allocates nothing.
   - **Reading:** `TryGetOrigin` is false when the body is unstamped or the record is older than Origin Lifetime.
   - **When a stamped carrier hits something:** in `OnCollisionEnter`, at `VelocityUtil.ClosingSpeed` ≥ Notice Speed:
@@ -112,7 +112,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - **Expiry:** a carrier whose record has expired destroys itself. A record whose root is gone is dropped.
   - **No rules configured:** it warns once and stops propagating.
 
-- [ ] **Step 4: The emitters.**
+- [x] **Step 4: The emitters.**
   - `Gun.TryFire` calls `Stimuli.Gunshot(_muzzle.position, shooter)` after the bullet spawns.
   - `GunController.Fire` calls `Stimuli.Gunshot(_firePoint.position, _player.transform)`.
   - `GrappleController`:
@@ -121,11 +121,11 @@ Each of these is a rule until its piece lands. None of them is a fallback.
     - `Detach` stamps the host once more, before ending the grab.
   - `ImpactDamage` uses `VelocityUtil.ClosingSpeed`.
 
-- [ ] **Step 5: `Intel`, minimal.** Add a summary saying it's the squad's shared knowledge (Task 2 grows it). For now it configures the bus from `_stimulusRules`, with a `Debug.LogError` naming the missing field if it's empty.
+- [x] **Step 5: `Intel`, minimal.** Add a summary saying it's the squad's shared knowledge (Task 2 grows it). For now it configures the bus from `_stimulusRules`, with a `Debug.LogError` naming the missing field if it's empty.
 
-- [ ] **Step 6: Compile.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-Authored-By line.
+- [x] **Step 6: Compile.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-Authored-By line.
 
-- [ ] **Step 7: Play-test gate (the user).** Inspector work first:
+- [x] **Step 7: Play-test gate (the user).** Inspector work first:
   - create `Assets/Settings/StimulusRules.asset` (Create > Ruby > Stimulus Rules);
   - add an empty `Intel` GameObject to `SampleScene` with `Intel` on it, and assign the asset.
 
@@ -149,8 +149,8 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - `bool FlowField.TryGetDistance(Vector3 point, out float metres)`: path metres from the goal, snapping to walkable like `TryGetStartCell`. It never re-floods, and is false when the point wasn't reached.
   - `FlowField PathGrid.FloodFrom(Vector3 source, float maxDistance)`: floods and returns the grid's one shared scratch field. Callers read it at once; the next `FloodFrom` on that grid overwrites it.
 - **Produces, in Game:**
-  - `public enum KnowledgeSource { Seen = 0, Heard = 1, Told = 2, Pool = 3 }`.
-  - `public readonly struct RubyFact`: `Position`, `Time`, `KnowledgeSource Source`.
+  - `public enum Knowledge { Seen = 0, Heard = 1, Told = 2, Pool = 3 }`.
+  - `public readonly struct RubyFact`: `Position`, `Time`, `Knowledge Source`.
   - `public class EnemyMemory`:
     - `bool HasSeenRuby` (never cleared);
     - `void Learn(RubyFact fact)`, which keeps the newer by `Time`;
@@ -165,11 +165,11 @@ Each of these is a rule until its piece lands. None of them is a fallback.
     - `EnemyMemory Memory { get; }`, `Intel Intel { get; }`;
     - `bool SeesPlayer { get; }`: noticed (`DetectsPlayer`), or in Aggro with `InContactWithPlayer()`. Cached per frame, like `CanSeePlayer`.
 
-- [ ] **Step 1: Bounded floods.** Implement the Pathing interfaces. The distance is the cell cost ÷ `StraightCost` × `CellSize`. Update the summaries.
+- [x] **Step 1: Bounded floods.** Implement the Pathing interfaces. The distance is the cell cost ÷ `StraightCost` × `CellSize`. Update the summaries.
 
-- [ ] **Step 2: `EnemyMemory` and `IntelSnapshot`.** Plain classes as in Interfaces, with summaries saying why: own knowledge is acted on at once, and the pool is stale by design.
+- [x] **Step 2: `EnemyMemory` and `IntelSnapshot`.** Plain classes as in Interfaces, with summaries saying why: own knowledge is acted on at once, and the pool is stale by design.
 
-- [ ] **Step 3: The pool.** `Intel` gains:
+- [x] **Step 3: The pool.** `Intel` gains:
   - `_intelInterval` 1 and `_speechRange` 15, with tooltips;
   - an inbox of reports;
   - every Intel Interval, merges the inbox (newest Ruby fact wins, `LevelOnAlert` latches) into a **new** `IntelSnapshot` assigned to `Published`, so a snapshot an officer holds never changes under him;
@@ -179,23 +179,23 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 
   `ReportAggro` latches the level's alert, logged once as "the level is on alert".
 
-- [ ] **Step 4: Speech.** `Say(speaker, fact)`:
+- [x] **Step 4: Speech.** `Say(speaker, fact)`:
   - `FloodFrom(speaker position, _speechRange)` on the speaker's grid;
   - every other registered, living officer on that grid within range gets `Memory.Learn(fact with Source = Told)`;
   - the fact is also `Report`ed;
   - one `DebugLog.Info` line with the speaker and how many heard;
   - a speaker on no grid warns once.
 
-- [ ] **Step 5: The officer.** In `EnemyController`:
+- [x] **Step 5: The officer.** In `EnemyController`:
   - In `Start`, find the scene's `Intel` (`FindAnyObjectByType`). If there's none, log a `Debug.LogError` saying officers can't share or hear, then register.
   - Each `Update`, after the state machine ticks:
     - if `SeesPlayer`, `Memory.Learn` a `Seen` fact at Ruby's position;
     - on the first frame of a sighting, and every Speak Interval (1 s) while it lasts, `Intel.Say` it.
   - `AggroState.Enter` calls `Enemy.Intel.ReportAggro(Enemy)` (null-guarded: the missing-Intel error has already been logged).
 
-- [ ] **Step 6: Compile and commit,** as in Task 1.
+- [x] **Step 6: Compile and commit,** as in Task 1.
 
-- [ ] **Step 7: Play-test gate (the user).** No Inspector work. In play:
+- [x] **Step 7: Play-test gate (the user).** No Inspector work. In play:
   - Ruby is seen: the Console logs the speech and how many heard, and once a second the pool's publish. The gizmo marks her reported spot.
   - Officers in the same room hear the speech. An officer on the other side of a wall, more than 15 m away by the doors, doesn't.
   - "The level is on alert" logs once, at the first aggro.
@@ -212,24 +212,26 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - `bool EnemyController.TryGetNewestRuby(out Vector3 point)`: memory plus the published pool.
   - `NavResult EnemyController.ChaseKnown(float speed)`.
 
-- [ ] **Step 1: Out of sight, chase what he knows.**
+- [x] **Step 1: Out of sight, chase what he knows.**
   - In `AggroState.FixedTick`, `Move.Chase` without sight calls `Enemy.ChaseKnown(Enemy.ChaseSpeed)`, which is `Navigator.MoveTo` to the newest point. With sight, he keeps `PathToPlayer`: he can see where she is.
   - `LostPlayer` also turns true when he's out of sight and `ChaseKnown` returns `Arrived`, so he searches from the spot instead of standing on it.
 
-- [ ] **Step 2: Nothing to go on.** When `TryGetNewestRuby` is false, he has nowhere to chase.
+- [x] **Step 2: Nothing to go on.** When `TryGetNewestRuby` is false, he has nowhere to chase.
   - `LostPlayer` turns true at once, and he searches where he stands.
   - One `DebugLog.Info` line says he has nothing to go on.
 
-- [ ] **Step 3: The search starts from knowledge.**
+- [x] **Step 3: The search starts from knowledge.**
   - `AggroState.Exit` sets `LastKnownPlayerPosition` from `TryGetNewestRuby`, or his own position when he has nothing. That replaces `RecordTrailEnd`, which read her true position; remove it.
   - Update `LastKnownPlayerPosition`'s summary to say it's what he knew.
 
-- [ ] **Step 4: Compile and commit.**
+- [x] **Step 4: Compile and commit.**
 
-- [ ] **Step 5: Play-test gate (the user).**
+- [x] **Step 5: Play-test gate (the user).**
   - Break line of sight mid-fight and keep running. The officers run to where they last saw her, search there, and don't track her through the wall.
   - Speech: an officer who was told where she is, then loses her, heads for the told spot.
   - Shoot an officer from outside his view. He's hurt, goes to Aggro, and goes for what he knows. With nothing to go on, he searches where he stands and logs it.
+
+  **Built differently.** Reaching the spot he knew used to end the hunt at once, which dropped fights while Ruby was a metre past it. He now **holds there for Aggro Time** first, the out-of-contact timer is suspended during the hold (counting the walk toward it cut it short), and sight coming back or a newer fact restarts it. The user's play-test passed (2026-10-29).
 
 ### Task 4: Senses, the behaviour map, and reacting
 
@@ -260,7 +262,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
     - read properties `Reason` and `Priority`.
     - A search entered from Aggro has reason `SearchForAttack` and priority `SearchingState.FromAggroPriority = 100`, above every map row.
 
-- [ ] **Step 1: `BehaviourMap`.**
+- [x] **Step 1: `BehaviourMap`.**
   - `Reset()` fills the spec's table, with higher numbers outranking lower:
     - Body 50 and FastObject 50, both SearchForAttack;
     - Gunshot 40, SearchForAttack;
@@ -270,7 +272,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - A kind with no row is ignored, with one warning per kind naming the map.
   - `Intel` gains `[SerializeField] BehaviourMap _defaultMap`, with an error if it's empty.
 
-- [ ] **Step 2: Deciding.** `Investigate(point, reason, priority)`:
+- [x] **Step 2: Deciding.** `Investigate(point, reason, priority)`:
   - **Ignored:** in Grabbed, Ragdoll, Dead, Rearm or Aggro, and for `Ignore`.
   - **From Idle or Patrol:** sets the search and `SetState(Searching)`.
   - **In Searching:** retargets only if `priority` beats the current search's. Equal doesn't, which is what stops flicker.
@@ -280,7 +282,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
     - `Retarget` restarts its timer.
   - Add `Investigate` to the external `SetState` comment block in `EnemyController`.
 
-- [ ] **Step 3: Hearing.** `Intel` subscribes to `Stimuli.Emitted`. For a stimulus with `Loudness > 0`:
+- [x] **Step 3: Hearing.** `Intel` subscribes to `Stimuli.Emitted`. For a stimulus with `Loudness > 0`:
   - `FloodFrom(position, loudness)` on its grid, once per sound;
   - every registered, living officer on that grid within range gets `Senses.Hear(stimulus)`, skipping the officer the `Source` belongs to;
   - a sound off any grid isn't heard, and logs one `DebugLog.Info` line.
@@ -289,7 +291,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - when the `Source` is under the `PlayerController`, he learns a `Heard` fact at the stimulus position;
   - then he looks up `MapAt(origin)` for the kind and calls `Investigate(origin, row.Response, row.Priority)`.
 
-- [ ] **Step 4: Motion.** `EnemySenses.Scan()` runs every 0.2 s, at a random phase per officer, from `EnemyController.FixedUpdate` while the state isn't Grabbed, Ragdoll or Dead.
+- [x] **Step 4: Motion.** `EnemySenses.Scan()` runs every 0.2 s, at a random phase per officer, from `EnemyController.FixedUpdate` while the state isn't Grabbed, Ragdoll or Dead.
   - It runs `Physics.OverlapSphereNonAlloc` within Motion Radius, ignoring triggers, into a static buffer of 64.
   - It groups colliders by body: a character's root (`EnemyController`) or the Rigidbody itself. A body counts when:
     - it isn't kinematic;
@@ -302,7 +304,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - A body he reacted to in the last Origin Lifetime doesn't trigger him again.
   - Each body found goes through the map to `Investigate(origin, ...)`.
 
-- [ ] **Step 5: Bodies and loose guns.** The same scan also runs these.
+- [x] **Step 5: Bodies and loose guns.** The same scan also runs these.
   - **Bodies:** registered officers whose `Health.IsDead` is true, `InView(corpse, 6 m)` and `HasClearSight`. Then:
     - unknown to him and to the pool: he reports the body to the pool, remembers it, and calls `Investigate(corpse, Body row)`;
     - known to the pool but not to him: he remembers it and logs it, nothing more (interim rule);
@@ -310,7 +312,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - **Loose guns:** armed officers only (an unarmed one goes to Rearm as today). Each gun in `Gun.Loose` that's `IsResting`, `InView(gun)` and `HasClearSight(gun, gun.transform)`. Unknown to him and to the pool: he reports and remembers it, and calls `Investigate(gun, LooseGun row)`.
   - The pool publishes bodies and guns with Ruby's spot, at each Intel Interval. The gizmo marks them.
 
-- [ ] **Step 6: Compile and commit.**
+- [x] **Step 6: Compile and commit.**
 
 - [ ] **Step 7: Play-test gate (the user).** Inspector work first:
   - create `Assets/Settings/DefaultBehaviourMap.asset` (Create > Ruby > Behaviour Map; its rows fill themselves);
@@ -327,17 +329,28 @@ Each of these is a rule until its piece lands. None of them is a fallback.
     - one checking a gunshot ignores a thud;
     - an officer never reacts to his own shot.
 
+  **Built differently, and played so far (2026-10-30).** The user played the sound, reaction and fast-object cases and is happy with them, with the ranges retuned on the officer prefab (Motion Radius and Body Notice Range 12.5 m, Search Duration 10 s). The corpse and loose-gun cases haven't been reported, so this gate stays open. What changed in building:
+  - **A search's timer runs from arrival,** not from the sound, with Search Travel Limit (20 s) as the cap on the walk. An unreachable spot counts as arrived.
+  - **`Stage` and `Retarget`** replaced a single `Aim`: only a search being entered from Idle or Patrol is staged, because a stage left standing by a retarget later hijacked the search that follows Aggro.
+  - **A search gives way only to a strictly higher priority.** An equal one is ignored, as the plan has it. An attempt to let an equal one retarget once an Intel Interval was dropped.
+  - **Corpses come from `Intel`'s registered officers,** not a trigger sweep, and the pool is read as published.
+  - **A missing map or kind is "no row"** with one warning, instead of throwing out of `Stimuli.Emit` into the grapple.
+  - **A sound from Ruby teaches her position,** not the whip's anchor.
+  - **Motion Radius, Body Notice Range and Scan Interval are Inspector fields** on the officer, not constants.
+  - **Debug overlays** for the whole grid (`PathGrid`) and each sound's reach (`Intel`), off by default: they cost a draw per cell in the editor.
+  - **Left to piece 4:** the officer stands on a body or spot without looking around.
+
 ### Task 5: Docs and the end-of-piece review
 
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, `docs/specs/2026-10-28-enemy-states-0.2.md`, this plan.
 
-- [ ] **Step 1: CLAUDE.md.**
+- [x] **Step 1: CLAUDE.md.**
   - **Assemblies table:** Core holds the stimulus bus, `StimulusRules` and `Disturbance`; `Ruby.Game`'s folders are the root, `States/` and `Squad/`.
   - **New Enemy AI bullets** on memory, the pool (Intel Interval, staleness), speech, hearing along the grid, origins, the behaviour map and the interim rules.
   - **External `SetState`:** add `Investigate` to the list.
   - **Piece 1's carry-over:** re-wrap the long Detection line.
-- [ ] **Step 2: The manual.**
+- [x] **Step 2: The manual.**
   - A section on what officers notice and know, with the new values in the tuning table.
   - Rebuild the PDF with headless Chrome, as piece 1's plan did, and check that it wrote.
-- [ ] **Step 3: Spec and plan.** Tick pieces 2 and 3 in the spec's Progress, and tick this plan's steps. Then commit these files only.
+- [x] **Step 3: Spec and plan.** Tick pieces 2 and 3 in the spec's Progress, and tick this plan's steps. Then commit these files only.
 - [ ] **Step 4: End-of-piece review, in the background,** over the range this plan added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before piece 4, in one fix wave.

@@ -758,8 +758,8 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
 ## Progress
 
 - [x] 1. The pie-shaped view
-- [ ] 2. Knowledge: memory and the shared pool
-- [ ] 3. Senses and what they weigh
+- [x] 2. Knowledge: memory and the shared pool
+- [x] 3. Senses and what they weigh
 - [ ] 4. Smaller states inside the main ones
 - [ ] 5. Group jobs
 - [ ] 6. Fighting together: squads and fire lanes
