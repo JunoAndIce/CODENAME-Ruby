@@ -55,6 +55,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("Seconds for one full sweep, left to right and back.")]
     [SerializeField, Min(0.2f)] private float _lookSweepPeriod = 2f;
 
+    [Header("Distraction")]
+    [Tooltip("How long he turns to look at a lesser disturbance while searching, in seconds. The search waits meanwhile, so he doesn't lose search time.")]
+    [SerializeField, Min(0.1f)] private float _distractionTime = 1f;
+    [Tooltip("How many distractions inside Distraction Memory it takes before the jig is up and he goes to Aggro, taking the newest disturbance's origin as where Ruby is.")]
+    [SerializeField, Min(1)] private int _distractionThreshold = 3;
+    [Tooltip("How long a distraction counts toward the jig, in seconds.")]
+    [SerializeField, Min(1f)] private float _distractionMemory = 12f;
+    [Tooltip("A disturbance within this long of the last counted one is the same disturbance, in seconds: a thrown body thuds about ten times as it tumbles, and a firefight is a run of shots.")]
+    [SerializeField, Min(0f)] private float _distractionGap = 2f;
+
     [Header("Grabbed")]
     [Tooltip("How fast the gun pops up out of the officer's hand when the chain grabs him, in m/s: a small hop, to sell the grab.")]
     [SerializeField, Min(0f)] private float _grabPopUp = 3f;
@@ -160,6 +170,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float SearchReach => _searchReach;
     public float LookTime => _lookTime;
     public float StandDownTime => _standDownTime;
+    public float DistractionTime => _distractionTime;
     public PatrolRoute SafeRoute => _safeRoute;
     public PatrolRoute AggressiveRoute => _aggressiveRoute;
     public bool HasAggressiveRoute => _aggressiveRoute != null && _aggressiveRoute.Count > 0;
@@ -365,13 +376,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// Told or heard something worth searching. Idle and patrolling officers start searching
     /// there. One already searching moves only for a strictly higher priority: an equal one never
     /// does, so a shootout's alternating shots can't swap his target or re-flood his field, and a
-    /// quiet sound can't pull him off a spot he's checking. Aggro and the
+    /// quiet sound can't pull him off a spot he's checking. But he **notices** it: an equal or
+    /// lower one is a distraction (see Distract) rather than being ignored, which left an officer
+    /// searching on beside things flying past him. Aggro and the
     /// states that can't act on it ignore the call: he already knows where Ruby is. True when it
     /// was taken; every decision is logged. A search for an attack makes him wary for good, taken
     /// or not, so it always ends on an aggressive patrol. With walkThere false he looks from where
     /// he stands instead of going to the point (a glance at a body the squad already knows).
+    /// isFind marks a body or gun sighting, which says nothing about where Ruby is.
     /// </summary>
-    public bool Investigate(Vector3 point, StimulusResponse reason, int priority, bool walkThere = true)
+    public bool Investigate(Vector3 point, StimulusResponse reason, int priority, bool walkThere = true, bool isFind = false)
     {
         if (reason == StimulusResponse.Ignore)
         {
@@ -392,11 +406,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
         if (_state.Current is SearchingState)
         {
-            if (priority <= Searching.Priority)
-            {
-                DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): equal or lower than his search at {Searching.Priority}.", this);
-                return false;
-            }
+            if (priority <= Searching.Priority) return Distract(point, reason, priority, isFind);
+
             Searching.Retarget(point, reason, priority, walkThere);
             DebugLog.Info($"{name} retargets his search to {point}: {reason} at priority {priority}.", this);
             return true;
@@ -406,6 +417,28 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Searching.Stage(point, reason, priority, walkThere);
         _state.SetState(Searching);
         DebugLog.Info($"{name} starts a search at {point}: {reason} at priority {priority}.", this);
+        return true;
+    }
+
+    // Something lesser happened while he was searching. He turns to look at it and the search waits
+    // a moment, but it isn't dropped or retargeted. Enough of them close together and the jig is
+    // up: he aggros, and a thrown object's origin or a shot's muzzle is where he takes Ruby to be,
+    // so Aggro has somewhere to go. A body or gun says nothing about her, so he goes to Aggro with
+    // what he already knows, and searches where he stands if that is nothing.
+    private bool Distract(Vector3 point, StimulusResponse reason, int priority, bool isFind)
+    {
+        int count = Memory.NoteDistraction(Time.time, _distractionMemory, _distractionGap, out bool counted);
+        if (counted && count >= _distractionThreshold)
+        {
+            Memory.ClearDistractions();
+            if (!isFind) Memory.Learn(new RubyFact(point, Time.time, Knowledge.Heard));
+            DebugLog.Info($"{name}: the jig is up ({count} disturbances in {_distractionMemory:0.#}s, the last {reason} at {point}); he aggros.", this);
+            Alert();
+            return true;
+        }
+
+        Searching.Distract(point, counted);
+        DebugLog.Info($"{name} {(counted ? "is distracted by" : "glances again at")} {reason} at {point} (priority {priority}, his search is {Searching.Priority}): {count} of {_distractionThreshold}.", this);
         return true;
     }
 

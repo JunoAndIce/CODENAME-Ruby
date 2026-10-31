@@ -82,6 +82,24 @@ public class EnemyMemory
 
     public void BecomeWary() => Wary = true;
 
+    private readonly List<float> _distractions = new();
+
+    /// <summary>
+    /// Notes that something lesser happened while he was searching, and returns how many he has had
+    /// within memory seconds. One within gap of the last is the same disturbance and isn't counted
+    /// again: a thrown body thuds about ten times as it tumbles and a firefight is a run of shots,
+    /// and each of those is one thing to respond to, not a dozen.
+    /// </summary>
+    public int NoteDistraction(float now, float memory, float gap, out bool counted)
+    {
+        _distractions.RemoveAll(time => now - time > memory);
+        counted = _distractions.Count == 0 || now - _distractions[_distractions.Count - 1] >= gap;
+        if (counted) _distractions.Add(now);
+        return _distractions.Count;
+    }
+
+    public void ClearDistractions() => _distractions.Clear();
+
     public bool KnowsBody(EnemyController body) => _bodies.Contains(body);
     public void RememberBody(EnemyController body) => _bodies.Add(body);
 

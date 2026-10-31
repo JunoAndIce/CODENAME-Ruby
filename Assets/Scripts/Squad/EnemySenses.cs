@@ -158,7 +158,7 @@ public class EnemySenses
 
         _enemy.Memory.BecomeWary();
         DebugLog.Info($"{_enemy.name} sees {what}: he looks at it from where he stands and is wary.", _enemy);
-        _enemy.Investigate(at, StimulusResponse.SearchForProblem, row.Priority, walkThere: false);
+        _enemy.Investigate(at, StimulusResponse.SearchForProblem, row.Priority, walkThere: false, isFind: true);
     }
 
     private void Notice(Vector3 origin, StimulusKind kind, string what)
@@ -166,7 +166,8 @@ public class EnemySenses
         if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} notices {what}: {row.Response} at priority {row.Priority}.", _enemy);
-        _enemy.Investigate(origin, row.Response, row.Priority);
+        // A body or a gun is found, not heard: it says nothing about where Ruby is.
+        _enemy.Investigate(origin, row.Response, row.Priority, isFind: kind is StimulusKind.Body or StimulusKind.LooseGun);
     }
 
     // A character is one body for this purpose, so a bone of a tumbling officer isn't a body of its

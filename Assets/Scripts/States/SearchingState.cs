@@ -23,6 +23,8 @@ public class SearchingState : EnemyStateBase
     private float _stepTimer;      // seconds in the current step. The walk there isn't part of the search: the look is.
     private float _lookBaseYaw;    // where he faced when the look began; the sweep turns about it
     private bool _walk = true;     // false: look from where he stands (a glance at something already known)
+    private float _distractLeft;   // a lesser disturbance has his eye: the search waits this long, then carries on
+    private Vector3 _distractPoint;
     // Set by Stage before the transition into this state, so Enter keeps the staged target.
     private bool _staged;
 
@@ -76,11 +78,28 @@ public class SearchingState : EnemyStateBase
         Begin();
     }
 
-    public override void Exit() => _staged = false;
+    public override void Exit()
+    {
+        _staged = false;
+        _distractLeft = 0f;
+    }
+
+    /// <summary>
+    /// A lesser disturbance than his search: he turns toward it and the search waits for
+    /// Distraction Time, then carries on where it was. It never changes what he is searching for.
+    /// One merged into the last (the same thrown body thudding again) only turns him while he's
+    /// already looking, and never starts a new pause or stacks one on a running pause.
+    /// </summary>
+    public void Distract(Vector3 point, bool newDisturbance)
+    {
+        if (newDisturbance) _distractLeft = Enemy.DistractionTime;
+        if (_distractLeft > 0f) _distractPoint = point;
+    }
 
     private void Begin()
     {
         _stepTimer = 0f;
+        _distractLeft = 0f;
         if (_walk)
         {
             _step = SearchStep.Walk;
@@ -104,6 +123,13 @@ public class SearchingState : EnemyStateBase
 
     public override void Tick()
     {
+        // The search waits while something has his eye, so he doesn't lose search time to it.
+        if (_distractLeft > 0f)
+        {
+            _distractLeft -= Time.deltaTime;
+            return;
+        }
+
         switch (_step)
         {
             case SearchStep.Walk:
@@ -148,6 +174,13 @@ public class SearchingState : EnemyStateBase
     // outside the area is only crowding, and is logged.
     public override void FixedTick()
     {
+        if (_distractLeft > 0f)
+        {
+            Enemy.Stop();
+            Enemy.FaceToward(_distractPoint);
+            return;
+        }
+
         switch (_step)
         {
             case SearchStep.Walk:
