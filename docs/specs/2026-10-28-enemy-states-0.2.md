@@ -239,7 +239,9 @@ officers talk:
 
 **What the pool changes on its own:**
 
-- **The first aggro puts the level on alert.** Once Ruby aggros any officer, every officer on
+- **The first aggro puts the level on alert.** *(Removed for now, user, 2026-10-30: only what an
+  officer has himself seen or been after makes him aggressive. To be explored later; see Decisions.)*
+  Once Ruby aggros any officer, every officer on
   patrol switches to Patrol Aggressive at the next pool update *(user: "Once Ruby aggros one
   officer, all officers are patrol cautioused")*. It doesn't pull anyone toward her. They walk
   their Aggressive routes, wary, and the level never goes back to Normal *(my reading)*.
@@ -478,7 +480,8 @@ walking with each other and breaking off")*:
 - **Groups** are two or three officers, the leader included. At most **two groups** walk the map
   at a time *(user)*. With more leaders than that, the rest walk their own routes alone until a
   group's place frees up *(my call)*.
-- **When they form** *(my reading)*: once the level is on alert, leaders
+- **When they form** *(my reading; the level alert it relied on was removed on 2026-10-30, so
+  the trigger is open and part B must pick one)*: once the level is on alert, leaders
   go to Patrol Aggressive and gather followers. Before the alert, everyone walks Normal, alone.
 - **Joining:** an officer walking his Aggressive patrol alone checks for a group near him (in Speech Range) with
   room, and joins it. A follower walks the leader's route behind him, keeping Squad Spacing, and
@@ -728,8 +731,11 @@ touching them and turn sharply at each bend.
 - **A shared pool that updates periodically** (user) carries news across the level, so it's stale
   by up to one update. **Speech across a room** (user) carries it at once to the officers in
   earshot. Officers in the room with Ruby know; officers elsewhere know what the pool last said.
-- **The first aggro puts every patrolling officer on Aggressive** (user), without pulling anyone
-  toward Ruby.
+- **The first aggro put every patrolling officer on Aggressive** (user), without pulling anyone
+  toward Ruby. **Removed for now (user, 2026-10-30):** only an officer who has seen Ruby or been
+  after her goes aggressive, and a level-wide alert is to be explored later. Part B of piece 5
+  (patrol together) was written to start groups "once the level is on alert", so it needs its
+  own trigger when it is planned.
 - **Aggro chases what he knows,** not her real position, so breaking sight drops a fight. *(My
   reading of the user's goal; see piece 2.)*
 - **The open-jobs list is live,** not stale, so two officers never start the same job. *(My

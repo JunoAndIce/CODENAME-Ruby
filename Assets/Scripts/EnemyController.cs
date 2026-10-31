@@ -82,7 +82,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Header("Patrol")]
     [Tooltip("Walked while unaware. Empty = he idles at his post. One point 4 m or more across (a circle's diameter, a rectangle's longer side) is wandered rather than stood on. Edit with the Scene-view handles when this enemy is selected.")]
     [SerializeField] private PatrolRoute _safeRoute = new();
-    [Tooltip("Walked instead of the Safe route once he's aggressive: after the level goes on alert, or he has seen Ruby or been sent after her. Edit it with the same Scene-view handles (the toggle below picks which route they edit). Empty: a patroller keeps walking his Safe route, and an idle officer stays at his post, alert.")]
+    [Tooltip("Walked instead of the Safe route once he's aggressive: after he has seen Ruby or been sent after her (an attack search, or a glance at a body). Edit it with the same Scene-view handles (the toggle below picks which route they edit). Empty: a patroller keeps walking his Safe route, and an idle officer stays at his post, alert.")]
     [SerializeField] private PatrolRoute _aggressiveRoute = new();
     [Tooltip("How much faster he patrols once he's aggressive, as a multiple of Patrol Speed. Applies to whichever route he walks, and to an idle officer walking back to his post.")]
     [SerializeField, Min(1f)] private float _aggressiveSpeedFactor = 1.25f;
@@ -176,11 +176,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public bool HasAggressiveRoute => _aggressiveRoute != null && _aggressiveRoute.Count > 0;
 
     /// <summary>
-    /// Whether he patrols aggressively: he has been after Ruby, has seen her, or the level is on
-    /// alert. Derived on every read and never stored, so a level alert flips every patroller at the
-    /// next pool update with no transition. None of the three is ever cleared, so he never goes back.
+    /// Whether he patrols aggressively: he has been after Ruby (an attack search, or a glance at a
+    /// body) or has seen her. Derived on every read and never stored, and neither is ever cleared,
+    /// so he never goes back. A level-wide alert from the first Aggro was removed for now: only
+    /// what an officer himself has been through makes him aggressive.
     /// </summary>
-    public bool IsAggressive => Memory.Wary || Memory.HasSeenRuby || (Intel != null && Intel.Published.LevelOnAlert);
+    public bool IsAggressive => Memory.Wary || Memory.HasSeenRuby;
 
     /// <summary>
     /// The route he walks now: the Aggressive one when he's aggressive and has one, else the Safe

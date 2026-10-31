@@ -29,16 +29,15 @@ public readonly struct RubyFact
 /// </summary>
 public class IntelSnapshot
 {
-    public static readonly IntelSnapshot Empty = new(false, default, false, Array.Empty<EnemyController>(), Array.Empty<Gun>());
+    public static readonly IntelSnapshot Empty = new(false, default, Array.Empty<EnemyController>(), Array.Empty<Gun>());
 
     private readonly HashSet<EnemyController> _bodies;
     private readonly HashSet<Gun> _guns;
 
-    public IntelSnapshot(bool rubyReported, RubyFact ruby, bool levelOnAlert, IEnumerable<EnemyController> bodies, IEnumerable<Gun> guns)
+    public IntelSnapshot(bool rubyReported, RubyFact ruby, IEnumerable<EnemyController> bodies, IEnumerable<Gun> guns)
     {
         RubyReported = rubyReported;
         Ruby = ruby;
-        LevelOnAlert = levelOnAlert;
         _bodies = new HashSet<EnemyController>(bodies);
         _guns = new HashSet<Gun>(guns);
     }
@@ -47,8 +46,6 @@ public class IntelSnapshot
     public bool RubyReported { get; }
     /// <summary>The newest report of her. Meaningless unless RubyReported.</summary>
     public RubyFact Ruby { get; }
-    /// <summary>Latched: once anyone has gone to aggro, the level stays on alert.</summary>
-    public bool LevelOnAlert { get; }
     /// <summary>Dead officers the squad has reported. Never forgotten within a level.</summary>
     public IReadOnlyCollection<EnemyController> Bodies => _bodies;
     /// <summary>Loose guns the squad has reported.</summary>

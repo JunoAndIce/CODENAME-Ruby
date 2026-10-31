@@ -52,8 +52,6 @@ public class AggroState : EnemyStateBase
         _dwellTimer = 0f;
         _loggedNothing = false;
         _hadSight = Enemy.CanSeePlayer();
-        // Null-guarded: with no Intel in the scene the enemy has already logged the error.
-        if (Enemy.Intel != null) Enemy.Intel.ReportAggro(Enemy);
     }
 
     // The search starts from what he knew, or from where he stands when he knew nothing.

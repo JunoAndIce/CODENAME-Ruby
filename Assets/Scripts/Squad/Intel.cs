@@ -48,8 +48,6 @@ public class Intel : MonoBehaviour
     private RubyFact _pendingRuby;
     private bool _hasPendingRuby;
     private EnemyController _pendingReporter;
-    private bool _pendingAlert;
-    private bool _alertLogged;
     // Each enemy warns once about a setup problem, however often he speaks or is spoken to.
     private readonly HashSet<EnemyController> _warnedNoGrid = new();
     private readonly HashSet<EnemyController> _warnedNoReach = new();
@@ -130,15 +128,6 @@ public class Intel : MonoBehaviour
         _pendingRuby = fact;
         _hasPendingRuby = true;
         _pendingReporter = reporter;
-    }
-
-    /// <summary>An enemy has gone to aggro: the level is on alert from the next publish, for good.</summary>
-    public void ReportAggro(EnemyController enemy)
-    {
-        _pendingAlert = true;
-        if (_alertLogged) return;
-        _alertLogged = true;
-        DebugLog.Info($"The level is on alert ({enemy.name} went to aggro).", this);
     }
 
     /// <summary>The squad has a dead officer on its books. True only the first time anyone reports him.</summary>
@@ -273,22 +262,20 @@ public class Intel : MonoBehaviour
     private void Publish()
     {
         bool rubyChanged = _hasPendingRuby && (!Published.RubyReported || _pendingRuby.Time > Published.Ruby.Time);
-        bool alertChanged = _pendingAlert && !Published.LevelOnAlert;
         // Bodies and guns are only ever added within a level, so a count change is a real change.
         bool bodiesChanged = _knownBodies.Count != Published.Bodies.Count;
         bool gunsChanged = _knownGuns.Count != Published.Guns.Count;
-        if (!rubyChanged && !alertChanged && !bodiesChanged && !gunsChanged) return;
+        if (!rubyChanged && !bodiesChanged && !gunsChanged) return;
 
         // Always a new object: an enemy mid-decision holds the old one and must see it unchanged.
         Published = new IntelSnapshot(
             Published.RubyReported || _hasPendingRuby,
             rubyChanged ? _pendingRuby : Published.Ruby,
-            Published.LevelOnAlert || _pendingAlert,
             _knownBodies,
             _knownGuns);
 
         DebugLog.Info(rubyChanged
-            ? $"Intel published: Ruby last at {Published.Ruby.Position} (reported by {(_pendingReporter != null ? _pendingReporter.name : "someone")}){(Published.LevelOnAlert ? ", level on alert" : "")}."
+            ? $"Intel published: Ruby last at {Published.Ruby.Position} (reported by {(_pendingReporter != null ? _pendingReporter.name : "someone")})."
             : $"Intel published: {Published.Bodies.Count} bod{(Published.Bodies.Count == 1 ? "y" : "ies")}, {Published.Guns.Count} loose gun(s).", this);
     }
 
@@ -342,7 +329,7 @@ public class Intel : MonoBehaviour
 
         if (Published.RubyReported)
         {
-            Gizmos.color = Published.LevelOnAlert ? Color.red : Color.yellow;
+            Gizmos.color = Color.yellow;
             Gizmos.DrawWireSphere(Published.Ruby.Position, 0.5f);
 #if UNITY_EDITOR
             UnityEditor.Handles.Label(Published.Ruby.Position + Vector3.up * 0.8f, $"Ruby reported {Time.time - Published.Ruby.Time:0.0}s ago");

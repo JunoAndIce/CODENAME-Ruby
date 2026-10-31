@@ -429,17 +429,18 @@ through the player never slows the walk.
   have him pushing at it for good. Idle activities (a desk, a TV) are a later piece.
 - **Patrol Normal and Aggressive.** These are modes of Patrol, not states. `IsAggressive` is
   **derived on every read, never stored**: he has been after Ruby (`EnemyMemory.Wary`, set by any
-  search for an attack and by a glance at a known body), has seen her (`HasSeenRuby`), or the
-  level is on alert (`Intel.Published.LevelOnAlert`, latched by the first Aggro). None is ever
-  cleared, so he never goes back. A level alert flips every patroller at the next pool update with
-  no transition. `ActiveRoute` is the Aggressive route when he's aggressive and has one, else the
-  Safe route: **an aggressive officer with no Aggressive route keeps walking his Safe route, and
+  search for an attack and by a glance at a known body) or has seen her (`HasSeenRuby`). Neither is
+  ever cleared, so he never goes back. Only what an officer himself has been through makes him
+  aggressive: a **level-wide alert** (the first Aggro flipping every patroller) was removed for now
+  and is to be explored later. `ActiveRoute` is the Aggressive route when he's aggressive and has
+  one, else the Safe
+  route: **an aggressive officer with no Aggressive route keeps walking his Safe route, and
   an idle one stays at his post, alert**. That is a rule and not a fallback, and the Inspector
   says which applies. `PatrolState` reads `ActiveRoute`, and starts over on the nearest point of a
   new one when it changes. Aggressive, he walks at Aggressive Speed Factor (1.25) times Patrol
   Speed, and spends each pause looking around (the point's pause override, else Look Time)
   instead of standing. The table has `Idle` to `Patrol` when `HasActiveRoute`, and `Patrol` to
-  `Idle` when not, so an alert can hand an idle officer a route to walk. Nothing may ask "does he
+  `Idle` when not, so becoming aggressive can hand an idle officer a route to walk. Nothing may ask "does he
   patrol?" without saying for which mode: `HasPatrolRoute` is gone.
 - **Knowledge** (`Squad/`). An officer's memory (`EnemyMemory`) holds the newest fact about Ruby
   (`RubyFact`: position, time and a `Knowledge` source, Seen, Heard, Told or Pool), whether he has
@@ -452,7 +453,7 @@ through the player never slows the walk.
   Interval (1 s) the inbox is merged into a **new** immutable `IntelSnapshot` (`Published`) that
   all of them read. It is stale on purpose: a fight Ruby has left doesn't end the instant she's out
   of sight, and an officer mid-decision holds a snapshot that can't change under him. It holds her
-  newest reported spot, the level's **alert** (latched by the first Aggro, for good) and the bodies
+  newest reported spot and the bodies
   and loose guns the squad has reported (only ever added to within a level). **Speech** is the
   opposite: while an officer sees her he calls her position out at once on first sight and then
   every Speak Interval, and every other living officer within Speech Range (15 m) learns it
