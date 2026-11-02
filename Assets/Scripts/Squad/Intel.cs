@@ -200,6 +200,31 @@ public class Intel : MonoBehaviour
         DebugLog.Info($"{who.name} reaches the spot: {job} {(job.Kind == JobKind.Check ? "looks" : "searches")}.", who);
     }
 
+    /// <summary>
+    /// The member who goes to the spot while the rest follow: the one nearest it (flat) when the team
+    /// sets off, kept until he leaves or the job starts over. Null for a Search, where everyone goes.
+    /// Chosen here, by the first member who asks, so it is one decision and every member reads the same.
+    /// </summary>
+    public EnemyController CheckerOf(GroupJob job)
+    {
+        if (job.Kind != JobKind.Check) return null;
+        if (job.Checker != null && job.Has(job.Checker)) return job.Checker;
+
+        EnemyController nearest = null;
+        float best = float.MaxValue;
+        foreach (EnemyController member in job.Members)
+        {
+            float distance = PathGrid.FlatDistance(member.transform.position, job.Point);
+            if (distance >= best) continue;
+            best = distance;
+            nearest = member;
+        }
+        job.SetChecker(nearest);
+        if (nearest != null)
+            DebugLog.Info($"{job}: {nearest.name} is nearest the spot ({best:0.#} m) and goes to check it; {(job.Count > 1 ? "the others follow behind" : "he goes alone")}.", nearest);
+        return nearest;
+    }
+
     public void Register(EnemyController enemy)
     {
         if (!_enemies.Contains(enemy)) _enemies.Add(enemy);
@@ -404,6 +429,7 @@ public class Intel : MonoBehaviour
         Recruit(job, who);
         // A check of one has nobody to gather: he goes straight there.
         if (job.Kind == JobKind.Check && job.Count == 1) job.SetStep(JobStep.Go);
+        else if (job.Kind == JobKind.Check) DebugLog.Info($"{job} gathers: {job.Count} officers turn toward {point}.", who);
         return job;
     }
 
@@ -417,6 +443,7 @@ public class Intel : MonoBehaviour
         GroupJob job = who.Job;
         if (job == null) return;
 
+        bool wasChecker = job.Checker == who;
         job.Remove(who);
         if (job.Count == 0)
         {
@@ -425,6 +452,15 @@ public class Intel : MonoBehaviour
             return;
         }
         DebugLog.Info($"{who.name} leaves {job}; {job.Lead.name} leads.", who);
+
+        // The checker went with the look half done: the nearest of the rest takes over, and the job
+        // goes back to Go so he walks to the spot from where he is and looks it over himself. Before
+        // the look, or after it, there is nothing to hand over: the next to ask is chosen from the rest.
+        if (wasChecker && job.Step == JobStep.Look)
+        {
+            job.SetStep(JobStep.Go);
+            DebugLog.Info($"{job}: the checker is gone, so someone else goes to look.", who);
+        }
     }
 
     private bool Near(Vector3 a, Vector3 b) => PathGrid.FlatDistance(a, b) <= _jobMatchRadius;
@@ -468,7 +504,10 @@ public class Intel : MonoBehaviour
     // moved the team re-plans its walk from the first step; at the same place it carries on.
     private void Upgrade(GroupJob job, Vector3 point, StimulusResponse reason, int priority, JobKind kind)
     {
+        bool wasCheck = job.Kind == JobKind.Check;
         bool restarted = job.Upgrade(point, reason, priority, kind);
+        if (wasCheck && job.Kind == JobKind.Search)
+            DebugLog.Info($"{job} found something at {point}: the check becomes a search, and everyone goes.", this);
         if (reason == StimulusResponse.SearchForAttack)
             foreach (EnemyController member in job.Members) member.Memory.BecomeWary();
         if (!restarted) return;
@@ -619,8 +658,10 @@ public class Intel : MonoBehaviour
                 Gizmos.DrawLine(lead.transform.position + Vector3.up * 0.2f, member.transform.position + Vector3.up * 0.2f);
                 Gizmos.DrawLine(member.transform.position + Vector3.up * 0.2f, job.Point);
             }
+            // The checker is ringed: he's the one who goes, and the rest trail him.
+            if (job.Checker != null) DrawCircle(job.Checker.transform.position, 0.9f);
 #if UNITY_EDITOR
-            UnityEditor.Handles.Label(job.Point + Vector3.up * 1.4f, $"#{job.Id} {job.Kind} · {job.Step} · {job.Count}/{job.Cap}\n{job.Reason}, priority {job.Priority}");
+            UnityEditor.Handles.Label(job.Point + Vector3.up * 1.4f, $"#{job.Id} {job.Kind} · {job.Step} · {job.Count}/{job.Cap}\n{job.Reason}, priority {job.Priority}{(job.Checker != null ? $"\nchecker {job.Checker.name}" : "")}");
 #endif
         }
     }

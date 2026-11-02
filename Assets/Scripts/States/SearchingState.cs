@@ -177,10 +177,14 @@ public class SearchingState : EnemyStateBase
     }
 
     // On a job the walk is the one thing a member times himself: the job's clock runs every other
-    // step. It keeps one he can't reach (blocked, a crowded doorway) from walking for good.
+    // step. It keeps one he can't reach (blocked, a crowded doorway) from walking for good. A
+    // follower isn't walking to the spot, so his time isn't limited here.
     private void TickJob()
     {
         if (_arrived || Job.Step is JobStep.Gather or JobStep.StandDown or JobStep.Done) return;
+
+        EnemyController checker = Enemy.Intel != null ? Enemy.Intel.CheckerOf(Job) : null;
+        if (checker != null && checker != Enemy) return;
 
         _walkTimer += Time.deltaTime;
         if (_walkTimer >= Enemy.SearchTravelLimit)
@@ -246,8 +250,10 @@ public class SearchingState : EnemyStateBase
         }
     }
 
-    // His part of the job's step. The team gathers facing the spot, walks there (the first to arrive
-    // moves the job on), looks together for the job's time, and holds for the gesture.
+    // His part of the job's step. The team gathers facing the spot. Then one member, the checker (a
+    // check) or everyone (a search), walks there, and the first to arrive moves the job on. The
+    // others of a check follow the checker. Then the one who's there looks for the job's time, and
+    // everyone holds for the gesture.
     private void FixedTickJob(GroupJob job)
     {
         switch (job.Step)
@@ -260,7 +266,6 @@ public class SearchingState : EnemyStateBase
             case JobStep.Go:
             case JobStep.Look:
             case JobStep.Search:
-                if (!_arrived && !WalkToSpot(job)) return;
                 break;
 
             default:
@@ -268,6 +273,16 @@ public class SearchingState : EnemyStateBase
                 Enemy.Stop();
                 return;
         }
+
+        // Null for a search, where everyone goes.
+        EnemyController checker = Enemy.Intel.CheckerOf(job);
+        if (checker != null && checker != Enemy)
+        {
+            FollowChecker(job, checker);
+            return;
+        }
+
+        if (!_arrived && !WalkToSpot(job)) return;
 
         if (job.Step == JobStep.Go)
         {
@@ -280,6 +295,26 @@ public class SearchingState : EnemyStateBase
         // The job's clock, not his own, so a late arrival joins the sweep where it is and every
         // member ends it facing the spot together.
         Enemy.LookAround(_lookBaseYaw, job.StepElapsed, Enemy.Intel.StepDuration(job));
+    }
+
+    // A follower trails the checker slowly and never closer than Follow Distance: he stops there and
+    // faces the spot, so the team spreads out behind the one who goes rather than crowding him, and
+    // keeps closing up while the checker looks, until he is that near. PathTo re-floods only when the
+    // goal has moved a metre, so a checker walking a long way costs a follower one flood a metre,
+    // not one a physics step.
+    private void FollowChecker(GroupJob job, EnemyController checker)
+    {
+        Vector3 offset = checker.transform.position - Enemy.transform.position;
+        offset.y = 0f;
+        if (offset.magnitude <= Enemy.FollowDistance)
+        {
+            Enemy.Stop();
+            Enemy.FaceToward(job.Point);
+            return;
+        }
+
+        // Unreachable is the navigator's one warning, and he stands: no walk to somewhere else.
+        Enemy.PathTo(checker.transform.position, Enemy.SearchSpeed * Enemy.FollowSpeedFactor);
     }
 
     // True once he has arrived this step, false while he is still walking.

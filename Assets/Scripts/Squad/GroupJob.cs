@@ -55,6 +55,15 @@ public class GroupJob
     public EnemyController Lead => _members.Count > 0 ? _members[0] : null;
 
     /// <summary>
+    /// The member who goes to the spot and looks while the rest follow him (a Check only; a Search
+    /// sends everyone). The one nearest the spot when the team sets off. Null until chosen, and again
+    /// when he leaves or the job starts over, so the next to need one picks the nearest remaining.
+    /// Intel chooses it (CheckerOf); everyone else reads.
+    /// </summary>
+    public EnemyController Checker { get; private set; }
+    internal void SetChecker(EnemyController who) => Checker = who;
+
+    /// <summary>
     /// Whether a late officer can still be taken on: a Check until it looks (someone arriving after
     /// that would only stand about), a Search until it's done, and never beyond the cap.
     /// </summary>
@@ -73,6 +82,7 @@ public class GroupJob
     {
         if (!_members.Remove(who)) return;
         if (who.Job == this) who.Job = null;
+        if (Checker == who) Checker = null;
     }
 
     internal void SetStep(JobStep step)
@@ -104,8 +114,12 @@ public class GroupJob
         return true;
     }
 
-    /// <summary>The first step a job takes: a check of several gathers first, a lone one or a search goes straight there.</summary>
-    internal void Restart() => SetStep(Kind == JobKind.Check && Count > 1 ? JobStep.Gather : JobStep.Go);
+    /// <summary>The first step a job takes: a check of several gathers first, a lone one or a search goes straight there. The place may have moved, so the checker is chosen again.</summary>
+    internal void Restart()
+    {
+        Checker = null;
+        SetStep(Kind == JobKind.Check && Count > 1 ? JobStep.Gather : JobStep.Go);
+    }
 
     // Closer than this is the same place: the walk carries on, so a louder sound on the spot doesn't send everyone back to start.
     private const float SamePlace = 1f;

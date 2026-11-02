@@ -54,6 +54,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Range(0f, 180f)] private float _lookSweepAngle = 70f;
     [Tooltip("Seconds for one full sweep, left to right and back.")]
     [SerializeField, Min(0.2f)] private float _lookSweepPeriod = 2f;
+    [Tooltip("How close a follower keeps behind the officer who goes to check, in metres. He stops here and holds, facing the spot, so the team trails the checker and never crowds him.")]
+    [SerializeField, Min(1f)] private float _followDistance = 3f;
+    [Tooltip("A follower's walking speed behind the checker, as a multiple of Search Speed: below 1 so the team trails slowly behind him.")]
+    [SerializeField, Range(0.2f, 1f)] private float _followSpeedFactor = 0.8f;
 
     [Header("Distraction")]
     [Tooltip("How long he turns to look at a lesser disturbance while searching, in seconds. The search waits meanwhile, so he doesn't lose search time.")]
@@ -170,6 +174,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float SearchReach => _searchReach;
     public float LookTime => _lookTime;
     public float StandDownTime => _standDownTime;
+    public float FollowDistance => _followDistance;
+    public float FollowSpeedFactor => _followSpeedFactor;
     public float DistractionTime => _distractionTime;
     public PatrolRoute SafeRoute => _safeRoute;
     public PatrolRoute AggressiveRoute => _aggressiveRoute;
@@ -469,7 +475,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         {
             Memory.ClearDistractions();
             if (!isFind) Memory.Learn(new RubyFact(point, Time.time, Knowledge.Heard));
-            DebugLog.Info($"{name}: the jig is up ({count} disturbances in {_distractionMemory:0.#}s, the last {reason} at {point}); he aggros.", this);
+            DebugLog.Info($"{name}: Enemies have been disturbed too much! ({count} disturbances in {_distractionMemory:0.#}s, the last {reason} at {point}); he aggros.", this);
             Alert();
             return true;
         }

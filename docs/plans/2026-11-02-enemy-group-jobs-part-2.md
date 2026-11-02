@@ -108,7 +108,7 @@
 
   **Built differently.** An elevation at the same place doesn't re-plan anyone: `GroupJob.Upgrade` returns whether it restarted, and only then are members retargeted. A job's `Reason` and `Priority` are read through by `SearchingState`, so a member never holds a stale copy. A check that ends with an attack reason logs "finds nothing, but stays wary" and not "all clear", since everyone on it goes aggressive. Raising a reason makes every member wary at once. `Investigate` still latches wary for the officer who sensed an attack, taken or not (piece 4's rule), which is now consistent because `Handle` raises the job he joins. A job-less search (a glance, or after a lost fight) is unchanged: Task 8 moves the lost-fight search onto jobs.
 
-- [ ] **Step 6: Play-test gate (the user).** No Inspector work (Gather Time appears on `Intel`). In play, with three or more officers in a room:
+- [x] **Step 6: Play-test gate (the user).** No Inspector work (Gather Time appears on `Intel`). In play, with three or more officers in a room:
   - **Together:** a thud sends a job of up to three. They all look for about 1.5 s, gesture at once, and all finish on the same frame. The Console shows the job's steps once, and `Intel`'s gizmo shows the step.
   - **A gunshot:** the same check, a look and not a ten-second search, then **everyone is wary**, so they all walk the Aggressive route.
   - **One who has seen Ruby:** he joins a thud job and the whole job becomes an attack. Nobody says all clear and then splits.
@@ -121,14 +121,23 @@
 
 **Files:** `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/Squad/Intel.cs`, `Assets/Scripts/States/SearchingState.cs`, `Assets/Scripts/EnemyController.cs`
 
-- [ ] **Step 1: The checker.** The member nearest the spot (flat). He is the only one who walks it in Go. If he leaves, the nearest remaining member takes over, and a job that has only reached Go restarts him from where he is. `GroupJob.Checker`.
-- [ ] **Step 2: Followers.** The others trail him at Search Speed × Follow Speed Factor (0.8, `EnemyController`), stopping within Follow Distance (3 m, `EnemyController`) of him and facing the spot. They use `PathTo` toward the checker, which re-floods only when the goal moves a metre. They hold when he arrives.
-- [ ] **Step 3: Callouts.** `DebugLog.Info` lines: gathering, sending the checker, all clear, found a body. These are the spec's callouts until barks exist.
-- [ ] **Step 4: Compile and commit,** as in Task 3.
-- [ ] **Step 5: Play-test gate (the user).** No Inspector work. Three officers in a room, throw a body past them:
+- [x] **Step 1: The checker.** The member nearest the spot (flat). He is the only one who walks it in Go. If he leaves, the nearest remaining member takes over, and a job that has only reached Go restarts him from where he is. `GroupJob.Checker`.
+- [x] **Step 2: Followers.** The others trail him at Search Speed × Follow Speed Factor (0.8, `EnemyController`), stopping within Follow Distance (3 m, `EnemyController`) of him and facing the spot. They use `PathTo` toward the checker, which re-floods only when the goal moves a metre. They hold when he arrives.
+- [x] **Step 3: Callouts.** `DebugLog.Info` lines: gathering, sending the checker, all clear, found a body. These are the spec's callouts until barks exist.
+- [x] **Step 4: Compile and commit,** as in Task 3.
+
+  **Built differently.**
+  - **A Search sends everyone,** not a checker: the checker is for a Check only (`Intel.CheckerOf` returns null for a Search). A check upgraded by a find becomes a Search and everyone goes.
+  - **Followers keep closing up while the checker looks,** until they are within Follow Distance of him, rather than freezing where they stood when he arrived. At 0.8 × Search Speed they would otherwise be left far behind on a long walk. They still never come closer than Follow Distance.
+  - **The checker is chosen lazily,** by the first member who asks once the team sets off (`Intel.CheckerOf`), and again when he leaves or the job restarts at a moved place. If he leaves during the look, the job goes back to Go so the nearest remaining member walks over and looks it over himself; before or after the look nothing needs handing over.
+  - **The walk time limit applies to the checker only.** A follower isn't walking to the spot.
+  - The Intel gizmo rings the checker and names him in the label.
+
+- [ ] **Step 5: Play-test gate (the user).** No Inspector work (Follow Distance and Follow Speed Factor appear on the officer). Three officers in a room, throw a body past them:
   - they turn toward the **origin**, one goes there and the other two follow about 3 m behind him;
   - he looks for 1.5 s, gestures, and everyone goes back;
-  - a checker who is put in Aggro hands the check to the next nearest;
+  - a checker who is put in Aggro hands the check to the next nearest, who walks over and looks it over himself;
+  - a find (a body, a loose gun) turns the check into a search, and everyone goes;
   - three followers don't cost the frame rate over a long walk.
 
 ---
