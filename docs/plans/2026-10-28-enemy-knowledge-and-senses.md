@@ -314,7 +314,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 
 - [x] **Step 6: Compile and commit.**
 
-- [ ] **Step 7: Play-test gate (the user).** Inspector work first:
+- [x] **Step 7: Play-test gate (the user).** Inspector work first:
   - create `Assets/Settings/DefaultBehaviourMap.asset` (Create > Ruby > Behaviour Map; its rows fill themselves);
   - assign it to the `Intel` object's Default Map.
 
@@ -329,7 +329,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
     - one checking a gunshot ignores a thud;
     - an officer never reacts to his own shot.
 
-  **Built differently, and played so far (2026-10-30).** The user played the sound, reaction and fast-object cases and is happy with them, with the ranges retuned on the officer prefab (Motion Radius and Body Notice Range 12.5 m, Search Duration 10 s). The corpse and loose-gun cases haven't been reported, so this gate stays open. What changed in building:
+  **Built differently, and played so far (2026-10-30).** The user played the sound, reaction and fast-object cases and is happy with them, with the ranges retuned on the officer prefab (Motion Radius and Body Notice Range 12.5 m, Search Duration 10 s). The corpse and loose-gun cases weren't reported then; the user later confirmed the Task 4 gate passed (2026-11-02), so it is closed. What changed in building:
   - **A search's timer runs from arrival,** not from the sound, with Search Travel Limit (20 s) as the cap on the walk. An unreachable spot counts as arrived.
   - **`Stage` and `Retarget`** replaced a single `Aim`: only a search being entered from Idle or Patrol is staged, because a stage left standing by a retarget later hijacked the search that follows Aggro.
   - **A search gives way only to a strictly higher priority.** An equal one is ignored, as the plan has it. An attempt to let an equal one retarget once an Intel Interval was dropped.
