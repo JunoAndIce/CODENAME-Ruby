@@ -1,15 +1,18 @@
 using UnityEngine;
 
 /// <summary>How far through a search he is: going there, looking about, and for a check that
-/// found nothing, standing down.</summary>
+/// found nothing, standing down. A job-less search runs these itself; a member of a job reads the
+/// job's step instead (JobStep).</summary>
 public enum SearchStep { Walk, Look, StandDown, Done }
 
 /// <summary>
-/// Went to look for something: Ruby, after a lost fight or a gunshot, or something odd. He walks
-/// to the spot, looks around it, and is done. The reason sets how long and how it ends: a search
-/// for an attack looks for Search Duration; a check on a problem looks for Look Time and then
-/// stands down with a gesture, because nothing came of it. Which patrol he goes back to is the
-/// table's business (EnemyController.IsAggressive), not this state's.
+/// Went to look for something: Ruby, after a lost fight or a gunshot, or something odd. **On a job**
+/// (the usual case for a sound or a sight) the job decides what each step is and when it ends, and he
+/// plays his part: he holds while the team gathers, walks to the spot, looks around it, stands down,
+/// and finishes when the job does, so a team ends together. **Without a job** (a glance at something
+/// already known, or after a lost fight until jobs take that over) he runs his own steps: a search for
+/// an attack looks for Search Duration, a check on a problem looks for Look Time and then stands down
+/// with a gesture. Which patrol he goes back to is the table's business (EnemyController.IsAggressive).
 /// </summary>
 public class SearchingState : EnemyStateBase
 {
@@ -27,15 +30,21 @@ public class SearchingState : EnemyStateBase
     private Vector3 _distractPoint;
     // Set by Stage before the transition into this state, so Enter keeps the staged target.
     private bool _staged;
+    // On a job: he has reached the spot, been blocked short of it, or run out of time walking there.
+    private bool _arrived;
+    private float _walkTimer;
 
     public SearchingState(EnemyController enemy) : base(enemy) { }
 
     public override EnemyState Id => EnemyState.Searching;
 
+    private GroupJob Job => Enemy.Job;
+
     public SearchStep Step => _step;
-    public bool Finished => _step == SearchStep.Done;
-    public StimulusResponse Reason => _reason;
-    public int Priority => _priority;
+    public bool Finished => Job != null ? Job.Step == JobStep.Done : _step == SearchStep.Done;
+    // A job's reason and priority are the job's own, which can rise after he joined, so they are read through.
+    public StimulusResponse Reason => Job != null ? Job.Reason : _reason;
+    public int Priority => Job != null ? Job.Priority : _priority;
 
     /// <summary>
     /// Sets the target for a search about to begin from Idle or Patrol. Only staging, never a
@@ -103,6 +112,11 @@ public class SearchingState : EnemyStateBase
     {
         _stepTimer = 0f;
         _distractLeft = 0f;
+        _arrived = false;
+        _walkTimer = 0f;
+        // A member's steps are the job's, not his own.
+        if (Job != null) return;
+
         if (_walk)
         {
             _step = SearchStep.Walk;
@@ -133,6 +147,12 @@ public class SearchingState : EnemyStateBase
             return;
         }
 
+        if (Job != null)
+        {
+            TickJob();
+            return;
+        }
+
         switch (_step)
         {
             case SearchStep.Walk:
@@ -154,6 +174,17 @@ public class SearchingState : EnemyStateBase
                 if (_stepTimer >= Enemy.StandDownTime) Finish("stands down");
                 break;
         }
+    }
+
+    // On a job the walk is the one thing a member times himself: the job's clock runs every other
+    // step. It keeps one he can't reach (blocked, a crowded doorway) from walking for good.
+    private void TickJob()
+    {
+        if (_arrived || Job.Step is JobStep.Gather or JobStep.StandDown or JobStep.Done) return;
+
+        _walkTimer += Time.deltaTime;
+        if (_walkTimer >= Enemy.SearchTravelLimit)
+            Arrive($"{Enemy.name} hasn't reached the spot in {Enemy.SearchTravelLimit:0.#}s; he stops where he is");
     }
 
     // The gesture is a pause and a line until there is an animation for it.
@@ -184,6 +215,12 @@ public class SearchingState : EnemyStateBase
             return;
         }
 
+        if (Job != null)
+        {
+            FixedTickJob(Job);
+            return;
+        }
+
         switch (_step)
         {
             case SearchStep.Walk:
@@ -207,5 +244,69 @@ public class SearchingState : EnemyStateBase
                 Enemy.Stop();
                 break;
         }
+    }
+
+    // His part of the job's step. The team gathers facing the spot, walks there (the first to arrive
+    // moves the job on), looks together for the job's time, and holds for the gesture.
+    private void FixedTickJob(GroupJob job)
+    {
+        switch (job.Step)
+        {
+            case JobStep.Gather:
+                Enemy.Stop();
+                Enemy.FaceToward(job.Point);
+                return;
+
+            case JobStep.Go:
+            case JobStep.Look:
+            case JobStep.Search:
+                if (!_arrived && !WalkToSpot(job)) return;
+                break;
+
+            default:
+                // StandDown is the gesture, Done is waiting for the table to send him back.
+                Enemy.Stop();
+                return;
+        }
+
+        if (job.Step == JobStep.Go)
+        {
+            // He is there and the job hasn't moved on yet (it has just been told): hold, facing the spot.
+            Enemy.Stop();
+            Enemy.FaceToward(job.Point);
+            return;
+        }
+
+        // The job's clock, not his own, so a late arrival joins the sweep where it is and every
+        // member ends it facing the spot together.
+        Enemy.LookAround(_lookBaseYaw, job.StepElapsed, Enemy.Intel.StepDuration(job));
+    }
+
+    // True once he has arrived this step, false while he is still walking.
+    private bool WalkToSpot(GroupJob job)
+    {
+        NavResult result = Enemy.WalkTo(job.Point, Enemy.SearchReach, Enemy.SearchSpeed);
+        if (result == NavResult.Moving) return false;
+
+        if (result == NavResult.Unreachable)
+            Debug.LogWarning($"{Enemy.name} can't reach the spot ({Enemy.Navigator.FailureReason}); he looks from where he stands.", Enemy);
+        Arrive(result switch
+        {
+            NavResult.Arrived => $"{Enemy.name} reaches the spot",
+            NavResult.Blocked => $"{Enemy.name} is blocked short of the spot",
+            _ => $"{Enemy.name} can't reach the spot",
+        });
+        return true;
+    }
+
+    // He is as close as he will get. He faces the spot, so the sweep he joins is about it and ends
+    // on it, and tells the squad: the first member to arrive moves the job from Go to its look.
+    private void Arrive(string why)
+    {
+        _arrived = true;
+        Enemy.FaceToward(Job.Point);
+        _lookBaseYaw = Enemy.transform.eulerAngles.y;
+        DebugLog.Info($"{why}.", Enemy);
+        if (Enemy.Intel != null) Enemy.Intel.NoteArrived(Job, Enemy);
     }
 }

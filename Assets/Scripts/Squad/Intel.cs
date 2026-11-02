@@ -26,6 +26,8 @@ public class Intel : MonoBehaviour
     [SerializeField, Range(1, 6)] private int _jobCap = 3;
     [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another.")]
     [SerializeField, Min(0f)] private float _jobMatchRadius = 10f;
+    [Tooltip("How long a team of two or three turns toward the spot before anyone goes, in seconds. A check of one skips it.")]
+    [SerializeField, Min(0f)] private float _gatherTime = 0.75f;
 
     [Header("Debug")]
     [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
@@ -130,9 +132,72 @@ public class Intel : MonoBehaviour
 
     private void Update()
     {
+        AdvanceJobs(Time.deltaTime);
         if (Time.time < _nextPublish) return;
         _nextPublish = Time.time + _intelInterval;
         Publish();
+    }
+
+    // The jobs' one clock. A job, not its members, decides when each step ends, so a team looks
+    // together, gestures together and finishes on the same frame: members each timing their own look
+    // is how one said all clear while another walked off aggressive. Go has no duration, because it
+    // waits for the first member to reach the spot (NoteArrived).
+    private void AdvanceJobs(float dt)
+    {
+        for (int i = 0; i < _jobs.Count; i++)
+        {
+            GroupJob job = _jobs[i];
+            if (job.Lead == null || job.Step == JobStep.Done) continue;
+
+            job.Tick(dt);
+            float duration = StepDuration(job);
+            if (duration <= 0f && job.Step != JobStep.Gather) continue;
+            if (job.StepElapsed < duration) continue;
+
+            switch (job.Step)
+            {
+                case JobStep.Gather:
+                    AdvanceTo(job, JobStep.Go, "sets off");
+                    break;
+                case JobStep.Look:
+                    AdvanceTo(job, JobStep.StandDown, job.Reason == StimulusResponse.SearchForAttack ? "finds nothing, but stays wary" : "finds nothing and gestures: all clear");
+                    break;
+                case JobStep.StandDown:
+                    AdvanceTo(job, JobStep.Done, "stands down");
+                    break;
+                case JobStep.Search:
+                    AdvanceTo(job, JobStep.Done, "finishes searching");
+                    break;
+            }
+        }
+    }
+
+    private void AdvanceTo(GroupJob job, JobStep step, string what)
+    {
+        job.SetStep(step);
+        DebugLog.Info($"{job} {what}.", this);
+    }
+
+    /// <summary>How long a job stays in its current step, in seconds. Zero for a step that waits on someone, not the clock.</summary>
+    public float StepDuration(GroupJob job)
+    {
+        EnemyController lead = job.Lead;
+        if (lead == null) return 0f;
+        return job.Step switch
+        {
+            JobStep.Gather => _gatherTime,
+            JobStep.Look => lead.LookTime,
+            JobStep.StandDown => lead.StandDownTime,
+            JobStep.Search => lead.SearchDuration,
+            _ => 0f,
+        };
+    }
+
+    /// <summary>A member has reached the spot, been blocked short of it or run out of time walking. The first one moves the job on.</summary>
+    public void NoteArrived(GroupJob job, EnemyController who)
+    {
+        if (!job.NoteArrived()) return;
+        DebugLog.Info($"{who.name} reaches the spot: {job} {(job.Kind == JobKind.Check ? "looks" : "searches")}.", who);
     }
 
     public void Register(EnemyController enemy)
@@ -287,8 +352,10 @@ public class Intel : MonoBehaviour
     /// 1. **He is on a job.** A more serious thing at its place turns the whole job to it; one
     ///    elsewhere takes him off it, and he carries on below.
     /// 2. **An open job is handling this** (its place is within Job Match Radius). A more serious
-    ///    thing upgrades it. If it is still recruiting and has room he joins, and otherwise he
-    ///    leaves it alone: he never just stands there as a second job on the same thing.
+    ///    thing upgrades it, and a stronger reason (an attack, where the job is a problem) raises it
+    ///    for every member even at the same priority. If it is still recruiting and has room he
+    ///    joins, and otherwise he leaves it alone: he never just stands there as a second job on
+    ///    the same thing.
     /// 3. **Nothing is.** He starts a job and becomes its lead, and calls in the free officers near
     ///    him, nearest first, up to the cap. A find (a body, a loose gun) is already found, so it
     ///    starts a Search; anything else is a Check, for a checker to go and see.
@@ -301,7 +368,11 @@ public class Intel : MonoBehaviour
         GroupJob own = who.Job;
         if (own != null)
         {
-            if (priority <= own.Priority) return own;
+            if (priority <= own.Priority)
+            {
+                Elevate(own, reason, $"{who.name} senses {reason}");
+                return own;
+            }
             if (Near(own.Point, point))
             {
                 Upgrade(own, point, reason, priority, kind);
@@ -315,10 +386,10 @@ public class Intel : MonoBehaviour
         if (match != null)
         {
             if (priority > match.Priority) Upgrade(match, point, reason, priority, kind);
+            else Elevate(match, reason, $"{who.name} senses {reason} at {point}");
             if (match.Recruiting)
             {
-                match.Add(who);
-                who.FollowJob(match);
+                JoinMember(match, who);
                 DebugLog.Info($"{who.name} joins {match}.", who);
                 return match;
             }
@@ -328,10 +399,11 @@ public class Intel : MonoBehaviour
 
         var job = new GroupJob(kind, reason, priority, point, _jobCap);
         _jobs.Add(job);
-        job.Add(who);
-        who.FollowJob(job);
+        JoinMember(job, who);
         DebugLog.Info($"{who.name} starts {job} at {point}.", who);
         Recruit(job, who);
+        // A check of one has nobody to gather: he goes straight there.
+        if (job.Kind == JobKind.Check && job.Count == 1) job.SetStep(JobStep.Go);
         return job;
     }
 
@@ -373,10 +445,33 @@ public class Intel : MonoBehaviour
         return best;
     }
 
-    // Every member turns to the new place and reason, so the team never splits on what it's doing.
+    // The team's reason only rises, and every member shares it, so they end together. An attack makes
+    // them all wary now, not each when he happens to sense it: an officer who latched wary on his
+    // own reading walked off aggressive while the rest of his job said all clear.
+    private void Elevate(GroupJob job, StimulusResponse reason, string why)
+    {
+        if (!job.Elevate(reason)) return;
+        foreach (EnemyController member in job.Members) member.Memory.BecomeWary();
+        DebugLog.Info($"{job} is raised to {reason}: {why}.", this);
+    }
+
+    // Puts an officer on a job. One who has seen Ruby knows she is about, so a job he is on is an
+    // attack, as it would be if he had sensed the thing himself (spec piece 2).
+    private void JoinMember(GroupJob job, EnemyController who)
+    {
+        job.Add(who);
+        if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
+        who.FollowJob(job);
+    }
+
+    // A more serious thing at a job's place: the reason and priority rise for everyone. If the place
+    // moved the team re-plans its walk from the first step; at the same place it carries on.
     private void Upgrade(GroupJob job, Vector3 point, StimulusResponse reason, int priority, JobKind kind)
     {
-        job.Upgrade(point, reason, priority, kind);
+        bool restarted = job.Upgrade(point, reason, priority, kind);
+        if (reason == StimulusResponse.SearchForAttack)
+            foreach (EnemyController member in job.Members) member.Memory.BecomeWary();
+        if (!restarted) return;
         foreach (EnemyController member in job.Members) member.FollowJob(job);
     }
 
@@ -419,8 +514,7 @@ public class Intel : MonoBehaviour
             if (job.IsFull) break;
             // A one-officer job he was on is closed by taking him off it: he is better used here.
             Leave(candidate.Officer);
-            job.Add(candidate.Officer);
-            candidate.Officer.FollowJob(job);
+            JoinMember(job, candidate.Officer);
             taken++;
             DebugLog.Info($"{lead.name} calls in {candidate.Officer.name} ({candidate.Metres:0.#} m away).", lead);
         }

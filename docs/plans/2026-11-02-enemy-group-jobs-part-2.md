@@ -83,16 +83,16 @@
 - **The clock:** a Check runs Gather (Gather Time), Go (until the first member reaches the spot), Look (Look Time), StandDown (Stand Down Time), Done. A Search runs Go, Search (Search Duration), Done. Durations come from the lead.
 - **Produces, in `SearchingState`:** a member's role from the job's step. `Finished` is the job being Done. `Reason` reads the job's. A job-less search (a glance, a lost-fight search) keeps its own steps as before.
 
-- [ ] **Step 1: The job's steps and reason.** The `GroupJob` members above, with summaries saying the reason only rises and why an upgrade at the same place must not restart the walk.
+- [x] **Step 1: The job's steps and reason.** The `GroupJob` members above, with summaries saying the reason only rises and why an upgrade at the same place must not restart the walk.
 
-- [ ] **Step 2: The clock.** `Intel.Update` advances each job. Every step change logs a line naming the job and the step, and the Check's all-clear logs once, for the job, not once per member.
+- [x] **Step 2: The clock.** `Intel.Update` advances each job. Every step change logs a line naming the job and the step, and the Check's all-clear logs once, for the job, not once per member.
 
-- [ ] **Step 3: Raising the reason.** In `Handle`:
+- [x] **Step 3: Raising the reason.** In `Handle`:
   - a match with a stronger reason, at equal priority, raises it (`Elevate`); a higher priority upgrades as before;
   - a joiner or recruit who `HasSeenRuby` raises a problem job to an attack, naming him in the log;
   - an attack makes every member wary.
 
-- [ ] **Step 4: Members read the job.** `SearchingState` in a job:
+- [x] **Step 4: Members read the job.** `SearchingState` in a job:
   - **Gather:** he holds and faces the spot.
   - **Go:** he walks to the spot's area (Search Reach, the travel limit still applies). On reaching it, being blocked or having no path (one warning), he faces the spot, notes his sweep's base, tells `Intel.NoteArrived`, and holds while the others come.
   - **Look and Search:** a member who has arrived sweeps for the step's duration; one still walking carries on, then joins the sweep.
@@ -100,7 +100,9 @@
   - **Done:** `Finished`.
   - An upgrade retargets members through `FollowJob`, which resets their arrival. An elevation at the same place doesn't.
 
-- [ ] **Step 5: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-authored-by line.
+- [x] **Step 5: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-authored-by line.
+
+  **Built differently.** An elevation at the same place doesn't re-plan anyone: `GroupJob.Upgrade` returns whether it restarted, and only then are members retargeted. A job's `Reason` and `Priority` are read through by `SearchingState`, so a member never holds a stale copy. A check that ends with an attack reason logs "finds nothing, but stays wary" and not "all clear", since everyone on it goes aggressive. Raising a reason makes every member wary at once. `Investigate` still latches wary for the officer who sensed an attack, taken or not (piece 4's rule), which is now consistent because `Handle` raises the job he joins. A job-less search (a glance, or after a lost fight) is unchanged: Task 8 moves the lost-fight search onto jobs.
 
 - [ ] **Step 6: Play-test gate (the user).** No Inspector work (Gather Time appears on `Intel`). In play, with three or more officers in a room:
   - **Together:** a thud sends a job of up to three. They all look for about 1.5 s, gesture at once, and all finish on the same frame. The Console shows the job's steps once, and `Intel`'s gizmo shows the step.

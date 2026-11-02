@@ -41,9 +41,9 @@ public class GroupJob
     public int Priority { get; private set; }
     /// <summary>The spot the job is about: where a sound came from, or where a body lies.</summary>
     public Vector3 Point { get; private set; }
-    public JobStep Step { get; internal set; }
+    public JobStep Step { get; private set; }
     /// <summary>Seconds in the current step.</summary>
-    public float StepElapsed { get; internal set; }
+    public float StepElapsed { get; private set; }
     public int Cap { get; }
 
     public IReadOnlyList<EnemyController> Members => _members;
@@ -60,6 +60,8 @@ public class GroupJob
     /// </summary>
     public bool Recruiting => !IsFull && (Kind == JobKind.Search ? Step != JobStep.Done : Step is JobStep.Gather or JobStep.Go);
 
+    internal void Tick(float dt) => StepElapsed += dt;
+
     internal void Add(EnemyController who)
     {
         if (_members.Contains(who)) return;
@@ -73,18 +75,60 @@ public class GroupJob
         if (who.Job == this) who.Job = null;
     }
 
-    /// <summary>Something more serious came up at this job's place: the whole job turns to it, which can make a Check into a Search.</summary>
-    internal void Upgrade(Vector3 point, StimulusResponse reason, int priority, JobKind kind)
+    internal void SetStep(JobStep step)
     {
-        Point = point;
+        Step = step;
+        StepElapsed = 0f;
+    }
+
+    /// <summary>
+    /// The first member has reached the spot: the job moves on from Go to its look or its search.
+    /// False when it wasn't going, which is how a late arrival, or a second one, does nothing.
+    /// </summary>
+    internal bool NoteArrived()
+    {
+        if (Step != JobStep.Go) return false;
+        SetStep(Kind == JobKind.Check ? JobStep.Look : JobStep.Search);
+        return true;
+    }
+
+    /// <summary>
+    /// Raises the reason to an attack and never lowers it: whatever one member knows is known to the
+    /// team, and a team that has been told Ruby may be here doesn't forget it because a later sound
+    /// was quieter. True when it rose.
+    /// </summary>
+    internal bool Elevate(StimulusResponse reason)
+    {
+        if (reason <= Reason) return false;
         Reason = reason;
-        Priority = priority;
-        if (kind == JobKind.Search && Kind == JobKind.Check)
-        {
-            Kind = JobKind.Search;
-            Step = JobStep.Go;
-            StepElapsed = 0f;
-        }
+        return true;
+    }
+
+    /// <summary>The first step a job takes: a check of several gathers first, a lone one or a search goes straight there.</summary>
+    internal void Restart() => SetStep(Kind == JobKind.Check && Count > 1 ? JobStep.Gather : JobStep.Go);
+
+    // Closer than this is the same place: the walk carries on, so a louder sound on the spot doesn't send everyone back to start.
+    private const float SamePlace = 1f;
+
+    /// <summary>
+    /// Something more serious came up at this job's place: the reason and priority rise (never fall)
+    /// and it can make a Check into a Search. When the place moves, or it becomes a Search, the job
+    /// starts over from its first step and returns true so its members re-plan their walk; at the
+    /// same place it returns false and the job carries on as it was.
+    /// </summary>
+    internal bool Upgrade(Vector3 point, StimulusResponse reason, int priority, JobKind kind)
+    {
+        bool moved = PathGrid.FlatDistance(Point, point) > SamePlace;
+        bool becomesSearch = kind == JobKind.Search && Kind == JobKind.Check;
+
+        Point = point;
+        Elevate(reason);
+        if (priority > Priority) Priority = priority;
+        if (becomesSearch) Kind = JobKind.Search;
+
+        if (!moved && !becomesSearch) return false;
+        Restart();
+        return true;
     }
 
     public override string ToString() => $"job #{Id} ({Kind}, {Reason} at priority {Priority}, {_members.Count}/{Cap})";
