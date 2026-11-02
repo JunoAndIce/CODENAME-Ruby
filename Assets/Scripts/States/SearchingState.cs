@@ -13,8 +13,8 @@ public enum SearchStep { Walk, Look, StandDown, Done }
 /// </summary>
 public class SearchingState : EnemyStateBase
 {
-    // A search from Aggro outranks every map row, so a sound can't pull him off a lost player.
-    public const int FromAggroPriority = 100;
+    // A search from Aggro outranks every map row (one above the top of the 1 to 5 scale), so a sound can't pull him off a lost player.
+    public const int FromAggroPriority = BehaviourMap.MaxPriority + 1;
 
     private Vector3 _target;
     private StimulusResponse _reason;

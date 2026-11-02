@@ -479,9 +479,11 @@ through the player never slows the walk.
   his feet is sensed by sight and a stale record would make him thud at every wall he bumps.
   Officers react to an origin, not to where a thrown body landed.
 - **The behaviour map** (`BehaviourMap`, an asset assigned to `Intel`'s Default Map). One row per
-  `StimulusKind`: a **priority** and a **response**: Ignore, SearchForProblem or SearchForAttack.
-  Defaults: body and fast object 50, gunshot 40 (attack); impact and whip landing 30, moving
-  object and loose gun 20 (problem). A kind with no row, or a missing map, logs one warning and
+  `StimulusKind`: a **priority**, 1 to 5, and a **response**: Ignore, SearchForProblem or
+  SearchForAttack. Defaults: body and fast object 5, gunshot 4 (attack); impact and whip landing 3,
+  moving object and loose gun 2 (problem). A priority outside 1 to 5 (an asset saved on the old
+  10s-and-up scale) warns once and is held to the range; the component's Reset refills the
+  defaults. A kind with no row, or a missing map, logs one warning and
   is treated as no reaction. Problem and Attack differ in how he searches (see **Searching**), and
   Investigate can upgrade a Problem to an Attack.
 - **Senses** (`EnemySenses`, one per officer, scanned from `FixedUpdate` every Scan Interval at a
@@ -502,7 +504,8 @@ through the player never slows the walk.
   Grabbed, Ragdoll, Dead, Rearm and Aggro. From Idle or Patrol it **stages** the target (`Stage`)
   and enters Searching. Already searching, it **retargets** (`Retarget`) only for a *strictly
   higher* priority: equal or lower is ignored, which is what stops flicker. A search from Aggro has
-  priority 100, above every map row, so a sound can't pull him off a lost player. The state runs
+  priority 6 (`SearchingState.FromAggroPriority`, one above the top of the scale), above every map
+  row, so a sound can't pull him off a lost player. The state runs
   **steps**, `Walk`, `Look`, `StandDown` and `Done`, and a retarget starts them over:
   - **Walk:** to an *area* of Search Reach (1.5 m) round the spot, at Search Speed, with the same
     area move patrol uses. Officers of equal weight block each other, so two sent to one spot used

@@ -105,6 +105,7 @@ a { color: var(--accent); }
   <h1>CODENAME: Ruby</h1>
   <p class="lede">A top-down action game in the style of Hotline Miami, built on Unity's physics engine so every kill can be improvised from whatever is in the room.</p>
   <p class="meta">Unity 6000.5.10f1 · URP · New Input System. Values match the editor as of 12 October 2026. Items marked <span class="planned">Planned</span> are design intent and are not in the build yet.</p>
+  <p>Updating Artifact Link: <a href="#">https://claude.ai/artifact/UyTAHHiqQQ5PpZRhiKMaqN</a></p>
 </header>
 
 <nav class="toc" aria-label="Contents">
@@ -249,7 +250,7 @@ a { color: var(--accent); }
     <tr><td>Gunshot / Whip landing loudness</td><td class="where">StimulusRules asset</td><td class="num">25 m / 6 m</td></tr>
     <tr><td>Impact loudness: at Notice Speed / per m/s above it / most</td><td class="where">StimulusRules asset</td><td class="num">10 m / 0.5 m / 20 m</td></tr>
     <tr><td>Impact Cooldown (one thud per body)</td><td class="where">StimulusRules asset</td><td class="num">0.25 s</td></tr>
-    <tr><td>Priorities: body, fast object / gunshot / impact, whip landing / moving object, loose gun</td><td class="where">BehaviourMap asset</td><td class="num">50 / 40 / 30 / 20</td></tr>
+    <tr><td>Priorities (1 to 5): body, fast object / gunshot / impact, whip landing / moving object, loose gun</td><td class="where">BehaviourMap asset</td><td class="num">5 / 4 / 3 / 2</td></tr>
     <tr class="group"><td colspan="3">Weight table</td></tr>
     <tr><td>Tiny / Small / Medium</td><td class="where">WeightTable asset</td><td class="num">10 / 20 / 30 kg</td></tr>
     <tr><td>Large / Huge</td><td class="where">WeightTable asset</td><td class="num">40 / 50 kg</td></tr>
@@ -541,7 +542,7 @@ a { color: var(--accent); }
 <p>Sight isn't all he has. Officers hear, notice and remember, and they share what they know, a little late.</p>
 <ul>
   <li><strong>Sounds travel along the floor.</strong> A gunshot carries 25 m, the whip landing 6 m, and an impact 10 m, growing with how hard the hit was up to 20 m. It's measured along the walkable floor, so it doesn't carry through a wall, or to another floor.</li>
-  <li><strong>What a sound is worth.</strong> Each kind has a priority: a body or a fast object 50, a gunshot 40, an impact or the whip landing 30, a slow-moving object or a loose gun 20. He treats a body, a fast object and a gunshot as an attack, and the rest as a problem to check. He ignores his own shot. An officer who is already fighting, rearming, held, down or dead ignores everything.</li>
+  <li><strong>What a sound is worth.</strong> Each kind has a priority from 1 to 5: a body or a fast object 5, a gunshot 4, an impact or the whip landing 3, a slow-moving object or a loose gun 2. He treats a body, a fast object and a gunshot as an attack, and the rest as a problem to check. He ignores his own shot. An officer who is already fighting, rearming, held, down or dead ignores everything.</li>
   <li><strong>A thrown body leads back to Ruby.</strong> Anything she holds on the chain remembers where she stood, for 5 seconds after she lets go, and passes that on to whatever it hits. An officer who sees it fly, or hears it hit, goes to where it was thrown from, not where it landed.</li>
   <li><strong>He notices what moves and what lies there.</strong> Within 12.5 m, in clear sight, a body moving at 4 m/s or more is worth a glance and one at 15 m/s or more is cause for alarm. An officer standing and walking never counts, only one held on the chain or tumbling. Corpses within 12.5 m in his view, and loose guns if he's armed, are noticed the same way. A body or gun the squad has never reported goes on its books and he goes to check it. One the squad already knows about he only <strong>glances</strong> at: he faces it, looks for a moment from where he stands without walking to it, and is wary from then on. Each moving body is reacted to once every 5 seconds.</li>
   <li><strong>A thud can be an attack.</strong> A sound that's only a problem to check (an impact, a moving object) is searched for as an attack instead when the officer has seen Ruby, or when the newest news of her is under 15 seconds old and within 20 m of it.</li>

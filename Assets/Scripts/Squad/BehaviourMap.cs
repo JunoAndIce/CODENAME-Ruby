@@ -17,12 +17,16 @@ public enum StimulusResponse
 [CreateAssetMenu(fileName = "BehaviourMap", menuName = "Ruby/Behaviour Map")]
 public class BehaviourMap : ScriptableObject
 {
+    /// <summary>Priorities run from 1 (least) to 5 (most). A search from Aggro sits one above, so it outranks every row.</summary>
+    public const int MinPriority = 1;
+    public const int MaxPriority = 5;
+
     [Serializable]
     public struct Row
     {
         public StimulusKind Kind;
-        [Tooltip("Higher outranks lower. A search only gives way to a higher number.")]
-        public int Priority;
+        [Tooltip("1 to 5. Higher outranks lower. A search only gives way to a higher number; an equal or lower one only distracts him.")]
+        [Range(MinPriority, MaxPriority)] public int Priority;
         public StimulusResponse Response;
     }
 
@@ -30,14 +34,26 @@ public class BehaviourMap : ScriptableObject
 
     // Not serialized: one warning per kind per session, not one per frame.
     private readonly HashSet<StimulusKind> _warnedMissing = new();
+    private readonly HashSet<StimulusKind> _warnedRange = new();
 
-    /// <summary>Looks up the row for a kind. A kind with no row is ignored, and warned about once.</summary>
+    /// <summary>
+    /// Looks up the row for a kind. A kind with no row is ignored, and warned about once. A priority
+    /// outside 1 to 5 (an asset saved before the scale was 1 to 5) is warned about once and held to
+    /// the range, because a row above the top would outrank the search from Aggro and pull an
+    /// officer off a lost player.
+    /// </summary>
     public bool TryGetRow(StimulusKind kind, out Row row)
     {
         foreach (Row candidate in _rows)
         {
             if (candidate.Kind != kind) continue;
             row = candidate;
+            if (row.Priority < MinPriority || row.Priority > MaxPriority)
+            {
+                if (_warnedRange.Add(kind))
+                    Debug.LogWarning($"Behaviour Map '{name}': {kind} has priority {row.Priority}, outside {MinPriority} to {MaxPriority}. It is held to the range for now; set it in the Inspector, or use the component's Reset to refill the defaults.", this);
+                row.Priority = Mathf.Clamp(row.Priority, MinPriority, MaxPriority);
+            }
             return true;
         }
 
@@ -51,17 +67,18 @@ public class BehaviourMap : ScriptableObject
     {
         _rows = new List<Row>
         {
-            new() { Kind = StimulusKind.Body, Priority = 50, Response = StimulusResponse.SearchForAttack },
-            new() { Kind = StimulusKind.FastObject, Priority = 50, Response = StimulusResponse.SearchForAttack },
-            new() { Kind = StimulusKind.Gunshot, Priority = 40, Response = StimulusResponse.SearchForAttack },
-            new() { Kind = StimulusKind.Impact, Priority = 30, Response = StimulusResponse.SearchForProblem },
-            new() { Kind = StimulusKind.WhipLanding, Priority = 30, Response = StimulusResponse.SearchForProblem },
-            new() { Kind = StimulusKind.MovingObject, Priority = 20, Response = StimulusResponse.SearchForProblem },
-            new() { Kind = StimulusKind.LooseGun, Priority = 20, Response = StimulusResponse.SearchForProblem },
+            new() { Kind = StimulusKind.Body, Priority = 5, Response = StimulusResponse.SearchForAttack },
+            new() { Kind = StimulusKind.FastObject, Priority = 5, Response = StimulusResponse.SearchForAttack },
+            new() { Kind = StimulusKind.Gunshot, Priority = 4, Response = StimulusResponse.SearchForAttack },
+            new() { Kind = StimulusKind.Impact, Priority = 3, Response = StimulusResponse.SearchForProblem },
+            new() { Kind = StimulusKind.WhipLanding, Priority = 3, Response = StimulusResponse.SearchForProblem },
+            new() { Kind = StimulusKind.MovingObject, Priority = 2, Response = StimulusResponse.SearchForProblem },
+            new() { Kind = StimulusKind.LooseGun, Priority = 2, Response = StimulusResponse.SearchForProblem },
         };
     }
 
     // Two rows for one kind would make the lookup depend on order, so the second is called out.
+    // A priority outside the scale is called out here too, where the asset is being edited.
     private void OnValidate()
     {
         var seen = new HashSet<StimulusKind>();
@@ -69,6 +86,8 @@ public class BehaviourMap : ScriptableObject
         {
             if (!seen.Add(row.Kind))
                 Debug.LogWarning($"Behaviour Map '{name}' lists {row.Kind} more than once. The first row wins.", this);
+            if (row.Priority < MinPriority || row.Priority > MaxPriority)
+                Debug.LogWarning($"Behaviour Map '{name}': {row.Kind} has priority {row.Priority}, outside {MinPriority} to {MaxPriority}.", this);
         }
     }
 }
