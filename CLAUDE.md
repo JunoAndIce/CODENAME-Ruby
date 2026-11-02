@@ -503,9 +503,10 @@ through the player never slows the walk.
   within Attack Near Radius (20 m) of the point, then makes him wary if it's an attack. It ignores
   Grabbed, Ragdoll, Dead, Rearm and Aggro. From Idle or Patrol it **stages** the target (`Stage`)
   and enters Searching. Already searching, it **retargets** (`Retarget`) only for a *strictly
-  higher* priority: equal or lower is ignored, which is what stops flicker. A search from Aggro has
+  higher* priority: an equal or lower one never retargets, which is what stops flicker, but it is
+  **noticed** (a distraction, below). A search from Aggro has
   priority 6 (`SearchingState.FromAggroPriority`, one above the top of the scale), above every map
-  row, so a sound can't pull him off a lost player. The state runs
+  row, so a sound can't swap his target while he's lost a player, though it still distracts him. The state runs
   **steps**, `Walk`, `Look`, `StandDown` and `Done`, and a retarget starts them over:
   - **Walk:** to an *area* of Search Reach (1.5 m) round the spot, at Search Speed, with the same
     area move patrol uses. Officers of equal weight block each other, so two sent to one spot used
@@ -522,6 +523,17 @@ through the player never slows the walk.
     false he faces the point and looks from where he stands: that is the glance.
   The search is one officer's. A checker with followers, searching a room and checking behind
   things are later pieces of `docs/specs/2026-10-28-enemy-states-0.2.md`.
+- **Distraction.** `Investigate` while he is in Searching at an equal or lower priority calls
+  `Distract`, which returns true (a taken reaction). He turns toward the disturbance
+  (`SearchingState.Distract`, `FaceToward`) and the search's timers and walk wait for Distraction
+  Time (1 s), then carry on where they were; it never changes his target, reason or priority. Each
+  officer counts his own (`EnemyMemory.NoteDistraction`): one within Distraction Gap (2 s) of the
+  last counted is the same disturbance (a tumbling thrown body thuds about ten times, and a firefight
+  is a run of shots), and each is forgotten after Distraction Memory (12 s). At Distraction Threshold
+  (3) **the jig is up**: the count clears, he is taught the disturbance's origin as a Heard fact
+  (unless it was a body or gun, `isFind`, which says nothing about Ruby) and `Alert()`s into Aggro.
+  A search from Aggro (priority 6) is outranked by nothing, so every sound distracts a lost-fight
+  searcher. Idle and patrolling officers aren't distractible: they go and check.
 - **Debug overlays**, all off by default and only in the editor: `PathGrid`'s Always Show Grid and
   Show Open Cells draw the whole floor, and `Intel`'s Show Sound Range draws each recent sound's
   reach (the cells its flood covered, shaded by distance, beside the circle the same loudness

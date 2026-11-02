@@ -84,7 +84,7 @@
 
 - [x] **Step 5: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-authored-by line.
 
-- [ ] **Step 6: Play-test gate (the user).** No Inspector work. In play, watching the Console:
+- [x] **Step 6: Play-test gate (the user).** No Inspector work. In play, watching the Console:
   - **A new gunshot during a search:** an officer searching a body (or after a lost fight) turns toward each gunshot for about a second, then carries on, and the search isn't restarted.
   - **Things flying past:** a thrown object passing a searching officer makes him look, once, not on every thud.
   - **A bottle at a corpse-searcher:** it distracts him without stopping the search.
@@ -99,6 +99,8 @@
 
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, this plan.
 
-- [ ] **Step 1: CLAUDE.md.** The **Searching** bullet: an equal or lower priority is a distraction, not an ignore. Say what it does, the merge gap, the expiry, the threshold and the jig. Add the Distraction fields to the tuning it names.
-- [ ] **Step 2: The manual.** The tuning table gains the four values. The Searching section says an officer already searching looks at what he notices and goes to Aggro on the third. Rebuild the PDF with headless Chrome, and check that it wrote.
-- [ ] **Step 3: Plan.** Tick this plan's steps and commit these files only.
+- [x] **Step 1: CLAUDE.md.** The **Searching** bullet: an equal or lower priority is a distraction, not an ignore. Say what it does, the merge gap, the expiry, the threshold and the jig. Add the Distraction fields to the tuning it names.
+- [x] **Step 2: The manual.** The tuning table gains the four values. The Searching section says an officer already searching looks at what he notices and goes to Aggro on the third. Rebuild the PDF with headless Chrome, and check that it wrote.
+- [x] **Step 3: Plan.** Tick this plan's steps and commit these files only.
+
+  **Played (2026-11-02).** The user confirmed distractions work for now and will be polished later. Known roughness to revisit then: the 1 s pause and the three-in-12 s jig are first guesses, a firefight of distinct shots more than 2 s apart can still trip the jig, and there is no head turn or animation, only a body turn.
