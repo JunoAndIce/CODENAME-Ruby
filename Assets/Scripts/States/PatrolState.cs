@@ -42,7 +42,7 @@ public class PatrolState : EnemyStateBase
 
     // Rejoin where we are, not at point 0, after a chase or search pulled us away. The walk
     // there starts a fresh history: any point may follow it. Also what a change of route does, so
-    // an alert that swaps his route puts him on the nearest point of the new one.
+    // becoming aggressive puts him on the nearest point of the new route.
     private void Restart()
     {
         _route = Route;
@@ -55,6 +55,9 @@ public class PatrolState : EnemyStateBase
         _holdReported = false;
         _reported.Clear();
         if (Enemy.HasActiveRoute) _index = Route.NearestIndex(Enemy.transform.position);
+
+        if (Enemy.IsAggressive && Enemy.HasActiveRoute)
+            DebugLog.Info($"{Enemy.name} starts his aggressive patrol on {(ReferenceEquals(Route, Enemy.AggressiveRoute) ? "his Aggressive route" : "his Safe route")}, at {PointName(_index)}, speed {Enemy.CurrentPatrolSpeed:0.##}.", Enemy);
     }
 
     public override void Tick()

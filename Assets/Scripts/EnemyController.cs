@@ -244,6 +244,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private bool _seesPlayer;
     private bool _wasSeeing;
     private float _nextSpeak;
+    private bool _wasAggressive;
 
     private void Awake()
     {
@@ -332,7 +333,22 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     {
         _state.Tick();
         UpdateKnowledge();
+        LogBecameAggressive();
         DebugDrawPath();
+    }
+
+    // IsAggressive is derived, so nothing "enters" it; this catches the moment it turns true, once,
+    // and says why and which route he'll walk. It never goes false again.
+    private void LogBecameAggressive()
+    {
+        bool aggressive = IsAggressive;
+        if (aggressive && !_wasAggressive)
+        {
+            string why = Memory.HasSeenRuby ? "he has seen Ruby" : "he has been sent after her";
+            string route = HasAggressiveRoute ? "his Aggressive route" : HasActiveRoute ? "his Safe route (he has no Aggressive one)" : "no route: he stays at his post, alert";
+            DebugLog.Info($"{name} is now aggressive: {why}. From here he patrols at {_aggressiveSpeedFactor:0.##}x speed on {route}, looking around at each point.", this);
+        }
+        _wasAggressive = aggressive;
     }
 
     private void FixedUpdate()
