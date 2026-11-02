@@ -84,8 +84,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private PatrolRoute _safeRoute = new();
     [Tooltip("Walked instead of the Safe route once he's aggressive: after he has seen Ruby or been sent after her (an attack search, or a glance at a body). Edit it with the same Scene-view handles (the toggle below picks which route they edit). Empty: a patroller keeps walking his Safe route, and an idle officer stays at his post, alert.")]
     [SerializeField] private PatrolRoute _aggressiveRoute = new();
-    [Tooltip("How much faster he patrols once he's aggressive, as a multiple of Patrol Speed. Applies to whichever route he walks, and to an idle officer walking back to his post.")]
-    [SerializeField, Min(1f)] private float _aggressiveSpeedFactor = 1.25f;
+    [Tooltip("Patrol speed once he's aggressive, as a multiple of Patrol Speed: above 1 hurries him, below 1 slows him to a wary creep (0.5 is half speed). Applies to whichever route he walks, and to an idle officer walking back to his post. At the prefab's Patrol Speed of 7 m/s, 1.25 is 8.75 m/s and 0.5 is 3.5 m/s.")]
+    [SerializeField, Range(0.1f, 3f)] private float _aggressiveSpeedFactor = 1.25f;
     [Tooltip("An idle officer this close to his post, in metres, counts as at it. Where he starts is his post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave him 'away' from a post he has reached.")]
     [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
     [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
@@ -346,7 +346,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         {
             string why = Memory.HasSeenRuby ? "he has seen Ruby" : "he has been sent after her";
             string route = HasAggressiveRoute ? "his Aggressive route" : HasActiveRoute ? "his Safe route (he has no Aggressive one)" : "no route: he stays at his post, alert";
-            DebugLog.Info($"{name} is now aggressive: {why}. From here he patrols at {_aggressiveSpeedFactor:0.##}x speed on {route}, looking around at each point.", this);
+            DebugLog.Info($"{name} is now aggressive: {why}. From here he patrols at {_aggressiveSpeedFactor:0.##}x ({CurrentPatrolSpeed:0.##} m/s, from {_patrolSpeed:0.##}) on {route}, looking around at each point.", this);
         }
         _wasAggressive = aggressive;
     }
