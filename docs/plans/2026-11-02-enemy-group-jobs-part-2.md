@@ -1,0 +1,199 @@
+# Enemy Group Jobs, part 2 (Enemy States 0.2, piece 5A revised: Tasks 3 onward)
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Each task ends in a play-test gate the user runs, so stop after each task's review and wait for them. Never hand-edit `.prefab`, `.unity` or `.asset` YAML: scene and asset work is the user's, done in the Inspector.
+
+**Goal:** Officers on a job act as one team and end it as one. They share a single outcome and a single reason, which can rise to an attack search but never fall. Free officers fill open jobs, jobs about the same place merge, an officer who has been sent to look three times goes after Ruby, an officer who got up from a grab or a throw raises the job near him, and a flying pistol or officer is judged by what it is.
+
+**Why this plan exists:** `2026-10-30-enemy-group-jobs.md` Tasks 1 and 2 are built (word of mouth, the job in the pool). Its Tasks 3 to 5 are **superseded by this plan** and stay unticked there. The user's play-test of Task 2 (2026-11-02) found officers on one job disagreeing: one searched and said all clear while another went to an aggressive patrol. Task 2 left each member running his own timers and latching wary on his own reading. The user also gave four design notes, recorded below.
+
+**Architecture:**
+- **The job owns the outcome.** `Intel`'s clock moves each job through its steps. Members read the step and do their part, and everyone finishes when the job does.
+- **A job's reason only rises.** Anything a member knows can raise it from a problem to an attack, and an attack job makes every member wary.
+- **`EnemyMemory`** counts the times he has been sent to look.
+- **`Intel`** fills open jobs from the free officers near their lead and merges jobs about the same place.
+- **`EnemySenses`** judges a moving body by what it is as well as how fast it goes.
+- **`SearchingState`** reads its job: it holds while the team gathers, walks to the spot, looks, and stands down together.
+- **`Ruby.Core`, `Ruby.Pathing` and the other reusable assemblies are untouched.**
+
+**Tech Stack:** Unity 6000.5.10f1, C# 9 (.NET Standard 2.1). Assemblies touched: `Ruby.Game` only.
+
+**Spec:** `docs/specs/2026-10-28-enemy-states-0.2.md`, piece 5 (check together, search together), plus piece 2's Memory bullets (an officer who has seen her treats a disturbance as an attack). The user's four notes below extend it. Read `2026-10-30-enemy-group-jobs.md` first: its Global Constraints and Review Focus still apply.
+
+## The user's decisions (2026-11-02)
+
+1. **Filling and merging.**
+   - Free officers (patrolling, or on a job of one) join open jobs to fill them to three.
+   - **When:** every Intel Interval (1 s), whenever they are free.
+   - **Merge:** two jobs about the same area become one. **The older job stays.** The extras start their own job at another spot if it is an attack, and go back to patrol if it is a problem.
+2. **Individual memory.** Each officer remembers every time he is sent to look or search. After three, he goes to an aggressive patrol: two impacts ending in all clear, and the third becomes a search for an attack. **The count never expires within a level.**
+3. **Recovered officers.** An officer who starts a search from Aggro (including one who got up after a grab) joins a job started nearby, or raises that job to a search for an attack for every member. **Any officer who starts a search from Aggro** does this, **once in the area he is searching in.**
+4. **Moving objects.** A moving pistol is treated as a loose pistol, a moving officer as a corpse. **The stronger of the two rows wins:** the row for what it is or the row for how fast it moves.
+5. **Checks follow the spec** (from the earlier plan): a checker looks for Look Time, and only a find (a body or loose gun) becomes a full Search Duration search.
+
+## Global Constraints
+
+- **Values that are my calls** (put in tooltips, retuned in play):
+  - Gather Time 0.75 s: the team turns toward the spot before anyone goes.
+  - Sent To Look Threshold 3, on the officer.
+  - Elsewhere Distance: an extra's new spot lies between Job Match Radius + 2 m and 2.5 × Job Match Radius from the merged job's place.
+  - Follow Speed Factor 0.8, Follow Distance 3 m, Search Area Radius 6 m (from the old plan).
+- **My readings of the notes, each a rule and not a fallback:**
+  - **A job's reason only rises.** Whatever one member knows raises it for all: a member sensing an attack, a recruit who has seen Ruby, his third look, a recovered officer's alert. An attack job makes every member wary, so they end together.
+  - **Already aggressive is not a disagreement.** An officer who was aggressive before the job (he has seen Ruby, or was sent after her on an earlier job) goes back to his Aggressive route afterward whatever the job decided. That is piece 4's "never goes back". A recruit who has seen Ruby raises the job; one who is only wary does not.
+  - **The third look raises the whole job,** so the team agrees on what it was doing.
+  - **The count** goes up each time he is put on a job he was not already on: he starts one, joins, is recruited, is filled in, or is merged out. A retarget of the same job, a distraction and a glance don't count.
+  - **A fill** runs each interval for each open job with room: the lead calls in the free officers within Speech Range along the floor, nearest first, as at the start.
+  - **Merging keeps the older job's members first,** then the younger's, up to the cap.
+  - **An extra from a merge** is dismissed to patrol when the job is a problem. When it is an attack he starts a Search job at a spot of the stated distance, tried three times before he gives up and returns to patrol with a log line.
+  - **A lost-fight team past the cap goes to Patrol Aggressive,** as the spec has it, and does not start its own job.
+  - **"Once in the area"** means within Job Match Radius of where he last raised a job. He can do it again after he searches somewhere else.
+  - **A moving gun or officer is not a find.** Its origin is where Ruby threw it from, so it stays a check at that origin. A moving officer is a corpse alive or dead.
+- **Sight is never masked, no silent fallbacks, states never name each other, the two-axis rule, one scratch flood at a time, conventions, verification, and the working tree rule** are as in `2026-10-30-enemy-group-jobs.md`. The working tree holds changes that aren't this plan's: `PlayerController.cs`, `officer.prefab`, `Pistol.prefab`, `SampleScene.unity`, `BehaviourMap.asset`, `StimulusRules.asset` and `docs/plans/Enemy knowledge notes.md`. Never stage, revert or edit them.
+
+## What waits for later pieces (interim rules)
+
+- **Patrol together** (leaders, groups, breaking off) is part B, and still needs a trigger now the level alert is gone.
+- **A fight is not a job** (piece 6): word of mouth still alerts everyone in earshot with no main-squad cap.
+- **Searching the area is roaming** within Search Area Radius, not rooms and hiding spots (pieces 7 and 8).
+- **Behaviour maps per room** (piece 7) will want an Ignore row for a loose gun to cover a flying one too. Until then the map is one table.
+- **Gestures and looks are a body turn and a pause,** until animations.
+
+## Review Focus
+
+1. **One outcome.** Every member of a job finishes on the same frame. None goes aggressive that the job didn't make wary, except one already aggressive (the reading above).
+2. **A reason that falls.** Nothing may lower a job's reason or priority, and an upgrade to a new place restarts the walk, but an elevation at the same place doesn't.
+3. **A job with nobody in it, or only dismissed officers,** closes and leaves nothing. A merge never leaves a member on two jobs.
+4. **Fill and merge per interval.** Each costs at most one flood per open job, read before anything else floods, and never churns: a merged-out extra's new job must not merge straight back.
+5. **The count.** It counts assignments, not retargets, and the third look cannot fire twice for one assignment.
+6. **Recovered officers.** The alert is once per area, must not re-run on every Aggro to Searching flip, and an officer who gets up knowing nothing still searches where he stands.
+7. **What it is.** A moving gun or officer must not make a stimulus of the officer on his own feet, and the per-field maximum must never downgrade a row (a speed row of Attack beaten by an Ignore).
+
+---
+
+### Task 3: One outcome per job
+
+**Files:**
+- Modify `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/Squad/Intel.cs`
+- Modify `Assets/Scripts/States/SearchingState.cs`, `Assets/Scripts/EnemyController.cs`
+
+**Interfaces**
+
+- **Produces, in `GroupJob`:** `internal SetStep(JobStep)`, `internal NoteArrived()`, `internal Elevate(StimulusResponse)` (raises the reason, never lowers it), and `Upgrade` that restarts the job from its first step only when the place moves more than 1 m or a Check becomes a Search.
+- **Produces, in `Intel`:** `[SerializeField] float _gatherTime` (0.75 s). `Update` advances every open job. `public float StepDuration(GroupJob)`, `public void NoteArrived(GroupJob, EnemyController)`, `Elevate(job, reason, why)`. `Handle` raises the job's reason when a member or a joiner has a stronger one, makes every member wary on an attack, and skips Gather for a Check of one.
+- **The clock:** a Check runs Gather (Gather Time), Go (until the first member reaches the spot), Look (Look Time), StandDown (Stand Down Time), Done. A Search runs Go, Search (Search Duration), Done. Durations come from the lead.
+- **Produces, in `SearchingState`:** a member's role from the job's step. `Finished` is the job being Done. `Reason` reads the job's. A job-less search (a glance, a lost-fight search) keeps its own steps as before.
+
+- [ ] **Step 1: The job's steps and reason.** The `GroupJob` members above, with summaries saying the reason only rises and why an upgrade at the same place must not restart the walk.
+
+- [ ] **Step 2: The clock.** `Intel.Update` advances each job. Every step change logs a line naming the job and the step, and the Check's all-clear logs once, for the job, not once per member.
+
+- [ ] **Step 3: Raising the reason.** In `Handle`:
+  - a match with a stronger reason, at equal priority, raises it (`Elevate`); a higher priority upgrades as before;
+  - a joiner or recruit who `HasSeenRuby` raises a problem job to an attack, naming him in the log;
+  - an attack makes every member wary.
+
+- [ ] **Step 4: Members read the job.** `SearchingState` in a job:
+  - **Gather:** he holds and faces the spot.
+  - **Go:** he walks to the spot's area (Search Reach, the travel limit still applies). On reaching it, being blocked or having no path (one warning), he faces the spot, notes his sweep's base, tells `Intel.NoteArrived`, and holds while the others come.
+  - **Look and Search:** a member who has arrived sweeps for the step's duration; one still walking carries on, then joins the sweep.
+  - **StandDown:** he holds and faces the spot (the gesture).
+  - **Done:** `Finished`.
+  - An upgrade retargets members through `FollowJob`, which resets their arrival. An elevation at the same place doesn't.
+
+- [ ] **Step 5: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-authored-by line.
+
+- [ ] **Step 6: Play-test gate (the user).** No Inspector work (Gather Time appears on `Intel`). In play, with three or more officers in a room:
+  - **Together:** a thud sends a job of up to three. They all look for about 1.5 s, gesture at once, and all finish on the same frame. The Console shows the job's steps once, and `Intel`'s gizmo shows the step.
+  - **A gunshot:** the same check, a look and not a ten-second search, then **everyone is wary**, so they all walk the Aggressive route.
+  - **One who has seen Ruby:** he joins a thud job and the whole job becomes an attack. Nobody says all clear and then splits.
+  - **Already aggressive:** an officer who was aggressive before returns to his Aggressive route afterward even from a thud. That is expected.
+  - **A louder sound at the same place:** the job raises its reason, the walk and look carry on. At another place (a few metres further) it restarts.
+
+---
+
+### Task 4: Checker and followers
+
+**Files:** `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/Squad/Intel.cs`, `Assets/Scripts/States/SearchingState.cs`, `Assets/Scripts/EnemyController.cs`
+
+- [ ] **Step 1: The checker.** The member nearest the spot (flat). He is the only one who walks it in Go. If he leaves, the nearest remaining member takes over, and a job that has only reached Go restarts him from where he is. `GroupJob.Checker`.
+- [ ] **Step 2: Followers.** The others trail him at Search Speed × Follow Speed Factor (0.8, `EnemyController`), stopping within Follow Distance (3 m, `EnemyController`) of him and facing the spot. They use `PathTo` toward the checker, which re-floods only when the goal moves a metre. They hold when he arrives.
+- [ ] **Step 3: Callouts.** `DebugLog.Info` lines: gathering, sending the checker, all clear, found a body. These are the spec's callouts until barks exist.
+- [ ] **Step 4: Compile and commit,** as in Task 3.
+- [ ] **Step 5: Play-test gate (the user).** No Inspector work. Three officers in a room, throw a body past them:
+  - they turn toward the **origin**, one goes there and the other two follow about 3 m behind him;
+  - he looks for 1.5 s, gestures, and everyone goes back;
+  - a checker who is put in Aggro hands the check to the next nearest;
+  - three followers don't cost the frame rate over a long walk.
+
+---
+
+### Task 5: Moving objects are judged by what they are
+
+**Files:** `Assets/Scripts/Squad/EnemySenses.cs`
+
+- [ ] **Step 1: What it is.** In `Consider`, find what the body is: a pistol (a `Gun`), a moving officer (an `EnemyController`, held or tumbling, alive or dead), or something else. Look up the row for each: `LooseGun` for a pistol, `Body` for an officer, and the speed row (`MovingObject` or `FastObject`) as now.
+- [ ] **Step 2: The stronger of the two.** Priority and response are each the higher of the two rows (Ignore is the lowest response, so an Ignore never beats a real one). The log says which row each came from. A moving pistol or officer is **not** a find: its origin is where Ruby threw it from, so it stays a check there.
+- [ ] **Step 3: Compile and commit,** as in Task 3.
+- [ ] **Step 4: Play-test gate (the user).** No Inspector work. In play:
+  - **A pistol flung** at a slow speed is a loose-gun reaction, and a fast one a fast object. The Console shows both rows and the winner.
+  - **A thrown officer,** dead or alive, at any speed that gets noticed, reads as a corpse (priority 5, an attack).
+  - **An officer on his feet** is still never a moving body.
+
+---
+
+### Task 6: Times sent to look
+
+**Files:** `Assets/Scripts/Squad/EnemyMemory.cs`, `Assets/Scripts/EnemyController.cs`, `Assets/Scripts/Squad/Intel.cs`
+
+- [ ] **Step 1: The count.** `EnemyMemory.TimesSentToLook`, and `NoteSentToLook()` returning the count. It never expires. `[SerializeField] int _sentToLookThreshold = 3` on the officer (`Sent To Look Threshold`).
+- [ ] **Step 2: Where it counts.** In `Intel`, whenever an officer is put on a job he wasn't on: start, join, recruit, fill, merge-out. If the count reaches the threshold, the job is raised to an attack, naming him and the count in the log, so he and everyone with him go wary.
+- [ ] **Step 3: Compile and commit,** as in Task 3.
+- [ ] **Step 4: Play-test gate (the user).** No Inspector work. In play:
+  - two impacts that each end in all clear, then a third: the third is logged as raised to an attack, and he finishes on an Aggressive patrol;
+  - a team: the third look raises the whole job, so they all go aggressive together;
+  - distractions and a glance don't move the count.
+
+---
+
+### Task 7: Fill and merge
+
+**Files:** `Assets/Scripts/Squad/Intel.cs`, `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/States/SearchingState.cs`, `Assets/Scripts/EnemyController.cs`
+
+- [ ] **Step 1: Fill.** Each Intel Interval, for each open job that is recruiting and has room, run recruiting again from its lead (one flood per job, read before anything else floods). Free officers join, nearest first.
+- [ ] **Step 2: Merge.** Each interval, any two open jobs whose places are within Job Match Radius merge: the older stays, members in the older's order then the younger's up to the cap, the priority and reason are the higher of the two, the kind is a Search if either is, and the place is that of the higher priority. The younger closes.
+- [ ] **Step 3: Extras.** The members who don't fit: a problem job dismisses them to patrol (`SearchingState.Dismiss`, which finishes his search at once). An attack job starts each extra team on a Search at a spot of Elsewhere Distance (`PathGrid.RandomSpotInArea`, three tries, never within Job Match Radius of another open job), else dismisses him with a log line. Extras that start a team recruit as a lead does.
+- [ ] **Step 4: Compile and commit,** as in Task 3.
+- [ ] **Step 5: Play-test gate (the user).** No Inspector work. In play:
+  - an officer who finishes his own job or is patrolling near an open job with room joins it within about a second;
+  - two jobs started about the same place merge into one of up to three;
+  - the extras of an attack search another spot, and the extras of a problem return to patrol;
+  - nobody ends up on two jobs, and the Intel gizmo shows one job per place.
+
+---
+
+### Task 8: Search together, and recovered officers
+
+**Files:** `Assets/Scripts/Squad/Intel.cs`, `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/Squad/EnemyMemory.cs`, `Assets/Scripts/States/SearchingState.cs`
+
+- [ ] **Step 1: Roam.** In a Search's Search step each member walks random open spots within Search Area Radius (6 m, on `Intel`) of the job's place, looks at each for Look Time, and picks the next, until the job is Done. A run of failed spots ends his part with a log line.
+- [ ] **Step 2: Joining from Aggro.** `Intel.JoinFromAggro(who, point)`, from `SearchingState.Enter` when he enters from Aggro:
+  - **A job within Job Match Radius:** he raises it to an attack (once per area, see below), and joins it if it has room. If it is full, he goes to Patrol Aggressive, as the spec has it.
+  - **None:** he starts a Search for an attack at `point` with him as lead, recruits the free officers near him, and the rest of the fight's officers join as they lose her, up to three.
+- [ ] **Step 3: Once per area.** `EnemyMemory` remembers where he last raised a job. He raises again only when his search is at least Job Match Radius from that place.
+- [ ] **Step 4: Compile and commit,** as in Task 3.
+- [ ] **Step 5: Play-test gate (the user).** No Inspector work. In play:
+  - **A body:** an officer finds a corpse out of sight of three others, and the team searches it by roaming round it for Search Duration, then walks Aggressive.
+  - **Got up:** throw an officer, let him get up beside a thud job. He raises it to an attack for everyone in it, once.
+  - **A lost fight:** five officers lose Ruby. The first three search together, the rest go to Patrol Aggressive.
+  - **No one stuck:** nobody stands in Searching for good.
+
+---
+
+### Task 9: Docs and the end-of-piece review
+
+**Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, `docs/specs/2026-10-28-enemy-states-0.2.md`, this plan and `2026-10-30-enemy-group-jobs.md`.
+
+- [ ] **Step 1: CLAUDE.md.** A Group jobs bullet: kinds and steps, the clock, roles, the cap, matching, merging, filling, the reason that only rises, wary from the job, the count, and the one-flood rule. Update Searching, Senses (what it is), Knowledge (`TimesSentToLook`) and the debug overlays (the jobs gizmo).
+- [ ] **Step 2: The manual.** The tuning table gains Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
+- [ ] **Step 3: Spec and plan.** Spec Progress notes piece 5 part A built, part B pending. Tick this plan's steps and mark `2026-10-30-enemy-group-jobs.md` finished by this plan. Commit these files only.
+- [ ] **Step 4: End-of-piece review, in the background,** over the range both plans added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before part B, in one fix wave.

@@ -141,9 +141,9 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 
 - [x] **Step 7: Compile and commit,** as in Task 1.
 
-  **Built differently.** `Intel` gets only Job Cap and Job Match Radius here: Gather Time and Search Area Radius arrive with the tasks that use them, so no Inspector field sits dead meanwhile. A nested `Hear` (a reaction that emits a sound) gets a list of its own rather than clearing the one being walked. Members of a job share its reason, so two officers sent to one sound no longer differ on problem or attack: only the lead's `ShouldSearchForAttack` decides. `GroupJob.cs` is a new script, so its `.meta` needs committing once Unity has generated it.
+  **Built differently.** `Intel` gets only Job Cap and Job Match Radius here: Gather Time and Search Area Radius arrive with the tasks that use them, so no Inspector field sits dead meanwhile. A nested `Hear` (a reaction that emits a sound)   gets a list of its own rather than clearing the one being walked. Members of a job share its reason, so two officers sent to one sound no longer differ on problem or attack: only the lead's `ShouldSearchForAttack` decides. *(Corrected 2026-11-02: this was wrong. An officer who had seen Ruby upgraded a thud to an attack on his own and latched wary before the squad decided, so he walked off aggressive while the others said all clear. Fixed by the revised plan's Task 3: the job's reason only rises and every member shares it.)* `GroupJob.cs` is a new script, so its `.meta` needs committing once Unity has generated it.
 
-- [ ] **Step 8: Play-test gate (the user).** No Inspector work. Members still search alone for now, so each walks to the spot and looks as in piece 4. In play, with three or more officers in a room:
+  - [x] **Step 8: Play-test gate (the user).** No Inspector work. Members still search alone for now, so each walks to the spot and looks as in piece 4. In play, with three or more officers in a room:
   - **One sound, one job:** a thud near them makes **one** job, the officer who heard first as its lead, with the nearest free officers recruited up to three. The Console and the gizmo show it.
   - **The cap:** a fourth officer in range isn't recruited, and one who hears the same sound leaves it alone.
   - **A second sound near it:** a quieter one is absorbed. A louder one (a gunshot after a thud) upgrades the job, and everyone retargets.
@@ -153,6 +153,8 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 ---
 
 ### Task 3: Check together
+
+> **Superseded (2026-11-02) by `2026-11-02-enemy-group-jobs-part-2.md`, Tasks 3 and 4.** Tasks 3 to 5 below are kept for the reasoning and are no longer to be built from. The revised plan adds one outcome per job and the user's notes on filling, merging, memory, recovered officers and moving objects.
 
 **Files:**
 - Modify `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/Squad/Intel.cs`
