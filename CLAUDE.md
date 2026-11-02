@@ -876,11 +876,12 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
 - `OnDrawGizmosSelected` visualises radii, routes, paths and camera lead. Add gizmos for anything
   spatial you introduce.
 - Comments explain **why**, not what, and often name the failure mode being avoided. Match that.
-- **Playtest logging is off by default.** Chatter (hits, lost sight, the tether's events, what an
-  officer heard and why he searches) goes
-  through `DebugLog.Info` or `TetherLog`, both `[Conditional("RUBY_DEBUG_LOGS")]`. Turn it on by
-  adding `RUBY_DEBUG_LOGS` under Project Settings > Player > Scripting Define Symbols. Without
-  the define the calls compile away, message and all. Pathing can't reference Core, so it gates
+- **Playtest logging is off by default.** Chatter (hits, lost sight, what an officer heard and why
+  he searches) goes through `DebugLog.Info`, `[Conditional("RUBY_DEBUG_LOGS")]`. The tether's
+  events go through `TetherLog`, on its own define, `RUBY_TETHER_LOGS`, because a held tether
+  solves every few steps and drowns the rest. Turn either on by adding its symbol under Project
+  Settings > Player > Scripting Define Symbols; they are independent. Without a define the calls
+  compile away, message and all. Pathing can't reference Core, so it gates
   its one bake line with `#if RUBY_DEBUG_LOGS`. Real problems (a skipped patrol point, a missing
   component) stay `Debug.LogWarning` / `LogError`, always on.
 - Commit messages: imperative subject, body in prose paragraphs explaining reasoning and trade-offs.
