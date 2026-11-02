@@ -82,6 +82,9 @@ public class SearchingState : EnemyStateBase
     {
         _staged = false;
         _distractLeft = 0f;
+        // He's off the search, so off its job: Aggro, a grab, a fall, a death or the search ending.
+        // The one place a job is given up, so it can't be left holding a member who has gone.
+        if (Enemy.Intel != null) Enemy.Intel.Leave(Enemy);
     }
 
     /// <summary>

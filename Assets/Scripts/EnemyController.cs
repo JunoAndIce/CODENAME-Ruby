@@ -322,7 +322,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private void OnDestroy()
     {
-        if (Intel != null) Intel.Unregister(this);
+        if (Intel == null) return;
+        Intel.Leave(this);
+        Intel.Unregister(this);
     }
 
     private void OnEnable() => Health.OnDamaged += HandleDamaged;
@@ -425,8 +427,26 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         {
             if (priority <= Searching.Priority) return Distract(point, reason, priority, isFind);
 
+            // More serious than his search: the squad decides, as a job. A glance (walkThere false)
+            // is his own look from where he stands, and a scene with no Intel (already reported)
+            // has no squad to ask, so both stay a search of his own. A null answer means a job
+            // nearby already has it; that counts as taken, or the motion scan would ask again every sweep.
+            if (walkThere && Intel != null)
+            {
+                Intel.Handle(this, point, reason, priority, isFind);
+                return true;
+            }
+
             Searching.Retarget(point, reason, priority, walkThere);
             DebugLog.Info($"{name} retargets his search to {point}: {reason} at priority {priority}.", this);
+            return true;
+        }
+
+        if (walkThere && Intel != null)
+        {
+            // Idle or patrolling: the squad decides whether this is already being handled, and who goes.
+            // Left to a job nearby is as good as taken, for the reason above.
+            Intel.Handle(this, point, reason, priority, isFind);
             return true;
         }
 
@@ -464,6 +484,45 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     /// <summary>On the chain right now. A death mid-swing reads this to stay held.</summary>
     public bool IsHeld { get; private set; }
+
+    /// <summary>
+    /// The job he is on, or null: a handful of officers dealing with one thing together (GroupJob).
+    /// Only Intel sets it, as it adds and removes members, and SearchingState gives him up on exit.
+    /// </summary>
+    public GroupJob Job { get; internal set; }
+
+    /// <summary>
+    /// Whether the squad may call him onto a job at this priority: he is idle or patrolling, or he is
+    /// searching alone (no job, or a job of one) at a lower priority than this. Never in a fight, down,
+    /// dead or fetching a gun, and never off a team that has two or more.
+    /// </summary>
+    public bool CanJoinJob(int priority)
+    {
+        if (Health.IsDead) return false;
+        if (_state.Current is IdleState or PatrolState) return true;
+        return _state.Current is SearchingState
+            && Searching.Priority < priority
+            && (Job == null || Job.Count == 1);
+    }
+
+    /// <summary>
+    /// Sends him to a job's place for its reason, as a search: staged from Idle or Patrol, a
+    /// retarget if he is already searching. Intel has already put him on the job's member list.
+    /// A search for an attack makes him wary, as any other does.
+    /// </summary>
+    internal void FollowJob(GroupJob job)
+    {
+        if (job.Reason == StimulusResponse.SearchForAttack) Memory.BecomeWary();
+        if (_state.Current is SearchingState)
+        {
+            Searching.Retarget(job.Point, job.Reason, job.Priority, true);
+            return;
+        }
+
+        // Stage before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
+        Searching.Stage(job.Point, job.Reason, job.Priority, true);
+        _state.SetState(Searching);
+    }
 
     public void EnterGrabbed()
     {

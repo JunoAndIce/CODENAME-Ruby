@@ -21,6 +21,12 @@ public class Intel : MonoBehaviour
     [Tooltip("Which stimuli the squad reacts to and how. Without it officers react to no stimulus.")]
     [SerializeField] private BehaviourMap _defaultMap;
 
+    [Header("Group jobs")]
+    [Tooltip("The most officers on one check or search, the lead included. The spec's number is three.")]
+    [SerializeField, Range(1, 6)] private int _jobCap = 3;
+    [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another.")]
+    [SerializeField, Min(0f)] private float _jobMatchRadius = 10f;
+
     [Header("Debug")]
     [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
     [SerializeField] private bool _showSoundRange;
@@ -56,12 +62,30 @@ public class Intel : MonoBehaviour
     private readonly HashSet<Object> _warnedNoHearing = new();
     private readonly HashSet<Object> _warnedSoundNoGrid = new();
     private readonly HashSet<EnemyController> _warnedListenerCantHear = new();
+    private readonly HashSet<EnemyController> _warnedJobNoGrid = new();
+    private readonly HashSet<EnemyController> _warnedJobNoReach = new();
     private float _nextPublish;
+
+    // The open jobs. Live, not published: this is coordination and not knowledge, so two officers who
+    // hear one gunshot in the same frame must find each other's job instead of starting two.
+    private readonly List<GroupJob> _jobs = new();
+    private struct Candidate
+    {
+        public EnemyController Officer;
+        public float Metres;
+    }
+    private readonly List<Candidate> _candidates = new();
+    private readonly List<EnemyController> _listeners = new();
+    private bool _telling;   // Hear is walking _listeners: a nested Hear must use a list of its own
 
     /// <summary>The pool as of the last publish. A new object each time, so one in hand never changes.</summary>
     public IntelSnapshot Published { get; private set; } = IntelSnapshot.Empty;
 
     public float SpeechRange => _speechRange;
+    public int JobCap => _jobCap;
+    public float JobMatchRadius => _jobMatchRadius;
+    /// <summary>The open jobs, live. Read by index: it changes as officers join and leave.</summary>
+    public IReadOnlyList<GroupJob> Jobs => _jobs;
 
     /// <summary>
     /// The behaviour map every officer reads. Null only when the asset is missing, which OnEnable
@@ -190,8 +214,9 @@ public class Intel : MonoBehaviour
     /// <summary>
     /// A sound carries as far as its Loudness, in path metres on its own floor. The flood is made
     /// once per sound and shared by every listener, so it must be read before anything else floods:
-    /// FloodFrom hands back one scratch field that the next flood overwrites. Hearing itself never
-    /// floods, so the distances stay valid through the loop.
+    /// FloodFrom hands back one scratch field that the next flood overwrites. Hearing no longer
+    /// guarantees that: an officer's reaction can recruit others, and recruiting floods. So the
+    /// listeners are collected first, while the field is intact, and told afterwards.
     /// </summary>
     private void Hear(Stimulus stimulus)
     {
@@ -221,6 +246,11 @@ public class Intel : MonoBehaviour
         if (_showSoundRange) RecordSound(stimulus, reach);
         EnemyController sourceOwner = stimulus.Source != null ? stimulus.Source.GetComponentInParent<EnemyController>() : null;
 
+        // A reaction that emits a sound of its own re-enters Hear while the outer call is still
+        // walking its list, so a nested call gets a list of its own and never touches the shared one.
+        bool nested = _telling;
+        List<EnemyController> listeners = nested ? new List<EnemyController>() : _listeners;
+        listeners.Clear();
         foreach (EnemyController listener in _enemies)
         {
             if (listener == sourceOwner || listener.Health.IsDead) continue;
@@ -235,8 +265,166 @@ public class Intel : MonoBehaviour
             if (listenerGrid != grid) continue;
             if (!reach.TryGetDistance(listener.transform.position, out float metres) || metres > stimulus.Loudness) continue;
 
-            listener.Senses.Hear(stimulus);
+            listeners.Add(listener);
         }
+
+        // Told afterwards, on the collected list: a reaction can recruit, and recruiting floods.
+        if (!nested) _telling = true;
+        try
+        {
+            for (int i = 0; i < listeners.Count; i++) listeners[i].Senses.Hear(stimulus);
+        }
+        finally
+        {
+            if (!nested) _telling = false;
+        }
+    }
+
+    /// <summary>
+    /// The one decision for an officer who senses something worth investigating and may act on it
+    /// (Idle, Patrol, or searching at a lower priority). Returns the job he is now in, or null when
+    /// it's left alone. In order:
+    /// 1. **He is on a job.** A more serious thing at its place turns the whole job to it; one
+    ///    elsewhere takes him off it, and he carries on below.
+    /// 2. **An open job is handling this** (its place is within Job Match Radius). A more serious
+    ///    thing upgrades it. If it is still recruiting and has room he joins, and otherwise he
+    ///    leaves it alone: he never just stands there as a second job on the same thing.
+    /// 3. **Nothing is.** He starts a job and becomes its lead, and calls in the free officers near
+    ///    him, nearest first, up to the cap. A find (a body, a loose gun) is already found, so it
+    ///    starts a Search; anything else is a Check, for a checker to go and see.
+    /// Every decision logs a line naming the job, so what the squad did is readable in the Console.
+    /// </summary>
+    public GroupJob Handle(EnemyController who, Vector3 point, StimulusResponse reason, int priority, bool isFind)
+    {
+        JobKind kind = isFind ? JobKind.Search : JobKind.Check;
+
+        GroupJob own = who.Job;
+        if (own != null)
+        {
+            if (priority <= own.Priority) return own;
+            if (Near(own.Point, point))
+            {
+                Upgrade(own, point, reason, priority, kind);
+                DebugLog.Info($"{who.name} upgrades {own}: {reason} at {point}.", who);
+                return own;
+            }
+            Leave(who);
+        }
+
+        GroupJob match = FindMatch(point);
+        if (match != null)
+        {
+            if (priority > match.Priority) Upgrade(match, point, reason, priority, kind);
+            if (match.Recruiting)
+            {
+                match.Add(who);
+                who.FollowJob(match);
+                DebugLog.Info($"{who.name} joins {match}.", who);
+                return match;
+            }
+            DebugLog.Info($"{who.name} leaves {reason} at {point} to {match}: {(match.IsFull ? "it is full" : "it has gone past needing anyone")}.", who);
+            return null;
+        }
+
+        var job = new GroupJob(kind, reason, priority, point, _jobCap);
+        _jobs.Add(job);
+        job.Add(who);
+        who.FollowJob(job);
+        DebugLog.Info($"{who.name} starts {job} at {point}.", who);
+        Recruit(job, who);
+        return job;
+    }
+
+    /// <summary>
+    /// Takes an officer off his job: when he goes to Aggro, is grabbed, ragdolls, dies or is destroyed,
+    /// or finishes. The next member leads if he was the lead, and a job with nobody
+    /// in it closes and leaves nothing behind.
+    /// </summary>
+    public void Leave(EnemyController who)
+    {
+        GroupJob job = who.Job;
+        if (job == null) return;
+
+        job.Remove(who);
+        if (job.Count == 0)
+        {
+            _jobs.Remove(job);
+            DebugLog.Info($"{who.name} leaves {job}; it closes.", who);
+            return;
+        }
+        DebugLog.Info($"{who.name} leaves {job}; {job.Lead.name} leads.", who);
+    }
+
+    private bool Near(Vector3 a, Vector3 b) => PathGrid.FlatDistance(a, b) <= _jobMatchRadius;
+
+    // The nearest open job whose place is within Job Match Radius.
+    private GroupJob FindMatch(Vector3 point)
+    {
+        GroupJob best = null;
+        float bestDistance = float.MaxValue;
+        foreach (GroupJob job in _jobs)
+        {
+            if (job.Step == JobStep.Done) continue;
+            float distance = PathGrid.FlatDistance(job.Point, point);
+            if (distance > _jobMatchRadius || distance >= bestDistance) continue;
+            best = job;
+            bestDistance = distance;
+        }
+        return best;
+    }
+
+    // Every member turns to the new place and reason, so the team never splits on what it's doing.
+    private void Upgrade(GroupJob job, Vector3 point, StimulusResponse reason, int priority, JobKind kind)
+    {
+        job.Upgrade(point, reason, priority, kind);
+        foreach (EnemyController member in job.Members) member.FollowJob(job);
+    }
+
+    // Calls in the free officers within Speech Range of the lead, nearest first, up to the cap.
+    // The flood is read to the end before anyone is moved, because FloodFrom's field is overwritten
+    // by the next flood and nothing below may start one.
+    private void Recruit(GroupJob job, EnemyController lead)
+    {
+        if (job.IsFull) return;
+
+        PathGrid grid = PathGrid.At(lead.transform.position);
+        if (grid == null)
+        {
+            if (_warnedJobNoGrid.Add(lead))
+                Debug.LogWarning($"{lead.name} is on no PathGrid, so he can't call anyone in: the officers he'd recruit are found along the floor, which needs a grid. He works alone.", lead);
+            return;
+        }
+        FlowField reach = grid.FloodFrom(lead.transform.position, _speechRange);
+        if (!reach.HasGoal)
+        {
+            if (_warnedJobNoReach.Add(lead))
+                Debug.LogWarning($"{lead.name} can't call anyone in: no walkable ground is within reach of where he stands (against a blocked cell?). He works alone.", lead);
+            return;
+        }
+
+        _candidates.Clear();
+        foreach (EnemyController officer in _enemies)
+        {
+            if (officer == lead || !officer.CanJoinJob(job.Priority)) continue;
+            if (PathGrid.At(officer.transform.position) != grid) continue;
+            if (!reach.TryGetDistance(officer.transform.position, out float metres) || metres > _speechRange) continue;
+            _candidates.Add(new Candidate { Officer = officer, Metres = metres });
+        }
+        if (_candidates.Count == 0) return;
+
+        _candidates.Sort((a, b) => a.Metres.CompareTo(b.Metres));
+        int taken = 0;
+        foreach (Candidate candidate in _candidates)
+        {
+            if (job.IsFull) break;
+            // A one-officer job he was on is closed by taking him off it: he is better used here.
+            Leave(candidate.Officer);
+            job.Add(candidate.Officer);
+            candidate.Officer.FollowJob(job);
+            taken++;
+            DebugLog.Info($"{lead.name} calls in {candidate.Officer.name} ({candidate.Metres:0.#} m away).", lead);
+        }
+        if (taken > 0) DebugLog.Info($"{job} recruited {taken}.", lead);
     }
 
     private void RecordSound(Stimulus stimulus, FlowField reach)
@@ -316,6 +504,30 @@ public class Intel : MonoBehaviour
             Vector3 next = centre + new Vector3(Mathf.Cos(angle) * radius, 0.05f, Mathf.Sin(angle) * radius);
             Gizmos.DrawLine(previous, next);
             previous = next;
+        }
+    }
+
+    // Each open job: a ring at its place, a line from its lead to every member, and a label with its
+    // kind, step and member count. Only while Intel is selected, so a crowded level isn't cluttered.
+    private void OnDrawGizmosSelected()
+    {
+        if (!Application.isPlaying) return;
+
+        foreach (GroupJob job in _jobs)
+        {
+            Gizmos.color = job.Kind == JobKind.Search ? new Color(1f, 0.45f, 0.1f) : new Color(0.2f, 0.9f, 0.9f);
+            DrawCircle(job.Point, _jobMatchRadius);
+            DrawCircle(job.Point, 0.6f);
+            EnemyController lead = job.Lead;
+            foreach (EnemyController member in job.Members)
+            {
+                if (member == null || lead == null) continue;
+                Gizmos.DrawLine(lead.transform.position + Vector3.up * 0.2f, member.transform.position + Vector3.up * 0.2f);
+                Gizmos.DrawLine(member.transform.position + Vector3.up * 0.2f, job.Point);
+            }
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(job.Point + Vector3.up * 1.4f, $"#{job.Id} {job.Kind} · {job.Step} · {job.Count}/{job.Cap}\n{job.Reason}, priority {job.Priority}");
+#endif
         }
     }
 

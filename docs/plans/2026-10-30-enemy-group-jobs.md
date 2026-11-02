@@ -123,23 +123,25 @@ Each of these is a rule until its piece lands. None of them is a fallback.
   - `public void Leave(EnemyController who)`.
 - **Produces, in `EnemyController`:** `public GroupJob Job { get; }` (his current job, or null) and `Investigate(point, reason, priority, walkThere = true, isFind = false)`.
 
-- [ ] **Step 1: Hear collects, then dispatches.** `Intel.Hear` builds the list of listeners in range from the scratch flood, then calls `Senses.Hear` on each, so a recruit inside a listener's reaction can flood without overwriting what `Hear` is reading. A summary says why.
+- [x] **Step 1: Hear collects, then dispatches.** `Intel.Hear` builds the list of listeners in range from the scratch flood, then calls `Senses.Hear` on each, so a recruit inside a listener's reaction can flood without overwriting what `Hear` is reading. A summary says why.
 
-- [ ] **Step 2: `GroupJob`.** A plain class with the members and step above. `Recruiting` is what lets a late officer join. `Upgrade` retargets the whole job, and can turn a Check into a Search. Summaries say it never moves anyone.
+- [x] **Step 2: `GroupJob`.** A plain class with the members and step above. `Recruiting` is what lets a late officer join. `Upgrade` retargets the whole job, and can turn a Check into a Search. Summaries say it never moves anyone.
 
-- [ ] **Step 3: `Intel.Handle`.** In this order:
+- [x] **Step 3: `Intel.Handle`.** In this order:
   1. **He's a member of a job.** Higher priority and within Job Match Radius of his job's point: upgrade the job (all members follow). Higher but elsewhere: he leaves, then carries on to step 2. Equal or lower: ignored, as in the last plan.
   2. **An open job matches** (its point within Job Match Radius of this one): if its priority is lower, upgrade it. Then, if it is recruiting and has room and he's free or already near, he joins; otherwise he leaves it alone (null).
   3. **Nothing matches:** a new job with him as lead. A find (`isFind`) starts a **Search** for the reason given; anything else starts a **Check**. Then recruit: read a flood from him at once (`FloodFrom` with Speech Range), take the free officers nearest first until the cap, and add them.
   A summary on each branch says which spec sentence it comes from. Every decision logs a line naming the job, members and why. Free is Idle, Patrol, or the only member of a lower-priority job.
 
-- [ ] **Step 4: `Investigate` through the pool.** After the guards and the upgrade to Attack, call `Intel.Handle` for a walk (not a glance). A null result is "left alone": return false and log it. Otherwise stage or retarget `SearchingState` with the job. A glance still stages a job-less search.
+- [x] **Step 4: `Investigate` through the pool.** After the guards and the upgrade to Attack, call `Intel.Handle` for a walk (not a glance). **Built differently:** a null result (a nearby job already has it, and is full or past needing anyone) counts as taken, not ignored. Returning false made the motion scan ask again every 0.2 s for as long as the body moved. `Handle` stages or retargets every member itself, through `EnemyController.FollowJob`. A glance still stages a job-less search.
 
-- [ ] **Step 5: Join and leave symmetrically.** `SearchingState.Enter` and `Retarget` take the job; `Exit` calls `Intel.Leave`, so an officer who goes Aggro, is grabbed, ragdolls or dies leaves his job. `EnemyController.OnDestroy` also leaves. `Leave` makes the nearest remaining member the checker if he was, and removes a job with no members.
+- [x] **Step 5: Join and leave symmetrically.** `Intel.Handle` adds a member and calls `FollowJob`, which stages or retargets `SearchingState`; `SearchingState.Exit` calls `Intel.Leave`, so an officer who goes Aggro, is grabbed, ragdolls or dies leaves his job. `EnemyController.OnDestroy` also leaves. `Leave` makes the next member the lead if he was, and removes a job with no members. (The checker is Task 3's.)
 
-- [ ] **Step 6: Gizmo.** With `Intel` selected, each open job draws a line from its lead to every member, a ring at its point, and a label with its kind, step and member count.
+- [x] **Step 6: Gizmo.** With `Intel` selected, each open job draws a ring at its point and one at Job Match Radius, a line from its lead to every member and from each member to the point, and a label with its kind, step, member count, reason and priority.
 
-- [ ] **Step 7: Compile and commit,** as in Task 1.
+- [x] **Step 7: Compile and commit,** as in Task 1.
+
+  **Built differently.** `Intel` gets only Job Cap and Job Match Radius here: Gather Time and Search Area Radius arrive with the tasks that use them, so no Inspector field sits dead meanwhile. A nested `Hear` (a reaction that emits a sound) gets a list of its own rather than clearing the one being walked. Members of a job share its reason, so two officers sent to one sound no longer differ on problem or attack: only the lead's `ShouldSearchForAttack` decides. `GroupJob.cs` is a new script, so its `.meta` needs committing once Unity has generated it.
 
 - [ ] **Step 8: Play-test gate (the user).** No Inspector work. Members still search alone for now, so each walks to the spot and looks as in piece 4. In play, with three or more officers in a room:
   - **One sound, one job:** a thud near them makes **one** job, the officer who heard first as its lead, with the nearest free officers recruited up to three. The Console and the gizmo show it.
