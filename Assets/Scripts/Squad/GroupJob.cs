@@ -5,11 +5,13 @@ using UnityEngine;
 public enum JobKind { Check, Search }
 
 /// <summary>
-/// Where a job has got to. A Check goes Gather, Go, Look, StandDown, Done; a Search goes Go,
-/// Search, Done. The job's clock moves it along (Intel advances it); members read the step and run
-/// their own role. Values are never saved, so they may be reordered, but Recruiting reads their order.
+/// Where a job has got to. A Check goes Call, Gather, Go, Look, StandDown, Done; a Search goes
+/// Call, Go, Search, Done. Call is the lead reacting to what he heard and then calling in the others
+/// one at a time, so nobody is on the job before he has reacted. The job's clock moves it along
+/// (Intel advances it); members read the step and run their own role. Values are never saved, so
+/// they may be reordered, but Recruiting reads their order.
 /// </summary>
-public enum JobStep { Gather, Go, Look, StandDown, Search, Done }
+public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done }
 
 /// <summary>
 /// A few officers dealing with one thing together. A plain object, owned by Intel, with members, a
@@ -63,11 +65,27 @@ public class GroupJob
     public EnemyController Checker { get; private set; }
     internal void SetChecker(EnemyController who) => Checker = who;
 
+    private readonly List<EnemyController> _pending = new();
+    /// <summary>Officers the lead will call in, nearest first, one at a time during Call. Not members yet: they carry on as they were until called.</summary>
+    public IReadOnlyList<EnemyController> Pending => _pending;
+    /// <summary>The officer being called right now: the lead faces him and he faces the lead. Null between calls.</summary>
+    public EnemyController Callee { get; internal set; }
+    /// <summary>The lead has finished reacting to what he heard, so the calls may begin.</summary>
+    public bool Reacted { get; internal set; }
+    internal void QueueCall(EnemyController who) => _pending.Add(who);
+    internal EnemyController DequeueCall()
+    {
+        if (_pending.Count == 0) return null;
+        EnemyController next = _pending[0];
+        _pending.RemoveAt(0);
+        return next;
+    }
+
     /// <summary>
     /// Whether a late officer can still be taken on: a Check until it looks (someone arriving after
     /// that would only stand about), a Search until it's done, and never beyond the cap.
     /// </summary>
-    public bool Recruiting => !IsFull && (Kind == JobKind.Search ? Step != JobStep.Done : Step is JobStep.Gather or JobStep.Go);
+    public bool Recruiting => !IsFull && (Kind == JobKind.Search ? Step != JobStep.Done : Step is JobStep.Call or JobStep.Gather or JobStep.Go);
 
     internal void Tick(float dt) => StepElapsed += dt;
 
@@ -83,7 +101,10 @@ public class GroupJob
         if (!_members.Remove(who)) return;
         if (who.Job == this) who.Job = null;
         if (Checker == who) Checker = null;
+        if (Callee == who) Callee = null;
     }
+
+    internal void RestartClock() => StepElapsed = 0f;
 
     internal void SetStep(JobStep step)
     {
@@ -118,6 +139,8 @@ public class GroupJob
     internal void Restart()
     {
         Checker = null;
+        // Still calling people in: carry on, the walk will start from the new place afterwards.
+        if (Step == JobStep.Call) return;
         SetStep(Kind == JobKind.Check && Count > 1 ? JobStep.Gather : JobStep.Go);
     }
 

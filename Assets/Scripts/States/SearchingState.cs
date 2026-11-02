@@ -181,7 +181,7 @@ public class SearchingState : EnemyStateBase
     // follower isn't walking to the spot, so his time isn't limited here.
     private void TickJob()
     {
-        if (_arrived || Job.Step is JobStep.Gather or JobStep.StandDown or JobStep.Done) return;
+        if (_arrived || Job.Step is JobStep.Call or JobStep.Gather or JobStep.StandDown or JobStep.Done) return;
 
         EnemyController checker = Enemy.Intel != null ? Enemy.Intel.CheckerOf(Job) : null;
         if (checker != null && checker != Enemy) return;
@@ -258,6 +258,15 @@ public class SearchingState : EnemyStateBase
     {
         switch (job.Step)
         {
+            case JobStep.Call:
+                // The lead looks at the officer he is calling, and that officer, who has only just been
+                // added, turns to face the lead. Before any call, and for anyone else, it is the spot.
+                Enemy.Stop();
+                if (job.Callee != null && job.Lead == Enemy) Enemy.FaceToward(job.Callee.transform.position);
+                else if (job.Callee == Enemy && job.Lead != null) Enemy.FaceToward(job.Lead.transform.position);
+                else Enemy.FaceToward(job.Point);
+                return;
+
             case JobStep.Gather:
                 Enemy.Stop();
                 Enemy.FaceToward(job.Point);

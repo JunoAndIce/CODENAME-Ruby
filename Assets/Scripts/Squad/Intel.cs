@@ -28,6 +28,10 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0f)] private float _jobMatchRadius = 10f;
     [Tooltip("How long a team of two or three turns toward the spot before anyone goes, in seconds. A check of one skips it.")]
     [SerializeField, Min(0f)] private float _gatherTime = 0.75f;
+    [Tooltip("How long the officer who heard something looks at it before he calls anyone, in seconds. Nobody else is on the job until he has reacted.")]
+    [SerializeField, Min(0f)] private float _reactTime = 0.5f;
+    [Tooltip("How long each call takes, in seconds: he turns to the nearest officer and calls him, and that officer turns to face him. Then the next nearest, and so on.")]
+    [SerializeField, Min(0f)] private float _callTime = 0.6f;
 
     [Header("Debug")]
     [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
@@ -150,6 +154,13 @@ public class Intel : MonoBehaviour
             if (job.Lead == null || job.Step == JobStep.Done) continue;
 
             job.Tick(dt);
+            // Calling people in has its own timing (a reaction, then a call each), not one duration.
+            if (job.Step == JobStep.Call)
+            {
+                AdvanceCall(job);
+                continue;
+            }
+
             float duration = StepDuration(job);
             if (duration <= 0f && job.Step != JobStep.Gather) continue;
             if (job.StepElapsed < duration) continue;
@@ -176,6 +187,54 @@ public class Intel : MonoBehaviour
     {
         job.SetStep(step);
         DebugLog.Info($"{job} {what}.", this);
+    }
+
+    // The lead reacts to what he heard first, with nobody else on the job. Then he calls the nearest
+    // officer: he turns to him and that officer, only now added to the job, turns to face him. When that
+    // call has had its time he calls the next, and when nobody is left the team gathers or sets off.
+    // Each officer is checked again as he is called: in the second or so since the sound he may have
+    // gone to Aggro, been grabbed, or been taken by another job, and a stale name must not be added.
+    private void AdvanceCall(GroupJob job)
+    {
+        if (!job.Reacted)
+        {
+            if (job.StepElapsed < _reactTime) return;
+            job.Reacted = true;
+            job.RestartClock();
+            DebugLog.Info($"{job.Lead.name} has reacted to {job.Reason} at {job.Point} and starts calling officers in.", job.Lead);
+        }
+
+        if (job.Callee != null)
+        {
+            if (job.StepElapsed < _callTime) return;
+            job.Callee = null;
+        }
+
+        while (job.Pending.Count > 0)
+        {
+            EnemyController next = job.DequeueCall();
+            if (job.IsFull) break;
+            // Already on the job: he heard it himself and joined, so there is nobody to call.
+            if (next != null && job.Has(next)) continue;
+            if (next == null || !next.CanJoinJob(job.Priority))
+            {
+                DebugLog.Info($"{job.Lead.name} doesn't call {(next != null ? next.name : "an officer who is gone")}: he is no longer free.", job.Lead);
+                continue;
+            }
+
+            // A one-officer job he was on is closed by taking him off it: he is better used here.
+            Leave(next);
+            job.Callee = next;
+            JoinMember(job, next);
+            job.RestartClock();
+            DebugLog.Info($"{job.Lead.name} turns to {next.name} ({PathGrid.FlatDistance(job.Lead.transform.position, next.transform.position):0.#} m away) and calls him in.", job.Lead);
+            return;
+        }
+
+        // Nobody left to call: the team turns to the spot, or a lone officer or a search goes straight there.
+        job.Callee = null;
+        if (job.Kind == JobKind.Check && job.Count > 1) AdvanceTo(job, JobStep.Gather, $"gathers: {job.Count} officers turn toward {job.Point}");
+        else AdvanceTo(job, JobStep.Go, "sets off");
     }
 
     /// <summary>How long a job stays in its current step, in seconds. Zero for a step that waits on someone, not the clock.</summary>
@@ -426,10 +485,17 @@ public class Intel : MonoBehaviour
         _jobs.Add(job);
         JoinMember(job, who);
         DebugLog.Info($"{who.name} starts {job} at {point}.", who);
-        Recruit(job, who);
-        // A check of one has nobody to gather: he goes straight there.
-        if (job.Kind == JobKind.Check && job.Count == 1) job.SetStep(JobStep.Go);
-        else if (job.Kind == JobKind.Check) DebugLog.Info($"{job} gathers: {job.Count} officers turn toward {point}.", who);
+        // He is the only one on the job for now. The officers he will call are only found here, by
+        // name, and are added one at a time once he has reacted (AdvanceCall), so none of them turns
+        // the moment the sound is heard: each turns afterwards, in answer to the one who calls him.
+        FindCallees(job, who);
+        if (job.Pending.Count > 0)
+        {
+            job.SetStep(JobStep.Call);
+            DebugLog.Info($"{who.name} will call in {job.Pending.Count} officer(s) once he has reacted.", who);
+        }
+        // A check of one has nobody to call or gather: he goes straight there.
+        else if (job.Kind == JobKind.Check) job.SetStep(JobStep.Go);
         return job;
     }
 
@@ -514,10 +580,10 @@ public class Intel : MonoBehaviour
         foreach (EnemyController member in job.Members) member.FollowJob(job);
     }
 
-    // Calls in the free officers within Speech Range of the lead, nearest first, up to the cap.
-    // The flood is read to the end before anyone is moved, because FloodFrom's field is overwritten
-    // by the next flood and nothing below may start one.
-    private void Recruit(GroupJob job, EnemyController lead)
+    // Finds the free officers within Speech Range of the lead, nearest first, up to the cap, and queues
+    // them on the job to be called. Nobody is added or moved here. The flood is read to the end
+    // before anything else, because FloodFrom's field is overwritten by the next flood.
+    private void FindCallees(GroupJob job, EnemyController lead)
     {
         if (job.IsFull) return;
 
@@ -547,17 +613,8 @@ public class Intel : MonoBehaviour
         if (_candidates.Count == 0) return;
 
         _candidates.Sort((a, b) => a.Metres.CompareTo(b.Metres));
-        int taken = 0;
-        foreach (Candidate candidate in _candidates)
-        {
-            if (job.IsFull) break;
-            // A one-officer job he was on is closed by taking him off it: he is better used here.
-            Leave(candidate.Officer);
-            JoinMember(job, candidate.Officer);
-            taken++;
-            DebugLog.Info($"{lead.name} calls in {candidate.Officer.name} ({candidate.Metres:0.#} m away).", lead);
-        }
-        if (taken > 0) DebugLog.Info($"{job} recruited {taken}.", lead);
+        int room = job.Cap - job.Count;
+        for (int i = 0; i < _candidates.Count && i < room; i++) job.QueueCall(_candidates[i].Officer);
     }
 
     private void RecordSound(Stimulus stimulus, FlowField reach)

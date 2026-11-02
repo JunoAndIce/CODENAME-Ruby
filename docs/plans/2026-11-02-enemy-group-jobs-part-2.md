@@ -30,10 +30,12 @@
 4. **Moving objects.** A moving pistol is treated as a loose pistol, a moving officer as a corpse. **The stronger of the two rows wins:** the row for what it is or the row for how fast it moves.
 5. **Checks follow the spec** (from the earlier plan): a checker looks for Look Time, and only a find (a body or loose gun) becomes a full Search Duration search.
 6. **Being told of Ruby (added 2026-11-02, from play).** Officer 1 called officer 3 over, and officer 3 fired at Ruby and saw her face: the only other living officer on the floor who knew it. **An officer who has seen Ruby tells every officer he is on a job with.** If officer 2 had entered a search with officer 3, officer 3 would tell him of Ruby. This belongs to individual memory, so it is Task 6.
+7. **Calling is staged, for the animations (added 2026-11-02).** When an officer hears a sound he reacts to it first, as he does. **Anyone added to the job is added after the lead has reacted,** so a recruit doesn't turn the moment the sound is heard: he turns afterwards, in answer to the officer who calls him. The caller **looks at the nearest officer to call him,** then the next nearest, one at a time. Built as a new first job step, `Call`, in Task 4.
 
 ## Global Constraints
 
 - **Values that are my calls** (put in tooltips, retuned in play):
+  - React Time 0.5 s (the lead looks at what he heard before he calls anyone) and Call Time 0.6 s (each call: he turns to the officer and the officer turns back), on `Intel`.
   - Gather Time 0.75 s: the team turns toward the spot before anyone goes.
   - Sent To Look Threshold 3, on the officer.
   - Elsewhere Distance: an extra's new spot lies between Job Match Radius + 2 m and 2.5 × Job Match Radius from the merged job's place.
@@ -133,8 +135,19 @@
   - **The walk time limit applies to the checker only.** A follower isn't walking to the spot.
   - The Intel gizmo rings the checker and names him in the label.
 
-- [ ] **Step 5: Play-test gate (the user).** No Inspector work (Follow Distance and Follow Speed Factor appear on the officer). Three officers in a room, throw a body past them:
-  - they turn toward the **origin**, one goes there and the other two follow about 3 m behind him;
+  **Staged calling (added 2026-11-02, the user's decision 7).** A new first step, `Call`, runs before Gather (a check) or Go (a search):
+  - **The lead is alone at first.** `Handle` starts the job with only him and finds the officers to call by name (`FindCallees`, one flood, read at once), but **adds nobody**. They carry on as they were.
+  - **He reacts first:** for React Time (0.5 s) he faces the spot.
+  - **Then he calls one at a time, nearest first.** He turns to the officer, who is added to the job at that moment and turns to face the lead; the call lasts Call Time (0.6 s). Then the next. When nobody is left, a team gathers (a check) or sets off (a lone officer, or a search).
+  - **Each is re-checked as he's called.** In the second or so since the sound he may be in Aggro, grabbed, or on another team, and a stale name isn't added (logged). One who heard the sound himself and joined meanwhile is skipped without a log.
+  - Officers who hear the sound themselves still join at once, as before: they are reacting to the sound, not to a call.
+  - **Task 7's fill and merge should call the same way** (queue the officers, add them one at a time), so an officer who joins a team that is already walking is called by the lead and not snapped into it.
+  - Facing is the instant `FaceToward` for now, so the delays only set the timing; the animations smooth it when they arrive.
+
+- [ ] **Step 5: Play-test gate (the user).** No Inspector work (Follow Distance and Follow Speed Factor appear on the officer, and React Time and Call Time on `Intel`). Three officers in a room, throw a body past them:
+  - the officer who heard it first turns to the spot **alone** for about half a second, and the others carry on with what they were doing;
+  - he then turns to the **nearest** officer and calls him; that officer turns to face him only then, and joins. Then the next nearest;
+  - the team then turns toward the spot, and they turn toward the **origin**, one goes there and the other two follow about 3 m behind him;
   - he looks for 1.5 s, gestures, and everyone goes back;
   - a checker who is put in Aggro hands the check to the next nearest, who walks over and looks it over himself;
   - a find (a body, a loose gun) turns the check into a search, and everyone goes;
