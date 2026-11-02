@@ -29,6 +29,7 @@
 3. **Recovered officers.** An officer who starts a search from Aggro (including one who got up after a grab) joins a job started nearby, or raises that job to a search for an attack for every member. **Any officer who starts a search from Aggro** does this, **once in the area he is searching in.**
 4. **Moving objects.** A moving pistol is treated as a loose pistol, a moving officer as a corpse. **The stronger of the two rows wins:** the row for what it is or the row for how fast it moves.
 5. **Checks follow the spec** (from the earlier plan): a checker looks for Look Time, and only a find (a body or loose gun) becomes a full Search Duration search.
+6. **Being told of Ruby (added 2026-11-02, from play).** Officer 1 called officer 3 over, and officer 3 fired at Ruby and saw her face: the only other living officer on the floor who knew it. **An officer who has seen Ruby tells every officer he is on a job with.** If officer 2 had entered a search with officer 3, officer 3 would tell him of Ruby. This belongs to individual memory, so it is Task 6.
 
 ## Global Constraints
 
@@ -48,6 +49,8 @@
   - **A lost-fight team past the cap goes to Patrol Aggressive,** as the spec has it, and does not start its own job.
   - **"Once in the area"** means within Job Match Radius of where he last raised a job. He can do it again after he searches somewhere else.
   - **A moving gun or officer is not a find.** Its origin is where Ruby threw it from, so it stays a check at that origin. A moving officer is a corpse alive or dead.
+  - **Telling happens when someone joins.** Whoever is put on a job (start, join, recruit, fill, merge) is a chance to tell: if any member has seen Ruby, every member learns what the newest of them knows, as **Told**, and knows she is about. It runs in the one place officers are put on a job, so every route into a job tells, and it works both ways: an officer who has seen her joining a team tells the team, and one who hasn't joining a team that has is told.
+  - **Told is not seen.** Hearing about her gives an officer her newest position as a Told fact and makes him treat a disturbance as an attack, as an officer who has seen her does, and aggressive on his patrol. It does not make him able to tell others of her **face**: only an officer who saw her himself tells. That stops one sighting spreading through the level by chain, which would be the level-wide alert again by another door.
 - **Sight is never masked, no silent fallbacks, states never name each other, the two-axis rule, one scratch flood at a time, conventions, verification, and the working tree rule** are as in `2026-10-30-enemy-group-jobs.md`. The working tree holds changes that aren't this plan's: `PlayerController.cs`, `officer.prefab`, `Pistol.prefab`, `SampleScene.unity`, `BehaviourMap.asset`, `StimulusRules.asset` and `docs/plans/Enemy knowledge notes.md`. Never stage, revert or edit them.
 
 ## What waits for later pieces (interim rules)
@@ -67,6 +70,7 @@
 5. **The count.** It counts assignments, not retargets, and the third look cannot fire twice for one assignment.
 6. **Recovered officers.** The alert is once per area, must not re-run on every Aggro to Searching flip, and an officer who gets up knowing nothing still searches where he stands.
 7. **What it is.** A moving gun or officer must not make a stimulus of the officer on his own feet, and the per-field maximum must never downgrade a row (a speed row of Attack beaten by an Ignore).
+8. **Telling.** Only an officer who saw Ruby himself tells, so being told never chains. Telling never gives an older fact than the newest one a member already has (the newer by time wins, as everywhere), and an officer already on the job is told once, not on every join.
 
 ---
 
@@ -143,17 +147,25 @@
 
 ---
 
-### Task 6: Times sent to look
+### Task 6: Individual memory: times sent to look, and being told of Ruby
 
 **Files:** `Assets/Scripts/Squad/EnemyMemory.cs`, `Assets/Scripts/EnemyController.cs`, `Assets/Scripts/Squad/Intel.cs`
 
+**Interfaces**
+
+- **Produces, in `EnemyMemory`:** `TimesSentToLook` and `NoteSentToLook()`, and `public bool WasToldOfRuby { get; }` with `public void BeToldOfRuby()`. Never cleared, like `HasSeenRuby`. `KnowsRuby => HasSeenRuby || WasToldOfRuby` is what `IsAggressive` and `ShouldSearchForAttack` read; the face that can be told on is `HasSeenRuby` alone.
+- **Produces, in `Intel`:** `TellOfRuby(GroupJob)`, called from the one place officers are put on a job.
+
 - [ ] **Step 1: The count.** `EnemyMemory.TimesSentToLook`, and `NoteSentToLook()` returning the count. It never expires. `[SerializeField] int _sentToLookThreshold = 3` on the officer (`Sent To Look Threshold`).
 - [ ] **Step 2: Where it counts.** In `Intel`, whenever an officer is put on a job he wasn't on: start, join, recruit, fill, merge-out. If the count reaches the threshold, the job is raised to an attack, naming him and the count in the log, so he and everyone with him go wary.
-- [ ] **Step 3: Compile and commit,** as in Task 3.
-- [ ] **Step 4: Play-test gate (the user).** No Inspector work. In play:
+- [ ] **Step 3: Telling.** Also in `Intel`'s one join point, after the member is added: if any member `HasSeenRuby`, the others learn the newest of the seers' facts as **Told** (`Memory.Learn`, so the newer by time wins and nothing older overwrites it), call `BeToldOfRuby()`, and the log names who told whom. Members who already knew are not told again. Seen officers still raise the job to an attack, as in Task 3, so the team stays one reason. A summary says why a Told officer cannot tell on: a sighting would spread through the level by chain, which is the removed level alert by another door.
+- [ ] **Step 4: Compile and commit,** as in Task 3.
+- [ ] **Step 5: Play-test gate (the user).** No Inspector work. In play:
   - two impacts that each end in all clear, then a third: the third is logged as raised to an attack, and he finishes on an Aggressive patrol;
   - a team: the third look raises the whole job, so they all go aggressive together;
-  - distractions and a glance don't move the count.
+  - distractions and a glance don't move the count;
+  - **the sighting case:** officer 3 sees Ruby, then officer 2 is put on a job with him (a recruit, a join, a fill). The Console says officer 3 told officer 2, and officer 2 then treats a thud as an attack and walks Aggressive;
+  - **no chain:** officer 2 then joins a job with officer 4, who hasn't seen her. Officer 4 is **not** told, because officer 2 was only told.
 
 ---
 
@@ -195,7 +207,7 @@
 
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, `docs/specs/2026-10-28-enemy-states-0.2.md`, this plan and `2026-10-30-enemy-group-jobs.md`.
 
-- [ ] **Step 1: CLAUDE.md.** A Group jobs bullet: kinds and steps, the clock, roles, the cap, matching, merging, filling, the reason that only rises, wary from the job, the count, and the one-flood rule. Update Searching, Senses (what it is), Knowledge (`TimesSentToLook`) and the debug overlays (the jobs gizmo).
+- [ ] **Step 1: CLAUDE.md.** A Group jobs bullet: kinds and steps, the clock, roles, the cap, matching, merging, filling, the reason that only rises, wary from the job, the count, and the one-flood rule. Update Searching, Senses (what it is), Knowledge (`TimesSentToLook`, `WasToldOfRuby` and who may tell) and the debug overlays (the jobs gizmo).
 - [ ] **Step 2: The manual.** The tuning table gains Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
 - [ ] **Step 3: Spec and plan.** Spec Progress notes piece 5 part A built, part B pending. Tick this plan's steps and mark `2026-10-30-enemy-group-jobs.md` finished by this plan. Commit these files only.
 - [ ] **Step 4: End-of-piece review, in the background,** over the range both plans added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before part B, in one fix wave.
