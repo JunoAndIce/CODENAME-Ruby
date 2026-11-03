@@ -460,6 +460,11 @@ with an unlimited standby squad (piece 6).
      job becomes **search together**, for Problem *(my call: the user's notes say "Searching
      Plus" without a reason)*.
 
+**A new sound during a job** *(user, 2026-11-03; not yet built)*: the job sends one member to
+its source to check it out, and the rest carry on. He returns to the job only once his check is
+complete. If the job ends before he makes it back, he goes back to his patrol route. Recorded
+with its open questions as decision 8 of `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`.
+
 **Search together** (Searching for Attack or Problem, Plus):
 
 - **A search team is at most three,** and can be two or just one *(user)*. That holds for every
