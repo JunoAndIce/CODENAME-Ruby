@@ -89,7 +89,15 @@ public class EnemyMemory
     /// </summary>
     public int NoteDistraction(float now, float memory, float gap, out bool counted)
     {
-        _distractions.RemoveAll(time => now - time > memory);
+        // A loop rather than RemoveAll with a lambda: the lambda captures now and memory, so it
+        // allocated on every sound an enemy hears while he searches. Same order kept.
+        int kept = 0;
+        for (int i = 0; i < _distractions.Count; i++)
+        {
+            if (now - _distractions[i] > memory) continue;
+            _distractions[kept++] = _distractions[i];
+        }
+        _distractions.RemoveRange(kept, _distractions.Count - kept);
         counted = _distractions.Count == 0 || now - _distractions[_distractions.Count - 1] >= gap;
         if (counted) _distractions.Add(now);
         return _distractions.Count;

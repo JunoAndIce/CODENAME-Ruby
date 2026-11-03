@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -29,8 +30,11 @@ public class RearmState : EnemyStateBase
 
     private readonly Dictionary<Gun, (Vector3 position, float time)> _unreachable = new();
     private Gun _target;
+    // Made once: a method group converts to a new delegate on every use, and the table asks every
+    // frame (WantsGun) while an unarmed enemy is in any AI state.
+    private readonly Predicate<Gun> _isFree;
 
-    public RearmState(EnemyController enemy) : base(enemy) { }
+    public RearmState(EnemyController enemy) : base(enemy) => _isFree = IsFree;
 
     public bool Armed => Enemy.IsArmed;
     public bool GaveUp { get; private set; }
@@ -119,7 +123,7 @@ public class RearmState : EnemyStateBase
         Claims[_target] = this;
     }
 
-    private Gun FindFree() => Enemy.Arms == null ? null : Enemy.Arms.FindLooseGun(Enemy.RearmRadius, IsFree);
+    private Gun FindFree() => Enemy.Arms == null ? null : Enemy.Arms.FindLooseGun(Enemy.RearmRadius, _isFree);
 
     private bool IsFree(Gun gun)
     {
