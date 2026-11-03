@@ -99,8 +99,6 @@ public class Intel : MonoBehaviour
     public float SpeechRange => _speechRange;
     public int JobCap => _jobCap;
     public float JobMatchRadius => _jobMatchRadius;
-    /// <summary>The open jobs, live. Read by index: it changes as officers join and leave.</summary>
-    public IReadOnlyList<GroupJob> Jobs => _jobs;
 
     /// <summary>
     /// The behaviour map every officer reads. Null only when the asset is missing, which OnEnable

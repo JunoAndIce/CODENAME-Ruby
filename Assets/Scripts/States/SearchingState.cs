@@ -39,11 +39,8 @@ public class SearchingState : EnemyStateBase
 
     public SearchingState(EnemyController enemy) : base(enemy) { }
 
-    public override EnemyState Id => EnemyState.Searching;
-
     private GroupJob Job => Enemy.Job;
 
-    public SearchStep Step => _step;
     public bool Finished => Job != null ? Job.Step == JobStep.Done : _step == SearchStep.Done;
     // A job's reason and priority are the job's own, which can rise after he joined, so they are read through.
     public StimulusResponse Reason => Job != null ? Job.Reason : _reason;

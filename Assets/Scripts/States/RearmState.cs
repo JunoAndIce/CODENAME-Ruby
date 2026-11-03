@@ -32,8 +32,6 @@ public class RearmState : EnemyStateBase
 
     public RearmState(EnemyController enemy) : base(enemy) { }
 
-    public override EnemyState Id => EnemyState.Rearm;
-
     public bool Armed => Enemy.IsArmed;
     public bool GaveUp { get; private set; }
 

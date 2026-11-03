@@ -12,8 +12,6 @@ public class DeadState : EnemyStateBase
 
     public DeadState(EnemyController enemy) : base(enemy) { }
 
-    public override EnemyState Id => EnemyState.Dead;
-
     public override void Enter()
     {
         Enemy.DropGun();

@@ -13,8 +13,6 @@ public class IdleState : EnemyStateBase
 
     public IdleState(EnemyController enemy) : base(enemy) { }
 
-    public override EnemyState Id => EnemyState.Idle;
-
     private bool AwayFromPost => PathGrid.FlatDistance(Enemy.transform.position, Enemy.PostPosition) > Enemy.PostTolerance;
 
     public override void Enter()

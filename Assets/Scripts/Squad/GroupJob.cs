@@ -33,8 +33,9 @@ public class GroupJob
         Priority = priority;
         Point = point;
         Cap = Mathf.Max(1, cap);
-        // Handle moves a new job to Call or Go at once, and neither has a length, so StepLength starts at zero.
-        Step = kind == JobKind.Check ? JobStep.Gather : JobStep.Go;
+        // Go is the step a job that calls nobody keeps; Intel moves one with callees to Call at once.
+        // Neither has a length, so StepLength starts at zero.
+        Step = JobStep.Go;
     }
 
     public int Id { get; }

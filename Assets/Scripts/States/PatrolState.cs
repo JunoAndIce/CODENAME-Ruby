@@ -34,8 +34,6 @@ public class PatrolState : EnemyStateBase
 
     public PatrolState(EnemyController enemy) : base(enemy) { }
 
-    public override EnemyState Id => EnemyState.Patrol;
-
     private PatrolRoute Route => Enemy.ActiveRoute;
 
     public override void Enter() => Restart();

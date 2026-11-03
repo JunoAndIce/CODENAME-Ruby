@@ -9,8 +9,6 @@ public class GrabbedState : EnemyStateBase
 {
     public GrabbedState(EnemyController enemy) : base(enemy) { }
 
-    public override EnemyState Id => EnemyState.Grabbed;
-
     // Stop the walk so leftover speed doesn't drift into the grab; from here the rope and
     // physics own the body.
     public override void Enter() => Enemy.Stop();

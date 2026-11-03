@@ -22,8 +22,6 @@ public class AggroState : EnemyStateBase
 
     public AggroState(EnemyController enemy) : base(enemy) { }
 
-    public override EnemyState Id => EnemyState.Aggro;
-
     // The table reads this before the state's own Tick, so nothing here may rest on a flag a Tick or
     // FixedTick wrote earlier: a stale one ended fights on a frame he could see her. Contact and
     // sight are cached per frame, so the table and the state read the same fresh answer.

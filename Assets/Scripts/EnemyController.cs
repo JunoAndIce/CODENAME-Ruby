@@ -184,9 +184,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>
     /// Whether he patrols aggressively: he has been after Ruby (an attack search, or a glance at a
     /// body) or has seen her. Derived on every read and never stored, and neither is ever cleared,
-    /// so he never goes back. A level-wide alert from the first Aggro was removed for now: only
-    /// what an officer himself has been through makes him aggressive.
-    /// </summary>
+    /// so he never goes back. Only what he himself has been through makes him aggressive.
+    ///</summary>
     public bool IsAggressive => Memory.Wary || Memory.HasSeenRuby;
 
     /// <summary>
@@ -298,8 +297,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         At(Searching, Patrol, new FuncPredicate(() => Searching.Finished && HasActiveRoute));
         At(Searching, Idle, new FuncPredicate(() => Searching.Finished && !HasActiveRoute));
 
-        // The route he walks follows how aggressive he is (IsAggressive), so an alert can hand an idle
-        // officer a route to walk, or leave a patroller with none for his mode and send him to his post.
+        // The route he walks follows how aggressive he is (IsAggressive), so becoming aggressive can hand an
+        // idle enemy a route to walk, or leave a patroller with none for his mode and send him to his post.
         At(Idle, Patrol, new FuncPredicate(() => HasActiveRoute));
         At(Patrol, Idle, new FuncPredicate(() => !HasActiveRoute));
 
@@ -835,7 +834,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// Alive and on his feet only: a corpse, a held or a tumbling officer sees and says nothing.
     /// Cached per frame, like CanSeePlayer.
     /// </summary>
-    public bool SeesPlayer
+    private bool SeesPlayer
     {
         get
         {
