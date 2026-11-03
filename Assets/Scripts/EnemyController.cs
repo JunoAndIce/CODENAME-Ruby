@@ -547,14 +547,17 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     internal void FollowJob(GroupJob job)
     {
         if (job.Reason == StimulusResponse.SearchForAttack) Memory.BecomeWary();
+        // Built here rather than kept on the job: a job doesn't remember whether its latest trigger was
+        // a find, and the search doesn't read it, so it carries none.
+        var request = new SearchRequest(new Incident(job.Point, job.Reason, job.Priority));
         if (_state.Current is SearchingState)
         {
-            Searching.Retarget(new SearchRequest(job.Incident));
+            Searching.Retarget(request);
             return;
         }
 
         // Stage before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
-        Searching.Stage(new SearchRequest(job.Incident));
+        Searching.Stage(request);
         _state.SetState(Searching);
     }
 

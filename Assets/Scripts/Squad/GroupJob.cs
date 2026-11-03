@@ -45,8 +45,6 @@ public class GroupJob
     public int Priority { get; private set; }
     /// <summary>The spot the job is about: where a sound came from, or where a body lies.</summary>
     public Vector3 Point { get; private set; }
-    /// <summary>What the job is about, as an incident to send a member after. A Search is the job a find makes, so that is what IsFind reads.</summary>
-    public Incident Incident => new Incident(Point, Reason, Priority, Kind == JobKind.Search);
     public JobStep Step { get; private set; }
     /// <summary>Seconds in the current step.</summary>
     public float StepElapsed { get; private set; }
