@@ -144,7 +144,7 @@
   - **Task 7's fill and merge should call the same way** (queue the officers, add them one at a time), so an officer who joins a team that is already walking is called by the lead and not snapped into it.
   - Facing is the instant `FaceToward` for now, so the delays only set the timing; the animations smooth it when they arrive.
 
-- [ ] **Step 5: Play-test gate (the user).** No Inspector work (Follow Distance and Follow Speed Factor appear on the officer, and React Time and Call Time on `Intel`). Three officers in a room, throw a body past them:
+- [x] **Step 5: Play-test gate (the user).** Passed 2026-11-02 ("task 4 passes"), with the Call step. No Inspector work (Follow Distance and Follow Speed Factor appear on the officer, and React Time and Call Time on `Intel`). Three officers in a room, throw a body past them:
   - the officer who heard it first turns to the spot **alone** for about half a second, and the others carry on with what they were doing;
   - he then turns to the **nearest** officer and calls him; that officer turns to face him only then, and joins. Then the next nearest;
   - the team then turns toward the spot, and they turn toward the **origin**, one goes there and the other two follow about 3 m behind him;
