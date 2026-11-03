@@ -60,6 +60,14 @@
       - Is "the source" Ruby's position now (while the chain still holds the enemy) or where she stood when it happened?
       - What does a corpse lead to once its origin has expired: where it lies, as now?
       - Is seeing an enemy on the chain a sighting of Ruby (Aggro) when she's in view too, or only a lead to follow?
+11. **Aggro drops too easily around crates (added 2026-11-03, after the refactor, not yet planned to a task).** *(User, during the baseline run of script A: "Enemies drop aggro quickly if Ruby runs around crates. They seem too dumb almost. They drop aggro after 1.5 seconds of not being able to see Ruby.")*
+    - **Cause:** Aggro keeps contact by line of sight within Give Up Radius, in every direction. A crate breaks it, and Aggro Time (1.5 s) later he gives up and searches the spot he last knew.
+    - **First, tuning:** the user raises Aggro Time on `officer.prefab` to about 4 s before recording the refactor's baseline. Aggro Time is also his hold at the spot he knew, so that grows too.
+    - **If that isn't enough, a design change:** after losing sight he **follows where she was heading**, carrying her last seen direction and speed on past the corner, not only running to where he last saw her.
+    - Open, to settle when it's planned:
+      - How far ahead does he follow her heading?
+      - Does a Heard or Told fact carry a heading, or only Seen?
+      - Does the heading feed the search that follows a lost fight?
 
 ## Global Constraints
 

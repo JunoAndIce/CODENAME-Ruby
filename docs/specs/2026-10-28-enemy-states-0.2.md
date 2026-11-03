@@ -796,6 +796,12 @@ order.
 
 - **Breakables** (piece 9, much later): how a fixture is ripped down, what breaks a prop, and
   whether a dark room shortens sight. Settled at piece 9's check-in.
+- **Aggro drops too easily around crates** *(user, 2026-11-03; after the refactor)*: Ruby
+  running round crates breaks line of sight, and 1.5 s of Aggro Time later he gives up. The
+  user's tuning is raising Aggro Time on the prefab to about 4 s. If that isn't enough, the
+  change is to have him **follow where she was heading** after losing sight, not only run to
+  where she was last seen. Recorded as decision 11 of
+  `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`.
 
 Everything else is decided. The *(my call)* and *(my reading)* marks show where the decision was
 mine rather than the user's.
