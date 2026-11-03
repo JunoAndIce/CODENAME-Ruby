@@ -225,6 +225,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         _ => AnimStance.Rest,
     };
 
+    /// <summary>
+    /// Held, knocked down or dead: an override state (EnemyStateBase.IsOverride) is running, so the
+    /// AI neither senses nor reacts. The one test for it. KnockDown keeps its own set.
+    /// </summary>
+    public bool IsOverridden => _state.Current is EnemyStateBase { IsOverride: true };
+
     /// <summary>Ruby, while it's aiming at her.</summary>
     public bool TryFindTarget(out Vector3 point)
     {
@@ -362,7 +368,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private void FixedUpdate()
     {
         _state.FixedTick();
-        if (!Health.IsDead && _state.Current is not (GrabbedState or RagdollState or DeadState))
+        if (!Health.IsDead && !IsOverridden)
             Senses.Scan();
     }
 
@@ -391,7 +397,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>Sends him into Aggro (hurt, or told by an enemy who sees Ruby). True when that moved him: not when he was already there, or can't act.</summary>
     public bool Alert()
     {
-        if (_state.Current is GrabbedState or RagdollState or DeadState) return false;
+        if (IsOverridden) return false;
         if (_state.Current == Aggro) return false;
         _state.SetState(Aggro);
         return true;
@@ -424,7 +430,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             reason = StimulusResponse.SearchForAttack;
         }
         if (reason == StimulusResponse.SearchForAttack) BecomeWary(point, $"{name} senses {reason} at {point}");
-        if (_state.Current is GrabbedState or RagdollState or DeadState or RearmState or AggroState)
+        if (IsOverridden || _state.Current is RearmState or AggroState)
         {
             DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): he is in {_state.Current.GetType().Name}.", this);
             return false;
@@ -842,7 +848,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         {
             if (_seesFrame == Time.frameCount) return _seesPlayer;
             _seesFrame = Time.frameCount;
-            _seesPlayer = !Health.IsDead && _state.Current is not (GrabbedState or RagdollState or DeadState)
+            _seesPlayer = !Health.IsDead && !IsOverridden
                 && (DetectsPlayer() || (_state.Current == Aggro && InContactWithPlayer()));
             return _seesPlayer;
         }

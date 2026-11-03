@@ -12,6 +12,8 @@ public class DeadState : EnemyStateBase
 
     public DeadState(EnemyController enemy) : base(enemy) { }
 
+    public override bool IsOverride => true;
+
     public override void Enter()
     {
         Enemy.DropGun();
