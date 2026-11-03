@@ -46,7 +46,7 @@ public class IntelSnapshot
     public bool RubyReported { get; }
     /// <summary>The newest report of her. Meaningless unless RubyReported.</summary>
     public RubyFact Ruby { get; }
-    /// <summary>Dead officers the squad has reported. Never forgotten within a level.</summary>
+    /// <summary>Dead enemies the squad has reported. Never forgotten within a level.</summary>
     public IReadOnlyCollection<EnemyController> Bodies => _bodies;
     /// <summary>Loose guns the squad has reported.</summary>
     public IReadOnlyCollection<Gun> Guns => _guns;
@@ -73,7 +73,7 @@ public class EnemyMemory
     /// <summary>
     /// He has been after her, or has been shown she's about (a search for an attack, a body he was
     /// told of): from then on he patrols aggressively. Never cleared, like HasSeenRuby, because the
-    /// level doesn't relax once an officer has gone looking for her.
+    /// level doesn't relax once an enemy has gone looking for her.
     /// </summary>
     public bool Wary { get; private set; }
 

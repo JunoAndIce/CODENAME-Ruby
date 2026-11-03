@@ -9,12 +9,12 @@ public enum JobKind { Check, Search }
 /// Call, Go, Search, Done. Call is the lead reacting to what he heard and then calling in the others
 /// one at a time, so nobody is on the job before he has reacted. The job's clock moves it along
 /// (Intel advances it); members read the step and run their own role. Values are never saved, so
-/// they may be reordered, but Recruiting reads their order.
+/// they may be reordered, and nothing compares them by order.
 /// </summary>
 public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done }
 
 /// <summary>
-/// A few officers dealing with one thing together. A plain object, owned by Intel, with members, a
+/// A few enemies dealing with one thing together. A plain object, owned by Intel, with members, a
 /// kind, a step and a point. It **never moves anyone**: each member's state machine reads it and
 /// runs his own role, so the machine stays the one place movement is decided. Intel is the only
 /// caller of the members of this class that change it (Add, Remove, Upgrade); everyone else reads.
@@ -61,7 +61,7 @@ public class GroupJob
     public bool IsFull => _members.Count >= Cap;
     public bool Has(EnemyController who) => _members.Contains(who);
 
-    /// <summary>The officer who started it, or the next member if he has left. Null for a job with nobody in it.</summary>
+    /// <summary>The enemy who started it, or the next member if he has left. Null for a job with nobody in it.</summary>
     public EnemyController Lead => _members.Count > 0 ? _members[0] : null;
 
     /// <summary>
@@ -74,9 +74,9 @@ public class GroupJob
     internal void SetChecker(EnemyController who) => Checker = who;
 
     private readonly List<EnemyController> _pending = new();
-    /// <summary>Officers the lead will call in, nearest first, one at a time during Call. Not members yet: they carry on as they were until called.</summary>
+    /// <summary>Enemies the lead will call in, nearest first, one at a time during Call. Not members yet: they carry on as they were until called.</summary>
     public IReadOnlyList<EnemyController> Pending => _pending;
-    /// <summary>The officer being called right now: the lead faces him and he faces the lead. Null between calls.</summary>
+    /// <summary>The enemy being called right now: the lead faces him and he faces the lead. Null between calls.</summary>
     public EnemyController Callee { get; internal set; }
     /// <summary>The lead has finished reacting to what he heard, so the calls may begin.</summary>
     public bool Reacted { get; internal set; }
@@ -90,7 +90,7 @@ public class GroupJob
     }
 
     /// <summary>
-    /// Whether a late officer can still be taken on: a Check until it looks (someone arriving after
+    /// Whether a late enemy can still be taken on: a Check until it looks (someone arriving after
     /// that would only stand about), a Search until it's done, and never beyond the cap.
     /// </summary>
     public bool Recruiting => !IsFull && (Kind == JobKind.Search ? Step != JobStep.Done : Step is JobStep.Call or JobStep.Gather or JobStep.Go);

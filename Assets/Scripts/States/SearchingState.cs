@@ -96,7 +96,9 @@ public class SearchingState : EnemyStateBase
         // aggro on its first one or two. (Within one search the counting is unchanged.)
         Enemy.Memory.ClearDistractions();
         // He's off the search, so off its job: Aggro, a grab, a fall, a death or the search ending.
-        // The one place a job is given up, so it can't be left holding a member who has gone.
+        // Intel.Leave is the one way a job is given up, and this is the usual way to it, so a job
+        // can't be left holding a member who has gone. (A destroyed enemy and Intel's own moves of
+        // someone to another job reach it too.)
         if (Enemy.Intel != null) Enemy.Intel.Leave(Enemy);
     }
 
@@ -235,10 +237,10 @@ public class SearchingState : EnemyStateBase
         DebugLog.Info($"{Enemy.name} {what}.", Enemy);
     }
 
-    // An area move, not a point: officers of equal weight block each other (the push rule), so two
+    // An area move, not a point: enemies of equal weight block each other (the push rule), so two
     // sent to one spot used to leave the second pushing at the first until the travel limit. The
     // navigator arrives once progress stalls inside the area, which is how he ends up beside the
-    // first officer and looks from there. No path at all is a setup problem and warns; a stall
+    // first enemy and looks from there. No path at all is a setup problem and warns; a stall
     // outside the area is only crowding, and is logged.
     public override void FixedTick()
     {
@@ -291,7 +293,7 @@ public class SearchingState : EnemyStateBase
         switch (job.Step)
         {
             case JobStep.Call:
-                // The lead looks at the officer he is calling, and that officer, who has only just been
+                // The lead looks at the enemy he is calling, and that enemy, who has only just been
                 // added, turns to face the lead. Before any call, and for anyone else, it is the spot.
                 Enemy.Stop();
                 if (job.Callee != null && job.Lead == Enemy) Enemy.FaceToward(job.Callee.transform.position);

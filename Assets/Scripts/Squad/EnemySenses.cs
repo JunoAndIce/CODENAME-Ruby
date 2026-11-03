@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// One officer's senses beyond sight: what he hears, and what he notices moving, dead or
+/// One enemy's senses beyond sight: what he hears, and what he notices moving, dead or
 /// dropped. Kept out of EnemyController so its scans don't grow the controller further.
 /// </summary>
 public class EnemySenses
@@ -20,7 +20,7 @@ public class EnemySenses
     {
         _enemy = enemy;
         // A sweep every frame would be wasted: a body at notice speed moves a few centimetres in that
-        // time, and the sweep is the costly part. Each officer's first sweep is at a random offset so
+        // time, and the sweep is the costly part. Each enemy's first sweep is at a random offset so
         // a squad doesn't scan on the same physics step.
         _nextScan = Time.time + Random.Range(0f, enemy.ScanInterval);
     }
@@ -91,38 +91,38 @@ public class EnemySenses
         }
     }
 
-    // Corpses come from the squad's registered officers, not a physics sweep: a body at rest has
+    // Corpses come from the squad's registered enemies, not a physics sweep: a body at rest has
     // trigger colliders, and the registry is short and needs no buffer to overflow. The cheap
     // tests (dead, known) run first, so the one sight ray is only for a corpse he could notice.
     private void ScanCorpses()
     {
-        IReadOnlyList<EnemyController> officers = _enemy.Intel.Enemies;
-        for (int i = 0; i < officers.Count; i++)
+        IReadOnlyList<EnemyController> enemies = _enemy.Intel.Enemies;
+        for (int i = 0; i < enemies.Count; i++)
         {
-            EnemyController officer = officers[i];
-            if (officer == null || officer == _enemy || !officer.Health.IsDead) continue;
-            if (_enemy.Memory.KnowsBody(officer)) continue;
+            EnemyController enemy = enemies[i];
+            if (enemy == null || enemy == _enemy || !enemy.Health.IsDead) continue;
+            if (_enemy.Memory.KnowsBody(enemy)) continue;
 
-            Vector3 at = officer.transform.position;
-            if (!_enemy.InView(at, _enemy.BodyNoticeRange) || !_enemy.HasClearSight(at, officer.transform)) continue;
+            Vector3 at = enemy.transform.position;
+            if (!_enemy.InView(at, _enemy.BodyNoticeRange) || !_enemy.HasClearSight(at, enemy.transform)) continue;
 
             // Known to the squad but not to him: he stops and looks at it where he stands, and is wary
             // from then on, but doesn't go to it: someone has already been. Unknown to both: it goes
             // on the squad's books and he searches where it lies. The pool is read as published, a
             // little stale, like everything else he reads from it.
-            bool squadKnows = _enemy.Intel.Published.KnowsBody(officer);
-            _enemy.Intel.ReportBody(officer);
-            _enemy.Memory.RememberBody(officer);
+            bool squadKnows = _enemy.Intel.Published.KnowsBody(enemy);
+            _enemy.Intel.ReportBody(enemy);
+            _enemy.Memory.RememberBody(enemy);
             if (squadKnows)
             {
-                Glance(at, StimulusKind.Body, $"the body of {officer.name}, already on the squad's books");
+                Glance(at, StimulusKind.Body, $"the body of {enemy.name}, already on the squad's books");
                 continue;
             }
-            Notice(at, StimulusKind.Body, $"the body of {officer.name}");
+            Notice(at, StimulusKind.Body, $"the body of {enemy.name}");
         }
     }
 
-    // Only an armed officer goes looking for a gun: an unarmed one has no use for it here (Rearm
+    // Only an armed enemy goes looking for a gun: an unarmed one has no use for it here (Rearm
     // is the one that would take it). Resting guns only, since a tumbling gun is still in flight.
     private void ScanLooseGuns()
     {
@@ -171,7 +171,7 @@ public class EnemySenses
         _enemy.Investigate(origin, row.Response, row.Priority, isFind: kind is StimulusKind.Body or StimulusKind.LooseGun);
     }
 
-    // A character is one body for this purpose, so a bone of a tumbling officer isn't a body of its
+    // A character is one body for this purpose, so a bone of a tumbling enemy isn't a body of its
     // own. Ruby is never a body to react to: she's the one being hunted. Null means skip.
     private static Rigidbody BodyOf(Rigidbody body)
     {
@@ -184,10 +184,10 @@ public class EnemySenses
     {
         if (body == _enemy.Body || body.isKinematic) return;
 
-        // An officer on his feet walks about; that's his own business, not a sound. Only one
+        // An enemy on his feet walks about; that's his own business, not a sound. Only one
         // that's held on the chain or tumbling counts.
-        EnemyController officer = body.GetComponentInParent<EnemyController>();
-        if (officer != null && !officer.IsHeld && !IsTumbling(body)) return;
+        EnemyController enemy = body.GetComponentInParent<EnemyController>();
+        if (enemy != null && !enemy.IsHeld && !IsTumbling(body)) return;
 
         float speed = body.linearVelocity.magnitude;
         if (speed < Stimuli.Rules.NoticeSpeed) return;

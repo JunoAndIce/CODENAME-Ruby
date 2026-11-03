@@ -2,8 +2,8 @@ using UnityEngine;
 
 /// <summary>
 /// At his post. Where he started is his post: after a search, a fall or a shove he walks back to
-/// it and turns the way he started, so an idle officer is never left standing wherever his last
-/// job ended. Aggressive, he comes back faster. Noticing Ruby, hearing something or wanting a gun
+/// it and turns the way he started, so an idle enemy is never left standing wherever his last
+/// job ended. Aggressive, he comes back at the aggressive patrol speed. Noticing Ruby, hearing something or wanting a gun
 /// is the table's business, not this state's.
 /// </summary>
 public class IdleState : EnemyStateBase
@@ -32,7 +32,7 @@ public class IdleState : EnemyStateBase
         }
         if (_gaveUp) return;
 
-        // The same limit as a search's walk: a post another officer stands on, or one behind a
+        // The same limit as a search's walk: a post another enemy stands on, or one behind a
         // jam, mustn't have him pushing at it for good.
         _walkTimer += Time.deltaTime;
         if (_walkTimer < Enemy.SearchTravelLimit) return;

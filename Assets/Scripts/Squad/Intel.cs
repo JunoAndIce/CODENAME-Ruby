@@ -2,13 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// The squad's shared knowledge, and how it spreads. Enemies report what they see into an inbox;
-/// every Intel Interval the inbox is merged into a new snapshot (Published) that all of them can
-/// read. The pool is stale by design: between publishes it lags the truth by up to a second, so a
-/// fight Ruby has left doesn't end the instant she is out of sight. Speech is the opposite:
-/// immediate, but it travels the floor, not through walls. It also configures the stimulus bus
-/// with the stimulus rules while active. Without an active Intel, shots and hits go nowhere and
-/// the bus warns once.
+/// The squad's shared knowledge, how it spreads, and what the squad does about it. Enemies report
+/// what they see into an inbox; every Intel Interval the inbox is merged into a new snapshot
+/// (Published) that all of them can read. The pool is stale by design: between publishes it lags
+/// the truth by up to a second, so a fight Ruby has left doesn't end the instant she is out of
+/// sight. Speech is the opposite: immediate, but it travels the floor, not through walls. Sounds
+/// are heard here too: each one is flooded once, and every enemy inside it reacts through the
+/// behaviour map. A reaction becomes a group job (GroupJob), which Intel owns: it starts, matches,
+/// upgrades and advances jobs, calls members in, and takes them off. It also configures the
+/// stimulus bus with the stimulus rules while active. Without an active Intel, shots and hits go
+/// nowhere and the bus warns once.
 /// </summary>
 // Runs before the enemies (order 0), so every member reads a job's new step on the same frame.
 [DefaultExecutionOrder(-20)]
@@ -20,19 +23,19 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0.05f)] private float _intelInterval = 1f;
     [Tooltip("How far a spoken report carries, in path metres from the speaker (round walls, not through them).")]
     [SerializeField, Min(0f)] private float _speechRange = 15f;
-    [Tooltip("Which stimuli the squad reacts to and how. Without it officers react to no stimulus.")]
+    [Tooltip("Which stimuli the squad reacts to and how. Without it enemies react to no stimulus.")]
     [SerializeField] private BehaviourMap _defaultMap;
 
     [Header("Group jobs")]
-    [Tooltip("The most officers on one check or search, the lead included. The spec's number is three.")]
+    [Tooltip("The most enemies on one check or search, the lead included. The spec's number is three.")]
     [SerializeField, Range(1, 6)] private int _jobCap = 3;
     [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another.")]
     [SerializeField, Min(0f)] private float _jobMatchRadius = 10f;
     [Tooltip("How long a team of two or three turns toward the spot before anyone goes, in seconds. A check of one skips it.")]
     [SerializeField, Min(0f)] private float _gatherTime = 0.75f;
-    [Tooltip("How long the officer who heard something looks at it before he calls anyone, in seconds. Nobody else is on the job until he has reacted.")]
+    [Tooltip("How long the enemy who heard something looks at it before he calls anyone, in seconds. Nobody else is on the job until he has reacted.")]
     [SerializeField, Min(0f)] private float _reactTime = 0.5f;
-    [Tooltip("How long each call takes, in seconds: he turns to the nearest officer and calls him, and that officer turns to face him. Then the next nearest, and so on.")]
+    [Tooltip("How long each call takes, in seconds: he turns to the nearest enemy and calls him, and that enemy turns to face him. Then the next nearest, and so on.")]
     [SerializeField, Min(0f)] private float _callTime = 0.6f;
 
     [Header("Debug")]
@@ -56,7 +59,7 @@ public class Intel : MonoBehaviour
     private readonly List<SoundMark> _soundMarks = new();
 
     private readonly List<EnemyController> _enemies = new();
-    // The squad's books on dead officers and loose guns. Only ever added to within a level.
+    // The squad's books on dead enemies and loose guns. Only ever added to within a level.
     private readonly HashSet<EnemyController> _knownBodies = new();
     private readonly HashSet<Gun> _knownGuns = new();
     private RubyFact _pendingRuby;
@@ -74,17 +77,17 @@ public class Intel : MonoBehaviour
     private readonly HashSet<EnemyController> _warnedJobNoReach = new();
     private float _nextPublish;
 
-    // The open jobs. Live, not published: this is coordination and not knowledge, so two officers who
+    // The open jobs. Live, not published: this is coordination and not knowledge, so two enemies who
     // hear one gunshot in the same frame must find each other's job instead of starting two.
     private readonly List<GroupJob> _jobs = new();
-    // While AdvanceJobs walks _jobs, a job that empties (AdvanceCall takes its last officer) is only
+    // While AdvanceJobs walks _jobs, a job that empties (AdvanceCall takes its last enemy) is only
     // marked here and removed after the walk: removing it mid-walk shifted the next job into its slot,
     // and that job missed a tick.
     private bool _advancing;
     private readonly List<GroupJob> _emptied = new();
     private struct Candidate
     {
-        public EnemyController Officer;
+        public EnemyController Enemy;
         public float Metres;
     }
     private readonly List<Candidate> _candidates = new();
@@ -101,7 +104,7 @@ public class Intel : MonoBehaviour
     public float JobMatchRadius => _jobMatchRadius;
 
     /// <summary>
-    /// The behaviour map every officer reads. Null only when the asset is missing, which OnEnable
+    /// The behaviour map every enemy reads. Null only when the asset is missing, which OnEnable
     /// reports once; callers treat null as "no row", so nothing reacts and nothing throws.
     /// </summary>
     public BehaviourMap MapAt(Vector3 point) => _defaultMap;
@@ -207,9 +210,9 @@ public class Intel : MonoBehaviour
     }
 
     // The lead reacts to what he heard first, with nobody else on the job. Then he calls the nearest
-    // officer: he turns to him and that officer, only now added to the job, turns to face him. When that
+    // enemy: he turns to him and that enemy, only now added to the job, turns to face him. When that
     // call has had its time he calls the next, and when nobody is left the team gathers or sets off.
-    // Each officer is checked again as he is called: in the second or so since the sound he may have
+    // Each enemy is checked again as he is called: in the second or so since the sound he may have
     // gone to Aggro, been grabbed, or been taken by another job, and a stale name must not be added.
     private void AdvanceCall(GroupJob job)
     {
@@ -239,7 +242,7 @@ public class Intel : MonoBehaviour
                 continue;
             }
 
-            // A one-officer job he was on is closed by taking him off it: he is better used here.
+            // A one-enemy job he was on is closed by taking him off it: he is better used here.
             Leave(next);
             job.Callee = next;
             JoinMember(job, next);
@@ -248,7 +251,7 @@ public class Intel : MonoBehaviour
             return;
         }
 
-        // Nobody left to call: the team turns to the spot, or a lone officer or a search goes straight there.
+        // Nobody left to call: the team turns to the spot, or a lone enemy or a search goes straight there.
         job.Callee = null;
         if (job.Kind == JobKind.Check && job.Count > 1) AdvanceTo(job, JobStep.Gather, $"gathers: {job.Count} officers turn toward {job.Point}");
         else AdvanceTo(job, JobStep.Go, "sets off");
@@ -307,7 +310,7 @@ public class Intel : MonoBehaviour
 
     public void Unregister(EnemyController enemy) => _enemies.Remove(enemy);
 
-    /// <summary>Every registered officer, alive or dead. Read by index, never enumerated, so a scan allocates nothing.</summary>
+    /// <summary>Every registered enemy, alive or dead. Read by index, never enumerated, so a scan allocates nothing.</summary>
     public IReadOnlyList<EnemyController> Enemies => _enemies;
 
     /// <summary>Drops a sighting in the inbox. It reaches everyone at the next publish; the newest report wins.</summary>
@@ -319,7 +322,7 @@ public class Intel : MonoBehaviour
         _pendingReporter = reporter;
     }
 
-    /// <summary>The squad has a dead officer on its books. True only the first time anyone reports him.</summary>
+    /// <summary>The squad has a dead enemy on its books. True only the first time anyone reports him.</summary>
     public bool ReportBody(EnemyController body) => _knownBodies.Add(body);
 
     /// <summary>The squad has a loose gun on its books. True only the first time anyone reports it.</summary>
@@ -328,7 +331,7 @@ public class Intel : MonoBehaviour
     /// <summary>
     /// A spoken report: every other living enemy within Speech Range along the floor learns it at
     /// once, as Told, and it goes in the inbox too. Measured in path metres, so a shout doesn't
-    /// carry through a wall to the room behind it. It is also **word of mouth**: an officer who sees
+    /// carry through a wall to the room behind it. It is also **word of mouth**: an enemy who sees
     /// Ruby recruits everyone who hears him, whatever they were doing, so each one is alerted into
     /// Aggro (not the grabbed, ragdolling or dead, which Alert refuses). Piece 6 will cap how many
     /// of them fight; until then everyone told joins.
@@ -398,7 +401,7 @@ public class Intel : MonoBehaviour
     /// A sound carries as far as its Loudness, in path metres on its own floor. The flood is made
     /// once per sound and shared by every listener, so it must be read before anything else floods:
     /// FloodFrom hands back one scratch field that the next flood overwrites. Hearing no longer
-    /// guarantees that: an officer's reaction can recruit others, and recruiting floods. So the
+    /// guarantees that: an enemy's reaction can recruit others, and recruiting floods. So the
     /// listeners are collected first, while the field is intact, and told afterwards.
     /// </summary>
     private void Hear(Stimulus stimulus)
@@ -464,9 +467,9 @@ public class Intel : MonoBehaviour
     }
 
     /// <summary>
-    /// The one decision for an officer who senses something worth investigating and may act on it
+    /// The one decision for an enemy who senses something worth investigating and may act on it
     /// (Idle, Patrol, or searching at a lower priority). Returns the job he is now in, or null when
-    /// it's left alone. An officer already on a job is dealt with at its own place first
+    /// it's left alone. An enemy already on a job is dealt with at its own place first
     /// (HandleAtOwnJob); this is for a thing **elsewhere**. In order:
     /// 1. **An open job is handling this** (its place is within Job Match Radius). A more serious
     ///    thing upgrades it, a find turns a check into a search, and a stronger reason (an attack,
@@ -475,7 +478,7 @@ public class Intel : MonoBehaviour
     ///    he leaves it alone: he never just stands there as a second job on the same thing. One
     ///    already on a job **stays on it** (the return is his own job) and the caller makes the thing
     ///    a distraction, so he is never left in Searching with no job.
-    /// 2. **Nothing is.** He starts a job and becomes its lead, and calls in the free officers near
+    /// 2. **Nothing is.** He starts a job and becomes its lead, and calls in the free enemies near
     ///    him, nearest first, up to the cap. A find (a body, a loose gun) is already found, so it
     ///    starts a Search; anything else is a Check, for a checker to go and see.
     /// Every decision logs a line naming the job, so what the squad did is readable in the Console.
@@ -503,7 +506,7 @@ public class Intel : MonoBehaviour
             if (own != null)
             {
                 // A team that is full or past recruiting can't take him, and dropping him from his own
-                // job here left him in Searching with no job. The full-team rule is for officers who
+                // job here left him in Searching with no job. The full-team rule is for enemies who
                 // aren't on a job already.
                 DebugLog.Info($"{who.name} stays on {own}: {reason} at {point} is {match}'s, and {why}.", who);
                 return own;
@@ -521,7 +524,7 @@ public class Intel : MonoBehaviour
         _jobs.Add(job);
         JoinMember(job, who);
         DebugLog.Info($"{who.name} starts {job} at {point}.", who);
-        // He is the only one on the job for now. The officers he will call are only found here, by
+        // He is the only one on the job for now. The enemies he will call are only found here, by
         // name, and are added one at a time once he has reacted (AdvanceCall), so none of them turns
         // the moment the sound is heard: each turns afterwards, in answer to the one who calls him.
         FindCallees(job, who);
@@ -536,7 +539,7 @@ public class Intel : MonoBehaviour
     }
 
     /// <summary>
-    /// Takes an officer off his job: when he goes to Aggro, is grabbed, ragdolls, dies or is destroyed,
+    /// Takes an enemy off his job: when he goes to Aggro, is grabbed, ragdolls, dies or is destroyed,
     /// or finishes. The next member leads if he was the lead, and a job with nobody
     /// in it closes and leaves nothing behind.
     /// </summary>
@@ -569,7 +572,7 @@ public class Intel : MonoBehaviour
 
     /// <summary>
     /// Whether a point is at a job's place, as a new disturbance is judged against it: the job is
-    /// open and the point is within Job Match Radius. The one test for FindMatch and for an officer's
+    /// open and the point is within Job Match Radius. The one test for FindMatch and for an enemy's
     /// own job, so they can't disagree.
     /// </summary>
     public bool Covers(GroupJob job, Vector3 point) => Covers(job, point, out _);
@@ -639,7 +642,7 @@ public class Intel : MonoBehaviour
     }
 
     // The team's reason only rises, and every member shares it, so they end together. An attack makes
-    // them all wary now, not each when he happens to sense it: an officer who latched wary on his
+    // them all wary now, not each when he happens to sense it: an enemy who latched wary on his
     // own reading walked off aggressive while the rest of his job said all clear.
     private void Elevate(GroupJob job, StimulusResponse reason, string why)
     {
@@ -648,7 +651,7 @@ public class Intel : MonoBehaviour
         DebugLog.Info($"{job} is raised to {reason}: {why}.", this);
     }
 
-    // Puts an officer on a job. One who has seen Ruby knows she is about, so a job he is on is an
+    // Puts an enemy on a job. One who has seen Ruby knows she is about, so a job he is on is an
     // attack, as it would be if he had sensed the thing himself (spec piece 2).
     private void JoinMember(GroupJob job, EnemyController who)
     {
@@ -671,7 +674,7 @@ public class Intel : MonoBehaviour
         foreach (EnemyController member in job.Members) member.FollowJob(job);
     }
 
-    // Finds the free officers within Speech Range of the lead, nearest first, up to the cap, and queues
+    // Finds the free enemies within Speech Range of the lead, nearest first, up to the cap, and queues
     // them on the job to be called. Nobody is added or moved here. The flood is read to the end
     // before anything else, because FloodFrom's field is overwritten by the next flood.
     private void FindCallees(GroupJob job, EnemyController lead)
@@ -694,18 +697,18 @@ public class Intel : MonoBehaviour
         }
 
         _candidates.Clear();
-        foreach (EnemyController officer in _enemies)
+        foreach (EnemyController enemy in _enemies)
         {
-            if (officer == lead || !officer.CanJoinJob(job.Priority)) continue;
-            if (PathGrid.At(officer.transform.position) != grid) continue;
-            if (!reach.TryGetDistance(officer.transform.position, out float metres) || metres > _speechRange) continue;
-            _candidates.Add(new Candidate { Officer = officer, Metres = metres });
+            if (enemy == lead || !enemy.CanJoinJob(job.Priority)) continue;
+            if (PathGrid.At(enemy.transform.position) != grid) continue;
+            if (!reach.TryGetDistance(enemy.transform.position, out float metres) || metres > _speechRange) continue;
+            _candidates.Add(new Candidate { Enemy = enemy, Metres = metres });
         }
         if (_candidates.Count == 0) return;
 
         _candidates.Sort((a, b) => a.Metres.CompareTo(b.Metres));
         int room = job.Cap - job.Count;
-        for (int i = 0; i < _candidates.Count && i < room; i++) job.QueueCall(_candidates[i].Officer);
+        for (int i = 0; i < _candidates.Count && i < room; i++) job.QueueCall(_candidates[i].Enemy);
     }
 
     private void RecordSound(Stimulus stimulus, FlowField reach)

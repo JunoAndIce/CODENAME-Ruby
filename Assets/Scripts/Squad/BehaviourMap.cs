@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>What an officer does about a stimulus. Numbers are saved by assets: new values take new numbers.</summary>
+/// <summary>What an enemy does about a stimulus. Numbers are saved by assets: new values take new numbers.</summary>
 public enum StimulusResponse
 {
     Ignore = 0,
@@ -40,7 +40,7 @@ public class BehaviourMap : ScriptableObject
     /// Looks up the row for a kind. A kind with no row is ignored, and warned about once. A priority
     /// outside 1 to 5 (an asset saved before the scale was 1 to 5) is warned about once and held to
     /// the range, because a row above the top would outrank the search from Aggro and pull an
-    /// officer off a lost player.
+    /// enemy off a lost player.
     /// </summary>
     public bool TryGetRow(StimulusKind kind, out Row row)
     {
