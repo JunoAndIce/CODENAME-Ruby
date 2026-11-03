@@ -3,12 +3,14 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Generic state machine, run by the enemy. Nodes are keyed by state Type, so each
-/// state class has one instance per machine, built once and reused across transitions.
+/// state class has one instance per machine, built once and reused across transitions. A table's
+/// order is its priority: transitions are tried in the order they were added, any-state ones first,
+/// and the first whose condition holds wins.
 /// </summary>
 public class StateMachine
 {
     readonly Dictionary<Type, StateNode> _nodes = new();
-    readonly HashSet<ITransition> _anyTransitions = new();
+    readonly List<ITransition> _anyTransitions = new();
     StateNode _current;
 
     public IState Current => _current?.State;
@@ -64,7 +66,7 @@ public class StateMachine
     class StateNode
     {
         public IState State { get; }
-        public HashSet<ITransition> Transitions { get; } = new();
+        public List<ITransition> Transitions { get; } = new();
 
         public StateNode(IState state) => State = state;
     }
