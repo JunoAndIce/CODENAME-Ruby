@@ -3,10 +3,10 @@ using UnityEngine;
 
 /// <summary>
 /// The squad's shared knowledge, how it spreads, and what the squad does about it. Enemies report
-/// what they see into an inbox; every Intel Interval the inbox is merged into a new snapshot
-/// (Published) that all of them can read. The pool is stale by design: between publishes it lags
-/// the truth by up to a second, so a fight Ruby has left doesn't end the instant she is out of
-/// sight. Speech is the opposite: immediate, but it travels the floor, not through walls. Sounds
+/// what they see into the pool's inbox (KnowledgePool, which Intel owns and ticks); every Intel
+/// Interval the inbox is merged into a new snapshot (Published) that all of them can read. The pool
+/// is stale by design: between publishes it lags the truth by up to a second, so a fight Ruby has
+/// left doesn't end the instant she is out of sight. Speech is the opposite: immediate, but it travels the floor, not through walls. Sounds
 /// are heard here too: each one is flooded once, and every enemy inside it reacts through the
 /// behaviour map. A reaction becomes a group job (GroupJob), which Intel owns: it starts, matches,
 /// upgrades and advances jobs, calls members in, and takes them off. It also configures the
@@ -59,19 +59,14 @@ public class Intel : MonoBehaviour
     private readonly List<SoundMark> _soundMarks = new();
 
     private readonly List<EnemyController> _enemies = new();
-    // The squad's books on dead enemies and loose guns. Only ever added to within a level.
-    private readonly HashSet<EnemyController> _knownBodies = new();
-    private readonly HashSet<Gun> _knownGuns = new();
-    private RubyFact _pendingRuby;
-    private bool _hasPendingRuby;
-    private EnemyController _pendingReporter;
+    // The shared pool: inbox, publish clock and the published snapshot. Intel ticks it and forwards to it.
+    private readonly KnowledgePool _pool = new();
     // One reach per use, each with warn-once sets of its own. Each enemy warns once about a setup
     // problem, however often he speaks or is spoken to; a sound that nobody can hear warns once per
     // source object, not once per shot.
     private readonly FloorReach _speech = new();
     private readonly FloorReach _sound = new();
     private readonly FloorReach _calling = new();
-    private float _nextPublish;
 
     // The open jobs. Live, not published: this is coordination and not knowledge, so two enemies who
     // hear one gunshot in the same frame must find each other's job instead of starting two.
@@ -93,7 +88,7 @@ public class Intel : MonoBehaviour
     private bool _saying;    // Say is walking _hearers: a nested Say must use a list of its own
 
     /// <summary>The pool as of the last publish. A new object each time, so one in hand never changes.</summary>
-    public IntelSnapshot Published { get; private set; } = IntelSnapshot.Empty;
+    public IntelSnapshot Published => _pool.Published;
 
     public float SpeechRange => _speechRange;
     public int JobCap => _jobCap;
@@ -115,6 +110,11 @@ public class Intel : MonoBehaviour
             return false;
         }
         return map.TryGetRow(kind, out row);
+    }
+
+    private void Awake()
+    {
+        _pool.LogContext = this;
     }
 
     // Enable and disable rather than Awake and destroy, so switching the component off also
@@ -143,9 +143,7 @@ public class Intel : MonoBehaviour
     private void Update()
     {
         AdvanceJobs(Time.deltaTime);
-        if (Time.time < _nextPublish) return;
-        _nextPublish = Time.time + _intelInterval;
-        Publish();
+        _pool.Tick(Time.deltaTime, _intelInterval);
     }
 
     // The jobs' one clock. A job, not its members, decides when each step ends, so a team looks
@@ -310,19 +308,13 @@ public class Intel : MonoBehaviour
     public IReadOnlyList<EnemyController> Enemies => _enemies;
 
     /// <summary>Drops a sighting in the inbox. It reaches everyone at the next publish; the newest report wins.</summary>
-    public void Report(RubyFact fact, EnemyController reporter)
-    {
-        if (_hasPendingRuby && _pendingRuby.Time >= fact.Time) return;
-        _pendingRuby = fact;
-        _hasPendingRuby = true;
-        _pendingReporter = reporter;
-    }
+    public void Report(RubyFact fact, EnemyController reporter) => _pool.Report(fact, reporter);
 
     /// <summary>The squad has a dead enemy on its books. True only the first time anyone reports him.</summary>
-    public bool ReportBody(EnemyController body) => _knownBodies.Add(body);
+    public bool ReportBody(EnemyController body) => _pool.ReportBody(body);
 
     /// <summary>The squad has a loose gun on its books. True only the first time anyone reports it.</summary>
-    public bool ReportGun(Gun gun) => _knownGuns.Add(gun);
+    public bool ReportGun(Gun gun) => _pool.ReportGun(gun);
 
     /// <summary>
     /// A spoken report: every other living enemy within Speech Range along the floor learns it at
@@ -718,26 +710,6 @@ public class Intel : MonoBehaviour
         mark.Time = Time.time;
         reach.CollectReached(mark.Cells, mark.Metres);
         _soundMarks.Add(mark);
-    }
-
-    private void Publish()
-    {
-        bool rubyChanged = _hasPendingRuby && (!Published.RubyReported || _pendingRuby.Time > Published.Ruby.Time);
-        // Bodies and guns are only ever added within a level, so a count change is a real change.
-        bool bodiesChanged = _knownBodies.Count != Published.Bodies.Count;
-        bool gunsChanged = _knownGuns.Count != Published.Guns.Count;
-        if (!rubyChanged && !bodiesChanged && !gunsChanged) return;
-
-        // Always a new object: an enemy mid-decision holds the old one and must see it unchanged.
-        Published = new IntelSnapshot(
-            Published.RubyReported || _hasPendingRuby,
-            rubyChanged ? _pendingRuby : Published.Ruby,
-            _knownBodies,
-            _knownGuns);
-
-        DebugLog.Info(rubyChanged
-            ? $"Intel published: Ruby last at {Published.Ruby.Position} (reported by {(_pendingReporter != null ? _pendingReporter.name : "someone")})."
-            : $"Intel published: {Published.Bodies.Count} bod{(Published.Bodies.Count == 1 ? "y" : "ies")}, {Published.Guns.Count} loose gun(s).", this);
     }
 
     // Cells a sound reached, brightest at the source and fading with distance, and the whole mark
