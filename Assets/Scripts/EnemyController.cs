@@ -779,11 +779,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             float age = Time.time - fact.Time;
             float distance = PathGrid.FlatDistance(fact.Position, point);
             // Floors are independent: news of Ruby upstairs says nothing about a thud downstairs, whatever
-            // their flat distance. A fact or point on no grid isn't near anything (Hear and the walk
-            // already warn about a point off every grid).
-            PathGrid factFloor = PathGrid.At(fact.Position);
-            if (factFloor != null && factFloor == PathGrid.At(point)
-                && age <= _attackNearTime && distance <= _attackNearRadius)
+            // their flat distance. A fact or point on no grid isn't near anything. That isn't warned here
+            // because it can't arise unwarned: a point off every grid was warned where it came from (Hear,
+            // Handle, the walk), and so was a fact (Hear and Say warn about a speaker, listener or sound
+            // off a grid, and Aggro's chase after a Ruby seen off the grid warns in the navigator). The
+            // floor lookups run last, after the cheap tests.
+            if (age <= _attackNearTime && distance <= _attackNearRadius
+                && PathGrid.At(fact.Position) is PathGrid factFloor && factFloor == PathGrid.At(point))
             {
                 why = $"Ruby was {fact.Source} {distance:0.#} m from it, {age:0.#}s ago";
                 return true;
