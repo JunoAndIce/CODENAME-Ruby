@@ -465,6 +465,10 @@ its source to check it out, and the rest carry on. He returns to the job only on
 complete. If the job ends before he makes it back, he goes back to his patrol route. Recorded
 with its open questions as decision 8 of `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`.
 
+**Gunshots always mobilise** *(user, 2026-11-03; not yet built)*: officers always go to the sound
+of a new gunshot, even mid-search or as a search ends. An officer on a job first signals to its
+other members, then they mobilise toward it. Decision 9 of the same plan.
+
 **Search together** (Searching for Attack or Problem, Plus):
 
 - **A search team is at most three,** and can be two or just one *(user)*. That holds for every

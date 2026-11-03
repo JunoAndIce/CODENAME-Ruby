@@ -41,6 +41,15 @@
      - Does every distraction send someone, or only one not already being checked?
      - Does it still count toward the jig?
      - What if his check finds something: does it convert his job, or start a new one?
+9. **Gunshots always mobilise (added 2026-11-03, not yet planned to a task).** *(User: "When enemies are searching a spot, it feels strange that they will hear a gunshot, but if their search is about to end, it looks like they just ignore the gunshot sound and walk away like nothing is happening. We want officers to respond to gunshots by ALWAYS going to the sound of new gunshots any officers in a job, first signals to the people in the job before mobilizing.")*
+   - **Officers always go to the sound of a new gunshot.** A search that is about to end, or one at an equal or higher priority, must not let a gunshot pass as a mere distraction and then walk off as if nothing happened.
+   - **On a job, the officer who hears it first signals to the others on his job, then they mobilise** toward it.
+   - My reading, to confirm when it's planned: the whole job goes, so this is the exception to decision 8's "send one". Until it's built, a gunshot at or below a searcher's priority stays a distraction.
+   - Open, to settle when it's planned:
+     - Does a gunshot that reaches an officer during Stand Down, or after the job is Done, still mobilise the job?
+     - Does a job-less searcher go too?
+     - What makes a gunshot "new": a shot outside a firefight he already knows of, or any shot after a gap?
+     - Is the signal a Call-style gesture with its own time?
 
 ## Global Constraints
 
