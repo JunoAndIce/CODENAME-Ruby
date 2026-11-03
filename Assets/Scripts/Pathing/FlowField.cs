@@ -45,6 +45,9 @@ public class FlowField
 
     public PathGrid Grid => _grid;
 
+    /// <summary>Bumped by every flood. A reader of a shared field (FloodFrom's) notes it and checks it again to know nothing overwrote the field meanwhile.</summary>
+    public int Generation => _generation;
+
     /// <summary>Whether the last flood found walkable ground at its goal. False means nothing was reached, so every distance query fails.</summary>
     public bool HasGoal => _hasGoal;
 

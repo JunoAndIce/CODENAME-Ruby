@@ -65,16 +65,12 @@ public class Intel : MonoBehaviour
     private RubyFact _pendingRuby;
     private bool _hasPendingRuby;
     private EnemyController _pendingReporter;
-    // Each enemy warns once about a setup problem, however often he speaks or is spoken to.
-    private readonly HashSet<EnemyController> _warnedNoGrid = new();
-    private readonly HashSet<EnemyController> _warnedNoReach = new();
-    private readonly HashSet<EnemyController> _warnedListenerNoGrid = new();
-    // A sound that nobody can hear warns once per source object, not once per shot.
-    private readonly HashSet<Object> _warnedNoHearing = new();
-    private readonly HashSet<Object> _warnedSoundNoGrid = new();
-    private readonly HashSet<EnemyController> _warnedListenerCantHear = new();
-    private readonly HashSet<EnemyController> _warnedJobNoGrid = new();
-    private readonly HashSet<EnemyController> _warnedJobNoReach = new();
+    // One reach per use, each with warn-once sets of its own. Each enemy warns once about a setup
+    // problem, however often he speaks or is spoken to; a sound that nobody can hear warns once per
+    // source object, not once per shot.
+    private readonly FloorReach _speech = new();
+    private readonly FloorReach _sound = new();
+    private readonly FloorReach _calling = new();
     private float _nextPublish;
 
     // The open jobs. Live, not published: this is coordination and not knowledge, so two enemies who
@@ -340,18 +336,16 @@ public class Intel : MonoBehaviour
     {
         Report(fact, speaker);
 
-        PathGrid grid = PathGrid.At(speaker.transform.position);
-        if (grid == null)
+        FloorReach.Status status = _speech.Begin(speaker.transform.position, _speechRange);
+        if (status == FloorReach.Status.NoGrid)
         {
-            if (_warnedNoGrid.Add(speaker))
+            if (_speech.FirstNoGrid(speaker))
                 Debug.LogWarning($"{speaker.name} is on no PathGrid, so nobody hears him: speech travels along the floor, which needs a grid.", speaker);
             return;
         }
-
-        FlowField reach = grid.FloodFrom(speaker.transform.position, _speechRange);
-        if (!reach.HasGoal)
+        if (status == FloorReach.Status.NoReach)
         {
-            if (_warnedNoReach.Add(speaker))
+            if (_speech.FirstNoReach(speaker))
                 Debug.LogWarning($"{speaker.name}'s speech reaches no one: no walkable ground is within reach of where he stands (against a blocked cell?).", speaker);
             return;
         }
@@ -365,19 +359,17 @@ public class Intel : MonoBehaviour
         foreach (EnemyController listener in _enemies)
         {
             if (listener == speaker || listener.Health.IsDead) continue;
-            PathGrid listenerGrid = PathGrid.At(listener.transform.position);
-            if (listenerGrid == null)
+            // Another floor is out of range: floors are independent by design, so he simply doesn't hear.
+            FloorReach.Standing standing = _speech.Measure(listener, _speechRange, out _);
+            if (standing == FloorReach.Standing.OffGrid)
             {
-                if (_warnedListenerNoGrid.Add(listener))
+                if (_speech.FirstOffGrid(listener))
                     Debug.LogWarning($"{listener.name} is on no PathGrid, so he can't hear speech.", listener);
                 continue;
             }
-            // Another grid is another floor: floors are independent by design, so he simply doesn't hear.
-            if (listenerGrid != grid) continue;
-            if (!reach.TryGetDistance(listener.transform.position, out float metres) || metres > _speechRange) continue;
-
-            hearers.Add(listener);
+            if (standing == FloorReach.Standing.InRange) hearers.Add(listener);
         }
+        _speech.End("speech", speaker);
 
         int heard = hearers.Count;
         int joined = 0;
@@ -408,28 +400,26 @@ public class Intel : MonoBehaviour
     {
         if (stimulus.Loudness <= 0f) return;
 
-        PathGrid grid = PathGrid.At(stimulus.Position);
-        if (grid == null)
+        FloorReach.Status status = _sound.Begin(stimulus.Position, stimulus.Loudness);
+        if (status == FloorReach.Status.NoGrid)
         {
             // Outside every grid, or above or below its height band: a setup problem, not silence,
             // and without a grid nobody hears it or learns where Ruby was.
             Object source = stimulus.Source != null ? stimulus.Source : this;
-            if (_warnedSoundNoGrid.Add(source))
+            if (_sound.FirstNoGrid(source))
                 Debug.LogWarning($"{stimulus.Kind} at {stimulus.Position} (from {source.name}) is on no PathGrid, so no one hears it: sound travels along the floor, which needs a grid.", source);
             return;
         }
-
-        FlowField reach = grid.FloodFrom(stimulus.Position, stimulus.Loudness);
-        if (!reach.HasGoal)
+        if (status == FloorReach.Status.NoReach)
         {
             // Mirrors Say: no walkable ground within reach of the source is a setup problem, not silence.
             Object source = stimulus.Source != null ? stimulus.Source : this;
-            if (_warnedNoHearing.Add(source))
+            if (_sound.FirstNoReach(source))
                 Debug.LogWarning($"{source.name}'s {stimulus.Kind} reaches no one: no walkable ground is within reach of {stimulus.Position} (against a blocked cell, or off the floor?).", source);
             return;
         }
         // Recording walks the whole grid, so it only happens while the overlay is on to show it.
-        if (_showSoundRange) RecordSound(stimulus, reach);
+        if (_showSoundRange) RecordSound(stimulus, _sound.Field);
         EnemyController sourceOwner = stimulus.Source != null ? stimulus.Source.GetComponentInParent<EnemyController>() : null;
 
         // A reaction that emits a sound of its own re-enters Hear while the outer call is still
@@ -440,19 +430,17 @@ public class Intel : MonoBehaviour
         foreach (EnemyController listener in _enemies)
         {
             if (listener == sourceOwner || listener.Health.IsDead) continue;
-            PathGrid listenerGrid = PathGrid.At(listener.transform.position);
-            if (listenerGrid == null)
+            // Another floor is out of range: floors are independent by design, so he simply doesn't hear.
+            FloorReach.Standing standing = _sound.Measure(listener, stimulus.Loudness, out _);
+            if (standing == FloorReach.Standing.OffGrid)
             {
-                if (_warnedListenerCantHear.Add(listener))
+                if (_sound.FirstOffGrid(listener))
                     Debug.LogWarning($"{listener.name} is on no PathGrid, so he can't hear sounds.", listener);
                 continue;
             }
-            // Another grid is another floor: floors are independent by design, so he simply doesn't hear.
-            if (listenerGrid != grid) continue;
-            if (!reach.TryGetDistance(listener.transform.position, out float metres) || metres > stimulus.Loudness) continue;
-
-            listeners.Add(listener);
+            if (standing == FloorReach.Standing.InRange) listeners.Add(listener);
         }
+        _sound.End($"a {stimulus.Kind} sound", stimulus.Source != null ? stimulus.Source : this);
 
         // Told afterwards, on the collected list: a reaction can recruit, and recruiting floods.
         if (!nested) _telling = true;
@@ -682,17 +670,16 @@ public class Intel : MonoBehaviour
     {
         if (job.IsFull) return;
 
-        PathGrid grid = PathGrid.At(lead.transform.position);
-        if (grid == null)
+        FloorReach.Status status = _calling.Begin(lead.transform.position, _speechRange);
+        if (status == FloorReach.Status.NoGrid)
         {
-            if (_warnedJobNoGrid.Add(lead))
+            if (_calling.FirstNoGrid(lead))
                 Debug.LogWarning($"{lead.name} is on no PathGrid, so he can't call anyone in: the officers he'd recruit are found along the floor, which needs a grid. He works alone.", lead);
             return;
         }
-        FlowField reach = grid.FloodFrom(lead.transform.position, _speechRange);
-        if (!reach.HasGoal)
+        if (status == FloorReach.Status.NoReach)
         {
-            if (_warnedJobNoReach.Add(lead))
+            if (_calling.FirstNoReach(lead))
                 Debug.LogWarning($"{lead.name} can't call anyone in: no walkable ground is within reach of where he stands (against a blocked cell?). He works alone.", lead);
             return;
         }
@@ -701,10 +688,11 @@ public class Intel : MonoBehaviour
         foreach (EnemyController enemy in _enemies)
         {
             if (enemy == lead || !enemy.CanJoinJob(job.Priority)) continue;
-            if (PathGrid.At(enemy.transform.position) != grid) continue;
-            if (!reach.TryGetDistance(enemy.transform.position, out float metres) || metres > _speechRange) continue;
+            // An enemy off the grid is no candidate and, unlike a listener, is not warned about.
+            if (_calling.Measure(enemy, _speechRange, out float metres) != FloorReach.Standing.InRange) continue;
             _candidates.Add(new Candidate { Enemy = enemy, Metres = metres });
         }
+        _calling.End("calling people in", lead);
         if (_candidates.Count == 0) return;
 
         _candidates.Sort((a, b) => a.Metres.CompareTo(b.Metres));
