@@ -415,24 +415,24 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// or not, so it always ends on an aggressive patrol. With walkThere false he looks from where
     /// he stands instead of going to the point (a glance at a body the squad already knows).
     /// On a job, a stimulus at the job's place goes to the job first (Intel.HandleAtOwnJob, BecomeWary).
-    /// isFind marks a body or gun sighting, which says nothing about where Ruby is.
+    /// The incident's IsFind marks a body or gun sighting, which says nothing about where Ruby is.
     /// </summary>
-    public bool Investigate(Vector3 point, StimulusResponse reason, int priority, bool walkThere = true, bool isFind = false)
+    public bool Investigate(Incident incident, bool walkThere = true)
     {
-        if (reason == StimulusResponse.Ignore)
+        if (incident.Reason == StimulusResponse.Ignore)
         {
-            DebugLog.Info($"{name} ignores {reason} at {point}: the map says to ignore it.", this);
+            DebugLog.Info($"{name} ignores {incident}: the map says to ignore it.", this);
             return false;
         }
-        if (reason == StimulusResponse.SearchForProblem && ShouldSearchForAttack(point, out string why))
+        if (incident.Reason == StimulusResponse.SearchForProblem && ShouldSearchForAttack(incident.Point, out string why))
         {
-            DebugLog.Info($"{name} treats the problem at {point} as an attack: {why}.", this);
-            reason = StimulusResponse.SearchForAttack;
+            DebugLog.Info($"{name} treats the problem at {incident.Point} as an attack: {why}.", this);
+            incident = incident.WithReason(StimulusResponse.SearchForAttack);
         }
-        if (reason == StimulusResponse.SearchForAttack) BecomeWary(point, $"{name} senses {reason} at {point}");
+        if (incident.Reason == StimulusResponse.SearchForAttack) BecomeWary(incident.Point, $"{name} senses {incident}");
         if (IsOverridden || _state.Current is RearmState or AggroState)
         {
-            DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): he is in {_state.Current.GetType().Name}.", this);
+            DebugLog.Info($"{name} ignores {incident} (priority {incident.Priority}): he is in {_state.Current.GetType().Name}.", this);
             return false;
         }
 
@@ -442,10 +442,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             // and a more serious thing upgrades it, for the whole team. Only what the job didn't take
             // is a distraction for him, and a glance never changes the job, so it never retargets him.
             GroupJob own = Job;
-            bool atOwnJob = own != null && Intel != null && Intel.Covers(own, point);
-            if (atOwnJob && Intel.HandleAtOwnJob(this, point, reason, priority, isFind, walkThere)) return true;
-            if (atOwnJob || priority <= Searching.Priority) return Distract(point, reason, priority, isFind);
-            if (own != null && !walkThere) return Distract(point, reason, priority, isFind);
+            bool atOwnJob = own != null && Intel != null && Intel.Covers(own, incident.Point);
+            if (atOwnJob && Intel.HandleAtOwnJob(this, new SearchRequest(incident, walkThere))) return true;
+            if (atOwnJob || incident.Priority <= Searching.Priority) return Distract(incident);
+            if (own != null && !walkThere) return Distract(incident);
 
             // More serious than his search: the squad decides, as a job. A glance off a job (walkThere
             // false) is his own look from where he stands, and a scene with no Intel (already reported)
@@ -453,14 +453,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             // nearby already has it; that counts as taken, or the motion scan would ask again every sweep.
             if (walkThere && Intel != null)
             {
-                Intel.Handle(this, point, reason, priority, isFind);
+                Intel.Handle(this, incident);
                 // Still on the job he was on: the team that has it can't take him, so he stays and is distracted.
-                if (own != null && Job == own) return Distract(point, reason, priority, isFind);
+                if (own != null && Job == own) return Distract(incident);
                 return true;
             }
 
-            Searching.Retarget(point, reason, priority, walkThere);
-            DebugLog.Info($"{name} retargets his search to {point}: {reason} at priority {priority}.", this);
+            Searching.Retarget(new SearchRequest(incident, walkThere));
+            DebugLog.Info($"{name} retargets his search to {incident.Point}: {incident.Reason} at priority {incident.Priority}.", this);
             return true;
         }
 
@@ -468,14 +468,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         {
             // Idle or patrolling: the squad decides whether this is already being handled, and who goes.
             // Left to a job nearby is as good as taken, for the reason above.
-            Intel.Handle(this, point, reason, priority, isFind);
+            Intel.Handle(this, incident);
             return true;
         }
 
         // Stage before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
-        Searching.Stage(point, reason, priority, walkThere);
+        Searching.Stage(new SearchRequest(incident, walkThere));
         _state.SetState(Searching);
-        DebugLog.Info($"{name} starts a search at {point}: {reason} at priority {priority}.", this);
+        DebugLog.Info($"{name} starts a search at {incident.Point}: {incident.Reason} at priority {incident.Priority}.", this);
         return true;
     }
 
@@ -496,20 +496,20 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // up: he aggros, and a thrown object's origin or a shot's muzzle is where he takes Ruby to be,
     // so Aggro has somewhere to go. A body or gun says nothing about her, so he goes to Aggro with
     // what he already knows, and searches where he stands if that is nothing.
-    private bool Distract(Vector3 point, StimulusResponse reason, int priority, bool isFind)
+    private bool Distract(Incident incident)
     {
         int count = Memory.NoteDistraction(Time.time, _distractionMemory, _distractionGap, out bool counted);
         if (counted && count >= _distractionThreshold)
         {
             Memory.ClearDistractions();
-            if (!isFind) Memory.Learn(new RubyFact(point, Time.time, Knowledge.Heard));
-            DebugLog.Info($"{name}: Enemies have been disturbed too much! ({count} disturbances in {_distractionMemory:0.#}s, the last {reason} at {point}); he aggros.", this);
+            if (!incident.IsFind) Memory.Learn(new RubyFact(incident.Point, Time.time, Knowledge.Heard));
+            DebugLog.Info($"{name}: Enemies have been disturbed too much! ({count} disturbances in {_distractionMemory:0.#}s, the last {incident}); he aggros.", this);
             Alert();
             return true;
         }
 
-        Searching.Distract(point, counted);
-        DebugLog.Info($"{name} {(counted ? "is distracted by" : "glances again at")} {reason} at {point} (priority {priority}, his search is {Searching.Priority}): {count} of {_distractionThreshold}.", this);
+        Searching.Distract(incident.Point, counted);
+        DebugLog.Info($"{name} {(counted ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {Searching.Priority}): {count} of {_distractionThreshold}.", this);
         return true;
     }
 
@@ -549,12 +549,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         if (job.Reason == StimulusResponse.SearchForAttack) Memory.BecomeWary();
         if (_state.Current is SearchingState)
         {
-            Searching.Retarget(job.Point, job.Reason, job.Priority, true);
+            Searching.Retarget(new SearchRequest(job.Incident));
             return;
         }
 
         // Stage before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
-        Searching.Stage(job.Point, job.Reason, job.Priority, true);
+        Searching.Stage(new SearchRequest(job.Incident));
         _state.SetState(Searching);
     }
 

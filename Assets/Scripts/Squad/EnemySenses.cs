@@ -41,7 +41,7 @@ public class EnemySenses
         if (!_enemy.Intel.TryGetRow(stimulus.Origin, stimulus.Kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} hears {stimulus.Kind} from {stimulus.Origin}: {row.Response} at priority {row.Priority}.", _enemy);
-        _enemy.Investigate(stimulus.Origin, row.Response, row.Priority);
+        _enemy.Investigate(new Incident(stimulus.Origin, row.Response, row.Priority));
     }
 
     /// <summary>
@@ -159,7 +159,7 @@ public class EnemySenses
         // On a job at its place, the job goes wary for everyone, not just the one who looked.
         _enemy.BecomeWary(at, $"{_enemy.name} glances at {what}");
         DebugLog.Info($"{_enemy.name} sees {what}: he looks at it from where he stands and is wary.", _enemy);
-        _enemy.Investigate(at, StimulusResponse.SearchForProblem, row.Priority, walkThere: false, isFind: true);
+        _enemy.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, isFind: true), walkThere: false);
     }
 
     private void Notice(Vector3 origin, StimulusKind kind, string what)
@@ -168,7 +168,7 @@ public class EnemySenses
 
         DebugLog.Info($"{_enemy.name} notices {what}: {row.Response} at priority {row.Priority}.", _enemy);
         // A body or a gun is found, not heard: it says nothing about where Ruby is.
-        _enemy.Investigate(origin, row.Response, row.Priority, isFind: kind is StimulusKind.Body or StimulusKind.LooseGun);
+        _enemy.Investigate(new Incident(origin, row.Response, row.Priority, isFind: kind is StimulusKind.Body or StimulusKind.LooseGun));
     }
 
     // A character is one body for this purpose, so a bone of a tumbling enemy isn't a body of its
@@ -200,7 +200,7 @@ public class EnemySenses
 
         DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: {row.Response} at priority {row.Priority}.", _enemy);
         // Recorded only when he took it: one he ignored (mid-fight, say) may still send him later.
-        if (_enemy.Investigate(origin, row.Response, row.Priority)) _reactedAt[body] = now;
+        if (_enemy.Investigate(new Incident(origin, row.Response, row.Priority))) _reactedAt[body] = now;
     }
 
     private static bool IsTumbling(Rigidbody body)

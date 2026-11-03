@@ -51,22 +51,22 @@ public class SearchingState : EnemyStateBase
     /// retarget: a search already running takes Retarget, which has no Enter to clear a stage, and
     /// a stage left standing would later hijack the search that follows Aggro.
     /// </summary>
-    public void Stage(Vector3 point, StimulusResponse reason, int priority, bool walk)
+    public void Stage(SearchRequest request)
     {
-        _target = point;
-        _reason = reason;
-        _priority = priority;
-        _walk = walk;
+        _target = request.Incident.Point;
+        _reason = request.Incident.Reason;
+        _priority = request.Incident.Priority;
+        _walk = request.WalkThere;
         _staged = true;
     }
 
     /// <summary>Moves a search already in progress to a new spot and reason. It starts over from the walk, so the new spot gets its full look on arrival.</summary>
-    public void Retarget(Vector3 point, StimulusResponse reason, int priority, bool walk)
+    public void Retarget(SearchRequest request)
     {
-        _target = point;
-        _reason = reason;
-        _priority = priority;
-        _walk = walk;
+        _target = request.Incident.Point;
+        _reason = request.Incident.Reason;
+        _priority = request.Incident.Priority;
+        _walk = request.WalkThere;
         Begin();
     }
 

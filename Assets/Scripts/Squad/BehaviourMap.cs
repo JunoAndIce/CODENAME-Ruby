@@ -30,6 +30,26 @@ public class BehaviourMap : ScriptableObject
         public StimulusResponse Response;
     }
 
+    /// <summary>
+    /// How serious a response is, for every "is this worse than that" test: Ignore 0, a problem 1, an
+    /// attack 2. Written out rather than read off the enum's number, because that number is saved by
+    /// assets and a value added later takes the next number whatever its place in the order. A value
+    /// not listed here is an error, not a guess: it is logged and held to its own number, which is
+    /// what the comparisons used before, so nothing changes until its place is decided.
+    /// </summary>
+    public static int Severity(StimulusResponse response)
+    {
+        switch (response)
+        {
+            case StimulusResponse.Ignore: return 0;
+            case StimulusResponse.SearchForProblem: return 1;
+            case StimulusResponse.SearchForAttack: return 2;
+            default:
+                Debug.LogError($"StimulusResponse {response} has no place in BehaviourMap.Severity, so it is ranked by its enum number. Give it a severity there.");
+                return (int)response;
+        }
+    }
+
     [SerializeField] private List<Row> _rows = new();
 
     // Not serialized: one warning per kind per session, not one per frame.

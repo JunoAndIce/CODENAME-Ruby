@@ -483,16 +483,16 @@ public class Intel : MonoBehaviour
     ///    starts a Search; anything else is a Check, for a checker to go and see.
     /// Every decision logs a line naming the job, so what the squad did is readable in the Console.
     /// </summary>
-    public GroupJob Handle(EnemyController who, Vector3 point, StimulusResponse reason, int priority, bool isFind)
+    public GroupJob Handle(EnemyController who, Incident incident)
     {
-        JobKind kind = isFind ? JobKind.Search : JobKind.Check;
+        JobKind kind = incident.IsFind ? JobKind.Search : JobKind.Check;
         GroupJob own = who.Job;
 
-        GroupJob match = FindMatch(point);
+        GroupJob match = FindMatch(incident.Point);
         if (match != null)
         {
-            if (Converts(match, priority, isFind)) Upgrade(match, point, reason, priority, kind);
-            else Elevate(match, reason, $"{who.name} senses {reason} at {point}");
+            if (Converts(match, incident)) Upgrade(match, incident, kind);
+            else Elevate(match, incident.Reason, $"{who.name} senses {incident}");
             if (match.Recruiting)
             {
                 // Decided before he is taken off his job: the destination is certain by now.
@@ -508,22 +508,22 @@ public class Intel : MonoBehaviour
                 // A team that is full or past recruiting can't take him, and dropping him from his own
                 // job here left him in Searching with no job. The full-team rule is for enemies who
                 // aren't on a job already.
-                DebugLog.Info($"{who.name} stays on {own}: {reason} at {point} is {match}'s, and {why}.", who);
+                DebugLog.Info($"{who.name} stays on {own}: {incident} is {match}'s, and {why}.", who);
                 return own;
             }
-            DebugLog.Info($"{who.name} leaves {reason} at {point} to {match}: {why}.", who);
+            DebugLog.Info($"{who.name} leaves {incident} to {match}: {why}.", who);
             return null;
         }
 
         if (own != null) Leave(who);
         // Nothing can match a job on no grid (Covers needs a floor), so say so now rather than let
         // every later sound there start a job of its own without a word.
-        if (PathGrid.At(point) == null)
-            Debug.LogWarning($"{who.name} starts a job at {point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
-        var job = new GroupJob(kind, reason, priority, point, _jobCap);
+        if (PathGrid.At(incident.Point) == null)
+            Debug.LogWarning($"{who.name} starts a job at {incident.Point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
+        var job = new GroupJob(kind, incident, _jobCap);
         _jobs.Add(job);
         JoinMember(job, who);
-        DebugLog.Info($"{who.name} starts {job} at {point}.", who);
+        DebugLog.Info($"{who.name} starts {job} at {incident.Point}.", who);
         // He is the only one on the job for now. The enemies he will call are only found here, by
         // name, and are added one at a time once he has reacted (AdvanceCall), so none of them turns
         // the moment the sound is heard: each turns afterwards, in answer to the one who calls him.
@@ -592,8 +592,8 @@ public class Intel : MonoBehaviour
 
     // A thing at a job's place changes the job when it is more serious, or when it is a find and the
     // job is only a check: a body or a gun is found whatever its priority, so the check is over.
-    private static bool Converts(GroupJob job, int priority, bool isFind) =>
-        priority > job.Priority || (isFind && job.Kind == JobKind.Check);
+    private static bool Converts(GroupJob job, Incident incident) =>
+        incident.Priority > job.Priority || (incident.IsFind && job.Kind == JobKind.Check);
 
     /// <summary>
     /// A member's stimulus **at his own job's place** (the caller has tested Covers), before anything
@@ -603,13 +603,14 @@ public class Intel : MonoBehaviour
     /// the team through RaiseJobAt, before this is reached. A glance (walkThere false, a find already
     /// on the books) never changes the job: it isn't worth a walk, so it only raises and distracts.
     /// </summary>
-    public bool HandleAtOwnJob(EnemyController who, Vector3 point, StimulusResponse reason, int priority, bool isFind, bool walkThere)
+    public bool HandleAtOwnJob(EnemyController who, SearchRequest request)
     {
+        Incident incident = request.Incident;
         GroupJob own = who.Job;
-        if (own == null || !walkThere || !Covers(own, point) || !Converts(own, priority, isFind)) return false;
+        if (own == null || !request.WalkThere || !Covers(own, incident.Point) || !Converts(own, incident)) return false;
 
-        Upgrade(own, point, reason, priority, isFind ? JobKind.Search : JobKind.Check);
-        DebugLog.Info($"{who.name} upgrades {own}: {reason} at {point}.", who);
+        Upgrade(own, incident, incident.IsFind ? JobKind.Search : JobKind.Check);
+        DebugLog.Info($"{who.name} upgrades {own}: {incident}.", who);
         return true;
     }
 
@@ -662,13 +663,13 @@ public class Intel : MonoBehaviour
 
     // A more serious thing at a job's place: the reason and priority rise for everyone. If the place
     // moved the team re-plans its walk from the first step; at the same place it carries on.
-    private void Upgrade(GroupJob job, Vector3 point, StimulusResponse reason, int priority, JobKind kind)
+    private void Upgrade(GroupJob job, Incident incident, JobKind kind)
     {
         bool wasCheck = job.Kind == JobKind.Check;
-        bool restarted = job.Upgrade(point, reason, priority, kind, _gatherTime);
+        bool restarted = job.Upgrade(incident, kind, _gatherTime);
         if (wasCheck && job.Kind == JobKind.Search)
-            DebugLog.Info($"{job} found something at {point}: the check becomes a search, and everyone goes.", this);
-        if (reason == StimulusResponse.SearchForAttack)
+            DebugLog.Info($"{job} found something at {incident.Point}: the check becomes a search, and everyone goes.", this);
+        if (incident.Reason == StimulusResponse.SearchForAttack)
             foreach (EnemyController member in job.Members) member.Memory.BecomeWary();
         if (!restarted) return;
         foreach (EnemyController member in job.Members) member.FollowJob(job);

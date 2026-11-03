@@ -25,13 +25,13 @@ public class GroupJob
 
     private readonly List<EnemyController> _members = new();
 
-    public GroupJob(JobKind kind, StimulusResponse reason, int priority, Vector3 point, int cap)
+    public GroupJob(JobKind kind, Incident incident, int cap)
     {
         Id = ++s_nextId;
         Kind = kind;
-        Reason = reason;
-        Priority = priority;
-        Point = point;
+        Reason = incident.Reason;
+        Priority = incident.Priority;
+        Point = incident.Point;
         Cap = Mathf.Max(1, cap);
         // Go is the step a job that calls nobody keeps; Intel moves one with callees to Call at once.
         // Neither has a length, so StepLength starts at zero.
@@ -45,6 +45,8 @@ public class GroupJob
     public int Priority { get; private set; }
     /// <summary>The spot the job is about: where a sound came from, or where a body lies.</summary>
     public Vector3 Point { get; private set; }
+    /// <summary>What the job is about, as an incident to send a member after. A Search is the job a find makes, so that is what IsFind reads.</summary>
+    public Incident Incident => new Incident(Point, Reason, Priority, Kind == JobKind.Search);
     public JobStep Step { get; private set; }
     /// <summary>Seconds in the current step.</summary>
     public float StepElapsed { get; private set; }
@@ -141,7 +143,7 @@ public class GroupJob
     /// </summary>
     internal bool Elevate(StimulusResponse reason)
     {
-        if (reason <= Reason) return false;
+        if (BehaviourMap.Severity(reason) <= BehaviourMap.Severity(Reason)) return false;
         Reason = reason;
         return true;
     }
@@ -165,14 +167,14 @@ public class GroupJob
     /// starts over from its first step and returns true so its members re-plan their walk; at the
     /// same place it returns false and the job carries on as it was.
     /// </summary>
-    internal bool Upgrade(Vector3 point, StimulusResponse reason, int priority, JobKind kind, float gatherLength)
+    internal bool Upgrade(Incident incident, JobKind kind, float gatherLength)
     {
-        bool moved = PathGrid.FlatDistance(Point, point) > SamePlace;
+        bool moved = PathGrid.FlatDistance(Point, incident.Point) > SamePlace;
         bool becomesSearch = kind == JobKind.Search && Kind == JobKind.Check;
 
-        Point = point;
-        Elevate(reason);
-        if (priority > Priority) Priority = priority;
+        Point = incident.Point;
+        Elevate(incident.Reason);
+        if (incident.Priority > Priority) Priority = incident.Priority;
         if (becomesSearch) Kind = JobKind.Search;
 
         if (!moved && !becomesSearch) return false;
