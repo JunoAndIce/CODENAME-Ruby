@@ -95,6 +95,9 @@ public class SearchingState : EnemyStateBase
         _staged = false;
         _onJob = false;
         _distractLeft = 0f;
+        // A search's disturbances end with it: a count left over made the next, unrelated search
+        // aggro on its first one or two. (Within one search the counting is unchanged.)
+        Enemy.Memory.ClearDistractions();
         // He's off the search, so off its job: Aggro, a grab, a fall, a death or the search ending.
         // The one place a job is given up, so it can't be left holding a member who has gone.
         if (Enemy.Intel != null) Enemy.Intel.Leave(Enemy);
@@ -340,9 +343,11 @@ public class SearchingState : EnemyStateBase
 
     // A follower trails the checker slowly and never closer than Follow Distance: he stops there and
     // faces the spot, so the team spreads out behind the one who goes rather than crowding him, and
-    // keeps closing up while the checker looks, until he is that near. PathTo re-floods only when the
-    // goal has moved a metre, so a checker walking a long way costs a follower one flood a metre,
-    // not one a physics step.
+    // keeps closing up while the checker looks, until he is that near. He chases the checker along the
+    // floor's shared field toward the checker's transform (ChaseTo), which re-floods only when the
+    // checker changes cell, at most five times a second, and which every follower reads: a team of
+    // three costs the one flood, not one each. A field of his own toward a point (PathTo) re-flooded
+    // each time the goal moved a quarter metre, up to sixteen floods a second per follower at Search Speed.
     private void FollowChecker(GroupJob job, EnemyController checker)
     {
         Vector3 offset = checker.transform.position - Enemy.transform.position;
@@ -354,8 +359,9 @@ public class SearchingState : EnemyStateBase
             return;
         }
 
-        // Unreachable is the navigator's one warning, and he stands: no walk to somewhere else.
-        Enemy.PathTo(checker.transform.position, Enemy.SearchSpeed * Enemy.FollowSpeedFactor);
+        // A checker on another floor or off every grid is the navigator's one warning, and he stands:
+        // no walk to somewhere else.
+        Enemy.ChaseTo(checker.transform, Enemy.SearchSpeed * Enemy.FollowSpeedFactor);
     }
 
     // True once he has arrived this step, false while he is still walking.

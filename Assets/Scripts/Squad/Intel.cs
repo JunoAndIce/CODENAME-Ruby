@@ -90,6 +90,8 @@ public class Intel : MonoBehaviour
     private readonly List<Candidate> _candidates = new();
     private readonly List<EnemyController> _listeners = new();
     private bool _telling;   // Hear is walking _listeners: a nested Hear must use a list of its own
+    private readonly List<EnemyController> _hearers = new();
+    private bool _saying;    // Say is walking _hearers: a nested Say must use a list of its own
 
     /// <summary>The pool as of the last publish. A new object each time, so one in hand never changes.</summary>
     public IntelSnapshot Published { get; private set; } = IntelSnapshot.Empty;
@@ -353,8 +355,12 @@ public class Intel : MonoBehaviour
             return;
         }
         RubyFact told = fact.WithSource(Knowledge.Told);
-        int heard = 0;
-        int joined = 0;
+        // Collected first, while the scratch field is intact, and told afterwards, as Hear does:
+        // Alert is safe today only because nothing on its path floods, and a later change that made it
+        // (a recruit, a job) would otherwise overwrite the field mid-read and silently drop hearers.
+        bool nested = _saying;
+        List<EnemyController> hearers = nested ? new List<EnemyController>() : _hearers;
+        hearers.Clear();
         foreach (EnemyController listener in _enemies)
         {
             if (listener == speaker || listener.Health.IsDead) continue;
@@ -369,9 +375,23 @@ public class Intel : MonoBehaviour
             if (listenerGrid != grid) continue;
             if (!reach.TryGetDistance(listener.transform.position, out float metres) || metres > _speechRange) continue;
 
-            listener.Memory.Learn(told);
-            heard++;
-            if (listener.Alert()) joined++;
+            hearers.Add(listener);
+        }
+
+        int heard = hearers.Count;
+        int joined = 0;
+        if (!nested) _saying = true;
+        try
+        {
+            for (int i = 0; i < hearers.Count; i++)
+            {
+                hearers[i].Memory.Learn(told);
+                if (hearers[i].Alert()) joined++;
+            }
+        }
+        finally
+        {
+            if (!nested) _saying = false;
         }
         DebugLog.Info($"{speaker.name} calls out Ruby's position: {heard} heard, {joined} joined the fight.", speaker);
     }
@@ -495,6 +515,10 @@ public class Intel : MonoBehaviour
         }
 
         if (own != null) Leave(who);
+        // Nothing can match a job on no grid (Covers needs a floor), so say so now rather than let
+        // every later sound there start a job of its own without a word.
+        if (PathGrid.At(point) == null)
+            Debug.LogWarning($"{who.name} starts a job at {point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
         var job = new GroupJob(kind, reason, priority, point, _jobCap);
         _jobs.Add(job);
         JoinMember(job, who);
@@ -556,7 +580,13 @@ public class Intel : MonoBehaviour
     {
         distance = PathGrid.FlatDistance(job.Point, point);
         // One emptied mid-walk is only waiting to be removed.
-        return job.Step != JobStep.Done && job.Count > 0 && distance <= _jobMatchRadius;
+        if (job.Step == JobStep.Done || job.Count == 0 || distance > _jobMatchRadius) return false;
+
+        // Floors are independent, so a sound upstairs is never the place of a job downstairs, however
+        // near they are in the plan. A point on no grid is nobody's place: Hear warns about a sound
+        // there, and a job started off the grid warns when it starts (Handle).
+        PathGrid floor = PathGrid.At(job.Point);
+        return floor != null && floor == PathGrid.At(point);
     }
 
     // A thing at a job's place changes the job when it is more serious, or when it is a find and the

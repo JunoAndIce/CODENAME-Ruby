@@ -124,7 +124,7 @@
 **Files:** `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/Squad/Intel.cs`, `Assets/Scripts/States/SearchingState.cs`, `Assets/Scripts/EnemyController.cs`
 
 - [x] **Step 1: The checker.** The member nearest the spot (flat). He is the only one who walks it in Go. If he leaves, the nearest remaining member takes over, and a job that has only reached Go restarts him from where he is. `GroupJob.Checker`.
-- [x] **Step 2: Followers.** The others trail him at Search Speed × Follow Speed Factor (0.8, `EnemyController`), stopping within Follow Distance (3 m, `EnemyController`) of him and facing the spot. They use `PathTo` toward the checker, which re-floods only when the goal moves a metre. They hold when he arrives.
+- [x] **Step 2: Followers.** The others trail him at Search Speed × Follow Speed Factor (0.8, `EnemyController`), stopping within Follow Distance (3 m, `EnemyController`) of him and facing the spot. They chase the checker with `ChaseTo`, along the floor's shared field toward his transform, which re-floods only when he changes cell, at most five times a second, and is read by every follower. (They first used `PathTo`, which re-flooded a field of each follower's own every quarter metre the goal moved: the plan's "a flood a metre" was wrong, and it was up to sixteen floods a second per follower.) They hold when he arrives.
 - [x] **Step 3: Callouts.** `DebugLog.Info` lines: gathering, sending the checker, all clear, found a body. These are the spec's callouts until barks exist.
 - [x] **Step 4: Compile and commit,** as in Task 3.
 

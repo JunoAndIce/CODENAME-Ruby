@@ -778,7 +778,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         {
             float age = Time.time - fact.Time;
             float distance = PathGrid.FlatDistance(fact.Position, point);
-            if (age <= _attackNearTime && distance <= _attackNearRadius)
+            // Floors are independent: news of Ruby upstairs says nothing about a thud downstairs, whatever
+            // their flat distance. A fact or point on no grid isn't near anything (Hear and the walk
+            // already warn about a point off every grid).
+            PathGrid factFloor = PathGrid.At(fact.Position);
+            if (factFloor != null && factFloor == PathGrid.At(point)
+                && age <= _attackNearTime && distance <= _attackNearRadius)
             {
                 why = $"Ruby was {fact.Source} {distance:0.#} m from it, {age:0.#}s ago";
                 return true;
@@ -808,6 +813,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     {
         if (_player != null) Navigator.ChaseTo(_player.transform, speed);
     }
+
+    /// <summary>
+    /// Chase another body along its floor's shared field, which every chaser of it reads (a team
+    /// following its checker). Stops and warns once when it is on another floor or no grid.
+    /// </summary>
+    public void ChaseTo(Transform target, float speed) => Navigator.ChaseTo(target, speed);
 
     public void Stop()
     {

@@ -10,7 +10,7 @@
 - **`EnemyController.Investigate`** asks `Intel` instead of staging a solo search. It stays the one door for "heard or noticed something".
 - **`SearchingState`** gains a job and a role: the checker walks to the spot, followers trail him, everyone looks or roams by the step. A search with no job survives for the glance only.
 - **Word of mouth** is `Intel.Say` alerting its hearers.
-- **`Ruby.Pathing` is untouched.** Followers use `PathTo`, which re-floods only when the goal moves a metre, and search teams use the patrol's wander picks.
+- **`Ruby.Pathing` is untouched.** Followers chase the checker with `ChaseTo` along the floor's shared field, which re-floods only when he changes cell (the plan first said `PathTo` re-floods "a metre"; it re-flooded every quarter metre, per follower), and search teams use the patrol's wander picks.
 
 **Tech Stack:** Unity 6000.5.10f1, C# 9 (.NET Standard 2.1). Assemblies touched: `Ruby.Game` only.
 
@@ -171,7 +171,7 @@ Each of these is a rule until its piece lands. None of them is a fallback.
 
 - [ ] **Step 2: The checker.** The member nearest the point (flat). In Gather he stops and faces the point. In Go he walks to the point as a search does now (Search Reach), and on arrival, blocked or unreachable he raises `CheckerArrived`, which starts Look. In Look he sweeps (`LookAround`) for the job's Look Time. In StandDown he faces his lead and holds: the gesture.
 
-- [ ] **Step 3: The followers.** In Gather they stop and face the point. In Go they walk after the checker, at Search Speed × Follow Speed Factor, stopping when within Follow Distance of him and facing the point, so they trail and never overtake. They use `PathTo` toward the checker's position, which re-floods only when it moves a metre. In Look and StandDown they hold and face the point.
+- [ ] **Step 3: The followers.** In Gather they stop and face the point. In Go they walk after the checker, at Search Speed × Follow Speed Factor, stopping when within Follow Distance of him and facing the point, so they trail and never overtake. They use `ChaseTo` toward the checker's transform, the floor's shared field, which re-floods only when he changes cell and is read by every follower (not `PathTo`: it re-flooded a field of each follower's own every quarter metre). In Look and StandDown they hold and face the point.
 
 - [ ] **Step 4: Report.** Nothing found by the end of Look: StandDown, then Done, and every member finishes to Patrol or Idle. A find during the check turns the job into a Search (Task 4 runs it): a body noticed by any member goes in as a body (Attack), a loose gun as a gun (Problem), through `Investigate(…, isFind: true)`. Ruby seen: that member leaves by going to Aggro, and word of mouth does the rest. Logged as callouts: "gathering", "sending <checker>", "all clear", "found a body".
 
