@@ -6,9 +6,9 @@ using UnityEngine;
 /// what they see into the pool's inbox (KnowledgePool, which Intel owns and ticks); every Intel
 /// Interval the inbox is merged into a new snapshot (Published) that all of them can read. The pool
 /// is stale by design: between publishes it lags the truth by up to a second, so a fight Ruby has
-/// left doesn't end the instant she is out of sight. Speech is the opposite: immediate, but it travels the floor, not through walls. Sounds
-/// are heard here too: each one is flooded once, and every enemy inside it reacts through the
-/// behaviour map. A reaction becomes a group job (GroupJob), which Intel owns: it starts, matches,
+/// left doesn't end the instant she is out of sight. Speech is the opposite: immediate, but it
+/// travels the floor, not through walls. Sounds are heard here too: each one is flooded once, and
+/// every enemy inside it reacts through the behaviour map. A reaction becomes a group job (GroupJob), which Intel owns: it starts, matches,
 /// upgrades and advances jobs, calls members in, and takes them off. It also configures the
 /// stimulus bus with the stimulus rules while active. Without an active Intel, shots and hits go
 /// nowhere and the bus warns once.
@@ -112,11 +112,6 @@ public class Intel : MonoBehaviour
         return map.TryGetRow(kind, out row);
     }
 
-    private void Awake()
-    {
-        _pool.LogContext = this;
-    }
-
     // Enable and disable rather than Awake and destroy, so switching the component off also
     // silences the bus instead of leaving stale rules behind.
     private void OnEnable()
@@ -143,7 +138,7 @@ public class Intel : MonoBehaviour
     private void Update()
     {
         AdvanceJobs(Time.deltaTime);
-        _pool.Tick(Time.deltaTime, _intelInterval);
+        _pool.Tick(_intelInterval, this);
     }
 
     // The jobs' one clock. A job, not its members, decides when each step ends, so a team looks

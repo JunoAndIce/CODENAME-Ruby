@@ -18,13 +18,6 @@ public class KnowledgePool
     private EnemyController _pendingReporter;
     private float _nextPublish;
 
-    /// <summary>
-    /// The Intel, so a publish logs against it as it always did: a plain class has no Unity Object of
-    /// its own. Set in Intel's Awake, because a field initialiser can't pass `this`, and the pool must
-    /// exist before Awake so Published can be read at once. No publish runs before Update.
-    /// </summary>
-    public Object LogContext { get; set; }
-
     /// <summary>The pool as of the last publish. A new object each time, so one in hand never changes.</summary>
     public IntelSnapshot Published { get; private set; } = IntelSnapshot.Empty;
 
@@ -44,17 +37,17 @@ public class KnowledgePool
     public bool ReportGun(Gun gun) => _knownGuns.Add(gun);
 
     /// <summary>
-    /// Publishes the inbox when the interval has passed. The clock is Time.time, as it was on Intel;
-    /// dt is accepted for the caller's one tick signature and isn't used.
+    /// Publishes the inbox when the interval has passed. The publish logs against logContext, the
+    /// Intel: a plain class has no Unity Object of its own to click through to.
     /// </summary>
-    public void Tick(float dt, float interval)
+    public void Tick(float interval, Object logContext)
     {
         if (Time.time < _nextPublish) return;
         _nextPublish = Time.time + interval;
-        Publish();
+        Publish(logContext);
     }
 
-    private void Publish()
+    private void Publish(Object logContext)
     {
         bool rubyChanged = _hasPendingRuby && (!Published.RubyReported || _pendingRuby.Time > Published.Ruby.Time);
         // Bodies and guns are only ever added within a level, so a count change is a real change.
@@ -71,6 +64,6 @@ public class KnowledgePool
 
         DebugLog.Info(rubyChanged
             ? $"Intel published: Ruby last at {Published.Ruby.Position} (reported by {(_pendingReporter != null ? _pendingReporter.name : "someone")})."
-            : $"Intel published: {Published.Bodies.Count} bod{(Published.Bodies.Count == 1 ? "y" : "ies")}, {Published.Guns.Count} loose gun(s).", LogContext);
+            : $"Intel published: {Published.Bodies.Count} bod{(Published.Bodies.Count == 1 ? "y" : "ies")}, {Published.Guns.Count} loose gun(s).", logContext);
     }
 }
