@@ -469,6 +469,10 @@ with its open questions as decision 8 of `docs/plans/2026-11-02-enemy-group-jobs
 of a new gunshot, even mid-search or as a search ends. An officer on a job first signals to its
 other members, then they mobilise toward it. Decision 9 of the same plan.
 
+**A grabbed, downed or dead enemy leads to the chain's source** *(user, 2026-11-03; not yet
+built)*: an enemy who sees one goes to where the chain came from, Ruby. Decision 10 of the same
+plan, which records what happens today and the open questions.
+
 **Search together** (Searching for Attack or Problem, Plus):
 
 - **A search team is at most three,** and can be two or just one *(user)*. That holds for every

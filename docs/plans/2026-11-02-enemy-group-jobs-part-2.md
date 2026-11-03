@@ -50,6 +50,16 @@
      - Does a job-less searcher go too?
      - What makes a gunshot "new": a shot outside a firefight he already knows of, or any shot after a gap?
      - Is the signal a Call-style gesture with its own time?
+10. **A grabbed, downed or dead enemy leads to the chain's source (added 2026-11-03, not yet planned to a task).** *(User: "If enemies also see a grabbed, ragdolled, or dead enemy, they should follow the source of the chain.")*
+    - An enemy who sees another that is **grabbed, ragdolled or dead** goes to **where the chain came from**: Ruby, at the other end of it.
+    - **What happens today:**
+      - A held or tumbling enemy moving at Notice Speed or faster is noticed as a moving object, and is already checked at its origin (the `Disturbance` stamp, where Ruby stood).
+      - A held enemy below Notice Speed, or a downed one that has come to rest, isn't noticed at all.
+      - A corpse is searched where it lies, not at its origin. The origin stamp lasts only Origin Lifetime (5 s) anyway.
+    - Open, to settle when it's planned:
+      - Is "the source" Ruby's position now (while the chain still holds the enemy) or where she stood when it happened?
+      - What does a corpse lead to once its origin has expired: where it lies, as now?
+      - Is seeing an enemy on the chain a sighting of Ruby (Aggro) when she's in view too, or only a lead to follow?
 
 ## Global Constraints
 

@@ -108,12 +108,12 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 - **Ordering:** `Intel` has no execution order, so members read `Done` on different frames, depending on update order.
 - **Tuning:** `StepDuration` reads the *current* lead's tuning (Intel.cs:241-253), so a step's length changes if the lead leaves mid-step.
 
-- [ ] **Step 1: Go waits explicitly.** `AdvanceJobs` tests `job.Step == JobStep.Go` (wait for an arrival) instead of inferring it from the duration. Every other timed step ends when elapsed ≥ duration, so a 0 duration ends the step at once, as on the job-less path. Give `EnemyController._searchDuration` `[Min(0f)]`.
-- [ ] **Step 2: A step's length is fixed when it starts.** *My call.* `GroupJob` records the duration as each step begins (`StepLength`), read from its lead at that moment. `AdvanceJobs` compares against it, so a lead leaving mid-step can't change it.
-- [ ] **Step 3: Close jobs after the walk.** Jobs that empty during `AdvanceJobs` are marked and removed after the loop, so no job misses a tick.
-- [ ] **Step 4: `[DefaultExecutionOrder(-20)]` on `Intel`,** with a comment saying why: it runs before the enemies, so a job's `Done` is seen by every member on the same frame.
-- [ ] **Step 5: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-Authored-By line.
-- [ ] **Step 6: Play-test gate (the user):**
+- [x] **Step 1: Go waits explicitly.** `AdvanceJobs` tests `job.Step == JobStep.Go` (wait for an arrival) instead of inferring it from the duration. Every other timed step ends when elapsed ≥ duration, so a 0 duration ends the step at once, as on the job-less path. Give `EnemyController._searchDuration` `[Min(0f)]`.
+- [x] **Step 2: A step's length is fixed when it starts.** *My call.* `GroupJob` records the duration as each step begins (`StepLength`), read from its lead at that moment. `AdvanceJobs` compares against it, so a lead leaving mid-step can't change it.
+- [x] **Step 3: Close jobs after the walk.** Jobs that empty during `AdvanceJobs` are marked and removed after the loop, so no job misses a tick.
+- [x] **Step 4: `[DefaultExecutionOrder(-20)]` on `Intel`,** with a comment saying why: it runs before the enemies, so a job's `Done` is seen by every member on the same frame.
+- [x] **Step 5: Compile and commit.** `python tools/compile_check.py` ends `compile-check: OK`. Commit only this task's files. The message is imperative with a prose body, and ends with the Co-Authored-By line.
+- [x] **Step 6: Play-test gate (the user):** Passed 2026-11-03.
   - C, plus Stand Down Time 0 on one officer: his checks finish at once rather than freezing.
   - Search Duration 0 doesn't freeze a search.
 
@@ -127,19 +127,19 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 - **I3:** an officer on job J who senses something more serious elsewhere, where the job handling it is full or past recruiting, is taken off J and `Handle` returns null. He's left in Searching with no job, and `_step` is stale from his last job-less search.
 - **I4:** a glance (`walkThere: false`) at a higher priority while on a job calls `Retarget`. `Begin` returns early because he has a job, so nothing happens, and the log says "retargets".
 
-- [ ] **Step 1: A job member's stimulus goes through the job first.** In `Investigate`, an enemy on a job hands any stimulus at his job's place (as `FindMatch` judges it; Task 3 adds the same-floor test there) to `Intel` before anything else.
+- [x] **Step 1: A job member's stimulus goes through the job first.** In `Investigate`, an enemy on a job hands any stimulus at his job's place (as `FindMatch` judges it; Task 3 adds the same-floor test there) to `Intel` before anything else.
   - An attack raises the job's reason for every member (`Elevate`, so everyone goes wary together).
   - A find converts the job (Step 2).
   - Only then is a stimulus that wasn't higher a distraction for him.
   - His own `Wary` latch is never set directly while he's on a job: the job sets it.
   - `Glance`'s wary on a job member goes through the job the same way.
-- [ ] **Step 2: A find converts a Check to a Search whatever the priority.** An `isFind` stimulus matched to a Check job converts it to a Search through `Handle`, from members and non-members alike. The reason rises to the find's row if higher, and the priority to the higher of the two. Everyone goes, as a search does.
-- [ ] **Step 3: A glance on a job is handled explicitly.** It's an elevation or a find (Steps 1-2) or a distraction, never `Retarget`. The log says which.
-- [ ] **Step 4: Nobody is stranded.**
+- [x] **Step 2: A find converts a Check to a Search whatever the priority.** An `isFind` stimulus matched to a Check job converts it to a Search through `Handle`, from members and non-members alike. The reason rises to the find's row if higher, and the priority to the higher of the two. Everyone goes, as a search does.
+- [x] **Step 3: A glance on a job is handled explicitly.** It's an elevation or a find (Steps 1-2) or a distraction, never `Retarget`. The log says which.
+- [x] **Step 4: Nobody is stranded.**
   - `Handle` decides where an officer on a job is going before calling `Leave`. If the more serious thing elsewhere can't take him (full, or past recruiting), he **stays on his job**, and the stimulus is a distraction for him, logged with why. *My call: the spec's "a full team leaves the rest" applies to officers not already on a job.*
   - When a member does leave a job without leaving Searching, `SearchingState` resets its job-less step state (`_step`, `_stepTimer`, `_walkTimer`, `_arrived`) and starts a fresh job-less search from his current request, logged.
-- [ ] **Step 5: Compile and commit,** as in Task 1.
-- [ ] **Step 6: Play-test gate (the user).** C. Then:
+- [x] **Step 5: Compile and commit,** as in Task 1.
+- [x] **Step 6: Play-test gate (the user).** Passed 2026-11-03. C. Then:
   - a body found while checking a thrown body becomes a search for everyone;
   - a loose gun found during a thud check becomes a search;
   - a member glancing at a known corpse makes the whole team wary, not just him;
@@ -155,12 +155,12 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 - **Distraction:** counts carry from one search into the next (cleared only at the jig), against the distraction plan's Review Focus 4.
 - **Hazard 4:** `Say` calls `listener.Alert()` inside the loop that reads the scratch flood. That's safe today only because nothing on `Alert`'s path floods.
 
-- [ ] **Step 1: Followers share one field.** A follower chases the checker along the shared field toward the checker's transform (`GridNavigator.ChaseTo(checker.transform, speed)`, which reads `PathGrid.FieldToward`). That field re-floods only when the checker changes cell, throttled, and every follower reads the same flood. He stops within Follow Distance, facing the spot, as now. Correct every "one flood a metre" claim in comments and in `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`.
-- [ ] **Step 2: Same floor or no match.** `Near`, `FindMatch` and `ShouldSearchForAttack`'s near test also require `PathGrid.At(a) == PathGrid.At(b)` (non-null). Comment: floors are independent.
-- [ ] **Step 3: A search's distraction count ends with the search.** `SearchingState.Exit` clears the officer's distraction count (`EnemyMemory`). The distraction plan's Review Focus 4 asks for this. Within one search, counting is unchanged.
-- [ ] **Step 4: `Say` collects, then tells.** It reads the flood into a reused list of hearers first, then teaches and alerts each, as `Hear` does.
-- [ ] **Step 5: Compile and commit,** as in Task 1.
-- [ ] **Step 6: Play-test gate (the user):**
+- [x] **Step 1: Followers share one field.** A follower chases the checker along the shared field toward the checker's transform (`GridNavigator.ChaseTo(checker.transform, speed)`, which reads `PathGrid.FieldToward`). That field re-floods only when the checker changes cell, throttled, and every follower reads the same flood. He stops within Follow Distance, facing the spot, as now. Correct every "one flood a metre" claim in comments and in `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`.
+- [x] **Step 2: Same floor or no match.** `Near`, `FindMatch` and `ShouldSearchForAttack`'s near test also require `PathGrid.At(a) == PathGrid.At(b)` (non-null). Comment: floors are independent.
+- [x] **Step 3: A search's distraction count ends with the search.** `SearchingState.Exit` clears the officer's distraction count (`EnemyMemory`). The distraction plan's Review Focus 4 asks for this. Within one search, counting is unchanged.
+- [x] **Step 4: `Say` collects, then tells.** It reads the flood into a reused list of hearers first, then teaches and alerts each, as `Hear` does.
+- [x] **Step 5: Compile and commit,** as in Task 1.
+- [x] **Step 6: Play-test gate (the user):** Passed 2026-11-03.
   - C, with Intel's debug overlays **off**: a check with three followers doesn't dip the frame rate, and the followers still trail the checker.
   - D, including a new search not inheriting an old one's count.
   - B.
