@@ -68,6 +68,20 @@
       - How far ahead does he follow her heading?
       - Does a Heard or Told fact carry a heading, or only Seen?
       - Does the heading feed the search that follows a lost fight?
+12. **A job's search clock waits for its team (added 2026-11-03, not yet planned to a task).** *(User: "Officers who are called from far away dont reach the search area before the timer for the search runs out. Make the countdown start once all officers have reached. If an officer cant reach, remove them from the job, and make them go back to their patrol.")*
+    - **The search countdown starts once every member has reached the area,** not when the first one does.
+    - **A member who can't reach it is taken off the job and goes back to his patrol.**
+    - Open, to settle when it's planned:
+      - What counts as "can't reach": no path at all, or also running out Search Travel Limit?
+      - Does a Check's Look wait for the team the same way, or only a Search?
+      - An unreachable attack search makes him wary: does he go back to his Aggressive route?
+      - Should being taken off log why, as other membership changes do?
+13. **A gunshot extends the search (added 2026-11-03, not yet planned to a task).** *(User: "A gunshot should extend the search timer for 4-5 more seconds.")*
+    - A gunshot heard during a search adds 4 to 5 seconds to its timer. This sits beside decision 9 (gunshots always mobilise).
+    - Open, to settle when it's planned:
+      - A tuning value on the controller: one number, or a random range?
+      - Does a firefight's run of shots keep adding with no ceiling, or is there a cap?
+      - Does it apply to any search, or only to one the shot didn't already send him to?
 
 ## Global Constraints
 

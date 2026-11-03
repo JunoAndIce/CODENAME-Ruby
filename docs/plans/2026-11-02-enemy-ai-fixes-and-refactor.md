@@ -228,11 +228,11 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
   - logs an **error** if the field's `Generation` changed before collecting finished. That error is a guard, not a fallback.
 - `Say`, `Hear` and `FindCallees` collect through it, then act. The warnings keep their exact text and once-per-key behaviour.
 
-- [ ] **Step 1: `FlowField.Generation`.**
-- [ ] **Step 2: `FloorReach`.**
-- [ ] **Step 3: The three callers.**
-- [ ] **Step 4: Compile and commit.**
-- [ ] **Step 5: Play-test gate (the user).** B in full, including exactly one warning for an officer off the grid. C's calling in.
+- [x] **Step 1: `FlowField.Generation`.**
+- [x] **Step 2: `FloorReach`.**
+- [x] **Step 3: The three callers.**
+- [x] **Step 4: Compile and commit.**
+- [x] **Step 5: Play-test gate (the user).** Passed 2026-11-03 (log compared with the baseline: no wording lost or changed). B in full, including exactly one warning for an officer off the grid. C's calling in.
 
 ### Task 7: `KnowledgePool` out of `Intel`
 

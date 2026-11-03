@@ -473,6 +473,11 @@ other members, then they mobilise toward it. Decision 9 of the same plan.
 built)*: an enemy who sees one goes to where the chain came from, Ruby. Decision 10 of the same
 plan, which records what happens today and the open questions.
 
+**A job's search clock waits for its team** *(user, 2026-11-03; not yet built)*: the countdown
+starts once every member has reached the area, and a member who can't reach it leaves the job and
+goes back to his patrol. **A gunshot extends the search** by 4 to 5 seconds. Decisions 12 and 13 of
+the same plan.
+
 **Search together** (Searching for Attack or Problem, Plus):
 
 - **A search team is at most three,** and can be two or just one *(user)*. That holds for every
