@@ -33,6 +33,7 @@ public class GroupJob
         Priority = priority;
         Point = point;
         Cap = Mathf.Max(1, cap);
+        // Handle moves a new job to Call or Go at once, and neither has a length, so StepLength starts at zero.
         Step = kind == JobKind.Check ? JobStep.Gather : JobStep.Go;
     }
 
@@ -46,6 +47,12 @@ public class GroupJob
     public JobStep Step { get; private set; }
     /// <summary>Seconds in the current step.</summary>
     public float StepElapsed { get; private set; }
+    /// <summary>
+    /// How long the current step lasts, in seconds, fixed by Intel when the step began. Zero for a step
+    /// that waits on someone (Go) or keeps its own timing (Call). Recorded rather than read off the lead
+    /// each tick, so a lead who leaves mid-step, with different tuning, can't stretch or cut the step.
+    /// </summary>
+    public float StepLength { get; private set; }
     public int Cap { get; }
 
     public IReadOnlyList<EnemyController> Members => _members;
@@ -106,20 +113,23 @@ public class GroupJob
 
     internal void RestartClock() => StepElapsed = 0f;
 
-    internal void SetStep(JobStep step)
+    // Every step change records its length too, so none can begin without one.
+    internal void SetStep(JobStep step, float length)
     {
         Step = step;
         StepElapsed = 0f;
+        StepLength = length;
     }
 
     /// <summary>
     /// The first member has reached the spot: the job moves on from Go to its look or its search.
     /// False when it wasn't going, which is how a late arrival, or a second one, does nothing.
+    /// The length is that of the look or the search the job moves on to.
     /// </summary>
-    internal bool NoteArrived()
+    internal bool NoteArrived(float length)
     {
         if (Step != JobStep.Go) return false;
-        SetStep(Kind == JobKind.Check ? JobStep.Look : JobStep.Search);
+        SetStep(Kind == JobKind.Check ? JobStep.Look : JobStep.Search, length);
         return true;
     }
 
@@ -136,12 +146,13 @@ public class GroupJob
     }
 
     /// <summary>The first step a job takes: a check of several gathers first, a lone one or a search goes straight there. The place may have moved, so the checker is chosen again.</summary>
-    internal void Restart()
+    internal void Restart(float gatherLength)
     {
         Checker = null;
         // Still calling people in: carry on, the walk will start from the new place afterwards.
         if (Step == JobStep.Call) return;
-        SetStep(Kind == JobKind.Check && Count > 1 ? JobStep.Gather : JobStep.Go);
+        if (Kind == JobKind.Check && Count > 1) SetStep(JobStep.Gather, gatherLength);
+        else SetStep(JobStep.Go, 0f);
     }
 
     // Closer than this is the same place: the walk carries on, so a louder sound on the spot doesn't send everyone back to start.
@@ -153,7 +164,7 @@ public class GroupJob
     /// starts over from its first step and returns true so its members re-plan their walk; at the
     /// same place it returns false and the job carries on as it was.
     /// </summary>
-    internal bool Upgrade(Vector3 point, StimulusResponse reason, int priority, JobKind kind)
+    internal bool Upgrade(Vector3 point, StimulusResponse reason, int priority, JobKind kind, float gatherLength)
     {
         bool moved = PathGrid.FlatDistance(Point, point) > SamePlace;
         bool becomesSearch = kind == JobKind.Search && Kind == JobKind.Check;
@@ -164,7 +175,7 @@ public class GroupJob
         if (becomesSearch) Kind = JobKind.Search;
 
         if (!moved && !becomesSearch) return false;
-        Restart();
+        Restart(gatherLength);
         return true;
     }
 

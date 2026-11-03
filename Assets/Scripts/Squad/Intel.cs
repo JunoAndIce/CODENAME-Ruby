@@ -10,6 +10,8 @@ using UnityEngine;
 /// with the stimulus rules while active. Without an active Intel, shots and hits go nowhere and
 /// the bus warns once.
 /// </summary>
+// Runs before the enemies (order 0), so every member reads a job's new step on the same frame.
+[DefaultExecutionOrder(-20)]
 public class Intel : MonoBehaviour
 {
     [Tooltip("The shared stimulus numbers: loudness, notice and alarm speeds, how long an origin is remembered.")]
@@ -75,6 +77,11 @@ public class Intel : MonoBehaviour
     // The open jobs. Live, not published: this is coordination and not knowledge, so two officers who
     // hear one gunshot in the same frame must find each other's job instead of starting two.
     private readonly List<GroupJob> _jobs = new();
+    // While AdvanceJobs walks _jobs, a job that empties (AdvanceCall takes its last officer) is only
+    // marked here and removed after the walk: removing it mid-walk shifted the next job into its slot,
+    // and that job missed a tick.
+    private bool _advancing;
+    private readonly List<GroupJob> _emptied = new();
     private struct Candidate
     {
         public EnemyController Officer;
@@ -145,47 +152,57 @@ public class Intel : MonoBehaviour
     // The jobs' one clock. A job, not its members, decides when each step ends, so a team looks
     // together, gestures together and finishes on the same frame: members each timing their own look
     // is how one said all clear while another walked off aggressive. Go has no duration, because it
-    // waits for the first member to reach the spot (NoteArrived).
+    // waits for the first member to reach the spot (NoteArrived). Every other timed step ends once
+    // its recorded length has passed, so a length of 0 ends it at once, as it does without a job.
     private void AdvanceJobs(float dt)
     {
-        for (int i = 0; i < _jobs.Count; i++)
+        _advancing = true;
+        try
         {
-            GroupJob job = _jobs[i];
-            if (job.Lead == null || job.Step == JobStep.Done) continue;
-
-            job.Tick(dt);
-            // Calling people in has its own timing (a reaction, then a call each), not one duration.
-            if (job.Step == JobStep.Call)
+            for (int i = 0; i < _jobs.Count; i++)
             {
-                AdvanceCall(job);
-                continue;
-            }
+                GroupJob job = _jobs[i];
+                if (job.Lead == null || job.Step == JobStep.Done) continue;
 
-            float duration = StepDuration(job);
-            if (duration <= 0f && job.Step != JobStep.Gather) continue;
-            if (job.StepElapsed < duration) continue;
+                job.Tick(dt);
+                // Calling people in has its own timing (a reaction, then a call each), not one duration.
+                if (job.Step == JobStep.Call)
+                {
+                    AdvanceCall(job);
+                    continue;
+                }
 
-            switch (job.Step)
-            {
-                case JobStep.Gather:
-                    AdvanceTo(job, JobStep.Go, "sets off");
-                    break;
-                case JobStep.Look:
-                    AdvanceTo(job, JobStep.StandDown, job.Reason == StimulusResponse.SearchForAttack ? "finds nothing, but stays wary" : "finds nothing and gestures: all clear");
-                    break;
-                case JobStep.StandDown:
-                    AdvanceTo(job, JobStep.Done, "stands down");
-                    break;
-                case JobStep.Search:
-                    AdvanceTo(job, JobStep.Done, "finishes searching");
-                    break;
+                if (job.Step == JobStep.Go) continue;
+                if (job.StepElapsed < job.StepLength) continue;
+
+                switch (job.Step)
+                {
+                    case JobStep.Gather:
+                        AdvanceTo(job, JobStep.Go, "sets off");
+                        break;
+                    case JobStep.Look:
+                        AdvanceTo(job, JobStep.StandDown, job.Reason == StimulusResponse.SearchForAttack ? "finds nothing, but stays wary" : "finds nothing and gestures: all clear");
+                        break;
+                    case JobStep.StandDown:
+                        AdvanceTo(job, JobStep.Done, "stands down");
+                        break;
+                    case JobStep.Search:
+                        AdvanceTo(job, JobStep.Done, "finishes searching");
+                        break;
+                }
             }
+        }
+        finally
+        {
+            _advancing = false;
+            for (int i = 0; i < _emptied.Count; i++) _jobs.Remove(_emptied[i]);
+            _emptied.Clear();
         }
     }
 
     private void AdvanceTo(GroupJob job, JobStep step, string what)
     {
-        job.SetStep(step);
+        job.SetStep(step, LengthOf(step, job.Lead));
         DebugLog.Info($"{job} {what}.", this);
     }
 
@@ -237,25 +254,24 @@ public class Intel : MonoBehaviour
         else AdvanceTo(job, JobStep.Go, "sets off");
     }
 
-    /// <summary>How long a job stays in its current step, in seconds. Zero for a step that waits on someone, not the clock.</summary>
-    public float StepDuration(GroupJob job)
+    /// <summary>How long a job stays in its current step, in seconds, as fixed when the step began. Zero for a step that waits on someone, not the clock.</summary>
+    public float StepDuration(GroupJob job) => job.StepLength;
+
+    // What a step lasts, read from the lead's tuning at the moment it begins and then kept on the job
+    // (StepLength): reading the current lead each tick changed a step's length when he left mid-step.
+    private float LengthOf(JobStep step, EnemyController lead) => step switch
     {
-        EnemyController lead = job.Lead;
-        if (lead == null) return 0f;
-        return job.Step switch
-        {
-            JobStep.Gather => _gatherTime,
-            JobStep.Look => lead.LookTime,
-            JobStep.StandDown => lead.StandDownTime,
-            JobStep.Search => lead.SearchDuration,
-            _ => 0f,
-        };
-    }
+        JobStep.Gather => _gatherTime,
+        JobStep.Look => lead.LookTime,
+        JobStep.StandDown => lead.StandDownTime,
+        JobStep.Search => lead.SearchDuration,
+        _ => 0f,
+    };
 
     /// <summary>A member has reached the spot, been blocked short of it or run out of time walking. The first one moves the job on.</summary>
     public void NoteArrived(GroupJob job, EnemyController who)
     {
-        if (!job.NoteArrived()) return;
+        if (!job.NoteArrived(LengthOf(job.Kind == JobKind.Check ? JobStep.Look : JobStep.Search, job.Lead))) return;
         DebugLog.Info($"{who.name} reaches the spot: {job} {(job.Kind == JobKind.Check ? "looks" : "searches")}.", who);
     }
 
@@ -491,11 +507,11 @@ public class Intel : MonoBehaviour
         FindCallees(job, who);
         if (job.Pending.Count > 0)
         {
-            job.SetStep(JobStep.Call);
+            job.SetStep(JobStep.Call, 0f);
             DebugLog.Info($"{who.name} will call in {job.Pending.Count} officer(s) once he has reacted.", who);
         }
         // A check of one has nobody to call or gather: he goes straight there.
-        else if (job.Kind == JobKind.Check) job.SetStep(JobStep.Go);
+        else if (job.Kind == JobKind.Check) job.SetStep(JobStep.Go, 0f);
         return job;
     }
 
@@ -513,7 +529,9 @@ public class Intel : MonoBehaviour
         job.Remove(who);
         if (job.Count == 0)
         {
-            _jobs.Remove(job);
+            // Mid-walk it is removed after the walk (see _advancing); anywhere else it closes now.
+            if (_advancing) _emptied.Add(job);
+            else _jobs.Remove(job);
             DebugLog.Info($"{who.name} leaves {job}; it closes.", who);
             return;
         }
@@ -524,7 +542,7 @@ public class Intel : MonoBehaviour
         // the look, or after it, there is nothing to hand over: the next to ask is chosen from the rest.
         if (wasChecker && job.Step == JobStep.Look)
         {
-            job.SetStep(JobStep.Go);
+            job.SetStep(JobStep.Go, 0f);
             DebugLog.Info($"{job}: the checker is gone, so someone else goes to look.", who);
         }
     }
@@ -538,7 +556,8 @@ public class Intel : MonoBehaviour
         float bestDistance = float.MaxValue;
         foreach (GroupJob job in _jobs)
         {
-            if (job.Step == JobStep.Done) continue;
+            // One emptied mid-walk is only waiting to be removed.
+            if (job.Step == JobStep.Done || job.Count == 0) continue;
             float distance = PathGrid.FlatDistance(job.Point, point);
             if (distance > _jobMatchRadius || distance >= bestDistance) continue;
             best = job;
@@ -571,7 +590,7 @@ public class Intel : MonoBehaviour
     private void Upgrade(GroupJob job, Vector3 point, StimulusResponse reason, int priority, JobKind kind)
     {
         bool wasCheck = job.Kind == JobKind.Check;
-        bool restarted = job.Upgrade(point, reason, priority, kind);
+        bool restarted = job.Upgrade(point, reason, priority, kind, _gatherTime);
         if (wasCheck && job.Kind == JobKind.Search)
             DebugLog.Info($"{job} found something at {point}: the check becomes a search, and everyone goes.", this);
         if (reason == StimulusResponse.SearchForAttack)
