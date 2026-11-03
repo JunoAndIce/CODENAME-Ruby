@@ -448,15 +448,16 @@ public class Intel : MonoBehaviour
     /// <summary>
     /// The one decision for an officer who senses something worth investigating and may act on it
     /// (Idle, Patrol, or searching at a lower priority). Returns the job he is now in, or null when
-    /// it's left alone. In order:
-    /// 1. **He is on a job.** A more serious thing at its place turns the whole job to it; one
-    ///    elsewhere takes him off it, and he carries on below.
-    /// 2. **An open job is handling this** (its place is within Job Match Radius). A more serious
-    ///    thing upgrades it, and a stronger reason (an attack, where the job is a problem) raises it
-    ///    for every member even at the same priority. If it is still recruiting and has room he
-    ///    joins, and otherwise he leaves it alone: he never just stands there as a second job on
-    ///    the same thing.
-    /// 3. **Nothing is.** He starts a job and becomes its lead, and calls in the free officers near
+    /// it's left alone. An officer already on a job is dealt with at its own place first
+    /// (HandleAtOwnJob); this is for a thing **elsewhere**. In order:
+    /// 1. **An open job is handling this** (its place is within Job Match Radius). A more serious
+    ///    thing upgrades it, a find turns a check into a search, and a stronger reason (an attack,
+    ///    where the job is a problem) raises it for every member even at the same priority. If it is
+    ///    still recruiting and has room he joins, taking himself off any job he was on. Otherwise
+    ///    he leaves it alone: he never just stands there as a second job on the same thing. One
+    ///    already on a job **stays on it** (the return is his own job) and the caller makes the thing
+    ///    a distraction, so he is never left in Searching with no job.
+    /// 2. **Nothing is.** He starts a job and becomes its lead, and calls in the free officers near
     ///    him, nearest first, up to the cap. A find (a body, a loose gun) is already found, so it
     ///    starts a Search; anything else is a Check, for a checker to go and see.
     /// Every decision logs a line naming the job, so what the squad did is readable in the Console.
@@ -464,39 +465,36 @@ public class Intel : MonoBehaviour
     public GroupJob Handle(EnemyController who, Vector3 point, StimulusResponse reason, int priority, bool isFind)
     {
         JobKind kind = isFind ? JobKind.Search : JobKind.Check;
-
         GroupJob own = who.Job;
-        if (own != null)
-        {
-            if (priority <= own.Priority)
-            {
-                Elevate(own, reason, $"{who.name} senses {reason}");
-                return own;
-            }
-            if (Near(own.Point, point))
-            {
-                Upgrade(own, point, reason, priority, kind);
-                DebugLog.Info($"{who.name} upgrades {own}: {reason} at {point}.", who);
-                return own;
-            }
-            Leave(who);
-        }
 
         GroupJob match = FindMatch(point);
         if (match != null)
         {
-            if (priority > match.Priority) Upgrade(match, point, reason, priority, kind);
+            if (Converts(match, priority, isFind)) Upgrade(match, point, reason, priority, kind);
             else Elevate(match, reason, $"{who.name} senses {reason} at {point}");
             if (match.Recruiting)
             {
+                // Decided before he is taken off his job: the destination is certain by now.
+                if (own != null && own != match) Leave(who);
                 JoinMember(match, who);
                 DebugLog.Info($"{who.name} joins {match}.", who);
                 return match;
             }
-            DebugLog.Info($"{who.name} leaves {reason} at {point} to {match}: {(match.IsFull ? "it is full" : "it has gone past needing anyone")}.", who);
+
+            string why = match.IsFull ? "it is full" : "it has gone past needing anyone";
+            if (own != null)
+            {
+                // A team that is full or past recruiting can't take him, and dropping him from his own
+                // job here left him in Searching with no job. The full-team rule is for officers who
+                // aren't on a job already.
+                DebugLog.Info($"{who.name} stays on {own}: {reason} at {point} is {match}'s, and {why}.", who);
+                return own;
+            }
+            DebugLog.Info($"{who.name} leaves {reason} at {point} to {match}: {why}.", who);
             return null;
         }
 
+        if (own != null) Leave(who);
         var job = new GroupJob(kind, reason, priority, point, _jobCap);
         _jobs.Add(job);
         JoinMember(job, who);
@@ -547,7 +545,56 @@ public class Intel : MonoBehaviour
         }
     }
 
-    private bool Near(Vector3 a, Vector3 b) => PathGrid.FlatDistance(a, b) <= _jobMatchRadius;
+    /// <summary>
+    /// Whether a point is at a job's place, as a new disturbance is judged against it: the job is
+    /// open and the point is within Job Match Radius. The one test for FindMatch and for an officer's
+    /// own job, so they can't disagree.
+    /// </summary>
+    public bool Covers(GroupJob job, Vector3 point) => Covers(job, point, out _);
+
+    private bool Covers(GroupJob job, Vector3 point, out float distance)
+    {
+        distance = PathGrid.FlatDistance(job.Point, point);
+        // One emptied mid-walk is only waiting to be removed.
+        return job.Step != JobStep.Done && job.Count > 0 && distance <= _jobMatchRadius;
+    }
+
+    // A thing at a job's place changes the job when it is more serious, or when it is a find and the
+    // job is only a check: a body or a gun is found whatever its priority, so the check is over.
+    private static bool Converts(GroupJob job, int priority, bool isFind) =>
+        priority > job.Priority || (isFind && job.Kind == JobKind.Check);
+
+    /// <summary>
+    /// A member's stimulus **at his own job's place** (the caller has tested Covers), before anything
+    /// else: a more serious thing upgrades the job, and a find turns a check into a search, for every
+    /// member, so the team never splits on it. True when the job took it, so he needn't be distracted;
+    /// false when it changed nothing, and the caller makes it a distraction. An attack is raised for
+    /// the team through RaiseJobAt, before this is reached. A glance (walkThere false, a find already
+    /// on the books) never changes the job: it isn't worth a walk, so it only raises and distracts.
+    /// </summary>
+    public bool HandleAtOwnJob(EnemyController who, Vector3 point, StimulusResponse reason, int priority, bool isFind, bool walkThere)
+    {
+        GroupJob own = who.Job;
+        if (own == null || !walkThere || !Covers(own, point) || !Converts(own, priority, isFind)) return false;
+
+        Upgrade(own, point, reason, priority, isFind ? JobKind.Search : JobKind.Check);
+        DebugLog.Info($"{who.name} upgrades {own}: {reason} at {point}.", who);
+        return true;
+    }
+
+    /// <summary>
+    /// A member has learned something that makes the whole job an attack, at its place (an attack
+    /// sensed, or a glance at a known body): the job's reason rises and everyone goes wary together,
+    /// so he can't latch wary alone while the job says all clear. False when the point is elsewhere or
+    /// he has no job; he is then wary on his own account, as he would be off a job.
+    /// </summary>
+    public bool RaiseJobAt(EnemyController who, Vector3 point, string why)
+    {
+        GroupJob job = who.Job;
+        if (job == null || !Covers(job, point)) return false;
+        Elevate(job, StimulusResponse.SearchForAttack, why);
+        return true;
+    }
 
     // The nearest open job whose place is within Job Match Radius.
     private GroupJob FindMatch(Vector3 point)
@@ -556,10 +603,7 @@ public class Intel : MonoBehaviour
         float bestDistance = float.MaxValue;
         foreach (GroupJob job in _jobs)
         {
-            // One emptied mid-walk is only waiting to be removed.
-            if (job.Step == JobStep.Done || job.Count == 0) continue;
-            float distance = PathGrid.FlatDistance(job.Point, point);
-            if (distance > _jobMatchRadius || distance >= bestDistance) continue;
+            if (!Covers(job, point, out float distance) || distance >= bestDistance) continue;
             best = job;
             bestDistance = distance;
         }

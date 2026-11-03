@@ -408,6 +408,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// was taken; every decision is logged. A search for an attack makes him wary for good, taken
     /// or not, so it always ends on an aggressive patrol. With walkThere false he looks from where
     /// he stands instead of going to the point (a glance at a body the squad already knows).
+    /// On a job, a stimulus at the job's place goes to the job first (Intel.HandleAtOwnJob, BecomeWary).
     /// isFind marks a body or gun sighting, which says nothing about where Ruby is.
     /// </summary>
     public bool Investigate(Vector3 point, StimulusResponse reason, int priority, bool walkThere = true, bool isFind = false)
@@ -422,7 +423,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             DebugLog.Info($"{name} treats the problem at {point} as an attack: {why}.", this);
             reason = StimulusResponse.SearchForAttack;
         }
-        if (reason == StimulusResponse.SearchForAttack) Memory.BecomeWary();
+        if (reason == StimulusResponse.SearchForAttack) BecomeWary(point, $"{name} senses {reason} at {point}");
         if (_state.Current is GrabbedState or RagdollState or DeadState or RearmState or AggroState)
         {
             DebugLog.Info($"{name} ignores {reason} at {point} (priority {priority}): he is in {_state.Current.GetType().Name}.", this);
@@ -431,7 +432,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
         if (_state.Current is SearchingState)
         {
-            if (priority <= Searching.Priority) return Distract(point, reason, priority, isFind);
+            // On a job, anything at its place goes to the job first: a find turns a check into a search
+            // and a more serious thing upgrades it, for the whole team. Only what the job didn't take
+            // is a distraction for him, and a glance never changes the job, so it never retargets him.
+            GroupJob own = Job;
+            bool atOwnJob = own != null && Intel != null && Intel.Covers(own, point);
+            if (atOwnJob && Intel.HandleAtOwnJob(this, point, reason, priority, isFind, walkThere)) return true;
+            if (atOwnJob || priority <= Searching.Priority) return Distract(point, reason, priority, isFind);
+            if (own != null && !walkThere) return Distract(point, reason, priority, isFind);
 
             // More serious than his search: the squad decides, as a job. A glance (walkThere false)
             // is his own look from where he stands, and a scene with no Intel (already reported)
@@ -440,6 +448,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             if (walkThere && Intel != null)
             {
                 Intel.Handle(this, point, reason, priority, isFind);
+                // Still on the job he was on: the team that has it can't take him, so he stays and is distracted.
+                if (own != null && Job == own) return Distract(point, reason, priority, isFind);
                 return true;
             }
 
@@ -461,6 +471,18 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         _state.SetState(Searching);
         DebugLog.Info($"{name} starts a search at {point}: {reason} at priority {priority}.", this);
         return true;
+    }
+
+    /// <summary>
+    /// He has reason to think Ruby is about, because of something at `at`. On a job, at the job's place,
+    /// the job takes it and everyone on it goes wary together, so one officer can't latch wary alone
+    /// while the job says all clear. Anywhere else (no job, or a thing away from his job's place) it
+    /// is his own knowledge and he latches wary himself.
+    /// </summary>
+    internal void BecomeWary(Vector3 at, string why)
+    {
+        if (Job != null && Intel != null && Intel.RaiseJobAt(this, at, why)) return;
+        Memory.BecomeWary();
     }
 
     // Something lesser happened while he was searching. He turns to look at it and the search waits

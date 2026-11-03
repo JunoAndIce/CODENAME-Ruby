@@ -156,7 +156,8 @@ public class EnemySenses
         // A map that says to ignore this kind (an armory, a morgue) means no glance either.
         if (row.Response == StimulusResponse.Ignore) return;
 
-        _enemy.Memory.BecomeWary();
+        // On a job at its place, the job goes wary for everyone, not just the one who looked.
+        _enemy.BecomeWary(at, $"{_enemy.name} glances at {what}");
         DebugLog.Info($"{_enemy.name} sees {what}: he looks at it from where he stands and is wary.", _enemy);
         _enemy.Investigate(at, StimulusResponse.SearchForProblem, row.Priority, walkThere: false, isFind: true);
     }
