@@ -175,14 +175,14 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 - `Assets/Scripts/Core/StateMachine/StateMachine.cs`
 - `Assets/Scripts/Editor/EnemyControllerEditor.cs`
 
-- [ ] **Step 0: The baseline log (the user).** With Part A in and `RUBY_DEBUG_LOGS` on, play scripts A-G once and save the Console output (or describe each script's key lines). Every Part B gate compares against it.
-- [ ] **Step 1: Dead code.**
+- [x] **Step 0: The baseline log (the user).** Recorded 2026-11-03 (A-F passed; saved in the SDD workspace as baseline.log, 2 Play sessions, 318 lines). With Part A in and `RUBY_DEBUG_LOGS` on, play scripts A-G once and save the Console output (or describe each script's key lines). Every Part B gate compares against it.
+- [x] **Step 1: Dead code.**
   - Delete the `EnemyState` enum and every `Id` override; nothing reads them.
   - Delete `SearchingState.Step`, `RagdollState.GettingUp` and `Intel.Jobs` if still unread.
   - `SeesPlayer` becomes private.
   - The `GroupJob` constructor drops its overwritten default step.
   - The level alert's leftovers: the comments at EnemyController.cs:187-188 and 301-302.
-- [ ] **Step 2: Stale comments.**
+- [x] **Step 2: Stale comments.**
   - GroupJob.cs:12 "Recruiting reads their order".
   - SearchingState.cs:95 "the one place a job is given up" (there are four).
   - EnemyController.cs:290 "fetching it comes before anything else" (the Aggro rows come first and win).
@@ -190,16 +190,16 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
   - The Aggressive Speed Factor tooltip's "7 m/s".
   - Intel.cs:4-12's summary, which doesn't mention jobs.
   - EnemyController.MoveToward: keep the user's summary line, and add one line under it with the contract (turns at Turn Speed and slows to fit only for points he must reach).
-- [ ] **Step 3: Names.**
+- [x] **Step 3: Names.**
   - `Intel.Candidate.Officer` becomes `Candidate.Enemy`.
   - Locals `officer`/`officers` in `EnemySenses` and `Intel` become `enemy`/`enemies`.
   - Inspector tooltips and the editor's HelpBox say "enemy" where they say "officer".
   - Renaming a serialized field in place keeps `[FormerlySerializedAs]`. Tooltip text needs nothing.
-- [ ] **Step 4: One "can't act" test.** `EnemyStateBase.IsOverride` (true in Grabbed, Ragdoll and Dead) and `EnemyController.IsOverridden` replace the four repeated `is GrabbedState or RagdollState or DeadState` checks. `KnockDown` keeps its own set, which differs.
-- [ ] **Step 5: Ordered transitions.** `StateMachine` keeps transitions in `List`s, not `HashSet`s, and its summary says the table's order is its priority. Behaviour is identical: the sets iterated in insertion order in practice.
-- [ ] **Step 6: Small allocations.** `RearmState.FindFree` caches its `IsFree` predicate (a method group allocates a delegate per call, every frame, from `WantsGun`). `EnemyMemory.NoteDistraction` drops its closure.
-- [ ] **Step 7: Compile and commit,** as in Task 1.
-- [ ] **Step 8: Play-test gate (the user).** A smoke run of A-G matching the baseline. E and F in full.
+- [x] **Step 4: One "can't act" test.** `EnemyStateBase.IsOverride` (true in Grabbed, Ragdoll and Dead) and `EnemyController.IsOverridden` replace the four repeated `is GrabbedState or RagdollState or DeadState` checks. `KnockDown` keeps its own set, which differs.
+- [x] **Step 5: Ordered transitions.** `StateMachine` keeps transitions in `List`s, not `HashSet`s, and its summary says the table's order is its priority. Behaviour is identical: the sets iterated in insertion order in practice.
+- [x] **Step 6: Small allocations.** `RearmState.FindFree` caches its `IsFree` predicate (a method group allocates a delegate per call, every frame, from `WantsGun`). `EnemyMemory.NoteDistraction` drops its closure.
+- [x] **Step 7: Compile and commit,** as in Task 1.
+- [x] **Step 8: Play-test gate (the user).** Passed 2026-11-03 (log compared with the baseline: no wording lost or changed). A smoke run of A-G matching the baseline. E and F in full.
 
 ### Task 5: `Incident`, `SearchRequest` and an explicit severity
 
@@ -210,10 +210,10 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 - `public readonly struct SearchRequest`: `Incident Incident`, `bool WalkThere`.
 - `public static int BehaviourMap.Severity(StimulusResponse response)`: Ignore 0, SearchForProblem 1, SearchForAttack 2, written out. `GroupJob.Elevate` and every "is this more serious" comparison use it, not the enum's number. A value added later (piece 7's switch-off) takes a new enum number and a deliberate place in `Severity`.
 
-- [ ] **Step 1: The types.**
-- [ ] **Step 2: Signatures.** `Investigate(Incident, bool walkThere = true)`, `Intel.Handle(EnemyController who, Incident incident)`, `GroupJob`'s constructor and `Upgrade(Incident, JobKind)`, and `SearchingState.Stage`/`Retarget(SearchRequest)`. Callers build an `Incident` once. No decision changes.
-- [ ] **Step 3: Compile and commit.**
-- [ ] **Step 4: Play-test gate (the user).** C and D, matching the baseline.
+- [x] **Step 1: The types.**
+- [x] **Step 2: Signatures.** `Investigate(Incident, bool walkThere = true)`, `Intel.Handle(EnemyController who, Incident incident)`, `GroupJob`'s constructor and `Upgrade(Incident, JobKind)`, and `SearchingState.Stage`/`Retarget(SearchRequest)`. Callers build an `Incident` once. No decision changes.
+- [x] **Step 3: Compile and commit.**
+- [x] **Step 4: Play-test gate (the user).** Passed 2026-11-03 (log compared with the baseline: no wording lost or changed). C and D, matching the baseline.
 
 ### Task 6: `FloorReach` and the flood generation check
 
