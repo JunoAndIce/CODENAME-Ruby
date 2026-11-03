@@ -147,7 +147,8 @@ public class SearchingState : EnemyStateBase
     // change under him), and notices when the job is gone. Off a job but still searching, his own steps
     // (_step and its timers) are left from an earlier job-less search or from nothing, so he starts a
     // fresh one from the request he last had: carrying on a stale Look or Done would end his search
-    // at once or never.
+    // at once or never. Every path that takes a member off a job either ends his search or puts him on
+    // another, so reaching this means that broke: it warns rather than recovering quietly.
     private void SyncJob()
     {
         if (Job != null)
@@ -162,7 +163,7 @@ public class SearchingState : EnemyStateBase
 
         _walk = true;
         Begin();
-        DebugLog.Info($"{Enemy.name} is off his job but still searching: he carries on alone from {_target} ({_reason}, priority {_priority}).", Enemy);
+        Debug.LogWarning($"{Enemy.name} is off his job but still searching, which nothing should leave him: he carries on alone from {_target} ({_reason}, priority {_priority}).", Enemy);
     }
 
     public override void Tick()

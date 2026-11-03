@@ -441,8 +441,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             if (atOwnJob || priority <= Searching.Priority) return Distract(point, reason, priority, isFind);
             if (own != null && !walkThere) return Distract(point, reason, priority, isFind);
 
-            // More serious than his search: the squad decides, as a job. A glance (walkThere false)
-            // is his own look from where he stands, and a scene with no Intel (already reported)
+            // More serious than his search: the squad decides, as a job. A glance off a job (walkThere
+            // false) is his own look from where he stands, and a scene with no Intel (already reported)
             // has no squad to ask, so both stay a search of his own. A null answer means a job
             // nearby already has it; that counts as taken, or the motion scan would ask again every sweep.
             if (walkThere && Intel != null)
