@@ -412,7 +412,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         return true;
     }
 
-    /// <summary>Forwards to EnemyReactions.Investigate, so the senses and Intel call it where they always have.</summary>
+    /// <summary>Forwards to EnemyReactions.Investigate, so the senses call it where they always have.</summary>
     public bool Investigate(Incident incident, bool walkThere = true) => Reactions.Investigate(incident, walkThere);
 
     /// <summary>Forwards to EnemyReactions.BecomeWaryAt.</summary>

@@ -6,7 +6,7 @@ using UnityEngine;
 /// doesn't carry the most order-sensitive decisions in the enemy. The tuning (the Distraction and
 /// Attack Near fields) and the state machine stay on the controller and are read on every call, so
 /// retuning in the Inspector during Play keeps working. SetState stays there too, behind Alert,
-/// RequestSearch and BeginSearch.
+/// FollowJob and BeginSearch.
 /// </summary>
 public class EnemyReactions
 {
@@ -97,7 +97,7 @@ public class EnemyReactions
     /// while the job says all clear. Anywhere else (no job, or a thing away from his job's place) it
     /// is his own knowledge and he latches wary himself.
     /// </summary>
-    public void BecomeWaryAt(Vector3 at, string why)
+    internal void BecomeWaryAt(Vector3 at, string why)
     {
         if (_enemy.Job != null && _enemy.Intel != null && _enemy.Intel.RaiseJobAt(_enemy, at, why)) return;
         BecomeWary();
@@ -148,7 +148,7 @@ public class EnemyReactions
     // A disturbance is an attack, not just a problem, to someone who knows she's about: he has seen
     // her, or the newest news of her is recent and close to it. The age is the fact's own time, so
     // an old report can't turn every later thud into an attack for good.
-    public bool ShouldSearchForAttack(Vector3 point, out string why)
+    private bool ShouldSearchForAttack(Vector3 point, out string why)
     {
         if (_enemy.Memory.HasSeenRuby)
         {
