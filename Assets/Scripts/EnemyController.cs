@@ -118,6 +118,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public EnemySenses Senses { get; private set; }
     /// <summary>His view cone, close circle and line of sight.</summary>
     public EnemyVision Vision { get; private set; }
+    public EnemyReactions Reactions { get; private set; }
     public float MotionRadius => _motionRadius;
     public float BodyNoticeRange => _bodyNoticeRange;
     public float ScanInterval => _scanInterval;
@@ -179,6 +180,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float FollowDistance => _followDistance;
     public float FollowSpeedFactor => _followSpeedFactor;
     public float DistractionTime => _distractionTime;
+    internal int DistractionThreshold => _distractionThreshold;
+    internal float DistractionMemory => _distractionMemory;
+    internal float DistractionGap => _distractionGap;
+    internal float AttackNearTime => _attackNearTime;
+    internal float AttackNearRadius => _attackNearRadius;
     public PatrolRoute SafeRoute => _safeRoute;
     public PatrolRoute AggressiveRoute => _aggressiveRoute;
     public bool HasAggressiveRoute => _aggressiveRoute != null && _aggressiveRoute.Count > 0;
@@ -236,6 +242,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>In the Searching state right now. The job board reads it to check that a member of a job is searching.</summary>
     public bool IsSearching => _state.Current is SearchingState;
 
+    /// <summary>The state he is in, for EnemyReactions to read. Reaching the machine itself stays with the controller.</summary>
+    internal IState CurrentState => _state.Current;
+
     /// <summary>Ruby, while it's aiming at her.</summary>
     public bool TryFindTarget(out Vector3 point)
     {
@@ -263,6 +272,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Memory = new EnemyMemory();
         Senses = new EnemySenses(this);
         Vision = new EnemyVision(this);
+        Reactions = new EnemyReactions(this);
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
@@ -402,115 +412,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         return true;
     }
 
-    /// <summary>
-    /// Told or heard something worth searching. Idle and patrolling enemies start searching
-    /// there. One already searching moves only for a strictly higher priority: an equal one never
-    /// does, so a shootout's alternating shots can't swap his target or re-flood his field, and a
-    /// quiet sound can't pull him off a spot he's checking. But he **notices** it: an equal or
-    /// lower one is a distraction (see Distract) rather than being ignored, which left an enemy
-    /// searching on beside things flying past him. Aggro and the
-    /// states that can't act on it ignore the call: he already knows where Ruby is. True when it
-    /// was taken; every decision is logged. A search for an attack makes him wary for good, taken
-    /// or not, so it always ends on an aggressive patrol. With walkThere false he looks from where
-    /// he stands instead of going to the point (a glance at a body the squad already knows).
-    /// On a job, a stimulus at the job's place goes to the job first (Intel.HandleAtOwnJob, BecomeWary).
-    /// The incident's IsFind marks a body or gun sighting, which says nothing about where Ruby is.
-    /// </summary>
-    public bool Investigate(Incident incident, bool walkThere = true)
-    {
-        if (incident.Reason == StimulusResponse.Ignore)
-        {
-            DebugLog.Info($"{name} ignores {incident}: the map says to ignore it.", this);
-            return false;
-        }
-        if (incident.Reason == StimulusResponse.SearchForProblem && ShouldSearchForAttack(incident.Point, out string why))
-        {
-            DebugLog.Info($"{name} treats the problem at {incident.Point} as an attack: {why}.", this);
-            incident = incident.WithReason(StimulusResponse.SearchForAttack);
-        }
-        if (incident.Reason == StimulusResponse.SearchForAttack) BecomeWary(incident.Point, $"{name} senses {incident}");
-        if (IsOverridden || _state.Current is RearmState or AggroState)
-        {
-            DebugLog.Info($"{name} ignores {incident} (priority {incident.Priority}): he is in {_state.Current.GetType().Name}.", this);
-            return false;
-        }
+    /// <summary>Forwards to EnemyReactions.Investigate, so the senses and Intel call it where they always have.</summary>
+    public bool Investigate(Incident incident, bool walkThere = true) => Reactions.Investigate(incident, walkThere);
 
-        if (_state.Current is SearchingState)
-        {
-            // On a job, anything at its place goes to the job first: a find turns a check into a search
-            // and a more serious thing upgrades it, for the whole team. Only what the job didn't take
-            // is a distraction for him, and a glance never changes the job, so it never retargets him.
-            GroupJob own = Job;
-            bool atOwnJob = own != null && Intel != null && Intel.Covers(own, incident.Point);
-            if (atOwnJob && Intel.HandleAtOwnJob(this, new SearchRequest(incident, walkThere))) return true;
-            if (atOwnJob || incident.Priority <= Searching.Priority) return Distract(incident);
-            if (own != null && !walkThere) return Distract(incident);
-
-            // More serious than his search: the squad decides, as a job. A glance off a job (walkThere
-            // false) is his own look from where he stands, and a scene with no Intel (already reported)
-            // has no squad to ask, so both stay a search of his own. A null answer means a job
-            // nearby already has it; that counts as taken, or the motion scan would ask again every sweep.
-            if (walkThere && Intel != null)
-            {
-                Intel.Handle(this, incident);
-                // Still on the job he was on: the team that has it can't take him, so he stays and is distracted.
-                if (own != null && Job == own) return Distract(incident);
-                return true;
-            }
-
-            Searching.Retarget(new SearchRequest(incident, walkThere));
-            DebugLog.Info($"{name} retargets his search to {incident.Point}: {incident.Reason} at priority {incident.Priority}.", this);
-            return true;
-        }
-
-        if (walkThere && Intel != null)
-        {
-            // Idle or patrolling: the squad decides whether this is already being handled, and who goes.
-            // Left to a job nearby is as good as taken, for the reason above.
-            Intel.Handle(this, incident);
-            return true;
-        }
-
-        // Ask before the transition: SearchingState.Enter takes the request, and entering with none is an error.
-        RequestSearch(new SearchRequest(incident, walkThere));
-        _state.SetState(Searching);
-        DebugLog.Info($"{name} starts a search at {incident.Point}: {incident.Reason} at priority {incident.Priority}.", this);
-        return true;
-    }
-
-    /// <summary>
-    /// He has reason to think Ruby is about, because of something at `at`. On a job, at the job's place,
-    /// the job takes it and everyone on it goes wary together, so one enemy can't latch wary alone
-    /// while the job says all clear. Anywhere else (no job, or a thing away from his job's place) it
-    /// is his own knowledge and he latches wary himself.
-    /// </summary>
-    internal void BecomeWary(Vector3 at, string why)
-    {
-        if (Job != null && Intel != null && Intel.RaiseJobAt(this, at, why)) return;
-        Memory.BecomeWary();
-    }
-
-    // Something lesser happened while he was searching. He turns to look at it and the search waits
-    // a moment, but it isn't dropped or retargeted. Enough of them close together and the jig is
-    // up: he aggros, and a thrown object's origin or a shot's muzzle is where he takes Ruby to be,
-    // so Aggro has somewhere to go. A body or gun says nothing about her, so he goes to Aggro with
-    // what he already knows, and searches where he stands if that is nothing.
-    private bool Distract(Incident incident)
-    {
-        int count = Memory.NoteDistraction(Time.time, _distractionMemory, _distractionGap, out bool counted);
-        if (counted && count >= _distractionThreshold)
-        {
-            Memory.ClearDistractions();
-            if (!incident.IsFind) Memory.Learn(new RubyFact(incident.Point, Time.time, Knowledge.Heard));
-            DebugLog.Info($"{name}: Enemies have been disturbed too much! ({count} disturbances in {_distractionMemory:0.#}s, the last {incident}); he aggros.", this);
-            Alert();
-            return true;
-        }
-
-        Searching.Distract(incident.Point, counted);
-        DebugLog.Info($"{name} {(counted ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {Searching.Priority}): {count} of {_distractionThreshold}.", this);
-        return true;
-    }
+    /// <summary>Forwards to EnemyReactions.BecomeWaryAt.</summary>
+    internal void BecomeWary(Vector3 at, string why) => Reactions.BecomeWaryAt(at, why);
 
     // Corpses too: a dead enemy stays a body the chain can swing and throw.
     public bool CanBeGrabbed => true;
@@ -524,19 +430,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public GroupJob Job { get; internal set; }
 
-    /// <summary>
-    /// Whether the squad may call him onto a job at this priority: he is idle or patrolling, or he is
-    /// searching alone (no job, or a job of one) at a lower priority than this. Never in a fight, down,
-    /// dead or fetching a gun, and never off a team that has two or more.
-    /// </summary>
-    public bool CanJoinJob(int priority)
-    {
-        if (Health.IsDead) return false;
-        if (_state.Current is IdleState or PatrolState) return true;
-        return _state.Current is SearchingState
-            && Searching.Priority < priority
-            && (Job == null || Job.Count == 1);
-    }
+    /// <summary>Forwards to EnemyReactions.CanJoinJob.</summary>
+    public bool CanJoinJob(int priority) => Reactions.CanJoinJob(priority);
 
     /// <summary>
     /// Sends him to a job's place for its reason, as a search: requested from Idle or Patrol, a
@@ -545,7 +440,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     internal void FollowJob(GroupJob job)
     {
-        if (job.Reason == StimulusResponse.SearchForAttack) Memory.BecomeWary();
+        if (job.Reason == StimulusResponse.SearchForAttack) Reactions.BecomeWary();
         // Built here rather than kept on the job: a job doesn't remember whether its latest trigger was
         // a find, and the search doesn't read it, so it carries none.
         var request = new SearchRequest(new Incident(job.Point, job.Reason, job.Priority));
@@ -555,7 +450,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             return;
         }
 
-        // Ask before the transition: SearchingState.Enter takes the request, and entering with none is an error.
+        BeginSearch(request);
+    }
+
+    /// <summary>
+    /// Starts a search from Idle or Patrol. Ask before the transition: SearchingState.Enter takes the
+    /// request, and entering with none is an error. Aggro's exit asks alone (RequestSearch), because
+    /// the table makes that transition.
+    /// </summary>
+    internal void BeginSearch(SearchRequest request)
+    {
         RequestSearch(request);
         _state.SetState(Searching);
     }
@@ -783,39 +687,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     {
         IntelSnapshot pool = Intel != null ? Intel.Published : IntelSnapshot.Empty;
         return Memory.TryGetNewestRuby(pool, out fact);
-    }
-
-    // A disturbance is an attack, not just a problem, to someone who knows she's about: he has seen
-    // her, or the newest news of her is recent and close to it. The age is the fact's own time, so
-    // an old report can't turn every later thud into an attack for good.
-    private bool ShouldSearchForAttack(Vector3 point, out string why)
-    {
-        if (Memory.HasSeenRuby)
-        {
-            why = "he has seen Ruby";
-            return true;
-        }
-
-        if (TryGetNewestRubyFact(out RubyFact fact))
-        {
-            float age = Time.time - fact.Time;
-            float distance = PathGrid.FlatDistance(fact.Position, point);
-            // Floors are independent: news of Ruby upstairs says nothing about a thud downstairs, whatever
-            // their flat distance. A fact or point on no grid isn't near anything. That isn't warned here
-            // because it can't arise unwarned: a point off every grid was warned where it came from (Hear,
-            // Handle, the walk), and so was a fact (Hear and Say warn about a speaker, listener or sound
-            // off a grid, and Aggro's chase after a Ruby seen off the grid warns in the navigator). The
-            // floor lookups run last, after the cheap tests.
-            if (age <= _attackNearTime && distance <= _attackNearRadius
-                && PathGrid.At(fact.Position) is PathGrid factFloor && factFloor == PathGrid.At(point))
-            {
-                why = $"Ruby was {fact.Source} {distance:0.#} m from it, {age:0.#}s ago";
-                return true;
-            }
-        }
-
-        why = null;
-        return false;
     }
 
     /// <summary>

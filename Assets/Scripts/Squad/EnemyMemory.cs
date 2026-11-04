@@ -77,6 +77,8 @@ public class EnemyMemory
     /// </summary>
     public bool Wary { get; private set; }
 
+    // EnemyReactions.BecomeWary is the only caller: one place to change or log it, so an enemy can't
+    // latch wary by a route nobody can find.
     public void BecomeWary() => Wary = true;
 
     private readonly List<float> _distractions = new();

@@ -448,7 +448,7 @@ public class JobBoard
     private void Elevate(GroupJob job, StimulusResponse reason, string why)
     {
         if (!job.Elevate(reason)) return;
-        foreach (EnemyController member in job.Members) member.Memory.BecomeWary();
+        foreach (EnemyController member in job.Members) member.Reactions.BecomeWary();
         DebugLog.Info($"{job} is raised to {reason}: {why}.", _intel);
     }
 
@@ -479,7 +479,7 @@ public class JobBoard
         if (wasCheck && job.Kind == JobKind.Search)
             DebugLog.Info($"{job} found something at {incident.Point}: the check becomes a search, and everyone goes.", _intel);
         if (incident.Reason == StimulusResponse.SearchForAttack)
-            foreach (EnemyController member in job.Members) member.Memory.BecomeWary();
+            foreach (EnemyController member in job.Members) member.Reactions.BecomeWary();
         if (!restarted) return false;
         foreach (EnemyController member in job.Members) member.FollowJob(job);
         return true;
