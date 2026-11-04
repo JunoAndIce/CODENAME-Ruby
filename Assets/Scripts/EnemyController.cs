@@ -828,8 +828,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Gizmos.DrawWireSphere(transform.position, _bodyNoticeRange);
 
         // Around where he last heard or saw of Ruby, while that report is recent enough: a
-        // disturbance inside this circle is searched for as an attack.
-        if (Application.isPlaying && TryGetNewestRubyFact(out RubyFact news) && Time.time - news.Time <= _attackNearTime)
+        // disturbance inside this circle is searched for as an attack. Playing doesn't mean he has woken:
+        // the prefab open in Prefab Mode during Play never runs Awake, so it has no Memory to ask.
+        if (Application.isPlaying && Memory != null && TryGetNewestRubyFact(out RubyFact news) && Time.time - news.Time <= _attackNearTime)
         {
             Gizmos.color = new Color(1f, 0.55f, 0.1f, 0.6f);
             DrawFlatCircle(news.Position + Vector3.up * 0.1f, _attackNearRadius);
