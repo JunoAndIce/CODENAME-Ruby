@@ -36,7 +36,7 @@ public class JobBoard
     // Reused by a merge: the younger job's members and the ones who didn't fit, so a firing allocates nothing.
     private readonly List<EnemyController> _moving = new();
     private readonly List<EnemyController> _extras = new();
-    // An extra's new spot is tried this many times before he is dismissed (Elsewhere Distance, in MergeExtraSpot).
+    // An extra's new spot is tried this many times before he is dismissed (Elsewhere Distance, in TryFindExtraSpot).
     private const int ExtraSpotTries = 3;
 
     public JobBoard(Intel intel) => _intel = intel;
