@@ -28,8 +28,6 @@ public class SearchingState : EnemyStateBase
     private bool _walk = true;     // false: look from where he stands (a glance at something already known)
     private float _distractLeft;   // a lesser disturbance has his eye: the search waits this long, then carries on
     private Vector3 _distractPoint;
-    // Set by Stage before the transition into this state, so Enter keeps the staged target.
-    private bool _staged;
     // On a job: he has reached the spot, been blocked short of it, or run out of time walking there.
     private bool _arrived;
     private float _walkTimer;
@@ -46,50 +44,36 @@ public class SearchingState : EnemyStateBase
     public StimulusResponse Reason => Job != null ? Job.Reason : _reason;
     public int Priority => Job != null ? Job.Priority : _priority;
 
-    /// <summary>
-    /// Sets the target for a search about to begin from Idle or Patrol. Only staging, never a
-    /// retarget: a search already running takes Retarget, which has no Enter to clear a stage, and
-    /// a stage left standing would later hijack the search that follows Aggro.
-    /// </summary>
-    public void Stage(SearchRequest request)
+    private void Take(SearchRequest request)
     {
         _target = request.Incident.Point;
         _reason = request.Incident.Reason;
         _priority = request.Incident.Priority;
         _walk = request.WalkThere;
-        _staged = true;
     }
 
     /// <summary>Moves a search already in progress to a new spot and reason. It starts over from the walk, so the new spot gets its full look on arrival.</summary>
     public void Retarget(SearchRequest request)
     {
-        _target = request.Incident.Point;
-        _reason = request.Incident.Reason;
-        _priority = request.Incident.Priority;
-        _walk = request.WalkThere;
+        Take(request);
         Begin();
     }
 
     public override void Enter()
     {
-        if (_staged)
+        if (!Enemy.TakeSearchRequest(out SearchRequest request))
         {
-            _staged = false;
+            // Every way in asks first (EnemyController.RequestSearch), so this is a bug in whoever sent him.
+            // He searches where he stands at the lowest priority, so anything real outranks it.
+            Debug.LogError($"{Enemy.name} entered Searching with nothing asked for: no one called RequestSearch first. He searches where he stands, at the lowest priority.", Enemy);
+            request = new SearchRequest(new Incident(Enemy.transform.position, StimulusResponse.SearchForProblem, BehaviourMap.MinPriority), false);
         }
-        else
-        {
-            // Entered from Aggro (or any table transition): the player's last known spot.
-            _target = Enemy.LastKnownPlayerPosition;
-            _reason = StimulusResponse.SearchForAttack;
-            _priority = FromAggroPriority;
-            _walk = true;
-        }
+        Take(request);
         Begin();
     }
 
     public override void Exit()
     {
-        _staged = false;
         _onJob = false;
         _distractLeft = 0f;
         // A search's disturbances end with it: a count left over made the next, unrelated search

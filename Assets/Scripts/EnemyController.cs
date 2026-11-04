@@ -240,12 +240,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         point = _player != null ? _player.transform.position : default;
         return _player != null && Stance == AnimStance.Aim;
     }
-    /// <summary>
-    /// What he knew of Ruby's whereabouts when aggro ended (his own position when he knew nothing),
-    /// which is where search goes. Never her true position: a search that read it would track her
-    /// through walls.
-    /// </summary>
-    public Vector3 LastKnownPlayerPosition { get; private set; }
+    // The one way into Searching: whoever sends him there asks first (RequestSearch) and Enter takes
+    // it. A default start at some remembered spot let a caller that forgot to ask search at the wrong place, silently.
+    private SearchRequest? _pendingSearch;
 
     private const float WanderSpotRadius = 0.5f;
     private static readonly RaycastHit[] SightHits = new RaycastHit[16];
@@ -475,8 +472,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             return true;
         }
 
-        // Stage before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
-        Searching.Stage(new SearchRequest(incident, walkThere));
+        // Ask before the transition: SearchingState.Enter takes the request, and entering with none is an error.
+        RequestSearch(new SearchRequest(incident, walkThere));
         _state.SetState(Searching);
         DebugLog.Info($"{name} starts a search at {incident.Point}: {incident.Reason} at priority {incident.Priority}.", this);
         return true;
@@ -543,7 +540,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     }
 
     /// <summary>
-    /// Sends him to a job's place for its reason, as a search: staged from Idle or Patrol, a
+    /// Sends him to a job's place for its reason, as a search: requested from Idle or Patrol, a
     /// retarget if he is already searching. The job board has already put him on the job's member list.
     /// A search for an attack makes him wary, as any other does.
     /// </summary>
@@ -559,9 +556,25 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             return;
         }
 
-        // Stage before the transition, so SearchingState.Enter keeps this spot rather than Ruby's last seen.
-        Searching.Stage(request);
+        // Ask before the transition: SearchingState.Enter takes the request, and entering with none is an error.
+        RequestSearch(request);
         _state.SetState(Searching);
+    }
+
+    /// <summary>
+    /// Asks for the search the next entry into Searching will begin: the one way in. Whoever moves him
+    /// there asks first (Investigate, FollowJob), or Aggro on its way out after a lost fight. A search
+    /// already running takes Retarget instead, which has no Enter.
+    /// </summary>
+    internal void RequestSearch(SearchRequest request) => _pendingSearch = request;
+
+    /// <summary>Hands over the pending request and clears it. SearchingState.Enter is the only caller.</summary>
+    internal bool TakeSearchRequest(out SearchRequest request)
+    {
+        request = _pendingSearch.GetValueOrDefault();
+        bool had = _pendingSearch.HasValue;
+        _pendingSearch = null;
+        return had;
     }
 
     public void EnterGrabbed()
@@ -612,9 +625,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             rendered.SetPropertyBlock(block);
         }
     }
-
-    /// <summary>Sets where the search will start from; Aggro calls it on the way out.</summary>
-    public void SetLastKnownPlayerPosition(Vector3 point) => LastKnownPlayerPosition = point;
 
     public void Release(Vector3 velocity)
     {

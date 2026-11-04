@@ -52,11 +52,20 @@ public class AggroState : EnemyStateBase
         _hadSight = Enemy.CanSeePlayer();
     }
 
-    // The search starts from what he knew, or from where he stands when he knew nothing.
+    // The search starts from what he knew, or from where he stands when he knew nothing. Exit also runs
+    // on the way to Rearm, Grabbed, Ragdoll and Dead, which never reach Searching without a fresher
+    // request (each comes back through Aggro), so the request is made only when the table is sending
+    // him to Searching, which is LostPlayer: an unconditional one would sit pending after nearly every
+    // fight and blind the guard in SearchingState.Enter. LostPlayer holds between the table's read and
+    // here: same call, same frame, and sight and contact are cached per frame.
     public override void Exit()
     {
         Firing = false;
-        Enemy.SetLastKnownPlayerPosition(Enemy.TryGetNewestRuby(out Vector3 known) ? known : Enemy.transform.position);
+        if (LostPlayer)
+        {
+            Vector3 known = Enemy.TryGetNewestRuby(out Vector3 newest) ? newest : Enemy.transform.position;
+            Enemy.RequestSearch(new SearchRequest(new Incident(known, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority)));
+        }
         if (Enemy.IsArmed) Enemy.Arms.Lower();
     }
 
