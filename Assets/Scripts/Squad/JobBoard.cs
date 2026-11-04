@@ -27,6 +27,8 @@ public class JobBoard
     private readonly List<Candidate> _candidates = new();
     // Its own reach, with warn-once sets of its own: a lead warns once about calling nobody, however often.
     private readonly FloorReach _calling = new();
+    // Jobs already reported for a Check going with no checker (CheckerOf): once each, not once a frame.
+    private readonly HashSet<GroupJob> _warnedNoChecker = new();
 
     public JobBoard(Intel intel) => _intel = intel;
 
@@ -88,6 +90,9 @@ public class JobBoard
     {
         job.SetStep(step, LengthOf(step, job.Lead));
         DebugLog.Info($"{job} {what}.", _intel);
+        // The team has set off (from Gather, or from Call with nobody left to gather): this is the moment
+        // the one who goes is chosen, straight after the line that says they have.
+        if (step == JobStep.Go) ChooseChecker(job);
     }
 
     // The lead reacts to what he heard first, with nobody else on the job. Then he calls the nearest
@@ -160,14 +165,33 @@ public class JobBoard
     }
 
     /// <summary>
-    /// The member who goes to the spot while the rest follow: the one nearest it (flat) when the team
-    /// sets off, kept until he leaves or the job starts over. Null for a Search, where everyone goes.
-    /// Chosen here, by the first member who asks, so it is one decision and every member reads the same.
+    /// The member who goes to the spot while the rest follow: the one chosen when the team set off
+    /// (ChooseChecker), kept until he leaves or the job starts over. Null for a Search, where everyone
+    /// goes. A pure read: members ask from two update phases, and the choice used to be made by whoever
+    /// asked first. A Check in Go or Look with nobody chosen means a path into Go forgot to choose, and
+    /// every member would take it as "I walk": that is reported once per job, never quietly.
     /// </summary>
     public EnemyController CheckerOf(GroupJob job)
     {
         if (job.Kind != JobKind.Check) return null;
-        if (job.Checker != null && job.Has(job.Checker)) return job.Checker;
+        if (job.Checker == null && (job.Step == JobStep.Go || job.Step == JobStep.Look) && _warnedNoChecker.Add(job))
+            Debug.LogError($"{job} is in {job.Step} with no checker chosen: a path into Go didn't choose one, so every member would walk to the spot himself.", _intel);
+        return job.Checker;
+    }
+
+    // An upgrade that started the job over cleared its checker. Only one that landed in Go chooses now:
+    // in Call or Gather the choice waits for the team to set off, as it always did (AdvanceTo).
+    private void ChooseAfterRestart(GroupJob job, bool restarted)
+    {
+        if (restarted && job.Step == JobStep.Go) ChooseChecker(job);
+    }
+
+    // The nearest member to the spot (flat) becomes the checker, once, when a Check enters Go or its
+    // checker is lost in Go or Look. One that is already chosen is kept, so a member joining a team
+    // that is already going doesn't change who leads it. Nobody on the job (a closed one) chooses nobody.
+    private void ChooseChecker(GroupJob job)
+    {
+        if (job.Kind != JobKind.Check || job.Checker != null) return;
 
         EnemyController nearest = null;
         float best = float.MaxValue;
@@ -181,7 +205,6 @@ public class JobBoard
         job.SetChecker(nearest);
         if (nearest != null)
             DebugLog.Info($"{job}: {nearest.name} is nearest the spot ({best:0.#} m) and goes to check it; {(job.Count > 1 ? "the others follow behind" : "he goes alone")}.", nearest);
-        return nearest;
     }
 
     /// <summary>
@@ -209,7 +232,8 @@ public class JobBoard
         GroupJob match = FindMatch(incident.Point);
         if (match != null)
         {
-            if (Converts(match, incident)) Upgrade(match, incident, kind);
+            bool restarted = false;
+            if (Converts(match, incident)) restarted = Upgrade(match, incident, kind);
             else Elevate(match, incident.Reason, $"{who.name} senses {incident}");
             if (match.Recruiting)
             {
@@ -217,6 +241,8 @@ public class JobBoard
                 if (own != null && own != match) Leave(who);
                 JoinMember(match, who);
                 DebugLog.Info($"{who.name} joins {match}.", who);
+                // After he has joined, so he is counted among those the checker is chosen from.
+                ChooseAfterRestart(match, restarted);
                 return match;
             }
 
@@ -227,9 +253,11 @@ public class JobBoard
                 // job here left him in Searching with no job. The full-team rule is for enemies who
                 // aren't on a job already.
                 DebugLog.Info($"{who.name} stays on {own}: {incident} is {match}'s, and {why}.", who);
+                ChooseAfterRestart(match, restarted);
                 return own;
             }
             DebugLog.Info($"{who.name} leaves {incident} to {match}: {why}.", who);
+            ChooseAfterRestart(match, restarted);
             return null;
         }
 
@@ -252,7 +280,11 @@ public class JobBoard
             DebugLog.Info($"{who.name} will call in {job.Pending.Count} officer(s) once he has reacted.", who);
         }
         // A check of one has nobody to call or gather: he goes straight there.
-        else if (job.Kind == JobKind.Check) job.SetStep(JobStep.Go, 0f);
+        else if (job.Kind == JobKind.Check)
+        {
+            job.SetStep(JobStep.Go, 0f);
+            ChooseChecker(job);
+        }
         return job;
     }
 
@@ -279,13 +311,16 @@ public class JobBoard
         DebugLog.Info($"{who.name} leaves {job}; {job.Lead.name} leads.", who);
 
         // The checker went with the look half done: the nearest of the rest takes over, and the job
-        // goes back to Go so he walks to the spot from where he is and looks it over himself. Before
-        // the look, or after it, there is nothing to hand over: the next to ask is chosen from the rest.
-        if (wasChecker && job.Step == JobStep.Look)
+        // goes back to Go so he walks to the spot from where he is and looks it over himself. In Go the
+        // nearest of the rest is chosen at once. Before Go there is no checker to lose (he is chosen as
+        // the team sets off), and after the look nobody asks, so nothing is handed over and nothing logged.
+        if (!wasChecker) return;
+        if (job.Step == JobStep.Look)
         {
             job.SetStep(JobStep.Go, 0f);
             DebugLog.Info($"{job}: the checker is gone, so someone else goes to look.", who);
         }
+        if (job.Step == JobStep.Go) ChooseChecker(job);
     }
 
     /// <summary>
@@ -327,8 +362,9 @@ public class JobBoard
         GroupJob own = who.Job;
         if (own == null || !request.WalkThere || !Covers(own, incident.Point) || !Converts(own, incident)) return false;
 
-        Upgrade(own, incident, incident.IsFind ? JobKind.Search : JobKind.Check);
+        bool restarted = Upgrade(own, incident, incident.IsFind ? JobKind.Search : JobKind.Check);
         DebugLog.Info($"{who.name} upgrades {own}: {incident}.", who);
+        ChooseAfterRestart(own, restarted);
         return true;
     }
 
@@ -380,8 +416,10 @@ public class JobBoard
     }
 
     // A more serious thing at a job's place: the reason and priority rise for everyone. If the place
-    // moved the team re-plans its walk from the first step; at the same place it carries on.
-    private void Upgrade(GroupJob job, Incident incident, JobKind kind)
+    // moved the team re-plans its walk from the first step; at the same place it carries on. True when
+    // it started over, which clears the checker: a caller whose job lands in Go chooses a new one
+    // (ChooseChecker), after its own log lines and any joining, so the choice sees the whole team.
+    private bool Upgrade(GroupJob job, Incident incident, JobKind kind)
     {
         bool wasCheck = job.Kind == JobKind.Check;
         bool restarted = job.Upgrade(incident, kind, _intel.GatherTime);
@@ -389,8 +427,9 @@ public class JobBoard
             DebugLog.Info($"{job} found something at {incident.Point}: the check becomes a search, and everyone goes.", _intel);
         if (incident.Reason == StimulusResponse.SearchForAttack)
             foreach (EnemyController member in job.Members) member.Memory.BecomeWary();
-        if (!restarted) return;
+        if (!restarted) return false;
         foreach (EnemyController member in job.Members) member.FollowJob(job);
+        return true;
     }
 
     // Finds the free enemies within Speech Range of the lead, nearest first, up to the cap, and queues
