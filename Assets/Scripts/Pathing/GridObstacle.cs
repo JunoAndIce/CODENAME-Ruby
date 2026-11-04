@@ -21,6 +21,7 @@ public class GridObstacle : MonoBehaviour
     private PathGrid _grid;          // the grid currently marked, so clearing hits the same one
     private Bounds _markedBounds;
     private float _restTimer;
+    private bool _warnedOffGrid;
 
     private bool IsMarked => _grid != null;
 
@@ -93,7 +94,15 @@ public class GridObstacle : MonoBehaviour
     private void Mark(Bounds bounds)
     {
         PathGrid grid = PathGrid.At(transform.position);
-        if (grid == null) return;
+        if (grid == null)
+        {
+            // A resting prop asks every physics step, so this says it once until it's back on a grid.
+            if (!_warnedOffGrid)
+                Debug.LogWarning($"{name} has a GridObstacle but rests on no PathGrid (outside every grid's area or Height band), so it doesn't block paths: enemies plan straight through it.", this);
+            _warnedOffGrid = true;
+            return;
+        }
+        _warnedOffGrid = false;
 
         _cells.Clear();
         foreach (Collider collider in _colliders)
