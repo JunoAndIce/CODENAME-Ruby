@@ -116,6 +116,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public EnemyMemory Memory { get; private set; }
     /// <summary>What he hears, and what else he notices without sight.</summary>
     public EnemySenses Senses { get; private set; }
+    /// <summary>His view cone, close circle and line of sight.</summary>
+    public EnemyVision Vision { get; private set; }
     public float MotionRadius => _motionRadius;
     public float BodyNoticeRange => _bodyNoticeRange;
     public float ScanInterval => _scanInterval;
@@ -245,12 +247,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private SearchRequest? _pendingSearch;
 
     private const float WanderSpotRadius = 0.5f;
-    private static readonly RaycastHit[] SightHits = new RaycastHit[16];
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
-    private int _sightFrame = -1;
-    private bool _canSeePlayer;
-    private Collider _sightBlocker;
     private int _seesFrame = -1;
     private bool _seesPlayer;
     private bool _wasSeeing;
@@ -264,6 +262,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Health = GetComponent<Health>();
         Memory = new EnemyMemory();
         Senses = new EnemySenses(this);
+        Vision = new EnemyVision(this);
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
@@ -851,7 +850,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         VelocityUtil.SetFlatVelocity(Body, Vector3.zero);
     }
 
-    private Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
+    internal Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
 
     /// <summary>
     /// Whether he has Ruby in his eyes this frame: noticed, or already hunting her and in contact.
@@ -888,108 +887,30 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         _wasSeeing = sees;
     }
 
-    // Detection: noticed means in his view, and in sight.
-    private bool DetectsPlayer() => _player != null && InView(_player.transform.position) && CanSeePlayer();
+    // Detection: noticed means in his view, and in sight. Sight lives in EnemyVision; these forwards
+    // keep every state, sense and the editor calling the controller as before.
+    private bool DetectsPlayer() => Vision.DetectsPlayer();
 
-    /// <summary>
-    /// Whether a point is in his view: the cone in front of him out to View Range, or the close
-    /// circle all round, which is there so nobody can stand right behind him unnoticed. Measured
-    /// flat, and only the shape: whether anything blocks the line is CanSeePlayer's business.
-    /// With no horizontal facing there's no cone: only the close circle counts. His root never
-    /// pitches in play (its rotation is frozen and only turned about Y), so this only covers an
-    /// enemy placed pitched in the scene.
-    /// </summary>
-    public bool InView(Vector3 point) => InView(point, _viewRange);
+    public bool InView(Vector3 point) => Vision.InView(point);
 
     public float ViewRange => _viewRange;
+    internal float ViewAngle => _viewAngle;
+    internal float CloseRadius => _closeRadius;
+    internal float GiveUpRadius => _giveUpRadius;
+    // Start fills it after Awake builds the Vision, so EnemyVision reads it here on every call.
+    internal PlayerController Player => _player;
 
-    /// <summary>The same cone and close circle, out to a range of the caller's choosing (a corpse is looked at closer than Ruby).</summary>
-    public bool InView(Vector3 point, float range)
-    {
-        Vector3 offset = point - transform.position;
-        offset.y = 0f;
-        float distance = offset.magnitude;
-        if (distance <= _closeRadius) return true;
-        if (distance > range) return false;
+    public bool InView(Vector3 point, float range) => Vision.InView(point, range);
 
-        // No facing, no cone. Angle against a zero vector reads 0 and would put everything in range in front.
-        if (!TryFlatForward(out Vector3 forward)) return false;
-        return Vector3.Angle(forward, offset) <= _viewAngle * 0.5f;
-    }
+    public bool InContactWithPlayer() => Vision.InContactWithPlayer();
 
-    // Flattened so a tilted body can't skew the angle; the same reason FaceTarget flattens. False
-    // when the body points straight up or down, which leaves nothing to flatten. InView and its
-    // gizmo share this so they can't disagree about when the cone exists.
-    private bool TryFlatForward(out Vector3 forward)
-    {
-        forward = transform.forward;
-        forward.y = 0f;
-        if (forward.sqrMagnitude <= 0.0001f) return false;
-        forward.Normalize();
-        return true;
-    }
+    public Collider SightBlocker => Vision.SightBlocker;
 
-    /// <summary>Aggro's contact test: still within the give-up radius, and in sight.</summary>
-    public bool InContactWithPlayer() => DistanceToPlayer() <= _giveUpRadius && CanSeePlayer();
+    public bool CanSeePlayer() => Vision.CanSeePlayer();
 
-    /// <summary>What blocked the last sight check, or null when the player was in view.</summary>
-    public Collider SightBlocker => _sightBlocker;
+    public bool HasClearSight(Vector3 point, Transform target) => Vision.HasClearSight(point, target);
 
-    /// <summary>
-    /// A line from eye height to the player that crosses nothing solid except characters. Checked
-    /// fresh, so a crate can hide the player while a prop below the eye line can't. Cached per
-    /// frame: several transitions and the aggro state all ask.
-    /// </summary>
-    public bool CanSeePlayer()
-    {
-        if (_player == null) return false;
-        if (_sightFrame == Time.frameCount) return _canSeePlayer;
-        _sightFrame = Time.frameCount;
-
-        _sightBlocker = FindSightBlocker(_player.transform.position, _player.transform);
-        _canSeePlayer = _sightBlocker == null;
-        return _canSeePlayer;
-    }
-
-    /// <summary>
-    /// Whether the line from his eyes to a point is clear. The target's own colliders don't block
-    /// it, so a body can be checked from its centre without its skin getting in the way.
-    /// </summary>
-    public bool HasClearSight(Vector3 point, Transform target) => FindSightBlocker(point, target) == null;
-
-    private Collider FindSightBlocker(Vector3 point, Transform target)
-    {
-        Vector3 eye = EyePosition;
-        Vector3 toPoint = point - eye;
-        float distance = toPoint.magnitude;
-        if (distance < 0.01f) return null;
-
-        int count = Physics.RaycastNonAlloc(eye, toPoint / distance, SightHits, distance, ~0, QueryTriggerInteraction.Ignore);
-        for (int i = 0; i < count; i++)
-        {
-            Collider hit = SightHits[i].collider;
-            if (IsCharacter(hit) || (target != null && hit.transform.IsChildOf(target))) continue;
-            return hit;
-        }
-        return null;
-    }
-
-    // Characters see past each other, ragdoll bones included: each bone is a body of its own.
-    private bool IsCharacter(Collider collider)
-    {
-        Rigidbody body = collider.attachedRigidbody;
-        if (body == null) return false;
-        return body.GetComponentInParent<PlayerController>() == _player || body.GetComponentInParent<EnemyController>() != null;
-    }
-
-    public float DistanceToPlayer()
-    {
-        if (_player == null) return float.MaxValue;
-
-        Vector3 delta = _player.transform.position - transform.position;
-        delta.y = 0f;
-        return delta.magnitude;
-    }
+    public float DistanceToPlayer() => Vision.DistanceToPlayer();
 
     private void HandleDamaged(float amount) => Alert();
 
@@ -1021,7 +942,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         DrawFlatCircle(eye, _closeRadius);
         // Pitched straight up or down he has no facing and no cone (see InView), so draw none
         // rather than invent a direction.
-        if (TryFlatForward(out Vector3 flatForward)) DrawFlatArc(eye, flatForward, _viewAngle, _viewRange);
+        if (EnemyVision.TryFlatForward(transform, out Vector3 flatForward)) DrawFlatArc(eye, flatForward, _viewAngle, _viewRange);
 
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, _giveUpRadius);
