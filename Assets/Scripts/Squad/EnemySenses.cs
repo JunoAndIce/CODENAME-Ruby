@@ -27,7 +27,10 @@ public class EnemySenses
 
     /// <summary>
     /// A sound that reached him. Ruby's own sounds teach him where she is, as Heard. Then the map
-    /// decides whether it's worth a search, and from where.
+    /// decides whether it's worth a search. He goes to where the sound happened, never to the thing's
+    /// origin: an impact is checked where it landed, not at whoever threw it. Only a body he sees moving
+    /// leads back to its throw (Consider), because he can see which way it came from. A sound can't tell
+    /// him that.
     /// </summary>
     public void Hear(in Stimulus stimulus)
     {
@@ -38,10 +41,10 @@ public class EnemySenses
         if (ruby != null)
             _enemy.Memory.Learn(new RubyFact(ruby.transform.position, stimulus.Time, Knowledge.Heard));
 
-        if (!_enemy.Intel.TryGetRow(stimulus.Origin, stimulus.Kind, out BehaviourMap.Row row)) return;
+        if (!_enemy.Intel.TryGetRow(stimulus.Position, stimulus.Kind, out BehaviourMap.Row row)) return;
 
-        DebugLog.Info($"{_enemy.name} hears {stimulus.Kind} from {stimulus.Origin}: {row.Response} at priority {row.Priority}.", _enemy);
-        _enemy.Investigate(new Incident(stimulus.Origin, row.Response, row.Priority));
+        DebugLog.Info($"{_enemy.name} hears {stimulus.Kind} from {stimulus.Position}: {row.Response} at priority {row.Priority}.", _enemy);
+        _enemy.Investigate(new Incident(stimulus.Position, row.Response, row.Priority));
     }
 
     /// <summary>

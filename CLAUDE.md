@@ -526,7 +526,7 @@ through the player never slows the walk.
   origin on, with the original time, to what it hit, so a knock-on leads back to the throw. A
   record lasts Origin Lifetime (5 s), and a character that stands up is cleared, because one on
   his feet is sensed by sight and a stale record would make him thud at every wall he bumps.
-  Officers react to an origin, not to where a thrown body landed.
+  **What he sees moving leads back to its origin; what he hears doesn't.** A body in motion shows him which way it came from, so he goes to where it was thrown from. A sound can't, so he goes to where it happened: an impact is checked where it landed, never at the thrower (`EnemySenses.Hear`). The origin still travels with the sound, so a knock-on he then sees moving leads back to the throw.
 - **The behaviour map** (`BehaviourMap`, an asset assigned to `Intel`'s Default Map). One row per
   `StimulusKind`: a **priority**, 1 to 5, and a **response**: Ignore, SearchForProblem or
   SearchForAttack. Defaults: body and fast object 5, gunshot 4 (attack); impact and whip landing 3,
@@ -659,7 +659,7 @@ through the player never slows the walk.
   is a run of shots), and each is forgotten after Distraction Memory (12 s). **The count ends with the
   search** (`SearchingState.Exit` clears it): a count left over made the next, unrelated search
   aggro on its first or second one. At Distraction Threshold
-  (3) **the jig is up**: the count clears, he is taught the disturbance's origin as a Heard fact
+  (3) **the jig is up**: the count clears, he is taught the disturbance's place (where a thing he saw came from, or where a sound happened) as a Heard fact
   (unless it was a body or gun, `isFind`, which says nothing about Ruby) and `Alert()`s into Aggro.
   A search from Aggro (priority 6) is outranked by nothing, so every sound distracts a lost-fight
   searcher. Idle and patrolling officers aren't distractible: they go and check.

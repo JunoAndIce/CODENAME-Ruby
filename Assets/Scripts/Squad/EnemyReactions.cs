@@ -111,7 +111,8 @@ public class EnemyReactions
 
     // Something lesser happened while he was searching. He turns to look at it and the search waits
     // a moment, but it isn't dropped or retargeted. Enough of them close together and the jig is
-    // up: he aggros, and a thrown object's origin or a shot's muzzle is where he takes Ruby to be,
+    // up: he aggros, and the disturbance's place (where a thing he saw came from, or where a sound
+    // happened) is where he takes Ruby to be,
     // so Aggro has somewhere to go. A body or gun says nothing about her, so he goes to Aggro with
     // what he already knows, and searches where he stands if that is nothing.
     private bool Distract(Incident incident)

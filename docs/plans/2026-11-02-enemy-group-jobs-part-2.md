@@ -249,7 +249,7 @@
 - [x] **Step 2: Where it counts.** In `Intel`, whenever an officer is put on a job he wasn't on: start, join, recruit, fill, merge-out. If the count reaches the threshold, the job is raised to an attack, naming him and the count in the log, so he and everyone with him go wary.
 - [x] **Step 3: Telling.** Also in `Intel`'s one join point, after the member is added: if any member `HasSeenRuby`, the others learn the newest of the seers' facts as **Told** (`Memory.Learn`, so the newer by time wins and nothing older overwrites it), call `BeToldOfRuby()`, and the log names who told whom. Members who already knew are not told again. Seen officers still raise the job to an attack, as in Task 3, so the team stays one reason. A summary says why a Told officer cannot tell on: a sighting would spread through the level by chain, which is the removed level alert by another door.
 - [x] **Step 4: Compile and commit,** as in Task 3.
-- [x] **Step 5: Play-test gate (the user).** Passed 2026-11-04. No Inspector work. In play:
+- [x] **Step 5: Play-test gate (the user).** Passed 2026-11-04. The third look was seen raising a job in the log; telling (the sighting and no-chain cases) did not come up in that run, so it rests on the review until Task 7's gate plays it. No Inspector work. In play:
   - two impacts that each end in all clear, then a third: the third is logged as raised to an attack, and he finishes on an Aggressive patrol;
   - a team: the third look raises the whole job, so they all go aggressive together;
   - distractions and a glance don't move the count;

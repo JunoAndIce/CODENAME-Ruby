@@ -326,6 +326,10 @@ a fight.
   by a thrown body leads back to Ruby, not to where the body landed. An object moving with no
   origin (one nobody set off, or set off long ago) takes the spot where the officer first saw it
   moving. The origin fades after Origin Lifetime (default 5 s). *(My design for the user's rule.)*
+  **Only what he sees moving leads back to the origin (user, 2026-11-04).** A sound sends him to
+  where it happened: "If an enemy hears an impact, they should go check the source of the sound
+  not the person who threw it. The only time they should go to the person who threw it, is if
+  they're reacting to a fast or moving object from a direction."
 
 **Hearing.**
 
