@@ -171,8 +171,8 @@ public class JobBoard
 
     /// <summary>
     /// The member who goes to the spot while the rest follow: the one chosen when the team set off
-    /// (ChooseChecker), kept until he leaves or the job starts over. Null for a Search, where everyone
-    /// goes. A pure read: members ask from two update phases, and the choice used to be made by whoever
+    /// (ChooseChecker), kept until he leaves or the job starts over, unless a nearer enemy joins in its
+    /// first moments (ReconsiderOnJoin). Null for a Search, where everyone goes. A pure read: members ask from two update phases, and the choice used to be made by whoever
     /// asked first. A Check in Go or Look with nobody chosen means a path into Go forgot to choose, and
     /// every member would take it as "I walk": that is reported once per job, never quietly.
     /// </summary>
@@ -224,19 +224,15 @@ public class JobBoard
     // job and goes into Go before the rest of the listeners have been told, so a later listener who joins
     // may be nearer the spot than the one already chosen. The old lazy choice waited for the first query,
     // after all of them had joined. So a join while the job has not yet ticked (the step's clock is still
-    // zero: it has just entered Go, by a new job or a restart) chooses again from the whole team, and says
-    // so only when it changed. The window is a little wider than the old first query (a join later in the
-    // frame, or before the next Intel update, also counts), which is accepted: it is the same sound. Once
-    // the job has ticked, a joiner keeps the checker, as after the old first query.
+    // zero: it has just entered Go, by any route) chooses again from the whole team, and says so only when
+    // it changed. The window is a little wider than the old first query (a join later in the frame, or
+    // before the next Intel update, also counts), which is accepted: nobody has gone far yet, and the one
+    // joining is nearer. Once the job has ticked, a joiner keeps the checker, as after the old first query.
+    // No checker at all isn't repaired here: that is a path into Go that forgot to choose, and filling it
+    // in would hide it from CheckerOf's error.
     private void ReconsiderOnJoin(GroupJob job)
     {
-        if (job.Kind != JobKind.Check || job.Step != JobStep.Go) return;
-        if (job.Checker == null)
-        {
-            ChooseChecker(job);
-            return;
-        }
-        if (job.StepElapsed != 0f) return;
+        if (job.Kind != JobKind.Check || job.Step != JobStep.Go || job.Checker == null || job.StepElapsed != 0f) return;
 
         EnemyController nearest = NearestToSpot(job, out float best);
         if (nearest == null || nearest == job.Checker) return;
@@ -276,7 +272,12 @@ public class JobBoard
             {
                 // Decided before he is taken off his job: the destination is certain by now.
                 if (own != null && own != match) Leave(who);
-                if (!JoinMember(match, who)) return who.Job;
+                if (!JoinMember(match, who))
+                {
+                    // Refused (JoinMember has said why), but an upgrade may still have sent the job back to Go.
+                    ChooseAfterRestart(match, restarted);
+                    return who.Job;
+                }
                 DebugLog.Info($"{who.name} joins {match}.", who);
                 // After he has joined, so he is counted, and after the line saying so, so a new checker
                 // reads as the result of his joining. A restart that landed in Go has no checker yet and

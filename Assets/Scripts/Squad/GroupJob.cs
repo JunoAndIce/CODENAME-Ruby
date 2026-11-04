@@ -14,7 +14,7 @@ public enum JobKind { Check, Search }
 public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done }
 
 /// <summary>
-/// A few enemies dealing with one thing together. A plain object, owned by Intel, with members, a
+/// A few enemies dealing with one thing together. A plain object, held by JobBoard, with members, a
 /// kind, a step and a point. It **never moves anyone**: each member's state machine reads it and
 /// runs his own role, so the machine stays the one place movement is decided. JobBoard is the only
 /// caller of the members of this class that change it (Add, Remove, Upgrade); everyone else reads.
@@ -66,9 +66,10 @@ public class GroupJob
 
     /// <summary>
     /// The member who goes to the spot and looks while the rest follow him (a Check only; a Search
-    /// sends everyone). The one nearest the spot when the team sets off. Null until chosen, and again
-    /// when he leaves or the job starts over; JobBoard chooses the nearest remaining at once, if the
-    /// job is then going (Go). Everyone else reads it, through Intel.CheckerOf.
+    /// sends everyone). The one nearest the spot when the team sets off, or a nearer enemy who joins in
+    /// its first moments. Null until chosen, and again when he leaves or the job starts over; JobBoard
+    /// chooses the nearest remaining at once, if the job is then going (Go). Everyone else reads it,
+    /// through Intel.CheckerOf.
     /// </summary>
     public EnemyController Checker { get; private set; }
     internal void SetChecker(EnemyController who) => Checker = who;
