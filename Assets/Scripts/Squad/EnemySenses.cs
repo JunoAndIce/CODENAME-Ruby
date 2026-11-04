@@ -196,11 +196,67 @@ public class EnemySenses
 
         var kind = speed >= Stimuli.Rules.AlarmSpeed ? StimulusKind.FastObject : StimulusKind.MovingObject;
         Vector3 origin = Disturbance.TryGetOrigin(body, out Vector3 thrownFrom) ? thrownFrom : body.position;
+
+        // A flying pistol or enemy is judged by what it is as well as how fast it moves: speed alone
+        // would call a flung pistol a mere moving object, and a thrown enemy (a body) one too. Anything
+        // else (a crate) has no second row and keeps the speed row alone.
+        bool isEnemy = enemy != null;
+        if (isEnemy || body.TryGetComponent(out Gun _))
+        {
+            StimulusKind whatKind = isEnemy ? StimulusKind.Body : StimulusKind.LooseGun;
+            bool haveSpeed = _enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row speedRow);
+            bool haveWhat = _enemy.Intel.TryGetRow(origin, whatKind, out BehaviourMap.Row whatRow);
+            // A missing row was warned about once by the map. One missing: the other stands alone.
+            // Both missing: nothing to react to, as a single missing row is today.
+            if (!haveSpeed && !haveWhat) return;
+
+            StimulusResponse response;
+            int priority;
+            StimulusKind responseFrom, priorityFrom;
+            if (!haveWhat) Stronger(speedRow, speedRow, kind, kind, out response, out priority, out responseFrom, out priorityFrom);
+            else if (!haveSpeed) Stronger(whatRow, whatRow, whatKind, whatKind, out response, out priority, out responseFrom, out priorityFrom);
+            else Stronger(speedRow, whatRow, kind, whatKind, out response, out priority, out responseFrom, out priorityFrom);
+
+            DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: it is a {whatKind}. {response} (from {responseFrom}) at priority {priority} (from {priorityFrom}).", _enemy);
+            // Not a find, though it is a body or a gun: its origin is where Ruby threw it from, so
+            // the search goes there, as a check. A find would send him to where it landed.
+            if (_enemy.Investigate(new Incident(origin, response, priority))) _reactedAt[body] = now;
+            return;
+        }
+
         if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: {row.Response} at priority {row.Priority}.", _enemy);
         // Recorded only when he took it: one he ignored (mid-fight, say) may still send him later.
         if (_enemy.Investigate(new Incident(origin, row.Response, row.Priority))) _reactedAt[body] = now;
+    }
+
+    // The stronger of two rows: response by severity, priority by number, each taken on its own. An
+    // Ignore row contributes nothing, neither response nor priority, or an Ignore at priority 5
+    // would lift a real row's priority. Both Ignore stays Ignore. Ties name the first (speed) row.
+    private static void Stronger(BehaviourMap.Row first, BehaviourMap.Row second, StimulusKind firstKind, StimulusKind secondKind,
+        out StimulusResponse response, out int priority, out StimulusKind responseFrom, out StimulusKind priorityFrom)
+    {
+        bool firstIgnored = first.Response == StimulusResponse.Ignore;
+        bool secondIgnored = second.Response == StimulusResponse.Ignore;
+        if (secondIgnored)
+        {
+            // Second adds nothing (or both ignore): the first row, whole.
+            response = first.Response; priority = first.Priority; responseFrom = priorityFrom = firstKind;
+            return;
+        }
+        if (firstIgnored)
+        {
+            response = second.Response; priority = second.Priority; responseFrom = priorityFrom = secondKind;
+            return;
+        }
+
+        bool secondWorse = BehaviourMap.Severity(second.Response) > BehaviourMap.Severity(first.Response);
+        response = secondWorse ? second.Response : first.Response;
+        responseFrom = secondWorse ? secondKind : firstKind;
+        bool secondHigher = second.Priority > first.Priority;
+        priority = secondHigher ? second.Priority : first.Priority;
+        priorityFrom = secondHigher ? secondKind : firstKind;
     }
 
     private static bool IsTumbling(Rigidbody body)
