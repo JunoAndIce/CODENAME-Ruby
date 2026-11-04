@@ -98,6 +98,24 @@ public class SearchingState : EnemyStateBase
         if (_distractLeft > 0f) _distractPoint = point;
     }
 
+    /// <summary>
+    /// Ends his search at once, for an extra a merge couldn't fit on its job: he is off every job and
+    /// Finished reads true, so the table sends him back to Patrol or Idle. Cleared _onJob is what
+    /// stops SyncJob warning "off his job but still searching" for what is deliberate here. Call it
+    /// after the job board has taken him off his job: with one, Finished would still read the job.
+    /// </summary>
+    public void Dismiss(string why)
+    {
+        if (Job != null)
+        {
+            Debug.LogError($"{Enemy.name} was dismissed from his search while still on {Job}: he must leave the job first, or Finished would read the job's step and he'd carry on.", Enemy);
+            return;
+        }
+        _onJob = false;
+        _step = SearchStep.Done;
+        DebugLog.Info($"{Enemy.name} is dismissed from his search: {why}.", Enemy);
+    }
+
     private void Begin()
     {
         _stepTimer = 0f;
@@ -274,6 +292,17 @@ public class SearchingState : EnemyStateBase
     // everyone holds for the gesture.
     private void FixedTickJob(GroupJob job)
     {
+        // A call a fill made while the team was already walking or looking (JobBoard.AdvanceFill): the
+        // enemy just called in stops and faces the lead for the call's time, then takes his role for
+        // whatever step the job is in. The lead doesn't stop, so a team never halts each time someone
+        // joins. Call has its own version below.
+        if (job.Step != JobStep.Call && job.Callee == Enemy && job.Lead != null && job.Lead != Enemy)
+        {
+            Enemy.Stop();
+            Enemy.FaceToward(job.Lead.transform.position);
+            return;
+        }
+
         switch (job.Step)
         {
             case JobStep.Call:

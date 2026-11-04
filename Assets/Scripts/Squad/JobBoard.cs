@@ -30,6 +30,14 @@ public class JobBoard
     private readonly FloorReach _calling = new();
     // Jobs already reported for a Check going with no checker (CheckerOf): once each, not once a frame.
     private readonly HashSet<GroupJob> _warnedNoChecker = new();
+    // Merge and fill run once per Intel Interval, on the board's own clock, so a squad's jobs are matched
+    // and topped up about once a second, not every frame.
+    private float _sinceMatch;
+    // Reused by a merge: the younger job's members and the ones who didn't fit, so a firing allocates nothing.
+    private readonly List<EnemyController> _moving = new();
+    private readonly List<EnemyController> _extras = new();
+    // An extra's new spot is tried this many times before he is dismissed (Elsewhere Distance, in MergeExtraSpot).
+    private const int ExtraSpotTries = 3;
 
     public JobBoard(Intel intel) => _intel = intel;
 
@@ -59,6 +67,8 @@ public class JobBoard
                     continue;
                 }
 
+                // Before the Go and length checks, so a job still walking gets its fill's calls too.
+                AdvanceFill(job);
                 if (job.Step == JobStep.Go) continue;
                 if (job.StepElapsed < job.StepLength) continue;
 
@@ -85,6 +95,13 @@ public class JobBoard
             for (int i = 0; i < _emptied.Count; i++) _jobs.Remove(_emptied[i]);
             _emptied.Clear();
         }
+
+        // After the walk, with _advancing false, so a job a merge or a fill empties closes at once.
+        _sinceMatch += dt;
+        if (_sinceMatch < _intel.IntelInterval) return;
+        _sinceMatch = 0f;
+        MergeOne();
+        FillOpenJobs();
     }
 
     private void AdvanceTo(GroupJob job, JobStep step, string what)
@@ -123,22 +140,8 @@ public class JobBoard
             if (job.IsFull) break;
             // Already on the job: he heard it himself and joined, so there is nobody to call.
             if (next != null && job.Has(next)) continue;
-            if (next == null || !next.CanJoinJob(job.Priority))
-            {
-                DebugLog.Info($"{job.Lead.name} doesn't call {(next != null ? next.name : "an officer who is gone")}: he is no longer free.", job.Lead);
-                continue;
-            }
-
-            // A one-enemy job he was on is closed by taking him off it: he is better used here.
-            Leave(next);
-            job.Callee = next;
-            if (!JoinMember(job, next))
-            {
-                job.Callee = null;
-                continue;
-            }
+            if (!CallIn(job, next)) continue;
             job.RestartClock();
-            DebugLog.Info($"{job.Lead.name} turns to {next.name} ({PathGrid.FlatDistance(job.Lead.transform.position, next.transform.position):0.#} m away) and calls him in.", job.Lead);
             return;
         }
 
@@ -146,6 +149,61 @@ public class JobBoard
         job.Callee = null;
         if (job.Kind == JobKind.Check && job.Count > 1) AdvanceTo(job, JobStep.Gather, $"gathers: {job.Count} officers turn toward {job.Point}");
         else AdvanceTo(job, JobStep.Go, "sets off");
+    }
+
+    // The lead calls one enemy in: the one place a call is made and worded, for the Call step (AdvanceCall)
+    // and a fill's calls in any other step (AdvanceFill). False, with the reason said, when he can't be
+    // called (null, gone to Aggro, grabbed, taken by another job) or the job refused him. The caller
+    // restarts whichever clock times the call.
+    private bool CallIn(GroupJob job, EnemyController next)
+    {
+        if (next == null || !next.CanJoinJob(job.Priority))
+        {
+            DebugLog.Info($"{job.Lead.name} doesn't call {(next != null ? next.name : "an officer who is gone")}: he is no longer free.", job.Lead);
+            return false;
+        }
+
+        // A one-enemy job he was on is closed by taking him off it: he is better used here.
+        Leave(next);
+        job.Callee = next;
+        if (!JoinMember(job, next))
+        {
+            job.Callee = null;
+            return false;
+        }
+        DebugLog.Info($"{job.Lead.name} turns to {next.name} ({PathGrid.FlatDistance(job.Lead.transform.position, next.transform.position):0.#} m away) and calls him in.", job.Lead);
+        return true;
+    }
+
+    // A fill's calls, in every step but Call: someone found after the job set off is called in by the
+    // lead and not snapped onto the team. It runs on CallElapsed, a clock of its own, because the step's
+    // clock (StepElapsed) times the Look and the Search, and restarting it here would stretch a search
+    // for good. Callee waits out CallTime, then the next in the queue is called, one per call.
+    private void AdvanceFill(GroupJob job)
+    {
+        if (job.Callee != null)
+        {
+            if (job.CallElapsed < _intel.CallTime) return;
+            job.Callee = null;
+        }
+
+        while (job.Pending.Count > 0)
+        {
+            // Full, or a Check that has reached its look: nobody more is wanted, so the whole queue goes.
+            if (!job.Recruiting)
+            {
+                DebugLog.Info($"{job.Lead.name} drops the {job.Pending.Count} call(s) he had queued: {job} can take no one more.", job.Lead);
+                job.ClearCalls();
+                return;
+            }
+
+            EnemyController next = job.DequeueCall();
+            // Already on the job: he heard it himself and joined, so there is nobody to call.
+            if (next != null && job.Has(next)) continue;
+            if (!CallIn(job, next)) continue;
+            job.RestartCallClock();
+            return;
+        }
     }
 
     /// <summary>How long a job stays in its current step, in seconds, as fixed when the step began. Zero for a step that waits on someone, not the clock.</summary>
@@ -307,6 +365,14 @@ public class JobBoard
         // every later sound there start a job of its own without a word.
         if (PathGrid.At(incident.Point) == null)
             Debug.LogWarning($"{who.name} starts a job at {incident.Point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
+        return StartJob(who, incident, kind);
+    }
+
+    // A job always starts this one way: a sound's first listener (Handle) and an extra a merge sent
+    // elsewhere (MergeExtras) both lead a new job and call in the free enemies near them. He must be
+    // off any job already. Returns the job, or the one he is on when it refused him.
+    private GroupJob StartJob(EnemyController who, Incident incident, JobKind kind)
+    {
         var job = new GroupJob(kind, incident, _intel.JobCap);
         _jobs.Add(job);
         if (!JoinMember(job, who))
@@ -529,6 +595,145 @@ public class JobBoard
         if (!restarted) return false;
         foreach (EnemyController member in job.Members) member.FollowJob(job);
         return true;
+    }
+
+    // A job still being worked: someone leads it and it hasn't reached its gesture or its end. A team a
+    // moment from finishing shouldn't swallow a job that is only starting, so StandDown is left out.
+    private static bool Working(GroupJob job) =>
+        job.Lead != null && job.Step != JobStep.StandDown && job.Step != JobStep.Done;
+
+    // Two open jobs about one place are one job. Only the first pair found (the list is oldest first)
+    // merges in a firing and the next waits for the next interval: that keeps this walk simple while
+    // jobs close under it, and a squad has few jobs.
+    private void MergeOne()
+    {
+        for (int i = 0; i < _jobs.Count; i++)
+        {
+            GroupJob older = _jobs[i];
+            if (!Working(older)) continue;
+            for (int j = i + 1; j < _jobs.Count; j++)
+            {
+                GroupJob younger = _jobs[j];
+                if (!Working(younger) || !Covers(older, younger.Point)) continue;
+                Merge(older, younger);
+                return;
+            }
+        }
+    }
+
+    // The older job stays and takes the combined incident: the higher reason and priority, the place of
+    // the higher priority (a tie stays where the older was, so a merge doesn't move a team for nothing),
+    // and a Search if either is. Its own members keep their order, then the younger's follow up to the
+    // cap, joined at once with no call: they are already at this place on this business. The younger
+    // closes when its last member leaves. The ones who don't fit are extras (MergeExtras).
+    private void Merge(GroupJob older, GroupJob younger)
+    {
+        DebugLog.Info($"{younger} is about the same place as {older} ({PathGrid.FlatDistance(older.Point, younger.Point):0.#} m apart): they merge into {older}.", _intel);
+
+        // Taken before anything changes: Leave empties the younger as it goes.
+        _moving.Clear();
+        _moving.AddRange(younger.Members);
+
+        Vector3 place = younger.Priority > older.Priority ? younger.Point : older.Point;
+        StimulusResponse reason = BehaviourMap.Severity(younger.Reason) > BehaviourMap.Severity(older.Reason) ? younger.Reason : older.Reason;
+        int priority = Mathf.Max(older.Priority, younger.Priority);
+        JobKind kind = older.Kind == JobKind.Search || younger.Kind == JobKind.Search ? JobKind.Search : JobKind.Check;
+        bool restarted = Upgrade(older, new Incident(place, reason, priority), kind);
+
+        _extras.Clear();
+        for (int i = 0; i < _moving.Count; i++)
+        {
+            EnemyController who = _moving[i];
+            Leave(who);
+            if (!older.IsFull && JoinMember(older, who)) DebugLog.Info($"{who.name} joins {older} in the merge.", who);
+            else _extras.Add(who);
+        }
+        _moving.Clear();
+
+        // After everyone has joined, so the choice sees the whole team.
+        if (restarted) ChooseAfterRestart(older, true);
+        else ReconsiderOnJoin(older);
+
+        MergeExtras(older);
+    }
+
+    // The members of a merge who had no room, already off their job. A problem job sends them back to
+    // patrol. An attack job sends each to search somewhere else, as a team of his own that recruits as
+    // any lead does, so the squad spreads over the area instead of piling on one spot. Dismissed
+    // enemies may be filled into another job later: they are free.
+    private void MergeExtras(GroupJob older)
+    {
+        for (int i = 0; i < _extras.Count; i++)
+        {
+            EnemyController who = _extras[i];
+            if (older.Reason != StimulusResponse.SearchForAttack)
+            {
+                who.Searching.Dismiss($"{older} has no room for him and it is only a problem");
+                continue;
+            }
+
+            if (!TryFindExtraSpot(older, out Vector3 spot))
+            {
+                who.Searching.Dismiss($"{older} has no room for him and no open spot {_intel.JobMatchRadius + 2f:0.#} to {2.5f * _intel.JobMatchRadius:0.#} m from {older.Point} was found in {ExtraSpotTries} tries that no other job covers (or the place is on no grid), so he goes back to patrol");
+                continue;
+            }
+            DebugLog.Info($"{who.name} has no room on {older}: he searches {spot} ({PathGrid.FlatDistance(older.Point, spot):0.#} m from it) instead.", who);
+            StartJob(who, new Incident(spot, older.Reason, older.Priority), JobKind.Search);
+        }
+        _extras.Clear();
+    }
+
+    // Elsewhere Distance: an open spot between Job Match Radius + 2 m and 2.5 times it from the merged
+    // job's place, and not at any open job's place, so what an extra starts can't merge straight back on
+    // the next interval (never churn). RandomSpotInArea measures its distance from `from`, which is the
+    // merged place here; a failed try counts, and no spot after the tries is the caller's to report.
+    private bool TryFindExtraSpot(GroupJob older, out Vector3 spot)
+    {
+        spot = older.Point;
+        PathGrid grid = PathGrid.At(older.Point);
+        if (grid == null) return false;
+
+        var area = GridArea.Circle(older.Point, 2.5f * _intel.JobMatchRadius);
+        for (int attempt = 0; attempt < ExtraSpotTries; attempt++)
+        {
+            if (!grid.RandomSpotInArea(area, older.Point, _intel.JobMatchRadius + 2f, out spot)) continue;
+            bool covered = false;
+            foreach (GroupJob job in _jobs)
+            {
+                if (!Covers(job, spot)) continue;
+                covered = true;
+                break;
+            }
+            if (!covered) return true;
+        }
+        return false;
+    }
+
+    // Each interval, every open job that is recruiting and has room looks again for free enemies near
+    // its lead, as it did when it began, and queues them to be called (AdvanceFill). Skipped while a call
+    // is under way or queued, for a job in Call (which is calling already) and one with no lead. Free
+    // enemies are checked cheaply first, so a full team or a level with nobody free costs no flood.
+    private void FillOpenJobs()
+    {
+        for (int i = 0; i < _jobs.Count; i++)
+        {
+            GroupJob job = _jobs[i];
+            if (!job.Recruiting || job.Step == JobStep.Call || job.Lead == null || job.Pending.Count > 0 || job.Callee != null) continue;
+            if (!AnyoneFree(job)) continue;
+
+            FindCallees(job, job.Lead);
+            if (job.Pending.Count > 0)
+                DebugLog.Info($"{job.Lead.name} will call in {job.Pending.Count} more officer(s) to join {job}.", job.Lead);
+        }
+    }
+
+    // Whether any enemy but the lead could be called onto the job at all. The same test FindCallees makes first.
+    private bool AnyoneFree(GroupJob job)
+    {
+        IReadOnlyList<EnemyController> enemies = _intel.Enemies;
+        for (int i = 0; i < enemies.Count; i++)
+            if (enemies[i] != job.Lead && enemies[i].CanJoinJob(job.Priority)) return true;
+        return false;
     }
 
     // Finds the free enemies within Speech Range of the lead, nearest first, up to the cap, and queues

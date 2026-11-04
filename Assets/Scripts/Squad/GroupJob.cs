@@ -75,10 +75,20 @@ public class GroupJob
     internal void SetChecker(EnemyController who) => Checker = who;
 
     private readonly List<EnemyController> _pending = new();
-    /// <summary>Enemies the lead will call in, nearest first, one at a time during Call. Not members yet: they carry on as they were until called.</summary>
+    /// <summary>Enemies the lead will call in, nearest first, one at a time: all of them during Call, and the ones a fill found later in any other step (JobBoard.AdvanceFill). Not members yet: they carry on as they were until called.</summary>
     public IReadOnlyList<EnemyController> Pending => _pending;
-    /// <summary>The enemy being called right now: the lead faces him and he faces the lead. Null between calls.</summary>
+    /// <summary>The enemy being called right now: he faces the lead (and, during Call only, the lead faces him). Null between calls.</summary>
     public EnemyController Callee { get; internal set; }
+    /// <summary>
+    /// Seconds since the last call a fill made. Its own clock beside StepElapsed, because a fill happens
+    /// in steps that time themselves by StepElapsed (Look, Search), and restarting that would make a
+    /// search never end. Call keeps using StepElapsed.
+    /// </summary>
+    public float CallElapsed { get; private set; }
+    internal void RestartCallClock() => CallElapsed = 0f;
+    // A job that can no longer take anyone (full, or a Check that has reached its look) drops the
+    // queue whole: the people in it are free, and calling one at a time to refuse each would be noise.
+    internal void ClearCalls() => _pending.Clear();
     /// <summary>The lead has finished reacting to what he heard, so the calls may begin.</summary>
     public bool Reacted { get; internal set; }
     internal void QueueCall(EnemyController who) => _pending.Add(who);
@@ -96,7 +106,11 @@ public class GroupJob
     /// </summary>
     public bool Recruiting => !IsFull && (Kind == JobKind.Search ? Step != JobStep.Done : Step is JobStep.Call or JobStep.Gather or JobStep.Go);
 
-    internal void Tick(float dt) => StepElapsed += dt;
+    internal void Tick(float dt)
+    {
+        StepElapsed += dt;
+        CallElapsed += dt;
+    }
 
     /// <summary>True when he is on this job afterwards, including when he already was; false when refused.</summary>
     internal bool Add(EnemyController who)

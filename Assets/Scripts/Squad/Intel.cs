@@ -78,6 +78,7 @@ public class Intel : MonoBehaviour
     /// <summary>The pool as of the last publish. A new object each time, so one in hand never changes.</summary>
     public IntelSnapshot Published => _pool.Published;
 
+    public float IntelInterval => _intelInterval;
     public float SpeechRange => _speechRange;
     public int JobCap => _jobCap;
     public float JobMatchRadius => _jobMatchRadius;
