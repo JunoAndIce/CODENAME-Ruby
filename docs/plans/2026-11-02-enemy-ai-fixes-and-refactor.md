@@ -299,9 +299,9 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 
 `EnemyController` keeps its current public methods as one-line forwards, so states, senses and the editor don't change. The view gizmo stays on `EnemyController`.
 
-- [ ] **Step 1: Move,** verbatim.
-- [ ] **Step 2: Compile and commit.**
-- [ ] **Step 3: Play-test gate (the user).** A in full, matching the baseline.
+- [x] **Step 1: Move,** verbatim.
+- [x] **Step 2: Compile and commit.**
+- [x] **Step 3: Play-test gate (the user).** Passed 2026-11-04 (log compared with the baseline: no wording lost or changed, no errors or exceptions). A in full, matching the baseline.
 
 ### Task 11: `EnemyReactions` out of `EnemyController`
 
