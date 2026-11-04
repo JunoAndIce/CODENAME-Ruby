@@ -455,10 +455,27 @@ public class JobBoard
     // Puts an enemy on a job. One who has seen Ruby knows she is about, so a job he is on is an
     // attack, as it would be if he had sensed the thing himself (spec piece 2).
     // False when the job refused him (he is on another job: GroupJob.Add reports it), and then nothing else happens.
+    // Every route onto a job comes through here, so this is the one place a look is counted and Ruby is
+    // told of. Add returns true for someone already on the job, so whether this is a new assignment is
+    // read first: a repeat join is not a new look and tells nobody anything new.
     private bool JoinMember(GroupJob job, EnemyController who)
     {
+        bool isNew = !job.Has(who);
         if (!job.Add(who)) return false;
-        if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
+        if (isNew)
+        {
+            // Telling comes before the raise and the count so everyone's knowledge is settled before
+            // anyone moves (FollowJob last).
+            TellOfRuby(job);
+            if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
+            // == and not >=: it fires once for him, for good. After it he is only wary, and a wary enemy
+            // alone doesn't raise a job, so a fourth look is counted but never raises again.
+            int count = who.Memory.NoteSentToLook();
+            DebugLog.Info($"{who.name} has been sent to look {count} time(s).", who);
+            if (count == who.SentToLookThreshold)
+                Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has been sent to look {count} times");
+        }
+        else if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
         who.FollowJob(job);
         // Checked here and not at Add: he is only put in Searching by FollowJob. Not at Leave either,
         // which SearchingState.Exit calls while the machine is still changing state. By now he is
@@ -466,6 +483,35 @@ public class JobBoard
         if (who.Job != null && !who.IsSearching)
             Debug.LogError($"{who.name} is on {who.Job} but is in a state other than Searching: a member of a job must be searching.", who);
         return true;
+    }
+
+    // Members who have seen Ruby tell the rest of the job where she was, as the newest of the seers' own
+    // facts (the pool is not consulted: it is the seers' knowledge being passed on). Learn keeps the
+    // newer by time, so a member with a fresher fact keeps it. Members who already know her are not
+    // told again. Only HasSeenRuby tells, never WasToldOfRuby: a told enemy who could tell would carry
+    // one sighting down every chain of jobs across the level, which is the removed level alert by
+    // another door. Speech (Intel.Say) is separate and doesn't mark anyone told.
+    private void TellOfRuby(GroupJob job)
+    {
+        EnemyController seer = null;
+        RubyFact newest = default;
+        foreach (EnemyController member in job.Members)
+        {
+            if (!member.Memory.HasSeenRuby || !member.Memory.TryGetNewestRuby(null, out RubyFact fact)) continue;
+            if (seer != null && fact.Time <= newest.Time) continue;
+            seer = member;
+            newest = fact;
+        }
+        if (seer == null) return;
+
+        RubyFact told = newest.WithSource(Knowledge.Told);
+        foreach (EnemyController member in job.Members)
+        {
+            if (member.Memory.KnowsRuby) continue;
+            member.Memory.Learn(told);
+            member.Memory.BeToldOfRuby();
+            DebugLog.Info($"{seer.name} tells {member.name} he has seen Ruby near {newest.Position}.", member);
+        }
     }
 
     // A more serious thing at a job's place: the reason and priority rise for everyone. If the place

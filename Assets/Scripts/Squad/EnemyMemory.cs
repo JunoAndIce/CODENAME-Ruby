@@ -81,6 +81,31 @@ public class EnemyMemory
     // latch wary by a route nobody can find.
     public void BecomeWary() => Wary = true;
 
+    /// <summary>
+    /// How many times he has been put on a job he wasn't on (started one, joined, was called in). Never
+    /// expires or clears: it is his own record, so a third look raises the job even when the first two
+    /// were minutes apart, and it can never reach the threshold twice for him (see JobBoard.JoinMember).
+    /// </summary>
+    public int TimesSentToLook { get; private set; }
+
+    /// <summary>Counts one more assignment and returns the new total.</summary>
+    public int NoteSentToLook() => ++TimesSentToLook;
+
+    /// <summary>
+    /// A teammate who had seen Ruby told him of her, on a job. He acts on it (KnowsRuby) but is not a
+    /// witness: only HasSeenRuby tells others in turn. Letting a told enemy tell would spread one
+    /// sighting down every chain of jobs through the level, which is the removed level alert by another
+    /// door. Never cleared, like HasSeenRuby.
+    /// </summary>
+    public bool WasToldOfRuby { get; private set; }
+
+    // JobBoard.TellOfRuby is the only caller. It doesn't set HasSeenRuby: Learn does that, and only
+    // for a Seen fact, which a told one never is.
+    public void BeToldOfRuby() => WasToldOfRuby = true;
+
+    /// <summary>He has seen her or been told of her: what makes him patrol aggressively and read every disturbance as an attack.</summary>
+    public bool KnowsRuby => HasSeenRuby || WasToldOfRuby;
+
     private readonly List<float> _distractions = new();
 
     /// <summary>

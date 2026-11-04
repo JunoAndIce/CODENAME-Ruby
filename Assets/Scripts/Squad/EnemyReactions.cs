@@ -150,9 +150,9 @@ public class EnemyReactions
     // an old report can't turn every later thud into an attack for good.
     private bool ShouldSearchForAttack(Vector3 point, out string why)
     {
-        if (_enemy.Memory.HasSeenRuby)
+        if (_enemy.Memory.KnowsRuby)
         {
-            why = "he has seen Ruby";
+            why = _enemy.Memory.HasSeenRuby ? "he has seen Ruby" : "he has been told of Ruby";
             return true;
         }
 

@@ -44,6 +44,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _attackNearRadius = 20f;
     [Tooltip("How old the newest report of Ruby may be, in seconds, for a disturbance near it to count as an attack. Older and it's just a problem again. An enemy who has seen her ignores this and treats everything as an attack.")]
     [SerializeField, Min(0f)] private float _attackNearTime = 15f;
+    [Tooltip("The time he is sent to look at something that raises his job to an attack, so a team goes aggressive together. Counted per enemy for good: each time he is put on a job he wasn't on (started, joined, called in). Distractions and glances don't count.")]
+    [SerializeField, Min(1)] private int _sentToLookThreshold = 3;
 
     [Header("Looking")]
     [Tooltip("How long he looks around a spot he went to check, in seconds, before standing down. A search for an attack looks for Search Duration instead.")]
@@ -185,16 +187,17 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     internal float DistractionGap => _distractionGap;
     internal float AttackNearTime => _attackNearTime;
     internal float AttackNearRadius => _attackNearRadius;
+    internal int SentToLookThreshold => _sentToLookThreshold;
     public PatrolRoute SafeRoute => _safeRoute;
     public PatrolRoute AggressiveRoute => _aggressiveRoute;
     public bool HasAggressiveRoute => _aggressiveRoute != null && _aggressiveRoute.Count > 0;
 
     /// <summary>
     /// Whether he patrols aggressively: he has been after Ruby (an attack search, or a glance at a
-    /// body) or has seen her. Derived on every read and never stored, and neither is ever cleared,
-    /// so he never goes back. Only what he himself has been through makes him aggressive.
+    /// body), has seen her, or has been told of her by a teammate who had (on a job). Derived on every
+    /// read and never stored, and none is ever cleared, so he never goes back.
     /// </summary>
-    public bool IsAggressive => Memory.Wary || Memory.HasSeenRuby;
+    public bool IsAggressive => Memory.Wary || Memory.KnowsRuby;
 
     /// <summary>
     /// The route he walks now: the Aggressive one when he's aggressive and has one, else the Safe
@@ -367,7 +370,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         bool aggressive = IsAggressive;
         if (aggressive && !_wasAggressive)
         {
-            string why = Memory.HasSeenRuby ? "he has seen Ruby" : "he has been sent after her";
+            string why = Memory.HasSeenRuby ? "he has seen Ruby" : Memory.WasToldOfRuby ? "he has been told of Ruby" : "he has been sent after her";
             string route = HasAggressiveRoute ? "his Aggressive route" : HasActiveRoute ? "his Safe route (he has no Aggressive one)" : "no route: he stays at his post, alert";
             DebugLog.Info($"{name} is now aggressive: {why}. From here he patrols at {_aggressiveSpeedFactor:0.##}x ({CurrentPatrolSpeed:0.##} m/s, from {_patrolSpeed:0.##}) on {route}, looking around at each point.", this);
         }
