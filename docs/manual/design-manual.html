@@ -520,7 +520,7 @@ a { color: var(--accent); }
   </tbody>
 </table>
 </div>
-<p>It is a rule of thumb, not a wall. An enemy walking to a single spot, such as a search, floods a field of its own, because it follows the field step by step as it goes.</p>
+<p>It is a rule of thumb, not a wall. An enemy walking to a single spot, such as back to his post, floods a field of its own, because it follows the field step by step as it goes.</p>
 
 <h3>Setting up a floor</h3>
 <ol>
@@ -616,7 +616,7 @@ a { color: var(--accent); }
 <p>Visual children (the model, the gun, the eyes) carry no colliders. For pathing this matters because <strong>the grid assumes the enemy is a capsule of Agent Radius</strong>. A model collider that sticks out makes the body wider than the grid believes, so it snags corners the grid called clear. A collider left on a decorative mesh with no Rigidbody becomes a wall in the bake, wherever it happens to stand. The one exception is a ragdoll: its bones' colliders take over from the capsule while it's limp, and they sit on dynamic Rigidbodies, so the bake skips them.</p>
 
 <h4>My enemy won't walk there</h4>
-<p>Start with the Console. The grid and navigator log a warning, once per failure, that names the enemy (click it to select him). The text below is exact, with the enemy's name in front.</p>
+<p>Start with the Console. The grid and navigator log a warning that names the enemy (click it to select him). It says so once per message, so a goal that keeps moving can repeat it. The text below is exact, with the enemy's name in front.</p>
 <div class="table-wrap">
 <table>
   <thead><tr><th>Warning</th><th>What it means and what to check</th></tr></thead>
@@ -644,7 +644,7 @@ a { color: var(--accent); }
 <h3>Navigation</h3>
 <h4>Who does what</h4>
 <p><code>GridNavigator</code> plans, and the agent steers. The navigator never moves a body. Each physics step it works out a point to head for and hands it to the agent through <code>IPathAgent</code>: <code>MoveToward(target, speed, mustReach)</code> and <code>Stop()</code>. The agent also reports its <code>Body</code> (where planning starts) and its <code>StuckTime</code>. <code>EnemyController</code> implements all of this, turning its heading and writing its own velocity. The split keeps <code>Ruby.Pathing</code> free of game rules, and lets each kind of character keep its own movement.</p>
-<p>Three navigator calls cover what enemies do: a patrol walks a route of areas (<code>MoveToArea</code>, A*), a chase follows the shared field toward its target (<code>ChaseTo</code>), and a search walks to a spot on a field of its own (<code>MoveTo</code>). Each step they all do the same three things:</p>
+<p>Three navigator calls cover what enemies do: a patrol or a search walks to an area (<code>MoveToArea</code>, A*), a chase follows the shared field toward its target (<code>ChaseTo</code>), and a walk back to his post goes to a point on a field of its own (<code>MoveTo</code>). Each step they all do the same three things:</p>
 <ol>
   <li><strong>Arrived?</strong> Within 0.5 m of the goal, or standing in the goal's cell: stop.</li>
   <li><strong>Is there a clear straight line?</strong> If so, head straight for the goal and skip the search.</li>
@@ -685,10 +685,10 @@ a { color: var(--accent); }
 </ul>
 
 <h4>When is he stuck?</h4>
-<p>A patrol move has a watchdog. If the distance left along the route doesn't shrink by 0.25 m for Stuck Time (1.5 s by default), he is blocked: if he is already inside the area it counts as arrived, and otherwise the move reports Blocked with the reason you saw in the table. Without it a walker would push at a jammed doorway for ever. Chase and single-spot walks have no watchdog. They keep stepping down their field.</p>
+<p>An area move (a patrol or a search) has a watchdog. If the distance left along the route doesn't shrink by 0.25 m for Stuck Time (1.5 s by default), he is blocked: if he is already inside the area it counts as arrived, and otherwise the move reports Blocked with the reason you saw in the table. Without it a walker would push at a jammed doorway for ever. Chase and single-spot walks have no watchdog. They keep stepping down their field.</p>
 
 <h3>No silent fallbacks</h3>
-<p>When the navigator can't plan a move, it does not quietly do something else. It <strong>stops the body and says why</strong>. Chase and point walks log one warning per failure (<code>Fail</code>) and stand still. The warning repeats only after a successful move, so a stuck enemy doesn't flood the Console. Area moves (patrol) return <code>Blocked</code> or <code>Unreachable</code> with a <code>FailureReason</code>, and the caller decides: the patrol skips the point with a warning. He never walks straight at the goal through a wall, and never wanders off.</p>
+<p>When the navigator can't plan a move, it does not quietly do something else. It <strong>stops the body and says why</strong>. Chase and point walks log a warning (<code>Fail</code>) and stand still. The same message repeats only after a successful move, so a stuck enemy doesn't flood the Console, but a goal that keeps moving changes the message and logs again. Area moves (a patrol or a search) return <code>Blocked</code> or <code>Unreachable</code> with a <code>FailureReason</code>, and the caller decides: the patrol skips the point with a warning. He never walks straight at the goal through a wall, and never wanders off.</p>
 <p>Two behaviours look like fallbacks but are written rules: a path lowers its clearance to what a narrow gap allows, and a patrol move that stalls inside its area counts as arrived. Neither hides a failure.</p>
 
 <h3>Debugging tools</h3>

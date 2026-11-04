@@ -376,7 +376,7 @@ through the player never slows the walk.
   `EnemyMemory` (what he knows), and, handed the controller to read, `EnemySenses` (hearing and
   scans), `EnemyVision` (the view and the line to a point) and `EnemyReactions` (what he does about
   what he senses). `Intel` is the scene's one hub and owns `KnowledgePool` (the shared picture),
-  `JobBoard` (group jobs) and the `FloorReach`es that speech, sound and calling use. The plain
+  `JobBoard` (group jobs, with the `FloorReach` calling uses) and the `FloorReach`es that speech and sound use. The plain
   classes read the controller's tuning on every call, so retuning in the Inspector during Play still
   works, and **no serialized field moves into them**: the scene holds route overrides and per-enemy
   tuning on `EnemyController` and `Intel`, and `FormerlySerializedAs` can't carry a value to another
@@ -462,8 +462,8 @@ through the player never slows the walk.
   line and starts again the next time he's at his post, so a post another officer stands on can't
   have him pushing at it for good. Idle activities (a desk, a TV) are a later piece.
 - **Patrol Normal and Aggressive.** These are modes of Patrol, not states. `IsAggressive` is
-  **derived on every read, never stored**: he has been after Ruby (`EnemyMemory.Wary`, set by any
-  search for an attack and by a glance at a known body) or has seen her (`HasSeenRuby`). Neither is
+  **derived on every read, never stored**: he has been after Ruby (`EnemyMemory.Wary`, set by an
+  attack he senses, a job for an attack and a glance at a known body, though not by the search after a lost fight) or has seen her (`HasSeenRuby`). Neither is
   ever cleared, so he never goes back. **`EnemyReactions.BecomeWary()` is the one writer of `Wary`**,
   so there is one place to change or log it and no enemy can latch wary by a route nobody can find.
   `BecomeWaryAt(at, why)` is for something sensed at a spot: when that is his own job's place it goes
@@ -537,7 +537,7 @@ through the player never slows the walk.
   Investigate can upgrade a Problem to an Attack. **`BehaviourMap.Severity`** ranks a response for
   every "is this more serious" test: Ignore 0, problem 1, attack 2, written out, because the enum's
   numbers are saved by assets and a value added later takes the next number whatever its place in the
-  order. `GroupJob.Elevate` and the job board compare by it, never by the enum. A value with no
+  order. `GroupJob.Elevate` compares by it, never by the enum. A value with no
   place in `Severity` logs an error (and is ranked by its enum number meanwhile). What a row
   produced travels as an **`Incident`** (point, reason, priority and whether it was a find, built once where the stimulus is
   judged and passed on whole, so a fifth value can't be added to one call and missed in another).
@@ -547,9 +547,9 @@ through the player never slows the walk.
   body, and only a *taken* reaction counts as one. An officer on his feet is never a moving body,
   only one held on the chain or tumbling. He notices **corpses** within Body Notice Range in his
   view and clear sight, and **loose guns** in view and sight if he is armed. A body or gun he
-  hasn't seen goes on the squad's books and he investigates it. One the squad already knows he
+  hasn't seen goes on the squad's books and he investigates it. A body the squad already knows he
   **glances** at: he faces it and looks from where he stands without walking to it, and is wary
-  from then on. A booked body or gun counts as seen even when he's too busy to investigate it
+  from then on. A gun the squad already knows gets a log line and nothing more. A booked body or gun counts as seen even when he's too busy to investigate it
   (Aggro, Rearm, or a search at equal or higher priority). Ruby is never a moving body: she's the
   one being hunted, and sight of her is Aggro.
 - **Searching** (`SearchingState`). **One way in:** whoever sends him there asks first, with
@@ -627,7 +627,7 @@ through the player never slows the walk.
     is removed after the walk, so none misses a tick. A job's reason **only rises**: whatever one
     member knows is known to the team, and an attack makes every member wary at once.
   - **The checker and followers.** In a Check one member goes to the spot and looks: the nearest to
-    it (flat) when the team sets off, chosen once and kept (`CheckerOf` is a pure read), unless a
+    it (flat) when the team sets off, chosen once and kept (`CheckerOf` only reads the job), unless a
     nearer enemy joins in the first moments of Go. If he leaves in Go, the nearest of the rest takes
     over at once; during the look, the job goes back to Go so someone else walks over and looks it
     over himself. A Search sends everyone. The others follow him at Search Speed x Follow Speed
@@ -638,8 +638,8 @@ through the player never slows the walk.
     follower.) A follower's walk isn't limited by Search Travel Limit; the checker's is.
   - **A member's own stimulus** at his job's place goes to the job before anything else
     (`HandleAtOwnJob`, `RaiseJobAt`): it upgrades or converts the job for everyone, or raises it to
-    an attack for everyone, and only what the job didn't take is a distraction for him. He never
-    latches `Wary` alone while on a job. A glance never changes a job.
+    an attack for everyone, and only what the job didn't take is a distraction for him. At the job's place he never
+    latches `Wary` alone, because everyone on the job goes wary together; away from it, what he senses is his own and he does. A glance at the job's place can raise its reason, but never converts, moves or restarts it.
   - **Membership invariants,** checked where membership changes. **One job per enemy:** `GroupJob.Add`
     refuses, with an error, an enemy already on another, so every route onto a job takes him off the
     last first (`JobBoard.Leave`). **An enemy on a job is in Searching:** `JoinMember` errors
@@ -704,7 +704,7 @@ A\* for individual ones**:
   saying so (`PathGrid.OnValidate`), never a silent no-op.
 - **`FlowField`** (Dijkstra): one flood from a goal, read by any number of agents. The chase field is
   **shared per floor** (`PathGrid.FieldToward(player)`), so chase cost doesn't grow with enemy count;
-  a searcher floods its own field once. Floods bound the **plain path length** (metres), never the
+  a walk to a fixed point (a chase of what he knows, the walk back to his post) floods its own field once. Floods bound the **plain path length** (metres), never the
   penalised cost, so wall costs can't shorten how far a chase reaches or drop a far doorway off the
   field; `TryGetDistance` returns plain metres too, but of the route the field leads, which on a
   penalised field is not necessarily the shortest. `PathGrid.FloodFrom` (hearing, speech and calling
@@ -715,8 +715,8 @@ A\* for individual ones**:
 - **`GridPathfinder`** (A\*, octile heuristic, integer costs 10/14, no corner cutting): patrol legs,
   cached and re-planned when the grid changes or the enemy is knocked off its route.
 - **`GridNavigator`** ties them together and moves any `IPathAgent`: it plans, and the agent steers
-  (facing, velocity scheme). There are **no silent fallbacks**: chase and search stop
-  and log one warning saying why; area moves report Blocked/Unreachable, and patrol skips that point
+  (facing, velocity scheme). There are **no silent fallbacks**: chases and point walks stop
+  and log a warning saying why (once per message, so a goal that keeps moving repeats it); area moves report Blocked/Unreachable, and patrol skips that point
   with a warning. Grid line of sight ignores the cell the agent already stands in, which near a wall
   is clearance-blocked.
 - **Lines keep the margin too.** `HasLineOfSight(from, to, minClearance)` needs every cell after the

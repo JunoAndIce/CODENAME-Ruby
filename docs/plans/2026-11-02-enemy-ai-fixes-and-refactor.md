@@ -338,4 +338,4 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
   - **The Assemblies table's `Ruby.Game` row,** with the new Squad contents.
 - [x] **Step 2: The manual** where player-visible behaviour changed, and rebuild the PDF with headless Chrome. The user's rule keeps group jobs out of the manual until that work is finished, so only the Aggro change and the distraction count went in.
 - [x] **Step 3: Tick this plan.** Commit these files only.
-- [ ] **Step 4: End review, in the background,** over this plan's range, on the most capable model. Point it at the Review Focus and the baseline comparisons. Fix what it says must change, in one fix wave, before part-2 Task 5.
+- [x] **Step 4: End review, in the background,** over this plan's range, on the most capable model. Point it at the Review Focus and the baseline comparisons. Fix what it says must change, in one fix wave, before part-2 Task 5. Done 2026-11-04: no code regression; the fix wave corrected CLAUDE.md, the manual and stale comments. One behaviour question is left to the user: whether the search after a lost fight should make him wary.

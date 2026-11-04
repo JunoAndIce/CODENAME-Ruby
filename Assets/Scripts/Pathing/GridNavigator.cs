@@ -4,9 +4,9 @@ using UnityEngine;
 public enum NavResult { Moving, Arrived, Blocked, Unreachable }
 
 /// <summary>
-/// Moves an IPathAgent over its floor's PathGrid: flow fields for chase and search, cached A* for
-/// patrol areas, and a straight line when one is clear. It only plans; the agent steers. No silent
-/// fallbacks: chase and search stop with a warning, area moves report Blocked or Unreachable.
+/// Moves an IPathAgent over its floor's PathGrid: flow fields for chases and walks to a point, cached
+/// A* for areas (patrols and searches), and a straight line when one is clear. It only plans; the agent steers. No silent
+/// fallbacks: chases and point walks stop with a warning, area moves report Blocked or Unreachable.
 /// </summary>
 public class GridNavigator
 {
@@ -22,7 +22,7 @@ public class GridNavigator
     private readonly IPathAgent _agent;
     private string _lastWarning;
 
-    // Search: this enemy's own field, flooded from its point.
+    // A walk to a point: this enemy's own field, flooded from it.
     private FlowField _pointField;
     private Vector3 _pointGoal;
 
@@ -75,7 +75,7 @@ public class GridNavigator
     }
 
     /// <summary>
-    /// Path to a fixed point (search, or a chase of what he knows) along this enemy's own field.
+    /// Path to a fixed point (the walk back to his post, or a chase of what he knows) along this enemy's own field.
     /// Stops on arrival and says so; Unreachable when no step can be taken (already warned).
     /// </summary>
     public NavResult MoveTo(Vector3 point, float speed)
