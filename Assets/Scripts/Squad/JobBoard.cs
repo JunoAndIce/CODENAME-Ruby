@@ -4,8 +4,9 @@ using UnityEngine;
 /// <summary>
 /// The squad's group jobs: starts, matches, upgrades and advances them, calls members in, and takes
 /// them off. A plain class that Intel owns and ticks, like KnowledgePool; Intel forwards what the
-/// enemies call. The job clock lives here, so a team looks, gestures and finishes together. Log lines
-/// name Intel as their context, because that is the object a designer can click through to.
+/// enemies call. The job clock lives here, so a team looks, gestures and finishes together. A log
+/// about the squad as a whole (a raise, a step, a find) names Intel as its context, the object a
+/// designer clicks through to; one about an enemy names that enemy.
 /// </summary>
 public class JobBoard
 {
@@ -131,7 +132,11 @@ public class JobBoard
             // A one-enemy job he was on is closed by taking him off it: he is better used here.
             Leave(next);
             job.Callee = next;
-            JoinMember(job, next);
+            if (!JoinMember(job, next))
+            {
+                job.Callee = null;
+                continue;
+            }
             job.RestartClock();
             DebugLog.Info($"{job.Lead.name} turns to {next.name} ({PathGrid.FlatDistance(job.Lead.transform.position, next.transform.position):0.#} m away) and calls him in.", job.Lead);
             return;
@@ -187,14 +192,21 @@ public class JobBoard
     }
 
     // The nearest member to the spot (flat) becomes the checker, once, when a Check enters Go or its
-    // checker is lost in Go or Look. One that is already chosen is kept, so a member joining a team
-    // that is already going doesn't change who leads it. Nobody on the job (a closed one) chooses nobody.
+    // checker is lost in Go or Look. One that is already chosen is kept, except in the first moments of
+    // Go (ReconsiderOnJoin). Nobody on the job (a closed one) chooses nobody.
     private void ChooseChecker(GroupJob job)
     {
         if (job.Kind != JobKind.Check || job.Checker != null) return;
 
+        EnemyController nearest = NearestToSpot(job, out float best);
+        job.SetChecker(nearest);
+        if (nearest != null) LogChecker(job, nearest, best);
+    }
+
+    private static EnemyController NearestToSpot(GroupJob job, out float best)
+    {
         EnemyController nearest = null;
-        float best = float.MaxValue;
+        best = float.MaxValue;
         foreach (EnemyController member in job.Members)
         {
             float distance = PathGrid.FlatDistance(member.transform.position, job.Point);
@@ -202,9 +214,34 @@ public class JobBoard
             best = distance;
             nearest = member;
         }
+        return nearest;
+    }
+
+    private static void LogChecker(GroupJob job, EnemyController nearest, float metres) =>
+        DebugLog.Info($"{job}: {nearest.name} is nearest the spot ({metres:0.#} m) and goes to check it; {(job.Count > 1 ? "the others follow behind" : "he goes alone")}.", nearest);
+
+    // The choice is meant to see everyone who heard the same sound, but the first to hear one starts the
+    // job and goes into Go before the rest of the listeners have been told, so a later listener who joins
+    // may be nearer the spot than the one already chosen. The old lazy choice waited for the first query,
+    // after all of them had joined. So a join while the job has not yet ticked (the step's clock is still
+    // zero: it has just entered Go, by a new job or a restart) chooses again from the whole team, and says
+    // so only when it changed. The window is a little wider than the old first query (a join later in the
+    // frame, or before the next Intel update, also counts), which is accepted: it is the same sound. Once
+    // the job has ticked, a joiner keeps the checker, as after the old first query.
+    private void ReconsiderOnJoin(GroupJob job)
+    {
+        if (job.Kind != JobKind.Check || job.Step != JobStep.Go) return;
+        if (job.Checker == null)
+        {
+            ChooseChecker(job);
+            return;
+        }
+        if (job.StepElapsed != 0f) return;
+
+        EnemyController nearest = NearestToSpot(job, out float best);
+        if (nearest == null || nearest == job.Checker) return;
         job.SetChecker(nearest);
-        if (nearest != null)
-            DebugLog.Info($"{job}: {nearest.name} is nearest the spot ({best:0.#} m) and goes to check it; {(job.Count > 1 ? "the others follow behind" : "he goes alone")}.", nearest);
+        LogChecker(job, nearest, best);
     }
 
     /// <summary>
@@ -239,10 +276,13 @@ public class JobBoard
             {
                 // Decided before he is taken off his job: the destination is certain by now.
                 if (own != null && own != match) Leave(who);
-                JoinMember(match, who);
+                if (!JoinMember(match, who)) return who.Job;
                 DebugLog.Info($"{who.name} joins {match}.", who);
-                // After he has joined, so he is counted among those the checker is chosen from.
-                ChooseAfterRestart(match, restarted);
+                // After he has joined, so he is counted, and after the line saying so, so a new checker
+                // reads as the result of his joining. A restart that landed in Go has no checker yet and
+                // chooses here for the same reason.
+                if (restarted) ChooseAfterRestart(match, true);
+                else ReconsiderOnJoin(match);
                 return match;
             }
 
@@ -268,7 +308,12 @@ public class JobBoard
             Debug.LogWarning($"{who.name} starts a job at {incident.Point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
         var job = new GroupJob(kind, incident, _intel.JobCap);
         _jobs.Add(job);
-        JoinMember(job, who);
+        if (!JoinMember(job, who))
+        {
+            // Refused (the error is the signal): no empty job is left in the list.
+            _jobs.Remove(job);
+            return who.Job;
+        }
         DebugLog.Info($"{who.name} starts {job} at {incident.Point}.", who);
         // He is the only one on the job for now. The enemies he will call are only found here, by
         // name, and are added one at a time once he has reacted (AdvanceCall), so none of them turns
@@ -408,9 +453,10 @@ public class JobBoard
 
     // Puts an enemy on a job. One who has seen Ruby knows she is about, so a job he is on is an
     // attack, as it would be if he had sensed the thing himself (spec piece 2).
-    private void JoinMember(GroupJob job, EnemyController who)
+    // False when the job refused him (he is on another job: GroupJob.Add reports it), and then nothing else happens.
+    private bool JoinMember(GroupJob job, EnemyController who)
     {
-        job.Add(who);
+        if (!job.Add(who)) return false;
         if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
         who.FollowJob(job);
         // Checked here and not at Add: he is only put in Searching by FollowJob. Not at Leave either,
@@ -418,6 +464,7 @@ public class JobBoard
         // searching, whether he was staged into it or retargeted.
         if (who.Job != null && !who.IsSearching)
             Debug.LogError($"{who.name} is on {who.Job} but is in a state other than Searching: a member of a job must be searching.", who);
+        return true;
     }
 
     // A more serious thing at a job's place: the reason and priority rise for everyone. If the place

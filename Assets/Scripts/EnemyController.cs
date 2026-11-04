@@ -544,7 +544,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     /// <summary>
     /// Sends him to a job's place for its reason, as a search: staged from Idle or Patrol, a
-    /// retarget if he is already searching. Intel has already put him on the job's member list.
+    /// retarget if he is already searching. The job board has already put him on the job's member list.
     /// A search for an attack makes him wary, as any other does.
     /// </summary>
     internal void FollowJob(GroupJob job)

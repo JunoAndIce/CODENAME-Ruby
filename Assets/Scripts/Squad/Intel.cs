@@ -8,10 +8,10 @@ using UnityEngine;
 /// is stale by design: between publishes it lags the truth by up to a second, so a fight Ruby has
 /// left doesn't end the instant she is out of sight. Speech is the opposite: immediate, but it
 /// travels the floor, not through walls. Sounds are heard here too: each one is flooded once, and
-/// every enemy inside it reacts through the behaviour map. A reaction becomes a group job (GroupJob), which the JobBoard Intel owns
-/// starts, matches, upgrades and advances, calls members in, and takes them off; Intel ticks the board,
-/// forwards to it and holds the numbers it reads. Intel also configures the
-/// stimulus bus with the stimulus rules while active. Without an active Intel, shots and hits go
+/// every enemy inside it reacts through the behaviour map. A reaction becomes a group job (GroupJob),
+/// which the JobBoard that Intel owns starts, matches, upgrades and advances, calling members in and
+/// taking them off; Intel ticks the board, forwards to it and holds the numbers it reads. Intel also
+/// configures the stimulus bus with the stimulus rules while active. Without an active Intel, shots and hits go
 /// nowhere and the bus warns once.
 /// </summary>
 // Runs before the enemies (order 0), so every member reads a job's new step on the same frame.
@@ -145,7 +145,6 @@ public class Intel : MonoBehaviour
 
     /// <summary>The member who goes to the spot while the rest follow, or null for a Search (see JobBoard).</summary>
     public EnemyController CheckerOf(GroupJob job) => _board.CheckerOf(job);
-
 
     public void Register(EnemyController enemy)
     {

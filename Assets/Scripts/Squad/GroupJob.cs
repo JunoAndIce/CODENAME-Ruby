@@ -8,7 +8,7 @@ public enum JobKind { Check, Search }
 /// Where a job has got to. A Check goes Call, Gather, Go, Look, StandDown, Done; a Search goes
 /// Call, Go, Search, Done. Call is the lead reacting to what he heard and then calling in the others
 /// one at a time, so nobody is on the job before he has reacted. The job's clock moves it along
-/// (Intel advances it); members read the step and run their own role. Values are never saved, so
+/// (JobBoard advances it); members read the step and run their own role. Values are never saved, so
 /// they may be reordered, and nothing compares them by order.
 /// </summary>
 public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done }
@@ -33,7 +33,7 @@ public class GroupJob
         Priority = incident.Priority;
         Point = incident.Point;
         Cap = Mathf.Max(1, cap);
-        // Go is the step a job that calls nobody keeps; Intel moves one with callees to Call at once.
+        // Go is the step a job that calls nobody keeps; JobBoard moves one with callees to Call at once.
         // Neither has a length, so StepLength starts at zero.
         Step = JobStep.Go;
     }
@@ -49,7 +49,7 @@ public class GroupJob
     /// <summary>Seconds in the current step.</summary>
     public float StepElapsed { get; private set; }
     /// <summary>
-    /// How long the current step lasts, in seconds, fixed by Intel when the step began. Zero for a step
+    /// How long the current step lasts, in seconds, fixed by JobBoard when the step began. Zero for a step
     /// that waits on someone (Go) or keeps its own timing (Call). Recorded rather than read off the lead
     /// each tick, so a lead who leaves mid-step, with different tuning, can't stretch or cut the step.
     /// </summary>
@@ -97,18 +97,20 @@ public class GroupJob
 
     internal void Tick(float dt) => StepElapsed += dt;
 
-    internal void Add(EnemyController who)
+    /// <summary>True when he is on this job afterwards, including when he already was; false when refused.</summary>
+    internal bool Add(EnemyController who)
     {
-        if (_members.Contains(who)) return;
+        if (_members.Contains(who)) return true;
         // Every path onto a job takes him off his last one first (JobBoard.Leave), so this is a bug in the
         // caller. Refused rather than moved: two jobs each listing him would each send him somewhere.
         if (who.Job != null)
         {
             Debug.LogError($"{who.name} is already on {who.Job} and can't join {this}: he must leave it first.", who);
-            return;
+            return false;
         }
         _members.Add(who);
         who.Job = this;
+        return true;
     }
 
     internal void Remove(EnemyController who)
