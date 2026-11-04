@@ -462,7 +462,7 @@ public class JobBoard
         who.FollowJob(job);
         // Checked here and not at Add: he is only put in Searching by FollowJob. Not at Leave either,
         // which SearchingState.Exit calls while the machine is still changing state. By now he is
-        // searching, whether he was staged into it or retargeted.
+        // searching, whether he entered it on a request or was retargeted.
         if (who.Job != null && !who.IsSearching)
             Debug.LogError($"{who.name} is on {who.Job} but is in a state other than Searching: a member of a job must be searching.", who);
         return true;

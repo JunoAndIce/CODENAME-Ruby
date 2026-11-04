@@ -44,7 +44,7 @@ public class SearchingState : EnemyStateBase
     public StimulusResponse Reason => Job != null ? Job.Reason : _reason;
     public int Priority => Job != null ? Job.Priority : _priority;
 
-    private void Take(SearchRequest request)
+    private void Apply(SearchRequest request)
     {
         _target = request.Incident.Point;
         _reason = request.Incident.Reason;
@@ -55,7 +55,7 @@ public class SearchingState : EnemyStateBase
     /// <summary>Moves a search already in progress to a new spot and reason. It starts over from the walk, so the new spot gets its full look on arrival.</summary>
     public void Retarget(SearchRequest request)
     {
-        Take(request);
+        Apply(request);
         Begin();
     }
 
@@ -68,7 +68,7 @@ public class SearchingState : EnemyStateBase
             Debug.LogError($"{Enemy.name} entered Searching with nothing asked for: no one called RequestSearch first. He searches where he stands, at the lowest priority.", Enemy);
             request = new SearchRequest(new Incident(Enemy.transform.position, StimulusResponse.SearchForProblem, BehaviourMap.MinPriority), false);
         }
-        Take(request);
+        Apply(request);
         Begin();
     }
 
