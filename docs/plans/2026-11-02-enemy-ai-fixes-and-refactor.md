@@ -281,10 +281,10 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 - `AggroState.Exit` requests the lost-fight search (from the newest knowledge, or where he stands, at `FromAggroPriority`).
 - `SearchingState.Enter` consumes the request. Entering with none logs an error and searches where he stands, at the lowest priority: a visible guard, not a silent default.
 
-- [ ] **Step 1: The request.**
-- [ ] **Step 2: Callers.** `Investigate`, `FollowJob` and `AggroState.Exit`. Every log line keeps its text.
-- [ ] **Step 3: Compile and commit.**
-- [ ] **Step 4: Play-test gate (the user).** D in full, matching the baseline.
+- [x] **Step 1: The request.**
+- [x] **Step 2: Callers.** `Investigate`, `FollowJob` and `AggroState.Exit`. Every log line keeps its text.
+- [x] **Step 3: Compile and commit.**
+- [x] **Step 4: Play-test gate (the user).** Passed 2026-11-04 (log compared with the baseline: no wording lost or changed, no errors). The glance from Idle or Patrol didn't come up in this run (the three glances were taken in Aggro), so Task 11's gate covers it, as it plays D again. D in full, matching the baseline.
 
 ### Task 10: `EnemyVision` out of `EnemyController`
 
@@ -316,7 +316,7 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 
 - [ ] **Step 1: Move,** verbatim, with the wary writers redirected.
 - [ ] **Step 2: Compile and commit.**
-- [ ] **Step 3: Play-test gate (the user).** D, plus C's "a member who has seen Ruby raises the job", matching the baseline.
+- [ ] **Step 3: Play-test gate (the user).** D (including a glance at a known body from Idle or Patrol, not seen at Task 9's gate), plus C's "a member who has seen Ruby raises the job", matching the baseline.
 
 ### Task 12: Docs and the end review
 
