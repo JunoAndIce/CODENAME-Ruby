@@ -246,9 +246,9 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 
 `Intel` forwards its existing public members, so callers don't change. The publish logs keep their text. The pool gizmo stays on `Intel` and reads the pool.
 
-- [ ] **Step 1: Move the pool,** verbatim.
-- [ ] **Step 2: Compile and commit.**
-- [ ] **Step 3: Play-test gate (the user).** Break sight: the Intel gizmo's "Ruby reported Xs ago" updates once a second. Then a glance at a known body versus a search at an unknown one.
+- [x] **Step 1: Move the pool,** verbatim.
+- [x] **Step 2: Compile and commit.**
+- [x] **Step 3: Play-test gate (the user).** Passed 2026-11-03 (log compared with the baseline: no wording lost or changed). Break sight: the Intel gizmo's "Ruby reported Xs ago" updates once a second. Then a glance at a known body versus a search at an unknown one.
 
 ### Task 8: `JobBoard` out of `Intel`
 
