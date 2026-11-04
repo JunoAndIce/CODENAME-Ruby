@@ -82,6 +82,13 @@
       - A tuning value on the controller: one number, or a random range?
       - Does a firefight's run of shots keep adding with no ceiling, or is there a cap?
       - Does it apply to any search, or only to one the shot didn't already send him to?
+14. **A job mate's death sends the others to Aggro (added 2026-11-03, not yet planned to a task).** *(User: "An anemy can die next to his job partner and the other enemy will simply not do anything. Add a note for later. Enemies should respond to their job mates death by aggroing Ruby immediately.")*
+    - **When a member of a job dies, the other members go to Aggro on Ruby at once.**
+    - Open, to settle when it's planned:
+      - Where do they think she is if none of them can see her: the newest thing they know, or does the death teach them something (the killing shot's origin, the chain's source)?
+      - If they know nothing about where she is, Aggro searches where he stands (today's rule): is that right here?
+      - Does a death at any distance count, or only one a member could see or hear?
+      - Does it also apply to a member killed by something other than Ruby, such as a crate he was hit by after it was thrown? And what ends the job, since its members have all left it?
 
 ## Global Constraints
 

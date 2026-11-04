@@ -478,6 +478,9 @@ starts once every member has reached the area, and a member who can't reach it l
 goes back to his patrol. **A gunshot extends the search** by 4 to 5 seconds. Decisions 12 and 13 of
 the same plan.
 
+**A job mate's death sends the others to Aggro** *(user, 2026-11-03; not yet built)*: when a member
+of a job dies, the others go to Aggro on Ruby at once. Decision 14 of the same plan.
+
 **Search together** (Searching for Attack or Problem, Plus):
 
 - **A search team is at most three,** and can be two or just one *(user)*. That holds for every
