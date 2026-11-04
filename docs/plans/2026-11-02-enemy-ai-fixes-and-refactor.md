@@ -264,11 +264,11 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 
 `Intel` forwards `Handle`, `Leave`, `NoteArrived`, `CheckerOf` and `StepDuration`. Logs keep `Intel` as their context object and their text.
 
-- [ ] **Step 1: Move the job engine,** verbatim.
-- [ ] **Step 2: The checker is chosen when the job enters Go, and when he leaves.** `CheckerOf` becomes a read with no side effects. *This is the one deliberate change in Part B:* the choice was a side effect of members' queries from two update phases. The log line saying who's sent keeps its text, and fires at the same moment it does now: as the team sets off.
-- [ ] **Step 3: Membership invariants.** `GroupJob.Add` refuses (with an error) an enemy already on another job. `JobBoard` is the only caller of `Add` and `Remove`, and `SearchingState` leaves through it. An enemy whose `Job` isn't null while he isn't in Searching is logged as an error, where membership changes.
-- [ ] **Step 4: Compile and commit.**
-- [ ] **Step 5: Play-test gate (the user).** C in full, including grabbing the checker mid-look. Match the baseline.
+- [x] **Step 1: Move the job engine,** verbatim.
+- [x] **Step 2: The checker is chosen when the job enters Go, and when he leaves.** `CheckerOf` becomes a read with no side effects. *This is the one deliberate change in Part B:* the choice was a side effect of members' queries from two update phases. The log line saying who's sent keeps its text, and fires at the same moment it does now: as the team sets off.
+- [x] **Step 3: Membership invariants.** `GroupJob.Add` refuses (with an error) an enemy already on another job. `JobBoard` is the only caller of `Add` and `Remove`, and `SearchingState` leaves through it. An enemy whose `Job` isn't null while he isn't in Searching is logged as an error, where membership changes.
+- [x] **Step 4: Compile and commit.**
+- [x] **Step 5: Play-test gate (the user).** Passed 2026-11-04 (log compared with the baseline: no wording lost or changed; a join into a job already in Go, the far-and-near re-pick, was not seen in play and rests on the reviews). C in full, including grabbing the checker mid-look. Match the baseline.
 
 ### Task 9: One way into Searching
 
