@@ -724,9 +724,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     internal Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
 
     /// <summary>
-    /// Whether he has Ruby in his eyes this frame: noticed, or already hunting her and in contact.
-    /// Alive and on his feet only: a corpse, a held or a tumbling enemy sees and says nothing.
-    /// Cached per frame, like CanSeePlayer.
+    /// Whether he has Ruby in his eyes this frame: noticed, or already hunting her with a clear line
+    /// to her, at any distance. Not only within Give Up Radius: Aggro chases her whenever she's in
+    /// sight, so past the radius he followed her without learning where she was, and when she dropped
+    /// out of sight he turned round and walked back to the old spot. The radius only decides when the
+    /// hunt ends (InContactWithPlayer). Alive and on his feet only: a corpse, a held or a tumbling
+    /// enemy sees and says nothing. Cached per frame, like CanSeePlayer.
     /// </summary>
     private bool SeesPlayer
     {
@@ -735,7 +738,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             if (_seesFrame == Time.frameCount) return _seesPlayer;
             _seesFrame = Time.frameCount;
             _seesPlayer = !Health.IsDead && !IsOverridden
-                && (DetectsPlayer() || (_state.Current == Aggro && InContactWithPlayer()));
+                && (DetectsPlayer() || (_state.Current == Aggro && CanSeePlayer()));
             return _seesPlayer;
         }
     }

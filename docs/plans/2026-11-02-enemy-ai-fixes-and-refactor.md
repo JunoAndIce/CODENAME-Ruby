@@ -323,6 +323,7 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, `docs/specs/2026-10-28-enemy-states-0.2.md` (only if a rule changed), `docs/plans/2026-11-02-enemy-group-jobs-part-2.md` (a note that this plan ran before its Task 5), this plan.
 
 - [ ] **Step 1: CLAUDE.md.**
+  - Aggro: past Give Up Radius, sight still teaches him where she is and he calls it out. The radius only decides when the hunt ends (the fix after Task 11).
   - **The drift the review found:**
     - word of mouth under Speech;
     - Searching entered through `Intel` and jobs;
