@@ -117,6 +117,7 @@ a { color: var(--accent); }
     <li><a href="#ruby">Ruby</a></li>
     <li><a href="#abilities">Ruby's abilities</a></li>
     <li><a href="#damage">Impact damage</a></li>
+    <li><a href="#pathing">Path Grid, colliders and navigation</a></li>
     <li><a href="#enemies">Enemies</a></li>
     <li><a href="#level">Level 1: Police Station</a></li>
     <li><a href="#sound">Sound</a></li>
@@ -500,7 +501,238 @@ a { color: var(--accent); }
 <p class="note"><strong>Tuning rule:</strong> keep Knockdown Speed above Ruby's walk plus an officer's chase (15 + 10 = 25 m/s), or characters running into each other head-on can knock each other down. At 25 it sits exactly on that line. Spin Speed must stay above Knockdown Speed for swings to hurt.</p>
 <p>A tethered object switches to continuous collision detection, because a thrown crate can move almost a metre per physics step and would otherwise pass straight through an enemy.</p>
 
-<h2 id="enemies"><span class="num">7</span>Enemies</h2>
+<h2 id="pathing"><span class="num">7</span>Path Grid, colliders and navigation</h2>
+<p>Enemies find their way over a grid that we bake ourselves. This section is for someone new to the code. It shows how to set a floor up, why a collider decides where an enemy can walk, and which script to open when one won't move. It covers <strong>how an enemy gets to a place</strong>, not how it picks the place.</p>
+
+<h3>The big picture</h3>
+<p>We don't use Unity's NavMesh. The code lives in its own assembly, <code>Ruby.Pathing</code> (<code>Assets/Scripts/Pathing/</code>), which knows nothing about the game. An enemy plugs in by implementing one small interface, <code>IPathAgent</code>.</p>
+<ul>
+  <li><strong>The floor is a grid of square cells</strong> (Cell Size, 0.5 m by default). Each cell is open or blocked. Everything happens on the X and Z axes. Height only decides which floor a point belongs to.</li>
+  <li><strong>One <code>PathGrid</code> per floor.</strong> It bakes once, when Play starts, from the colliders in the scene.</li>
+  <li><strong>Two ways to find a route.</strong> Which one depends on who wants the goal:</li>
+</ul>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Who wants the goal</th><th>Tool</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Many enemies, one goal (chasing Ruby)</td><td><code>FlowField</code> (Dijkstra)</td><td>One flood from the goal gives every cell its distance, and each enemy just steps downhill. The chase field is shared per floor, so chase cost does not grow with the number of enemies.</td></tr>
+    <tr><td>One enemy, its own goal (walking a patrol route)</td><td><code>GridPathfinder</code> (A*)</td><td>The search heads for the goal and stops there, and the route is cached. A flood of the whole floor would be wasted on a goal nobody else shares.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>It is a rule of thumb, not a wall. An enemy walking to a single spot, such as a search, floods a field of its own, because it follows the field step by step as it goes.</p>
+
+<h3>Setting up a floor</h3>
+<ol>
+  <li><strong>Add a <code>PathGrid</code> to an empty GameObject and put it at the floor's surface.</strong> The object's Y is the floor. The grid is a box around its position, lined up with X and Z, Size metres across. Its white outline shows in the Scene view.</li>
+  <li><strong>Set Size</strong> to cover the whole floor. Cells outside it don't exist, and an enemy standing off the grid can't plan.</li>
+  <li><strong>Set Height</strong> (the floor's band). A point belongs to this grid when it lies over it, at most Height above the grid's Y and at most 0.5 m below it. An enemy's root sits about 1 m up (a 2 m capsule centred on it), so Height must be well above that. Stacked floors need a grid each, and their bands must not overlap.</li>
+  <li><strong>Set Agent Radius to the enemy capsule's radius</strong> (0.35 m on the officer prefab) and Agent Height to its height (2 m). The grid decides what fits by pretending to be that capsule. If the two disagree, the grid promises gaps the body can't pass, or refuses ones it could.</li>
+  <li><strong>Press Play, then select the grid</strong> to see what it baked (see Debugging tools below).</li>
+</ol>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Setting</th><th class="num">Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>Size</td><td class="num">100 × 100 m</td><td>Metres covered along X and Z.</td></tr>
+    <tr><td>Height</td><td class="num">3 m</td><td>The floor's vertical band above the grid.</td></tr>
+    <tr><td>Cell Size</td><td class="num">0.5 m</td><td>Finer cells fit tighter gaps but cost more: halving it quadruples the cell count.</td></tr>
+    <tr><td>Agent Radius / Agent Height</td><td class="num">0.5 m / 2 m</td><td>The test capsule. Match the enemy's root capsule.</td></tr>
+    <tr><td>Floor Clearance</td><td class="num">0.1 m</td><td>Gap between the floor and the capsule's underside, so the floor never blocks a cell.</td></tr>
+    <tr><td>Max Flow Distance</td><td class="num">40 m</td><td>How far a flood spreads from its goal, in plain path metres. An enemy farther than this isn't on the field.</td></tr>
+    <tr><td>Corner Margin</td><td class="num">0.5 m</td><td>How far paths keep off walls and corners where there is room.</td></tr>
+    <tr><td>Wall Cost</td><td class="num">20</td><td>Path cost added per cell of margin a step cuts into (a straight step costs 10).</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note"><strong>These are the defaults in code.</strong> Every one is tunable, and the value on the grid in the scene wins. The test floor's grid, for one, uses an Agent Radius of 0.35 and a Max Flow Distance of 90. Read your own grid's Inspector.</p>
+<ul>
+  <li><strong>Doorways.</strong> A gap is open only if some cell centre in it is at least Agent Radius from both sides, and cell centres sit one Cell Size apart. So a doorway needs about <strong>2 × Agent Radius + one Cell Size</strong> to be sure of a column of open cells: 1.5 m with the default radius. We build doorways 1.5 m or wider.</li>
+  <li><strong>The grid bakes once, at Start.</strong> Change a setting, or move a wall, with Play mode stopped. <strong>Corner Margin</strong> shows why: it is turned into whole cells at the bake, so an edit made in Play does nothing until the next play. The grid says so, with a warning like <code>Corner Margin 0.75 m is 2 cells but this grid baked 1. The new margin takes effect at the next bake (next play).</code></li>
+</ul>
+
+<h3>Colliders and the grid</h3>
+<h4>How a cell becomes blocked</h4>
+<p>For every cell the bake stands an invisible capsule on the cell's centre, Agent Radius wide and Agent Height tall, and asks Unity's physics what it overlaps. If it overlaps anything static, the cell is blocked. That is the whole test (<code>PathGrid.IsOpenSpot</code>).</p>
+<div style="margin-top: 1rem; break-inside: avoid;">
+<svg viewBox="0 0 520 220" width="100%" role="img" aria-label="Top view of a wall and a row of cells. The capsule on the first cell touches the wall, so that cell is blocked. The second cell is open but inside the margin. The cells after it are open with no extra cost." style="max-width: 560px; display: block; font: 12px var(--font-body);">
+  <rect x="20" y="20" width="100" height="100" fill="#6b6266"/>
+  <text x="70" y="75" text-anchor="middle" fill="#ffffff">wall</text>
+  <rect x="120" y="60" width="60" height="60" fill="#d6402f" fill-opacity="0.45" stroke="#8a8085" stroke-width="1"/>
+  <rect x="180" y="60" width="60" height="60" fill="#e8c230" fill-opacity="0.55" stroke="#8a8085" stroke-width="1"/>
+  <rect x="240" y="60" width="60" height="60" fill="#3fae5f" fill-opacity="0.25" stroke="#8a8085" stroke-width="1"/>
+  <rect x="300" y="60" width="60" height="60" fill="#3fae5f" fill-opacity="0.25" stroke="#8a8085" stroke-width="1"/>
+  <rect x="360" y="60" width="60" height="60" fill="#3fae5f" fill-opacity="0.25" stroke="#8a8085" stroke-width="1"/>
+  <circle cx="150" cy="90" r="60" fill="none" stroke="#d6402f" stroke-width="2" stroke-dasharray="5 4"/>
+  <circle cx="210" cy="90" r="60" fill="none" stroke="currentColor" stroke-width="2"/>
+  <circle cx="150" cy="90" r="3" fill="#d6402f"/>
+  <circle cx="210" cy="90" r="3" fill="currentColor"/>
+  <text x="20" y="14" fill="currentColor">Top view: 0.5 m cells, the test capsule's footprint (Agent Radius 0.5 m) drawn on two of them</text>
+  <line x1="150" y1="120" x2="150" y2="202" stroke="#8a8085"/>
+  <line x1="210" y1="120" x2="210" y2="184" stroke="#8a8085"/>
+  <line x1="270" y1="120" x2="270" y2="166" stroke="#8a8085"/>
+  <text x="158" y="206" fill="currentColor">blocked: the capsule touches the wall</text>
+  <text x="218" y="188" fill="currentColor">open, but inside the margin: costs extra to path through</text>
+  <text x="278" y="170" fill="currentColor">open, no extra cost</text>
+</svg>
+<p class="meta">The colours match the Scene view overlay: red is blocked, yellow is open inside the margin.</p>
+</div>
+<ul>
+  <li><strong>Why this gives walls clearance.</strong> The capsule is the enemy's body. A cell is blocked when his body would touch something standing on it, so the open cells are exactly the places his centre can be. Paths never need extra room for his width. The margin on top is covered under Navigation below.</li>
+  <li><strong>Why the floor doesn't count.</strong> The capsule's underside floats Floor Clearance (0.1 m) above the grid's Y, and its top is Agent Height up. So the grid's Y must be at the floor's top surface. Put the grid below the floor and the floor overlaps every capsule, so the whole grid comes out blocked.</li>
+  <li><strong>Only the capsule's band counts.</strong> A collider wholly below 0.1 m (a flat rug) or above 2 m (a ceiling) blocks nothing. A low beam under 2 m does.</li>
+  <li><strong>Triggers never block, and layers never matter.</strong> The test ignores trigger colliders and looks at every layer. So an invisible wall needs a solid collider, on any layer.</li>
+</ul>
+
+<h4>Static and dynamic bodies</h4>
+<p>The bake asks one question of each collider it touches: is it fixed? A collider is fixed when the Rigidbody it belongs to is kinematic, or when it has no Rigidbody above it at all. Unity's own Static checkbox plays no part.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>The collider</th><th>The bake</th><th>Examples</th></tr></thead>
+  <tbody>
+    <tr><td>No Rigidbody on it or any parent</td><td>Blocks, for the whole play session</td><td>Walls, built-in furniture</td></tr>
+    <tr><td>On a kinematic Rigidbody</td><td>Blocks, same as above</td><td>An Immovable prop</td></tr>
+    <tr><td>On a dynamic Rigidbody</td><td>Skipped</td><td>Crates, loose guns, enemies, Ruby</td></tr>
+    <tr><td>A trigger</td><td>Ignored</td><td>A corpse at rest (its colliders are triggers)</td></tr>
+  </tbody>
+</table>
+</div>
+<p>A child collider belongs to the nearest Rigidbody above it, so a collider on a crate's mesh child is part of the crate. Moving things are skipped because the grid is baked once: a crate baked in would leave a wall behind when it moved, and enemies would wall each other off. Things that move but should still block are the job of <code>GridObstacle</code>.</p>
+
+<h4>GridObstacle: a prop that blocks while it rests</h4>
+<p>The bake skips a dynamic crate, so without help enemies plan straight through it. Put <code>GridObstacle</code> on any prop that should block paths. It needs a Rigidbody, and it works like this:</p>
+<ul>
+  <li><strong>At rest it marks the grid.</strong> Once the prop has stayed under Rest Speed (0.2 m/s, with spin counted as the speed its corners sweep at) for Settle Time (0.01 s), it blocks every cell its solid colliders would touch with an enemy capsule, the same clearance the bake gives a wall. Cells it blocks show orange in the Scene view.</li>
+  <li><strong>Moving, it clears.</strong> A shoved or thrown prop gives its cells back, so no stale cells hang in the air behind it. It re-marks once it settles. A slow creep that shifts its footprint by half a cell is re-marked too.</li>
+  <li><strong>It costs nothing while resting.</strong> It only touches the grid when it settles or starts to move.</li>
+  <li><strong>Every change tells the grid.</strong> Each mark or clear bumps the grid's <code>Version</code>, and flow fields and cached routes re-plan within about 0.2 s.</li>
+</ul>
+<p class="note"><strong>No <code>GridObstacle</code>, no blocking.</strong> Enemies plan through a prop that lacks one, then meet it as an ordinary physics body. One more catch: a <code>GridObstacle</code> whose prop rests outside every grid can't block anything, and it logs a warning once to say so.</p>
+
+<h4>Immovable objects</h4>
+<p>Giving a body the <code>Weight</code> class <strong>Immovable</strong> makes its Rigidbody kinematic (<code>Weight</code> owns that flag). That happens in Awake, before the bake at Start, so the bake sees it as fixed and blocks its cells with no <code>GridObstacle</code>. Adding one to it would add nothing. Because the bake is a one-off, an Immovable prop moved later by script keeps its old cells blocked and doesn't block its new spot.</p>
+
+<h4>Characters collide with their root capsule only</h4>
+<p>Visual children (the model, the gun, the eyes) carry no colliders. For pathing this matters because <strong>the grid assumes the enemy is a capsule of Agent Radius</strong>. A model collider that sticks out makes the body wider than the grid believes, so it snags corners the grid called clear. A collider left on a decorative mesh with no Rigidbody becomes a wall in the bake, wherever it happens to stand. The one exception is a ragdoll: its bones' colliders take over from the capsule while it's limp, and they sit on dynamic Rigidbodies, so the bake skips them.</p>
+
+<h4>My enemy won't walk there</h4>
+<p>Start with the Console. The grid and navigator log a warning, once per failure, that names the enemy (click it to select him). The text below is exact, with the enemy's name in front.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Warning</th><th>What it means and what to check</th></tr></thead>
+  <tbody>
+    <tr><td><code>is not on any PathGrid at (x, y, z) &mdash; standing still.</code></td><td>The enemy is outside every grid: past its Size, more than 0.5 m below its Y or above its Height, or the grid hasn't baked. Check the position of both.</td></tr>
+    <tr><td><code>&lt;target&gt; is not on this floor's grid (&lt;grid&gt;) &mdash; standing still.</code></td><td>A chase target is on another floor. Floors are independent, so there is no route between them.</td></tr>
+    <tr><td><code>no path to (x, y, z) on &lt;grid&gt; (walled off, or beyond Max Flow Distance) &mdash; standing still.</code></td><td>The goal is sealed off by blocked cells (a doorway too narrow, a crate with <code>GridObstacle</code> jammed in it), or it's farther than Max Flow Distance along the floor.</td></tr>
+    <tr><td><code>patrol point 2 skipped &mdash; &lt;reason&gt;.</code> (an Aggressive route's reads <code>aggressive patrol point A2</code>)</td><td>A patrol stop couldn't be reached. The reason is one of the next three rows, or the first row's <code>not on any PathGrid</code>.</td></tr>
+    <tr><td><code>no open ground inside the area</code></td><td>Every spot in the patrol area is blocked. The area's Scene-view handle is red.</td></tr>
+    <tr><td><code>no path to the area (walled off, or too far for one search)</code></td><td>The area is sealed off, or A* gave up after expanding 20,000 cells.</td></tr>
+    <tr><td><code>blocked: no progress for 1.5s, 3.2m short of the area</code></td><td>The grid said the way was open but the body jammed: another enemy on the spot, a prop with no <code>GridObstacle</code>, or a gap the real capsule can't pass (is Agent Radius smaller than the capsule's?). The time is Stuck Time on the enemy.</td></tr>
+    <tr><td><code>every patrol point failed &mdash; holding, retrying every 3s.</code></td><td>All the points failed in a row, so he waits Route Retry Time and tries again.</td></tr>
+    <tr><td><code>&lt;prop&gt; has a GridObstacle but rests on no PathGrid (outside every grid's area or Height band), so it doesn't block paths: enemies plan straight through it.</code></td><td>The prop came to rest outside every grid. Move it, or extend the grid to cover it. It warns once, and again only if it leaves a grid a second time.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>With no warning at all, check these:</p>
+<ul>
+  <li><strong>He walks into a crate.</strong> The crate has no <code>GridObstacle</code>, or hasn't settled yet.</li>
+  <li><strong>Everything is blocked.</strong> The grid's Y is below the floor's surface, or Agent Height or Agent Radius is bigger than the rooms.</li>
+  <li><strong>A doorway is shut to him.</strong> It's narrower than 2 × Agent Radius + one Cell Size, or something static (a collider with no Rigidbody, or a kinematic one) stands in it.</li>
+  <li><strong>You moved something and nothing changed.</strong> The bake happened at Start. Stop Play, change it, play again.</li>
+</ul>
+
+<h3>Navigation</h3>
+<h4>Who does what</h4>
+<p><code>GridNavigator</code> plans, and the agent steers. The navigator never moves a body. Each physics step it works out a point to head for and hands it to the agent through <code>IPathAgent</code>: <code>MoveToward(target, speed, mustReach)</code> and <code>Stop()</code>. The agent also reports its <code>Body</code> (where planning starts) and its <code>StuckTime</code>. <code>EnemyController</code> implements all of this, turning its heading and writing its own velocity. The split keeps <code>Ruby.Pathing</code> free of game rules, and lets each kind of character keep its own movement.</p>
+<p>Three navigator calls cover what enemies do: a patrol walks a route of areas (<code>MoveToArea</code>, A*), a chase follows the shared field toward its target (<code>ChaseTo</code>), and a search walks to a spot on a field of its own (<code>MoveTo</code>). Each step they all do the same three things:</p>
+<ol>
+  <li><strong>Arrived?</strong> Within 0.5 m of the goal, or standing in the goal's cell: stop.</li>
+  <li><strong>Is there a clear straight line?</strong> If so, head straight for the goal and skip the search.</li>
+  <li><strong>Otherwise follow the route.</strong> That is the flow field's next step, or the next corner of the A* route.</li>
+</ol>
+<p>A patrol stop is an <strong>area</strong> (<code>GridArea</code>: a circle, or a rectangle lined up with X and Z), not a point. He heads for its centre, but if the centre is blocked (a table, an anchor) the nearest open cell inside the area counts. An exact point on an object could never be reached.</p>
+
+<h4>The flow field and A*</h4>
+<ul>
+  <li><strong>Flow field.</strong> A Dijkstra flood outward from the goal: a straight step costs 10, a diagonal 14. Each enemy reads its neighbours and steps toward the lowest cost. The flood stops at Max Flow Distance, measured in plain path metres (wall costs don't count), so wall costs can never shorten a chase's reach. A cell the flood never reached is off the field, and that gives the <code>no path to ... beyond Max Flow Distance</code> warning. A chase field re-floods when its target changes cell, and any field re-floods when the grid changes, throttled to once per 0.2 s.</li>
+  <li><strong>A*.</strong> Searches from the enemy to the goal cell with the same costs, and ties go to the cell nearer the goal, so open rooms get a straight run. It gives up after 20,000 cells (the "too far for one search" warning) so a hopeless search can't hitch a frame. The route is cached. It's re-planned when the grid changes, or when the enemy is knocked off the route, meaning the next corner is out of his sight.</li>
+  <li><strong>No corner cutting.</strong> Both only take a diagonal step when the two cells beside it are open too, so nobody squeezes between two blocked corners.</li>
+  <li><strong>Hugging a wall.</strong> An enemy touching a wall often stands in a cell the margin marks blocked. Planning starts from the nearest open cell within two cells of him, and his first cell is exempt from sight checks.</li>
+</ul>
+
+<h4>Keeping off corners</h4>
+<p>The grid keeps a second number for each cell, its <strong>clearance</strong>: how many cells it is from the nearest blocked cell or the grid's edge, capped just past the margin. Corner Margin is turned into whole cells (rounded up, so never less than asked). A cell at or under that clearance is <em>inside the margin</em>, and stepping onto it adds a cost: (margin cells &minus; clearance + 1) × Wall Cost. With the defaults a step onto a cell beside a wall adds 20, the price of two straight steps.</p>
+<ul>
+  <li><strong>It is a price, not a wall.</strong> Paths keep half a metre off corners where there is room and run down the middle of a doorway instead of hugging a jamb. A gap too narrow for the margin is still walked, down its middle, because that is the cheapest line through. A margin never closes a route.</li>
+  <li><strong>Straight lines keep the margin too.</strong> The "clear straight line" test above needs every cell along it to be outside the margin, so a shortcut can't graze a corner that the flood routed round. A goal beside a wall can still be walked straight to: the test relaxes only near the goal, as a ramp. A line that fails goes to the field or A*.</li>
+</ul>
+
+<h4>String pulling and line of sight</h4>
+<p>A route over cells is a staircase of eight-direction steps. Walked as it is, enemies would zigzag. So the route is <strong>pulled tight</strong>: from each point, look as far ahead as there is a straight line, and keep a corner only where sight breaks. For A* this is string pulling on the finished path. The flow field does the same with a look-ahead of 8 cells, aiming at the furthest one in sight.</p>
+<ul>
+  <li><strong>Line of sight is exact.</strong> It walks the cells the line crosses rather than sampling points, so a line can't slip through the corner of a blocked cell.</li>
+  <li><strong>The pull keeps the margin it had room for.</strong> Where the path had room, the pulled line keeps the full margin. Through a narrow gap it keeps only the clearance the gap has, which is its middle. This is a rule, not a fallback.</li>
+  <li><strong>He turns on sight, not on arrival.</strong> An enemy on a route moves on to the next corner as soon as that corner is in straight sight, so he starts his bend early instead of walking onto the corner first. The same sight test, at the same clearance, tells him when he has been knocked off.</li>
+</ul>
+
+<h4>Steering: why bends are arcs</h4>
+<p>The navigator names a point and <code>EnemyController.MoveToward</code> does the steering, using <code>Steering</code>, which is pure maths. It <strong>turns his walking heading at Turn Speed</strong> (720 degrees a second by default) rather than pivoting to face the point, so a bend is an arc that starts before the corner. A standing body with no direction to turn to keeps its facing.</p>
+<ul>
+  <li><strong>The danger is orbiting.</strong> A body turning at a fixed rate at speed <em>v</em> sweeps a circle of radius <em>v</em> divided by the turn rate. A point inside that circle can never be reached: he circles it for ever.</li>
+  <li><strong><code>SpeedToFit</code> slows him just enough</strong> that the arc passes through the point. Within 30 degrees of straight ahead nothing is slowed, and he never drops below a tenth of his speed, so a point right behind him can't freeze him.</li>
+  <li><strong>Only for points he must reach.</strong> That means a goal on a clear line, a route corner, or a field's last step into the goal cell (the <code>mustReach</code> flag). Any other field step rolls ahead of him every step and can't be orbited, so slowing there would only slow a chase on ordinary bends.</li>
+  <li><strong>Turn Speed is tunable.</strong> Lower it for wider arcs. The legs' own turn on the model (<code>CharacterAnimator</code>) is a separate setting.</li>
+</ul>
+
+<h4>When is he stuck?</h4>
+<p>A patrol move has a watchdog. If the distance left along the route doesn't shrink by 0.25 m for Stuck Time (1.5 s by default), he is blocked: if he is already inside the area it counts as arrived, and otherwise the move reports Blocked with the reason you saw in the table. Without it a walker would push at a jammed doorway for ever. Chase and single-spot walks have no watchdog. They keep stepping down their field.</p>
+
+<h3>No silent fallbacks</h3>
+<p>When the navigator can't plan a move, it does not quietly do something else. It <strong>stops the body and says why</strong>. Chase and point walks log one warning per failure (<code>Fail</code>) and stand still. The warning repeats only after a successful move, so a stuck enemy doesn't flood the Console. Area moves (patrol) return <code>Blocked</code> or <code>Unreachable</code> with a <code>FailureReason</code>, and the caller decides: the patrol skips the point with a warning. He never walks straight at the goal through a wall, and never wanders off.</p>
+<p>Two behaviours look like fallbacks but are written rules: a path lowers its clearance to what a narrow gap allows, and a patrol move that stalls inside its area counts as arrived. Neither hides a failure.</p>
+
+<h3>Debugging tools</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Tool</th><th>Where</th><th>What it shows</th></tr></thead>
+  <tbody>
+    <tr><td>Grid outline</td><td>Scene view, Gizmos on</td><td>A white wire box: the grid's Size and Height. Always drawn.</td></tr>
+    <tr><td>Selected grid</td><td>Scene view, in Play</td><td>Red cells: blocked by static geometry. Orange: blocked by a resting <code>GridObstacle</code>. Yellow: open but inside the margin.</td></tr>
+    <tr><td>Always Show Grid</td><td><code>PathGrid</code>, Debug</td><td>Draws those cells without selecting the grid, in the Scene and Game views (Gizmos on).</td></tr>
+    <tr><td>Show Open Cells</td><td><code>PathGrid</code>, Debug</td><td>With Always Show Grid, also tints every open cell a faint green, so the floor reads as a map and not only its walls.</td></tr>
+    <tr><td>Route line</td><td>Scene view, in Play</td><td>Every enemy draws the route he is following as a yellow line.</td></tr>
+    <tr><td>Route handles</td><td>Scene view, enemy selected</td><td>Handles for each patrol area, coloured by the same test the bake uses, so a bad point shows while you place it, in edit mode. Green: the centre is open. Yellow: the centre is blocked but part of the area is open. Red: nothing is open, so the point will be skipped. Grey: no grid under the point. Safe points are labelled 0, 1, 2 and Aggressive ones A0, A1, A2, to match the warnings.</td></tr>
+    <tr><td>Bake log</td><td>Console, with the <code>RUBY_DEBUG_LOGS</code> define</td><td>One line per bake: <code>baked &lt;width&gt;x&lt;depth&gt; cells (0.5m), &lt;n&gt; blocked.</code> Without the define it compiles away.</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note"><strong>Draw cost grows with the cell count.</strong> The default grid is 200 × 200 = 40,000 cells, and the overlays draw all of them, so turn Always Show Grid and Show Open Cells off when you aren't looking at them. The route handles colour only by static geometry. They don't count props, and don't show the margin.</p>
+<p>Route handles: drag the move handle to place an area, the rim dot sizes a circle, and edge handles size a rectangle, as on a Box Collider. The Inspector's Safe and Aggressive toggle picks which route you are editing, and <strong>Add Patrol Point</strong> adds an area a couple of metres on from the last.</p>
+
+<h3>Where to read next</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Script</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>PathGrid</code></td><td>The grid: bake, open and blocked cells, clearance, wall costs, line of sight, area resolving, the debug overlays.</td></tr>
+    <tr><td><code>GridObstacle</code></td><td>Marks the grid while a dynamic prop rests.</td></tr>
+    <tr><td><code>FlowField</code></td><td>The Dijkstra flood and the downhill step with its look-ahead.</td></tr>
+    <tr><td><code>GridPathfinder</code></td><td>A*, plus the string pull that turns cells into corners.</td></tr>
+    <tr><td><code>GridNavigator</code></td><td>Ties it together: picks line, field or route, watches for being stuck, and warns on failure.</td></tr>
+    <tr><td><code>IPathAgent</code></td><td>What the navigator needs from a body: <code>Body</code>, <code>StuckTime</code>, <code>MoveToward</code>, <code>Stop</code>.</td></tr>
+    <tr><td><code>Steering</code></td><td>The turning maths: <code>TurnToward</code> and <code>SpeedToFit</code>.</td></tr>
+    <tr><td><code>GridArea</code>, <code>PatrolRoute</code></td><td>Circle and rectangle areas, and a route made of them.</td></tr>
+    <tr><td><code>CellHeap</code></td><td>The small priority queue under both searches.</td></tr>
+    <tr><td><code>EnemyController</code></td><td>Implements <code>IPathAgent</code> (<code>MoveToward</code>, <code>Stop</code>) and owns the navigator.</td></tr>
+    <tr><td><code>EnemyControllerEditor</code>, <code>PatrolPointDrawer</code></td><td>The Scene-view route handles and the patrol point Inspector.</td></tr>
+    <tr><td><code>Weight</code></td><td>Where the Immovable class makes a body kinematic.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>All the pathing scripts are in <code>Assets/Scripts/Pathing/</code>, except the editor ones in <code>Assets/Scripts/Editor/</code>, <code>EnemyController</code> in <code>Assets/Scripts/</code> and <code>Weight</code> in <code>Assets/Scripts/Core/</code>. The project's <code>CLAUDE.md</code> has a longer Pathing section with the reasons behind each rule.</p>
+
+
+<h2 id="enemies"><span class="num">8</span>Enemies</h2>
 
 <h3>Police officer</h3>
 <p>The demo's only enemy. Weighs 50 kg and has 20 health, and carries a pistol in his right hand.</p>
@@ -642,7 +874,7 @@ a { color: var(--accent); }
   <li><strong>Melee officers</strong>, once melee weapons exist.</li>
 </ul>
 
-<h2 id="level"><span class="num">8</span>Level 1: Police Station</h2>
+<h2 id="level"><span class="num">9</span>Level 1: Police Station</h2>
 <p>The demo's level is a police precinct in Central City's lower slums. Ruby fights her way from the street outside to the station's interior.</p>
 
 <h3>Goal</h3>
@@ -681,14 +913,14 @@ a { color: var(--accent); }
 </div>
 <p>Officers find their way with a grid baked over the floor at start. Every doorway needs to be at least 1.5 m wide, or officers can't path through it. Props that should block paths while resting carry a <code>GridObstacle</code> component.</p>
 
-<h2 id="sound"><span class="num">9</span>Sound <span class="planned">Planned</span></h2>
+<h2 id="sound"><span class="num">10</span>Sound <span class="planned">Planned</span></h2>
 <ul>
   <li>Sounds let officers notice Ruby and draw them toward where the sound came from.</li>
   <li>Each sound comes from a point in the world.</li>
   <li>Each sound has a loudness or a reach, which would also allow sounds heard across the whole floor.</li>
 </ul>
 
-<h2 id="world"><span class="num">10</span>The world of Parabellum</h2>
+<h2 id="world"><span class="num">11</span>The world of Parabellum</h2>
 <p class="meta">For artistic inspiration.</p>
 <p>CODENAME: Ruby takes place in the world of <strong><em>Parabellum</em></strong>, the franchise it belongs to.</p>
 <p>The story is set almost 300 years after the fall of our current civilization. Three hundred years ago, humans born with elemental powers were discovered, and the world was thrown into chaos. Over the next three centuries the elementalists became all that remained. After countless wars left the earth unrecognizable, they set out to rebuild civilization. The leaders of the war effort became political leaders, and those who followed them laid the groundwork for future generations to thrive. The country we once knew as the United States of America became <strong>the United Front</strong>.<sup>*</sup></p>
