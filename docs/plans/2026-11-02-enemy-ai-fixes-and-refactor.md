@@ -314,9 +314,9 @@ Run with `RUBY_DEBUG_LOGS` on and the Console visible.
 
 `SetState` stays on `EnemyController`, behind `Alert()`, `RequestSearch` and `FollowJob`. `EnemyController.Investigate` forwards, so the senses and `Intel` don't change.
 
-- [ ] **Step 1: Move,** verbatim, with the wary writers redirected.
-- [ ] **Step 2: Compile and commit.**
-- [ ] **Step 3: Play-test gate (the user).** D (including a glance at a known body from Idle or Patrol, not seen at Task 9's gate), plus C's "a member who has seen Ruby raises the job", matching the baseline.
+- [x] **Step 1: Move,** verbatim, with the wary writers redirected.
+- [x] **Step 2: Compile and commit.**
+- [x] **Step 3: Play-test gate (the user).** Passed 2026-11-04 (log compared with the baseline: no wording lost or changed, no errors in normal Play). The glance from Idle or Patrol and a job raised by a member who has seen Ruby did not come up; the user accepted those two on the line-by-line review. The end review is asked to look at them. D (including a glance at a known body from Idle or Patrol, not seen at Task 9's gate), plus C's "a member who has seen Ruby raises the job", matching the baseline.
 
 ### Task 12: Docs and the end review
 
