@@ -231,6 +231,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public bool IsOverridden => _state.Current is EnemyStateBase { IsOverride: true };
 
+    /// <summary>In the Searching state right now. The job board reads it to check that a member of a job is searching.</summary>
+    public bool IsSearching => _state.Current is SearchingState;
+
     /// <summary>Ruby, while it's aiming at her.</summary>
     public bool TryFindTarget(out Vector3 point)
     {
@@ -521,7 +524,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     /// <summary>
     /// The job he is on, or null: a handful of enemies dealing with one thing together (GroupJob).
-    /// Only Intel sets it, as it adds and removes members, and SearchingState gives him up on exit.
+    /// Only the job board sets it, as it adds and removes members, and SearchingState gives him up on exit.
     /// </summary>
     public GroupJob Job { get; internal set; }
 

@@ -413,6 +413,11 @@ public class JobBoard
         job.Add(who);
         if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
         who.FollowJob(job);
+        // Checked here and not at Add: he is only put in Searching by FollowJob. Not at Leave either,
+        // which SearchingState.Exit calls while the machine is still changing state. By now he is
+        // searching, whether he was staged into it or retargeted.
+        if (who.Job != null && !who.IsSearching)
+            Debug.LogError($"{who.name} is on {who.Job} but is in a state other than Searching: a member of a job must be searching.", who);
     }
 
     // A more serious thing at a job's place: the reason and priority rise for everyone. If the place

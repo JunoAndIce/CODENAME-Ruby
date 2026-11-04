@@ -16,7 +16,7 @@ public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done }
 /// <summary>
 /// A few enemies dealing with one thing together. A plain object, owned by Intel, with members, a
 /// kind, a step and a point. It **never moves anyone**: each member's state machine reads it and
-/// runs his own role, so the machine stays the one place movement is decided. Intel is the only
+/// runs his own role, so the machine stays the one place movement is decided. JobBoard is the only
 /// caller of the members of this class that change it (Add, Remove, Upgrade); everyone else reads.
 /// </summary>
 public class GroupJob
@@ -100,6 +100,13 @@ public class GroupJob
     internal void Add(EnemyController who)
     {
         if (_members.Contains(who)) return;
+        // Every path onto a job takes him off his last one first (JobBoard.Leave), so this is a bug in the
+        // caller. Refused rather than moved: two jobs each listing him would each send him somewhere.
+        if (who.Job != null)
+        {
+            Debug.LogError($"{who.name} is already on {who.Job} and can't join {this}: he must leave it first.", who);
+            return;
+        }
         _members.Add(who);
         who.Job = this;
     }
