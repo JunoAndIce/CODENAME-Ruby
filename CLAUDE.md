@@ -462,8 +462,8 @@ through the player never slows the walk.
   line and starts again the next time he's at his post, so a post another officer stands on can't
   have him pushing at it for good. Idle activities (a desk, a TV) are a later piece.
 - **Patrol Normal and Aggressive.** These are modes of Patrol, not states. `IsAggressive` is
-  **derived on every read, never stored**: he has been after Ruby (`EnemyMemory.Wary`, set by an
-  attack he senses, a job for an attack and a glance at a known body, though not by the search after a lost fight) or has seen her (`HasSeenRuby`). Neither is
+  **derived on every read, never stored**: he has been after Ruby (`EnemyMemory.Wary`, set by any
+  search for an attack, including the one after a lost fight, and by a glance at a known body) or has seen her (`HasSeenRuby`). Neither is
   ever cleared, so he never goes back. **`EnemyReactions.BecomeWary()` is the one writer of `Wary`**,
   so there is one place to change or log it and no enemy can latch wary by a route nobody can find.
   `BecomeWaryAt(at, why)` is for something sensed at a spot: when that is his own job's place it goes

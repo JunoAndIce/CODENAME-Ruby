@@ -65,6 +65,9 @@ public class AggroState : EnemyStateBase
         Firing = false;
         if (LostPlayer)
         {
+            // He has been after her, whether or not he ever got a clear look. One who joined by word of
+            // mouth and never saw her would otherwise lose the fight and go back to a Normal patrol.
+            Enemy.Reactions.BecomeWary();
             Vector3 known = Enemy.TryGetNewestRuby(out Vector3 newest) ? newest : Enemy.transform.position;
             Enemy.RequestSearch(new SearchRequest(new Incident(known, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority)));
         }
