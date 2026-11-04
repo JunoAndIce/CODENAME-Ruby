@@ -226,10 +226,10 @@
 
 **Files:** `Assets/Scripts/Squad/EnemySenses.cs`
 
-- [ ] **Step 1: What it is.** In `Consider`, find what the body is: a pistol (a `Gun`), a moving officer (an `EnemyController`, held or tumbling, alive or dead), or something else. Look up the row for each: `LooseGun` for a pistol, `Body` for an officer, and the speed row (`MovingObject` or `FastObject`) as now.
-- [ ] **Step 2: The stronger of the two.** Priority and response are each the higher of the two rows (Ignore is the lowest response, so an Ignore never beats a real one). The log says which row each came from. A moving pistol or officer is **not** a find: its origin is where Ruby threw it from, so it stays a check there.
-- [ ] **Step 3: Compile and commit,** as in Task 3.
-- [ ] **Step 4: Play-test gate (the user).** No Inspector work. In play:
+- [x] **Step 1: What it is.** In `Consider`, find what the body is: a pistol (a `Gun`), a moving officer (an `EnemyController`, held or tumbling, alive or dead), or something else. Look up the row for each: `LooseGun` for a pistol, `Body` for an officer, and the speed row (`MovingObject` or `FastObject`) as now.
+- [x] **Step 2: The stronger of the two.** Priority and response are each the higher of the two rows (Ignore is the lowest response, so an Ignore never beats a real one). The log says which row each came from. A moving pistol or officer is **not** a find: its origin is where Ruby threw it from, so it stays a check there.
+- [x] **Step 3: Compile and commit,** as in Task 3.
+- [x] **Step 4: Play-test gate (the user).** Passed 2026-11-04. No Inspector work. In play:
   - **A pistol flung** at a slow speed is a loose-gun reaction, and a fast one a fast object. The Console shows both rows and the winner.
   - **A thrown officer,** dead or alive, at any speed that gets noticed, reads as a corpse (priority 5, an attack).
   - **An officer on his feet** is still never a moving body.
