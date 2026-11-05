@@ -47,7 +47,7 @@ public class JobBoard
     // The jobs' one clock. A job, not its members, decides when each step ends, so a team looks
     // together, gestures together and finishes on the same frame: members each timing their own look
     // is how one said all clear while another walked off aggressive. Go has no duration, because it
-    // waits for the first member to reach the spot (NoteArrived). Every other timed step ends once
+    // waits for people to reach the spot: the first arrival of a Check, every member of a Search (NoteArrived). Every other timed step ends once
     // its recorded length has passed, so a length of 0 ends it at once, as it does without a job.
     public void Advance(float dt)
     {
@@ -220,11 +220,31 @@ public class JobBoard
         _ => 0f,
     };
 
-    /// <summary>A member has reached the spot, been blocked short of it or run out of time walking. The first one moves the job on.</summary>
+    /// <summary>
+    /// A member has reached the spot, or stopped short of it. A Check moves on at the first arrival (the
+    /// checker's). A Search moves on when the last member arrives, so its countdown starts with the whole
+    /// team there; the line names that last one.
+    /// </summary>
     public void NoteArrived(GroupJob job, EnemyController who)
     {
-        if (!job.NoteArrived(LengthOf(job.Kind == JobKind.Check ? JobStep.Look : JobStep.Search, job.Lead))) return;
+        if (!job.NoteArrived(who, LengthOf(job.Kind == JobKind.Check ? JobStep.Look : JobStep.Search, job.Lead))) return;
         DebugLog.Info($"{who.name} reaches the spot: {job} {(job.Kind == JobKind.Check ? "looks" : "searches")}.", who);
+    }
+
+    /// <summary>
+    /// Takes a member off a Search he can't reach (no path, or Search Travel Limit run out) and sends him
+    /// back to his patrol: the line says who and why, he leaves the job (which closes if he was the last,
+    /// or starts its search if everyone left has arrived), and his search ends so the table takes him to
+    /// Patrol, the Aggressive route if the search was an attack, since it made him wary. The caller must
+    /// stop reading its job at once: his Job is null afterwards.
+    /// </summary>
+    public void DropFromSearch(EnemyController who, string why)
+    {
+        GroupJob job = who.Job;
+        if (job == null) return;
+        DebugLog.Info($"{who.name} is taken off {job}: {why}.", who);
+        Leave(who);
+        who.Searching.Dismiss(why);
     }
 
     /// <summary>
@@ -421,6 +441,12 @@ public class JobBoard
             return;
         }
         DebugLog.Info($"{who.name} leaves {job}; {job.Lead.name} leads.", who);
+
+        // A Search in Go waits for everyone on it, and the one who left may have been the last one it was
+        // waiting for: without this it would wait for him for good. A job that emptied returned above,
+        // so there is a Lead to read the length from.
+        if (job.TryStartSearch(LengthOf(JobStep.Search, job.Lead)))
+            DebugLog.Info($"{who.name} left, and everyone still on {job} has reached the spot: it searches.", who);
 
         // The checker went with the look half done: the nearest of the rest takes over, and the job
         // goes back to Go so he walks to the spot from where he is and looks it over himself. In Go the

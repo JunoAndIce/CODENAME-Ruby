@@ -38,6 +38,8 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0f)] private float _reactTime = 0.5f;
     [Tooltip("How long each call takes, in seconds: he turns to the nearest enemy and calls him, and that enemy turns to face him. Then the next nearest, and so on.")]
     [SerializeField, Min(0f)] private float _callTime = 0.6f;
+    [Tooltip("How far from a search's place, in metres, its members roam while they search, and how near the place counts as having reached the area when a stall stops one short of it.")]
+    [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
 
     [Header("Debug")]
     [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
@@ -85,6 +87,7 @@ public class Intel : MonoBehaviour
     public float GatherTime => _gatherTime;
     public float ReactTime => _reactTime;
     public float CallTime => _callTime;
+    public float SearchAreaRadius => _searchAreaRadius;
 
     /// <summary>
     /// The behaviour map every enemy reads. Null only when the asset is missing, which OnEnable
@@ -141,7 +144,7 @@ public class Intel : MonoBehaviour
     /// <summary>How long a job stays in its current step, in seconds, as fixed when the step began. Zero for a step that waits on someone, not the clock.</summary>
     public float StepDuration(GroupJob job) => _board.StepDuration(job);
 
-    /// <summary>A member has reached the spot, been blocked short of it or run out of time walking. The first one moves the job on.</summary>
+    /// <summary>A member has reached the spot, or stopped short of it. A Check moves on at the first; a Search when every member has (see JobBoard.NoteArrived).</summary>
     public void NoteArrived(GroupJob job, EnemyController who) => _board.NoteArrived(job, who);
 
     /// <summary>The member who goes to the spot while the rest follow, or null for a Search (see JobBoard).</summary>
@@ -301,6 +304,9 @@ public class Intel : MonoBehaviour
 
     /// <summary>Takes an enemy off his job (see JobBoard.Leave).</summary>
     public void Leave(EnemyController who) => _board.Leave(who);
+
+    /// <summary>Takes a member off a search he can't reach and sends him back to his patrol (see JobBoard.DropFromSearch).</summary>
+    public void DropFromSearch(EnemyController who, string why) => _board.DropFromSearch(who, why);
 
     /// <summary>Whether a point is at a job's place (see JobBoard.Covers).</summary>
     public bool Covers(GroupJob job, Vector3 point) => _board.Covers(job, point);

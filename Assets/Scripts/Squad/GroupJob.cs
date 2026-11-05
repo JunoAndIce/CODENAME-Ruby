@@ -134,6 +134,7 @@ public class GroupJob
         if (who.Job == this) who.Job = null;
         if (Checker == who) Checker = null;
         if (Callee == who) Callee = null;
+        _arrived.Remove(who);
     }
 
     internal void RestartClock() => StepElapsed = 0f;
@@ -144,17 +145,44 @@ public class GroupJob
         Step = step;
         StepElapsed = 0f;
         StepLength = length;
+        // Back to walking: nobody has reached the spot yet.
+        if (step == JobStep.Go) _arrived.Clear();
+    }
+
+    // Who has reached the spot, for a Search in Go: its clock starts once every member has (decision 12).
+    // Cleared whenever the job goes back to Go, since the place may have moved.
+    private readonly HashSet<EnemyController> _arrived = new();
+
+    /// <summary>
+    /// A member has reached the spot. A Check moves on from Go to its look at the first arrival, the
+    /// checker's. A Search marks him and moves on to its search only when every current member has
+    /// arrived, so a member called from far away isn't left with no search time. False when the job
+    /// didn't move: it wasn't going (a late arrival, or a second one), or someone is still walking.
+    /// The length is that of the look or the search the job moves on to.
+    /// </summary>
+    internal bool NoteArrived(EnemyController who, float length)
+    {
+        if (Step != JobStep.Go) return false;
+        if (Kind == JobKind.Check)
+        {
+            SetStep(JobStep.Look, length);
+            return true;
+        }
+        _arrived.Add(who);
+        return TryStartSearch(length);
     }
 
     /// <summary>
-    /// The first member has reached the spot: the job moves on from Go to its look or its search.
-    /// False when it wasn't going, which is how a late arrival, or a second one, does nothing.
-    /// The length is that of the look or the search the job moves on to.
+    /// A Search in Go moves on to its search when every member has arrived. Also asked when a member
+    /// leaves (JobBoard.Leave): otherwise the job would wait for someone who is gone, for good. False
+    /// for anything but a Search in Go, for a job with nobody in it, and while anyone is still walking.
     /// </summary>
-    internal bool NoteArrived(float length)
+    internal bool TryStartSearch(float length)
     {
-        if (Step != JobStep.Go) return false;
-        SetStep(Kind == JobKind.Check ? JobStep.Look : JobStep.Search, length);
+        if (Kind != JobKind.Search || Step != JobStep.Go || _members.Count == 0) return false;
+        foreach (EnemyController member in _members)
+            if (!_arrived.Contains(member)) return false;
+        SetStep(JobStep.Search, length);
         return true;
     }
 
@@ -174,6 +202,7 @@ public class GroupJob
     internal void Restart(float gatherLength)
     {
         Checker = null;
+        _arrived.Clear();
         // Still calling people in: carry on, the walk will start from the new place afterwards.
         if (Step == JobStep.Call) return;
         if (Kind == JobKind.Check && Count > 1) SetStep(JobStep.Gather, gatherLength);

@@ -31,6 +31,8 @@ public class SearchingState : EnemyStateBase
     // On a job: he has reached the spot, been blocked short of it, or run out of time walking there.
     private bool _arrived;
     private float _walkTimer;
+    // The line about a stall outside the search area is said once per walk, not every step.
+    private bool _loggedBlocked;
     // He was on a job when last looked at. Seeing it gone while he is still searching means he was
     // taken off it without leaving the state, and his job-less steps are from some earlier search.
     private bool _onJob;
@@ -121,6 +123,7 @@ public class SearchingState : EnemyStateBase
         _stepTimer = 0f;
         _distractLeft = 0f;
         _arrived = false;
+        _loggedBlocked = false;
         _walkTimer = 0f;
         _onJob = Job != null;
         // A member's steps are the job's, not his own.
@@ -212,7 +215,9 @@ public class SearchingState : EnemyStateBase
 
     // On a job the walk is the one thing a member times himself: the job's clock runs every other
     // step. It keeps one he can't reach (blocked, a crowded doorway) from walking for good. A
-    // follower isn't walking to the spot, so his time isn't limited here.
+    // follower isn't walking to the spot, so his time isn't limited here. In a Search everyone walks, so
+    // it limits everyone until he arrives, and running out of time means he can't reach the spot: he
+    // is taken off the job (decision 12) instead of stopping where he is, which a Check still does.
     private void TickJob()
     {
         if (_arrived || Job.Step is JobStep.Call or JobStep.Gather or JobStep.StandDown or JobStep.Done) return;
@@ -221,8 +226,14 @@ public class SearchingState : EnemyStateBase
         if (checker != null && checker != Enemy) return;
 
         _walkTimer += Time.deltaTime;
-        if (_walkTimer >= Enemy.SearchTravelLimit)
-            Arrive($"{Enemy.name} hasn't reached the spot in {Enemy.SearchTravelLimit:0.#}s; he stops where he is");
+        if (_walkTimer < Enemy.SearchTravelLimit) return;
+
+        if (Job.Kind == JobKind.Search)
+        {
+            Enemy.Intel.DropFromSearch(Enemy, $"he hasn't reached the spot in {Enemy.SearchTravelLimit:0.#}s");
+            return;
+        }
+        Arrive($"{Enemy.name} hasn't reached the spot in {Enemy.SearchTravelLimit:0.#}s; he stops where he is");
     }
 
     // The gesture is a pause and a line until there is an animation for it.
@@ -287,8 +298,8 @@ public class SearchingState : EnemyStateBase
     }
 
     // His part of the job's step. The team gathers facing the spot. Then one member, the checker (a
-    // check) or everyone (a search), walks there, and the first to arrive moves the job on. The
-    // others of a check follow the checker. Then the one who's there looks for the job's time, and
+    // check) or everyone (a search), walks there. The checker's arrival moves a check on; a search
+    // waits for everyone's. The others of a check follow the checker. Then the one who's there looks for the job's time, and
     // everyone holds for the gesture.
     private void FixedTickJob(GroupJob job)
     {
@@ -338,6 +349,7 @@ public class SearchingState : EnemyStateBase
             return;
         }
 
+        // False too when he was taken off the job (WalkToSpot): his Job is null and there is nothing to read.
         if (!_arrived && !WalkToSpot(job)) return;
 
         if (job.Step == JobStep.Go)
@@ -376,14 +388,39 @@ public class SearchingState : EnemyStateBase
         Enemy.ChaseTo(checker.transform, Enemy.SearchSpeed * Enemy.FollowSpeedFactor);
     }
 
-    // True once he has arrived this step, false while he is still walking.
+    // True once he has arrived this step, false while he is still walking, and false when he has been
+    // taken off the job (his Job is null): the caller returns at once.
+    //
+    // A Check keeps its rules: a stall or no path means he looks from where he stands. A Search, by the
+    // user's rule, loses a member that can't reach it: no path at all removes him (after the warning),
+    // and a stall isn't "can't reach", so he has arrived only when the stall is inside Search Area Radius
+    // of the spot. Farther out he keeps trying (MoveToArea steers on every call and keeps returning
+    // Blocked until he makes progress), and Search Travel Limit (TickJob) bounds it.
     private bool WalkToSpot(GroupJob job)
     {
         NavResult result = Enemy.WalkTo(job.Point, Enemy.SearchReach, Enemy.SearchSpeed);
         if (result == NavResult.Moving) return false;
 
+        bool search = job.Kind == JobKind.Search;
         if (result == NavResult.Unreachable)
+        {
+            if (search)
+            {
+                string reason = Enemy.Navigator.FailureReason;
+                Debug.LogWarning($"{Enemy.name} can't reach the spot ({reason}); he is taken off {job}.", Enemy);
+                Enemy.Intel.DropFromSearch(Enemy, $"he can't reach the spot ({reason})");
+                return false;
+            }
             Debug.LogWarning($"{Enemy.name} can't reach the spot ({Enemy.Navigator.FailureReason}); he looks from where he stands.", Enemy);
+        }
+        if (result == NavResult.Blocked && search
+            && PathGrid.FlatDistance(Enemy.transform.position, job.Point) > Enemy.Intel.SearchAreaRadius)
+        {
+            if (!_loggedBlocked)
+                DebugLog.Info($"{Enemy.name} is blocked {PathGrid.FlatDistance(Enemy.transform.position, job.Point):0.#} m from the spot, outside the search area; he keeps trying.", Enemy);
+            _loggedBlocked = true;
+            return false;
+        }
         Arrive(result switch
         {
             NavResult.Arrived => $"{Enemy.name} reaches the spot",
@@ -394,7 +431,7 @@ public class SearchingState : EnemyStateBase
     }
 
     // He is as close as he will get. He faces the spot, so the sweep he joins is about it and ends
-    // on it, and tells the squad: the first member to arrive moves the job from Go to its look.
+    // on it, and tells the squad: a Check's first arrival moves the job from Go to its look, a Search's last one to its search.
     private void Arrive(string why)
     {
         _arrived = true;
