@@ -82,7 +82,7 @@
     - **A member who can't reach it is taken off the job and goes back to his patrol.**
     - Open, to settle when it's planned:
       - What counts as "can't reach": **settled (user, 2026-11-04): no path at all, or still not there after Search Travel Limit.**
-      - Does a Check's Look wait for the team the same way, or only a Search?
+      - Does a Check's Look wait for the team the same way: **settled (user, 2026-11-04): no, only a Search.** In a Check only the checker walks to the spot.
       - An unreachable attack search makes him wary: does he go back to his Aggressive route?
       - Should being taken off log why, as other membership changes do?
 13. **A gunshot extends the search (added 2026-11-03, not yet planned to a task).** *(User: "A gunshot should extend the search timer for 4-5 more seconds.")*
@@ -102,9 +102,10 @@
     - **A job that loses a member alerts the others on it.** Decision 14 covers only a death, and decision 10 only what an enemy sees. Today a member leaving is only a log line and, for the checker, a handover.
     - This widens decision 14, so they should be planned together.
     - Open, to settle when it's planned:
-      - Which losses count: grabbed, knocked down, killed, or also one who leaves for Aggro, is called away, or can't reach?
-      - What does the alert do: Aggro, as for a death, or an upgrade of the job to an attack?
-      - Does it need noticing, as decision 14's death does?
+    - **Settled (user, 2026-11-04):**
+      - **Which losses:** grabbed, knocked down or killed, and it alerts the job members **who saw it happen**. *("Since we will later add enemies walking around on search this will be easy for them to spot.")* One who leaves on his own (to Aggro, called away, can't reach) alerts nobody.
+      - **The alert:** Aggro at once, **onto Ruby's location**. *("They aren't stupid. We will have flavor animations in between like getting surprised and other stuff but aggro is the end goal.")*
+    - **To plan with decisions 10 and 14,** which this settles the shape of: seeing it is what counts, and it teaches them where she is.
 
 ## Global Constraints
 
@@ -285,6 +286,7 @@
 
 **Files:** `Assets/Scripts/Squad/Intel.cs`, `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/Squad/EnemyMemory.cs`, `Assets/Scripts/States/SearchingState.cs`
 
+- [ ] **Step 0: The clock waits for the team (decision 12).** A Search's countdown starts once every member has reached the spot. One who can't reach it (no path, or Search Travel Limit run out) leaves the job, with a log line saying why, and goes back to his patrol. A Check is unchanged.
 - [ ] **Step 1: Roam.** In a Search's Search step each member walks random open spots within Search Area Radius (6 m, on `Intel`) of the job's place, looks at each for Look Time, and picks the next, until the job is Done. A run of failed spots ends his part with a log line.
 - [ ] **Step 2: Joining from Aggro.** `Intel.JoinFromAggro(who, point)`, from `SearchingState.Enter` when he enters from Aggro:
   - **A job within Job Match Radius:** he raises it to an attack (once per area, see below), and joins it if it has room. If it is full, he goes to Patrol Aggressive, as the spec has it.
