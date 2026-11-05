@@ -81,7 +81,7 @@
     - **The search countdown starts once every member has reached the area,** not when the first one does.
     - **A member who can't reach it is taken off the job and goes back to his patrol.**
     - Open, to settle when it's planned:
-      - What counts as "can't reach": no path at all, or also running out Search Travel Limit?
+      - What counts as "can't reach": **settled (user, 2026-11-04): no path at all, or still not there after Search Travel Limit.**
       - Does a Check's Look wait for the team the same way, or only a Search?
       - An unreachable attack search makes him wary: does he go back to his Aggressive route?
       - Should being taken off log why, as other membership changes do?
@@ -94,10 +94,17 @@
 14. **A job mate's death sends the others to Aggro (added 2026-11-03, not yet planned to a task).** *(User: "An anemy can die next to his job partner and the other enemy will simply not do anything. Add a note for later. Enemies should respond to their job mates death by aggroing Ruby immediately.")*
     - **When a member of a job dies, the other members go to Aggro on Ruby at once.**
     - Open, to settle when it's planned:
-      - Where do they think she is if none of them can see her: the newest thing they know, or does the death teach them something (the killing shot's origin, the chain's source)?
+      - Where do they think she is if none of them can see her: **settled (user, 2026-11-04): the death teaches them, from the killing shot's origin or the chain's source.**
       - If they know nothing about where she is, Aggro searches where he stands (today's rule): is that right here?
-      - Does a death at any distance count, or only one a member could see or hear?
+      - Does a death at any distance count: **settled (user, 2026-11-04): only one a member could see or hear.** A checker killed round a corner can go unnoticed by his followers.
       - Does it also apply to a member killed by something other than Ruby, such as a crate he was hit by after it was thrown? And what ends the job, since its members have all left it?
+15. **A job notices when it loses a member (added 2026-11-04, not yet planned to a task).** *(User: "a check and a search should notice when an enemy has been removed? did we already have that as a note? Jobs that lose members should alert other members on the job.")*
+    - **A job that loses a member alerts the others on it.** Decision 14 covers only a death, and decision 10 only what an enemy sees. Today a member leaving is only a log line and, for the checker, a handover.
+    - This widens decision 14, so they should be planned together.
+    - Open, to settle when it's planned:
+      - Which losses count: grabbed, knocked down, killed, or also one who leaves for Aggro, is called away, or can't reach?
+      - What does the alert do: Aggro, as for a death, or an upgrade of the job to an attack?
+      - Does it need noticing, as decision 14's death does?
 
 ## Global Constraints
 
