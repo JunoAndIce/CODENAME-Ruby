@@ -157,7 +157,7 @@ public class JobBoard
     // restarts whichever clock times the call.
     private bool CallIn(GroupJob job, EnemyController next)
     {
-        if (next == null || !next.CanJoinJob(job.Priority))
+        if (next == null || !next.CanJoinJob(job.Priority) || job.WasDropped(next))
         {
             DebugLog.Info($"{job.Lead.name} doesn't call {(next != null ? next.name : "an officer who is gone")}: he is no longer free.", job.Lead);
             return false;
@@ -243,6 +243,8 @@ public class JobBoard
         GroupJob job = who.Job;
         if (job == null) return;
         DebugLog.Info($"{who.name} is taken off {job}: {why}.", who);
+        // Recorded first: the job's fill and call-in skip him, or he would be called straight back.
+        job.NoteDropped(who);
         Leave(who);
         who.Searching.Dismiss(why);
     }
@@ -405,8 +407,18 @@ public class JobBoard
             return;
         }
 
-        if (who.Memory.NoteRaisedAt(job.Point, _intel.JobMatchRadius))
-            Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has just lost Ruby near it");
+        // A lost fight makes the job a Search for an attack, so the fighters search where she was last known
+        // together; raising only the reason left a Check as a 1.5 s look. It needs raising when it is a Check
+        // or not yet an attack, and only then is the once-per-area record consulted, so a raise that would
+        // change nothing doesn't use it up. Upgrade restarts a Check into a Search, re-follows the members,
+        // latches them wary and lifts the priority to a lost fight's; the place doesn't move.
+        if ((job.Kind == JobKind.Check || job.Reason != StimulusResponse.SearchForAttack)
+            && who.Memory.NoteRaisedAt(job.Point, _intel.JobMatchRadius))
+        {
+            DebugLog.Info($"{who.name} has just lost Ruby near {job}: it becomes a search for an attack.", who);
+            bool restarted = Upgrade(job, new Incident(job.Point, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority), JobKind.Search);
+            ChooseAfterRestart(job, restarted);
+        }
 
         if (!job.Recruiting)
         {
@@ -420,8 +432,9 @@ public class JobBoard
         ReconsiderOnJoin(job);
     }
 
-    // A job always starts this one way: a sound's first listener (Handle) and an extra a merge sent
-    // elsewhere (MergeExtras) both lead a new job and call in the free enemies near them. He must be
+    // A job always starts this one way: a sound's first listener (Handle), an extra a merge sent
+    // elsewhere (MergeExtras) and an enemy who has lost a fight with no job at his spot (JoinFromAggro)
+    // all lead a new job and call in the free enemies near them. He must be
     // off any job already. Returns the job, or the one he is on when it refused him.
     private GroupJob StartJob(EnemyController who, Incident incident, JobKind kind)
     {
@@ -512,7 +525,7 @@ public class JobBoard
 
         // Floors are independent, so a sound upstairs is never the place of a job downstairs, however
         // near they are in the plan. A point on no grid is nobody's place: Hear warns about a sound
-        // there, and a job started off the grid warns when it starts (Handle).
+        // there, and a job started off the grid warns when it starts (StartJob).
         PathGrid floor = PathGrid.At(job.Point);
         return floor != null && floor == PathGrid.At(point);
     }
@@ -794,7 +807,7 @@ public class JobBoard
     {
         IReadOnlyList<EnemyController> enemies = _intel.Enemies;
         for (int i = 0; i < enemies.Count; i++)
-            if (enemies[i] != job.Lead && enemies[i].CanJoinJob(job.Priority)) return true;
+            if (enemies[i] != job.Lead && enemies[i].CanJoinJob(job.Priority) && !job.WasDropped(enemies[i])) return true;
         return false;
     }
 
@@ -824,7 +837,9 @@ public class JobBoard
         for (int i = 0; i < enemies.Count; i++)
         {
             EnemyController enemy = enemies[i];
-            if (enemy == lead || !enemy.CanJoinJob(job.Priority)) continue;
+            // One this job dropped for not reaching the spot isn't called back. His own stimulus (Handle)
+            // can still put him on it: that is a new thing he heard or saw, and stimuli are bounded.
+            if (enemy == lead || !enemy.CanJoinJob(job.Priority) || job.WasDropped(enemy)) continue;
             // An enemy off the grid is no candidate and, unlike a listener, is not warned about.
             if (_calling.Measure(enemy, _intel.SpeechRange, out float metres) != FloorReach.Standing.InRange) continue;
             _candidates.Add(new Candidate { Enemy = enemy, Metres = metres });

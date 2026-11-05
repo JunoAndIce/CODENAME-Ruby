@@ -10,7 +10,7 @@ public enum SearchStep { Walk, Look, StandDown, Done }
 /// (the usual case for a sound or a sight) the job decides what each step is and when it ends, and he
 /// plays his part: he holds while the team gathers, walks to the spot, looks around it, stands down,
 /// and finishes when the job does, so a team ends together. **Without a job** (a glance at something
-/// already known, or after a lost fight until jobs take that over) he runs his own steps: a search for
+/// already known, or a scene with no Intel) he runs his own steps: a search for
 /// an attack looks for Search Duration, a check on a problem looks for Look Time and then stands down
 /// with a gesture. Which patrol he goes back to is the table's business (EnemyController.IsAggressive).
 /// **A Search's team goes there together and roams:** its countdown starts once every member has
@@ -127,7 +127,8 @@ public class SearchingState : EnemyStateBase
     }
 
     /// <summary>
-    /// Ends his search at once, for an extra a merge couldn't fit on its job: he is off every job and
+    /// Ends his search at once, for an enemy his job can't keep or take: an extra a merge couldn't fit, one
+    /// dropped for not reaching a Search's spot, or one who lost a fight beside a full job. He is off every job and
     /// Finished reads true, so the table sends him back to Patrol or Idle. Cleared _onJob is what
     /// stops SyncJob warning "off his job but still searching" for what is deliberate here. Call it
     /// after the job board has taken him off his job: with one, Finished would still read the job.

@@ -172,6 +172,14 @@ public class GroupJob
         return TryStartSearch(length);
     }
 
+    // Who this job took off for not reaching the spot. Without it the next fill calls him straight back,
+    // he walks up to another Search Travel Limit, and two stuck members on staggered timers could keep a
+    // Search in Go for good. Cleared by Restart: a moved place or a conversion is a different walk.
+    private readonly HashSet<EnemyController> _dropped = new();
+    internal void NoteDropped(EnemyController who) => _dropped.Add(who);
+    /// <summary>He was taken off this job for not reaching the spot, so it doesn't call him again.</summary>
+    public bool WasDropped(EnemyController who) => _dropped.Contains(who);
+
     /// <summary>
     /// A Search in Go moves on to its search when every member has arrived. Also asked when a member
     /// leaves (JobBoard.Leave): otherwise the job would wait for someone who is gone, for good. False
@@ -203,6 +211,7 @@ public class GroupJob
     {
         Checker = null;
         _arrived.Clear();
+        _dropped.Clear();
         // Still calling people in: carry on, the walk will start from the new place afterwards.
         if (Step == JobStep.Call) return;
         if (Kind == JobKind.Check && Count > 1) SetStep(JobStep.Gather, gatherLength);
