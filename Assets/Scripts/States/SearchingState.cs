@@ -16,6 +16,8 @@ public enum SearchStep { Walk, Look, StandDown, Done }
 /// **A Search's team goes there together and roams:** its countdown starts once every member has
 /// arrived (a member who can't reach the spot is taken off the job), and then each walks random open
 /// spots within Search Area Radius of the place, looking at each for Look Time, until the job is done.
+/// One who enters it after losing a fight joins or starts a job at the spot he knew (AfterLostFight,
+/// Intel.JoinFromAggro), or goes back to patrol if the team there is full.
 /// </summary>
 public class SearchingState : EnemyStateBase
 {
@@ -89,6 +91,13 @@ public class SearchingState : EnemyStateBase
         }
         Apply(request);
         Begin();
+        // Having lost a fight he joins or starts a job at the spot, so the squad searches together. Here
+        // and not in AggroState.Exit, which runs while he is still in Aggro. It doesn't re-enter the
+        // machine: SetState has made Searching current before calling Enter, so the job board's FollowJob
+        // takes its Retarget branch and never calls SetState. With no Intel he keeps the search of his own
+        // he has just begun (a scene with no Intel is reported elsewhere).
+        if (request.AfterLostFight && Enemy.Intel != null)
+            Enemy.Intel.JoinFromAggro(Enemy, request.Incident.Point);
     }
 
     public override void Exit()

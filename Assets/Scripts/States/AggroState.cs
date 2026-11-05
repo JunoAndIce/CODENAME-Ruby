@@ -59,7 +59,10 @@ public class AggroState : EnemyStateBase
     // fight and blind the guard in SearchingState.Enter. LostPlayer holds between the table's read and
     // here: same call, same frame, and sight and contact are cached per frame. A grab, knockdown or
     // death landing on the very tick he lost her still leaves one pending. It can't start a wrong
-    // search, since he comes back through Aggro first, but until then the guard can't see a missing request.
+    // search: every way into Searching asks afresh first (BeginSearch, and this), overwriting it, and
+    // he comes back through Aggro before either, but until then the guard can't see a missing request.
+    // The request is marked AfterLostFight, so SearchingState.Enter has him join or start a job at the
+    // spot (Intel.JoinFromAggro) instead of searching alone.
     public override void Exit()
     {
         Firing = false;
@@ -69,7 +72,7 @@ public class AggroState : EnemyStateBase
             // mouth and never saw her would otherwise lose the fight and go back to a Normal patrol.
             Enemy.Reactions.BecomeWary();
             Vector3 known = Enemy.TryGetNewestRuby(out Vector3 newest) ? newest : Enemy.transform.position;
-            Enemy.RequestSearch(new SearchRequest(new Incident(known, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority)));
+            Enemy.RequestSearch(new SearchRequest(new Incident(known, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority), afterLostFight: true));
         }
         if (Enemy.IsArmed) Enemy.Arms.Lower();
     }

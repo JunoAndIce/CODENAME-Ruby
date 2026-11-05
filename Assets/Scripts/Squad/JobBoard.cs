@@ -381,11 +381,43 @@ public class JobBoard
         }
 
         if (own != null) Leave(who);
-        // Nothing can match a job on no grid (Covers needs a floor), so say so now rather than let
-        // every later sound there start a job of its own without a word.
-        if (PathGrid.At(incident.Point) == null)
-            Debug.LogWarning($"{who.name} starts a job at {incident.Point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
         return StartJob(who, incident, kind);
+    }
+
+    /// <summary>
+    /// An enemy has just lost a fight and begun a search at `point` (SearchingState.Enter, on a request
+    /// AggroState.Exit marked AfterLostFight). He is already searching, so a join retargets him and never
+    /// reaches the machine's SetState. In order:
+    /// 1. **A job is at that place:** he raises it to an attack, once per area (EnemyMemory.NoteRaisedAt,
+    ///    so the Aggro-and-back flip can't raise it each time), and joins it if it has room. A full job, or
+    ///    one past recruiting, dismisses him: he is wary (the exit latched it), so he walks his Aggressive
+    ///    patrol, which is the spec's "the rest go to Patrol Aggressive".
+    /// 2. **None is:** he starts a Search for an attack there, as lead, at the priority a search from
+    ///    Aggro has, which outranks every row of the map. He calls in the free enemies near him, and the
+    ///    rest of the fight's enemies join as they lose her, up to the cap.
+    /// </summary>
+    public void JoinFromAggro(EnemyController who, Vector3 point)
+    {
+        GroupJob job = FindMatch(point);
+        if (job == null)
+        {
+            StartJob(who, new Incident(point, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority), JobKind.Search);
+            return;
+        }
+
+        if (who.Memory.NoteRaisedAt(job.Point, _intel.JobMatchRadius))
+            Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has just lost Ruby near it");
+
+        if (!job.Recruiting)
+        {
+            string why = job.IsFull ? "it is full" : "it has gone past needing anyone";
+            who.Searching.Dismiss($"{job} can't take him ({why}), so he goes back to patrol, aggressively");
+            return;
+        }
+        // Refused (JoinMember has said why): nothing more to do. He is on no job, and keeps his own search.
+        if (!JoinMember(job, who)) return;
+        DebugLog.Info($"{who.name} joins {job}.", who);
+        ReconsiderOnJoin(job);
     }
 
     // A job always starts this one way: a sound's first listener (Handle) and an extra a merge sent
@@ -393,6 +425,10 @@ public class JobBoard
     // off any job already. Returns the job, or the one he is on when it refused him.
     private GroupJob StartJob(EnemyController who, Incident incident, JobKind kind)
     {
+        // Nothing can match a job on no grid (Covers needs a floor), so say so now rather than let
+        // every later sound there start a job of its own without a word.
+        if (PathGrid.At(incident.Point) == null)
+            Debug.LogWarning($"{who.name} starts a job at {incident.Point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
         var job = new GroupJob(kind, incident, _intel.JobCap);
         _jobs.Add(job);
         if (!JoinMember(job, who))

@@ -305,6 +305,9 @@ public class Intel : MonoBehaviour
     /// <summary>Takes an enemy off his job (see JobBoard.Leave).</summary>
     public void Leave(EnemyController who) => _board.Leave(who);
 
+    /// <summary>An enemy who has just lost a fight joins or starts a job at the spot he searches (see JobBoard.JoinFromAggro).</summary>
+    public void JoinFromAggro(EnemyController who, Vector3 point) => _board.JoinFromAggro(who, point);
+
     /// <summary>Takes a member off a search he can't reach and sends him back to his patrol (see JobBoard.DropFromSearch).</summary>
     public void DropFromSearch(EnemyController who, string why) => _board.DropFromSearch(who, why);
 

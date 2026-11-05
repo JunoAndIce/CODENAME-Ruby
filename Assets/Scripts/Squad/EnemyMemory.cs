@@ -106,6 +106,23 @@ public class EnemyMemory
     /// <summary>He has seen her or been told of her: what makes him patrol aggressively and read every disturbance as an attack.</summary>
     public bool KnowsRuby => HasSeenRuby || WasToldOfRuby;
 
+    private Vector3 _raisedAt;
+    private bool _hasRaisedAt;
+
+    /// <summary>
+    /// Whether he should raise a job to an attack for having lost a fight, once per area: true, and the
+    /// place is recorded, the first time or when it is at least radius (flat) from the one recorded; false
+    /// when it is the same area. The flip from Aggro to Searching can repeat within one fight, and he
+    /// mustn't raise the job each time. Only the raise is once per area: he still joins.
+    /// </summary>
+    public bool NoteRaisedAt(Vector3 point, float radius)
+    {
+        if (_hasRaisedAt && PathGrid.FlatDistance(_raisedAt, point) < radius) return false;
+        _raisedAt = point;
+        _hasRaisedAt = true;
+        return true;
+    }
+
     private readonly List<float> _distractions = new();
 
     /// <summary>
