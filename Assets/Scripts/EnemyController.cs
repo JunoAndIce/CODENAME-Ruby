@@ -50,6 +50,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Header("Looking")]
     [Tooltip("How long he looks around a spot he went to check, in seconds, before standing down. A search for an attack looks for Search Duration instead.")]
     [SerializeField, Min(0.1f)] private float _lookTime = 1.5f;
+    [Tooltip("How much each look varies while he roams a search, as a share of Look Time: at 0.5 each lasts from half to one and a half times Look Time. Rolled for every look, so a team doesn't move off together.")]
+    [SerializeField, Range(0f, 0.9f)] private float _roamLookVariation = 0.5f;
     [Tooltip("How long he holds still after finding nothing, in seconds: the gesture, until there is an animation for it.")]
     [SerializeField, Min(0f)] private float _standDownTime = 1f;
     [Tooltip("How far, in degrees, his body turns to each side of where he was facing while he looks around.")]
@@ -178,6 +180,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float SearchTravelLimit => _searchTravelLimit;
     public float SearchReach => _searchReach;
     public float LookTime => _lookTime;
+    public float RoamLookVariation => _roamLookVariation;
     public float StandDownTime => _standDownTime;
     public float FollowDistance => _followDistance;
     public float FollowSpeedFactor => _followSpeedFactor;

@@ -38,7 +38,7 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0f)] private float _reactTime = 0.5f;
     [Tooltip("How long each call takes, in seconds: he turns to the nearest enemy and calls him, and that enemy turns to face him. Then the next nearest, and so on.")]
     [SerializeField, Min(0f)] private float _callTime = 0.6f;
-    [Tooltip("How far from a search's place, in metres, its members roam while they search, and how near the place counts as having reached the area when a stall stops one short of it.")]
+    [Tooltip("How far from a search's place, in metres, its members roam while they search. A member starts as soon as he is this near with a clear line to the place, and the search's countdown starts when the last member has.")]
     [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
 
     [Header("Debug")]
@@ -144,7 +144,7 @@ public class Intel : MonoBehaviour
     /// <summary>How long a job stays in its current step, in seconds, as fixed when the step began. Zero for a step that waits on someone, not the clock.</summary>
     public float StepDuration(GroupJob job) => _board.StepDuration(job);
 
-    /// <summary>A member has reached the spot, or stopped short of it. A Check moves on at the first; a Search when every member has (see JobBoard.NoteArrived).</summary>
+    /// <summary>A member has reached the spot or a Search's area, or stopped short of it. A Check moves on at the first; a Search when every member has (see JobBoard.NoteArrived).</summary>
     public void NoteArrived(GroupJob job, EnemyController who) => _board.NoteArrived(job, who);
 
     /// <summary>The member who goes to the spot while the rest follow, or null for a Search (see JobBoard).</summary>

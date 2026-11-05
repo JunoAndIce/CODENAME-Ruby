@@ -222,13 +222,15 @@ public class JobBoard
 
     /// <summary>
     /// A member has reached the spot, or stopped short of it. A Check moves on at the first arrival (the
-    /// checker's). A Search moves on when the last member arrives, so its countdown starts with the whole
-    /// team there; the line names that last one.
+    /// checker's). A Search counts a member as arrived once he is in its area, and moves on when the last
+    /// one is, so its countdown starts with the whole team there; the line names that last one.
     /// </summary>
     public void NoteArrived(GroupJob job, EnemyController who)
     {
         if (!job.NoteArrived(who, LengthOf(job.Kind == JobKind.Check ? JobStep.Look : JobStep.Search, job.Lead))) return;
-        DebugLog.Info($"{who.name} reaches the spot: {job} {(job.Kind == JobKind.Check ? "looks" : "searches")}.", who);
+        DebugLog.Info(job.Kind == JobKind.Check
+            ? $"{who.name} reaches the spot: {job} looks."
+            : $"{who.name} is the last into the search area: {job} searches.", who);
     }
 
     /// <summary>
