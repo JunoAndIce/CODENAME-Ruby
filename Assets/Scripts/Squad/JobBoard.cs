@@ -390,10 +390,11 @@ public class JobBoard
     /// An enemy has just lost a fight and begun a search at `point` (SearchingState.Enter, on a request
     /// AggroState.Exit marked AfterLostFight). He is already searching, so a join retargets him and never
     /// reaches the machine's SetState. In order:
-    /// 1. **A job is at that place:** he raises it to an attack, once per area (EnemyMemory.NoteRaisedAt,
-    ///    so the Aggro-and-back flip can't raise it each time), and joins it if it has room. A full job, or
-    ///    one past recruiting, dismisses him: he is wary (the exit latched it), so he walks his Aggressive
-    ///    patrol, which is the spec's "the rest go to Patrol Aggressive".
+    /// 1. **A job is at that place:** if it's a Check or not yet an attack, he makes it a Search for an
+    ///    attack at a lost fight's priority, once per area (EnemyMemory.NoteRaisedAt, so the Aggro-and-back
+    ///    flip can't raise it each time), and joins it if it has room. A full job dismisses him: he is wary
+    ///    (the exit latched it), so he walks his Aggressive patrol, which is the spec's "the rest go to
+    ///    Patrol Aggressive".
     /// 2. **None is:** he starts a Search for an attack there, as lead, at the priority a search from
     ///    Aggro has, which outranks every row of the map. He calls in the free enemies near him, and the
     ///    rest of the fight's enemies join as they lose her, up to the cap.
