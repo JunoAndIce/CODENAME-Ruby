@@ -262,11 +262,11 @@
 
 **Files:** `Assets/Scripts/Squad/Intel.cs`, `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/States/SearchingState.cs`, `Assets/Scripts/EnemyController.cs`
 
-- [ ] **Step 1: Fill.** Each Intel Interval, for each open job that is recruiting and has room, run recruiting again from its lead (one flood per job, read before anything else floods). Free officers join, nearest first.
-- [ ] **Step 2: Merge.** Each interval, any two open jobs whose places are within Job Match Radius merge: the older stays, members in the older's order then the younger's up to the cap, the priority and reason are the higher of the two, the kind is a Search if either is, and the place is that of the higher priority. The younger closes.
-- [ ] **Step 3: Extras.** The members who don't fit: a problem job dismisses them to patrol (`SearchingState.Dismiss`, which finishes his search at once). An attack job starts each extra team on a Search at a spot of Elsewhere Distance (`PathGrid.RandomSpotInArea`, three tries, never within Job Match Radius of another open job), else dismisses him with a log line. Extras that start a team recruit as a lead does.
-- [ ] **Step 4: Compile and commit,** as in Task 3.
-- [ ] **Step 5: Play-test gate (the user).** No Inspector work. In play:
+- [x] **Step 1: Fill.** Each Intel Interval, for each open job that is recruiting and has room, run recruiting again from its lead (one flood per job, read before anything else floods). Free officers join, nearest first.
+- [x] **Step 2: Merge.** Each interval, any two open jobs whose places are within Job Match Radius merge: the older stays, members in the older's order then the younger's up to the cap, the priority and reason are the higher of the two, the kind is a Search if either is, and the place is that of the higher priority. The younger closes.
+- [x] **Step 3: Extras.** The members who don't fit: a problem job dismisses them to patrol (`SearchingState.Dismiss`, which finishes his search at once). An attack job starts each extra team on a Search at a spot of Elsewhere Distance (`PathGrid.RandomSpotInArea`, three tries, never within Job Match Radius of another open job), else dismisses him with a log line. Extras that start a team recruit as a lead does.
+- [x] **Step 4: Compile and commit,** as in Task 3.
+- [x] **Step 5: Play-test gate (the user).** Passed 2026-11-04. Filling was seen in play. Merging and extras were not: with this level's few enemies a merge needs a job to move near another before either ends, so they rest on the line-by-line review. Telling (Task 6) still hasn't come up in play and is carried to Task 8's gate. No Inspector work. In play:
   - an officer who finishes his own job or is patrolling near an open job with room joins it within about a second;
   - two jobs started about the same place merge into one of up to three;
   - the extras of an attack search another spot, and the extras of a problem return to patrol;
