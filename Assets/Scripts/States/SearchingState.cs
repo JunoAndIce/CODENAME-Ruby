@@ -13,6 +13,9 @@ public enum SearchStep { Walk, Look, StandDown, Done }
 /// already known, or after a lost fight until jobs take that over) he runs his own steps: a search for
 /// an attack looks for Search Duration, a check on a problem looks for Look Time and then stands down
 /// with a gesture. Which patrol he goes back to is the table's business (EnemyController.IsAggressive).
+/// **A Search's team goes there together and roams:** its countdown starts once every member has
+/// arrived (a member who can't reach the spot is taken off the job), and then each walks random open
+/// spots within Search Area Radius of the place, looking at each for Look Time, until the job is done.
 /// </summary>
 public class SearchingState : EnemyStateBase
 {
@@ -33,6 +36,20 @@ public class SearchingState : EnemyStateBase
     private float _walkTimer;
     // The line about a stall outside the search area is said once per walk, not every step.
     private bool _loggedBlocked;
+
+    // Roaming, in a Search's Search step: he walks to a random open spot near the job's place, looks at it for
+    // Look Time, and picks the next. Reset by Begin, so an upgrade or a new place starts him over.
+    private enum RoamPhase { Pick, Walk, Look }
+    private RoamPhase _roamPhase;
+    private Vector3 _roamSpot;
+    private float _roamLookTimer;
+    private float _roamBaseYaw;
+    private int _failedSpots;      // spots in a row he could not pick or reach
+    private bool _roamGaveUp;      // too many failed in a row: he sweeps on the spot for the rest of the job
+    // A run of this many failed spots ends his roaming. One can be bad luck (a crate parked on the way, a
+    // spot another enemy stands on), so a single failure only picks again; a run says the area gives him
+    // nowhere to go, and trying on would be walking into the same wall every second.
+    private const int MaxFailedSpots = 3;
     // He was on a job when last looked at. Seeing it gone while he is still searching means he was
     // taken off it without leaving the state, and his job-less steps are from some earlier search.
     private bool _onJob;
@@ -124,6 +141,9 @@ public class SearchingState : EnemyStateBase
         _distractLeft = 0f;
         _arrived = false;
         _loggedBlocked = false;
+        _roamPhase = RoamPhase.Pick;
+        _failedSpots = 0;
+        _roamGaveUp = false;
         _walkTimer = 0f;
         _onJob = Job != null;
         // A member's steps are the job's, not his own.
@@ -360,9 +380,71 @@ public class SearchingState : EnemyStateBase
             return;
         }
 
+        // A Search's members roam its area for the whole Search step. A Check's look, and a member whose
+        // roaming failed, sweep on the spot instead.
+        if (job.Kind == JobKind.Search && job.Step == JobStep.Search && !_roamGaveUp)
+        {
+            Roam(job);
+            return;
+        }
+
         // The job's clock, not his own, so a late arrival joins the sweep where it is and every
         // member ends it facing the spot together.
         Enemy.LookAround(_lookBaseYaw, job.StepElapsed, Enemy.Intel.StepDuration(job));
+    }
+
+    // Walks random open spots within Search Area Radius of the job's place and looks at each, until the
+    // job ends (it is the job's clock that ends it, so the team finishes together wherever each stands).
+    // The spots are PickSpotInArea's, ground joined to the place's own, so none is through a wall, and at
+    // least half the radius from where he stands, so each walk reads as roaming and not shuffling.
+    private void Roam(GroupJob job)
+    {
+        switch (_roamPhase)
+        {
+            case RoamPhase.Pick:
+                float radius = Enemy.Intel.SearchAreaRadius;
+                if (!Enemy.Navigator.PickSpotInArea(GridArea.Circle(job.Point, radius), radius * 0.5f, out _roamSpot))
+                {
+                    FailSpot($"no spot to roam to ({Enemy.Navigator.FailureReason})", job);
+                    Enemy.Stop();
+                    return;
+                }
+                _roamPhase = RoamPhase.Walk;
+                goto case RoamPhase.Walk;
+
+            case RoamPhase.Walk:
+                NavResult result = Enemy.WanderTo(_roamSpot, Enemy.SearchSpeed);
+                if (result == NavResult.Moving) return;
+                if (result == NavResult.Arrived)
+                {
+                    _failedSpots = 0;
+                    _roamPhase = RoamPhase.Look;
+                    _roamLookTimer = 0f;
+                    _roamBaseYaw = Enemy.transform.eulerAngles.y;
+                    return;
+                }
+                FailSpot($"couldn't {(result == NavResult.Blocked ? "get to" : "reach")} the spot at {_roamSpot} ({Enemy.Navigator.FailureReason})", job);
+                return;
+
+            case RoamPhase.Look:
+                _roamLookTimer += Time.fixedDeltaTime;
+                Enemy.LookAround(_roamBaseYaw, _roamLookTimer, Enemy.LookTime);
+                if (_roamLookTimer >= Enemy.LookTime) _roamPhase = RoamPhase.Pick;
+                return;
+        }
+    }
+
+    // A spot that failed: pick another next step, unless it is the run's last, which ends his roaming. He
+    // is still on the job and finishes with it; he only stops wandering and sweeps where he stands.
+    private void FailSpot(string why, GroupJob job)
+    {
+        _roamPhase = RoamPhase.Pick;
+        if (++_failedSpots < MaxFailedSpots) return;
+
+        _roamGaveUp = true;
+        // The sweep turns about a base facing, and he is nowhere near where he arrived.
+        _lookBaseYaw = Enemy.transform.eulerAngles.y;
+        DebugLog.Info($"{Enemy.name} gives up roaming {job}: {MaxFailedSpots} spots in a row failed, the last {why}; he searches where he stands for the rest of it.", Enemy);
     }
 
     // A follower trails the checker slowly and never closer than Follow Distance: he stops there and
