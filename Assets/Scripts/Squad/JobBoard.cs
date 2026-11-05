@@ -15,7 +15,7 @@ public class JobBoard
     // The open jobs. Live, not published: this is coordination and not knowledge, so two enemies who
     // hear one gunshot in the same frame must find each other's job instead of starting two.
     private readonly List<GroupJob> _jobs = new();
-    // While Advance walks _jobs, a job that empties (AdvanceCall takes its last enemy) is only
+    // While Advance walks _jobs, a job that empties (AdvanceCall or AdvanceFill takes its last enemy) is only
     // marked here and removed after the walk: removing it mid-walk shifted the next job into its slot,
     // and that job missed a tick.
     private bool _advancing;
