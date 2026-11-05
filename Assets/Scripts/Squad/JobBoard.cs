@@ -45,8 +45,9 @@ public class JobBoard
     public IReadOnlyList<GroupJob> Jobs => _jobs;
 
     // The jobs' one clock. A job, not its members, decides when each step ends, so a team looks
-    // together, gestures together and finishes on the same frame: members each timing their own look
-    // is how one said all clear while another walked off aggressive. Go has no duration, because it
+    // together, gestures together and a Check finishes on the same frame: members each timing their own
+    // look is how one said all clear while another walked off aggressive. A Search's Done only ends its
+    // countdown: each member finishes his own walk and look, then leaves. Go has no duration, because it
     // waits for people to reach the spot: the first arrival of a Check, every member of a Search (NoteArrived). Every other timed step ends once
     // its recorded length has passed, so a length of 0 ends it at once, as it does without a job.
     public void Advance(float dt)
