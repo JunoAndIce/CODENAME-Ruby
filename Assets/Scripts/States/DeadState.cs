@@ -16,6 +16,7 @@ public class DeadState : EnemyStateBase
 
     public override void Enter()
     {
+        Enemy.BodyState.NoteDied();
         Enemy.BodyState.DropGun();
         Enemy.BodyState.Darken();
 

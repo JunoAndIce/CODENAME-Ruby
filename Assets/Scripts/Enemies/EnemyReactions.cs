@@ -114,12 +114,12 @@ public class EnemyReactions
     public void BecomeWary() => _enemy.Memory.BecomeWary();
 
     /// <summary>
-    /// He sees the chain move an enemy, by dragging or throwing him: someone is on the other end of
-    /// it, so he goes for her. Taught where she is right now, which is also the chain's source: he
-    /// doesn't go on knowing where she goes after he looks away. Only this and sight of her send him
-    /// to Aggro; a grab that isn't moving, a knockdown or a death is searched (EnemySenses).
+    /// He sees an enemy killed, or the chain drag or throw one: someone is plainly doing this, so he goes
+    /// for her. Taught where she is right now, which is also the chain's source: he doesn't go on knowing
+    /// where she goes after he looks away. A grab that isn't moving, or a knockdown, is searched
+    /// instead (EnemySenses).
     /// </summary>
-    internal void SeeChainMove(EnemyController victim, string how)
+    internal void SeeAttack(EnemyController victim, string how)
     {
         Vector3 ruby = _enemy.Player.transform.position;
         _enemy.Memory.Learn(new RubyFact(ruby, Time.time, Knowledge.Heard));

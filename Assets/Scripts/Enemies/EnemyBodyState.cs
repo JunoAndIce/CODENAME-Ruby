@@ -17,6 +17,8 @@ public class EnemyBodyState
     private Vector3 _heldFrom;
     private Vector3 _thrownFrom;
     private float _thrownAt = float.NegativeInfinity;
+    private Vector3 _diedAtSpot;
+    private float _diedAt = float.NegativeInfinity;
 
     public EnemyBodyState(EnemyController enemy)
     {
@@ -37,6 +39,20 @@ public class EnemyBodyState
     {
         from = _thrownFrom;
         return Time.time - _thrownAt <= within;
+    }
+
+    /// <summary>Whether he died within the last `within` seconds, and where. A watcher tests that spot, not the body, which a killing hit can send many metres by his next scan.</summary>
+    public bool WasKilledWithin(float within, out Vector3 where)
+    {
+        where = _diedAtSpot;
+        return Time.time - _diedAt <= within;
+    }
+
+    /// <summary>He has just died.</summary>
+    public void NoteDied()
+    {
+        _diedAtSpot = _enemy.transform.position;
+        _diedAt = Time.time;
     }
 
     /// <summary>The chain has him: records where he was grabbed and that he is held.</summary>

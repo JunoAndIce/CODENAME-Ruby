@@ -134,6 +134,8 @@
 
 22. **A fast object makes a Search, and a hunt with nothing to go on searches sooner (added and built 2026-11-06).** *(User: "enemies should start a search quicker after aggroing and not aggroing on anything" and "a fast object should warrant a search, something moving that fast is bound to kill and no normal human can launch something that fast".)* Anything at Alarm Speed now makes a Search, so a thrown table or crate is more than one enemy's short look; a slower one stays a Check. An enemy who hasn't seen Ruby at all in the fight holds at the spot he knew for Unseen Hold Time, 1 s, instead of Aggro Time.
 
+23. **Seeing an enemy die sends him after Ruby (added and built 2026-11-06).** *(User: "when 3 died, 4 didn't do anything. Just searched his body.")* This changes decisions 14 and 15 again. Any enemy killed in his view with a clear line, on a job together or not, sends him to Aggro knowing where she is at that moment. A knockdown doesn't: it stays a Search at the throw spot. *(User: "ONLY DEATHS".)* What he sees of a death out of view is unchanged.
+
 ## Global Constraints
 
 - **Values that are my calls** (put in tooltips, retuned in play):

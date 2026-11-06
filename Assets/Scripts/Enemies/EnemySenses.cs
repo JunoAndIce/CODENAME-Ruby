@@ -63,6 +63,7 @@ public class EnemySenses
         // No Intel was reported at Start; there is nothing to report to or read the map from.
         if (_enemy.Intel == null) return;
 
+        ScanDeaths();
         ScanHeld();
 
         // Only the motion scan needs the stimulus rules (Notice and Alarm Speed, Origin Lifetime).
@@ -72,6 +73,26 @@ public class EnemySenses
         if (Stimuli.Rules != null && !TooBusy) ScanMotion(now);
         ScanCorpses();
         ScanLooseGuns();
+    }
+
+    // An enemy killed in his view with a clear line: he goes after Ruby, on a job together or not. A partner
+    // dying beside him and him only searching the body read as not caring, and it's the biggest provocation
+    // there is. A knockdown doesn't do this: it stays a Search at the throw spot (Consider), which keeps a
+    // step between a fall and a death. One scan's window, tested at the spot he died, as for a throw (ScanHeld).
+    private void ScanDeaths()
+    {
+        float window = _enemy.ScanInterval + Time.fixedDeltaTime;
+        IReadOnlyList<EnemyController> enemies = _enemy.Intel.Enemies;
+        for (int i = 0; i < enemies.Count; i++)
+        {
+            EnemyController other = enemies[i];
+            if (other == null || other == _enemy || !other.Health.IsDead) continue;
+            if (!other.BodyState.WasKilledWithin(window, out Vector3 where)) continue;
+            if (!_enemy.Vision.InView(where) || !_enemy.Vision.HasClearSight(where, other.transform)) continue;
+
+            _enemy.Reactions.SeeAttack(other, "killed");
+            return;
+        }
     }
 
     // An enemy on the chain, in his view with a clear line. Standing where he was grabbed, he is walked
@@ -97,7 +118,7 @@ public class EnemySenses
                 if (other.BodyState.WasThrownWithin(throwWindow, out Vector3 from)
                     && _enemy.Vision.InView(from) && _enemy.Vision.HasClearSight(from, other.transform))
                 {
-                    _enemy.Reactions.SeeChainMove(other, "thrown off the chain");
+                    _enemy.Reactions.SeeAttack(other, "thrown off the chain");
                     return;
                 }
                 continue;
@@ -108,7 +129,7 @@ public class EnemySenses
 
             if (other.BodyState.HeldMovedBy > _enemy.DraggedDistance)
             {
-                _enemy.Reactions.SeeChainMove(other, "being dragged on the chain");
+                _enemy.Reactions.SeeAttack(other, "being dragged on the chain");
                 return;
             }
             // Marked only when taken: one he couldn't act on (in a fight, fetching a gun) may still send him.
