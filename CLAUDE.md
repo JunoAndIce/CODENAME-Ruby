@@ -489,7 +489,7 @@ through the player never slows the walk.
   taken in. Between two things he knows, **the newer by time wins**, and on a tie his own beats the
   pool's, because it needed no publish to reach him. `EnemyAwareness.TryGetNewestRuby` combines his
   memory with the pool's published snapshot and is what Aggro chases once she's out of sight.
-  Seeing, remembering and speaking aren't states: `UpdateKnowledge` runs beside the machine.
+  Seeing, remembering and speaking aren't states: `EnemyAwareness.Update` runs beside the machine.
 - **The shared pool** (`KnowledgePool`, a plain class that `Intel`, one per scene, owns and ticks;
   `Intel` forwards `Report`, `ReportBody`, `ReportGun` and `Published`). Officers report into an
   inbox, and every Intel Interval (1 s) the inbox is merged into a **new** immutable `IntelSnapshot`
