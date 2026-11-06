@@ -280,18 +280,20 @@ public class EnemySenses
             DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: it is a {whatKind}. {response} (from {responseFrom}) at priority {priority} (from {priorityFrom}).", _enemy);
             // Its origin is where Ruby threw it from, so that is where they go, and it teaches where she
             // was: unlike a body lying found, it does say something about her. An enemy thrown past them
-            // needs more than one enemy's short look, so it makes a Search there. A flying gun stays a
-            // Check: one knocked out of a hand or flung is far less alarming than a thrown body. With no
-            // origin the point is only where it is, which says nothing about her.
-            if (_enemy.Reactions.Investigate(new Incident(origin, response, priority, makesSearch: isEnemy, saysNothingOfRuby: !hasOrigin))) _reactedAt[body] = now;
+            // needs more than one enemy's short look, so it makes a Search there. So does anything at
+            // Alarm Speed. A slower flying gun stays a Check: one knocked out of a hand is far less alarming.
+            // With no origin the point is only where it is, which says nothing about her.
+            if (_enemy.Reactions.Investigate(new Incident(origin, response, priority, makesSearch: isEnemy || kind == StimulusKind.FastObject, saysNothingOfRuby: !hasOrigin))) _reactedAt[body] = now;
             return;
         }
 
         if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: {row.Response} at priority {row.Priority}.", _enemy);
+        // Something this fast could kill, and no ordinary person throws it, so it is worth more than one
+        // enemy's short look: a Search, wherever it started. Slower, it's a Check.
         // Recorded only when he took it: one he ignored (mid-fight, say) may still send him later.
-        if (_enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority))) _reactedAt[body] = now;
+        if (_enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: kind == StimulusKind.FastObject))) _reactedAt[body] = now;
     }
 
     // The stronger of two rows: response by severity, priority by number, each taken on its own. An

@@ -424,7 +424,7 @@ through the player never slows the walk.
   - Aggro Time (1.5 s) of walking without contact (out of sight, or past the radius, even in
     sight: he then searches where he last saw her). The timer is suspended while he holds at the
     spot, because counting the walk toward the hold cut it short.
-  - Arriving at the spot he knew and **holding there for Aggro Time**. The spot is a place and not a point: within Known Spot Radius (3 m) with a clear line to it, or held up just outside that behind another hunter, he counts as there, so several don't push at each other to stand on it. Reaching it doesn't end the
+  - Arriving at the spot he knew and **holding there for Aggro Time**, or for Unseen Hold Time (1 s) if he hasn't seen her at all in this fight, such as after getting up from a throw: he has nothing to wait for, and holding for Aggro Time left him standing while a team checked and left without him. The spot is a place and not a point: within Known Spot Radius (3 m) with a clear line to it, or held up just outside that behind another hunter, he counts as there, so several don't push at each other to stand on it. Reaching it doesn't end the
     hunt: giving up the instant he arrived dropped fights while Ruby was a metre past it. Sight
     coming back, or a newer fact that moves the spot, restarts the hold.
   - Knowing nothing about where she is: he searches where he stands, with a log line.
@@ -606,9 +606,9 @@ through the player never slows the walk.
   - **Starting and matching.** `Intel.Handle` is the one decision for an enemy who senses
     something he may act on. A job whose place is within Job Match Radius (10 m, **on the same
     floor**: `Covers`) already has it. A more serious thing upgrades that job; **a find (a body
-    or a loose gun) or an enemy seen flying or on the chain turns a Check into a Search whatever its
+    or a loose gun) or anything at Alarm Speed, or an enemy seen flying or on the chain, turns a Check into a Search whatever its
     priority** (`Incident.MakesSearch`), because the check is over: a flying enemy's Search is at the
-    throw's origin, a find's where it lies, and a flying gun stays a Check. A stronger reason (an attack, on a problem job) raises it at the same
+    throw's origin, a find's where it lies, and a slower flying gun or crate stays a Check. A stronger reason (an attack, on a problem job) raises it at the same
     priority. He joins if it is still recruiting (a Check until it looks, a Search until it's done,
     never past the cap), taking himself off any job he was on. If it can't take him, an enemy
     off any job leaves it to the job; one already on a job **stays on his own**, and the thing is a

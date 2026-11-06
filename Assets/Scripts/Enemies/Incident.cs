@@ -26,7 +26,7 @@ public readonly struct Incident
     public int Priority { get; }
     /// <summary>
     /// There is no need to send one enemy to see: a job about this is a Search, and it turns a Check at
-    /// its place into one whatever its priority. A body or gun lying found, and an enemy seen flying or on
+    /// its place into one whatever its priority. A body or gun lying found, anything at Alarm Speed, and an enemy seen flying or on
     /// the chain.
     /// </summary>
     public bool MakesSearch { get; }

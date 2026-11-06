@@ -21,6 +21,7 @@ public class AggroState : EnemyStateBase
     private bool _loggedNothing;    // the nothing-to-go-on line is logged on its rising edge only
     private float _closestToKnown;  // the nearest he has got to the spot he knew, for noticing he is held up
     private float _stallTimer;
+    private bool _sawHer;           // he has had her in sight at some point in this fight
     private Vector3 _stallSpot;
     private const float StallProgress = 0.25f;   // closing less than this isn't getting anywhere
 
@@ -36,9 +37,14 @@ public class AggroState : EnemyStateBase
             if (Enemy.Vision.InContactWithPlayer()) return false;
             if (_lostTimer >= Enemy.AggroTime) return true;
             if (Enemy.Vision.CanSeePlayer()) return false;
-            return NothingToGoOn || (_holdingAtKnown && _dwellTimer >= Enemy.AggroTime);
+            return NothingToGoOn || (_holdingAtKnown && _dwellTimer >= HoldTime);
         }
     }
+
+    // How long he stands at the spot he knew. If he has seen her in this fight she may well be just past
+    // it. If he hasn't (he got up from a throw, or something hit him), there is nothing he is waiting on:
+    // he stood for Aggro Time while the team that came to check finished and left without him.
+    private float HoldTime => _sawHer ? Enemy.AggroTime : Enemy.UnseenHoldTime;
 
     // Out of sight and he knows nothing of her: no rule but "search where he stands".
     private bool NothingToGoOn => !Enemy.Vision.CanSeePlayer() && !Enemy.Awareness.TryGetNewestRuby(out _);
@@ -56,6 +62,7 @@ public class AggroState : EnemyStateBase
         _closestToKnown = float.PositiveInfinity;
         _stallTimer = 0f;
         _hadSight = Enemy.Vision.CanSeePlayer();
+        _sawHer = _hadSight;
     }
 
     // The search starts from what he knew, or from where he stands when he knew nothing. Exit also runs
@@ -96,6 +103,7 @@ public class AggroState : EnemyStateBase
         if (_hadSight && !hasSight)
             DebugLog.Info($"{Enemy.name} lost sight of {Enemy.PlayerTransform.name} — blocked by {(Enemy.Vision.SightBlocker != null ? Enemy.Vision.SightBlocker.name : "something")}.", Enemy);
         _hadSight = hasSight;
+        if (hasSight) _sawHer = true;
 
         bool nothing = NothingToGoOn;
         if (nothing && !_loggedNothing)
@@ -176,7 +184,7 @@ public class AggroState : EnemyStateBase
         if (arrived && !_holdingAtKnown)
         {
             _dwellTimer = 0f;
-            DebugLog.Info($"{Enemy.name} reached where he last knew Ruby was and holds there for {Enemy.AggroTime:0.#}s.", Enemy);
+            DebugLog.Info($"{Enemy.name} reached where he last knew Ruby was and holds there for {HoldTime:0.#}s.", Enemy);
         }
         // A newer fact that moves the point sends him off again, and the dwell starts over.
         else if (!arrived)

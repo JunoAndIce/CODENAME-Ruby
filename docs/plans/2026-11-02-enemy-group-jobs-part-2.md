@@ -132,6 +132,8 @@
 
 21. **Distractions are Ruby provoking them (added and built 2026-11-06).** *(User: "its not really being spooked into aggro, moreso being triggered by Ruby throwing things and threatenign them and they get tired of it and aggro her.")* So priority doesn't decide what counts: a priority 3 thud during a priority 5 search does. A body or gun lying there doesn't, since it isn't her doing anything; he still turns. When he has had enough he is taught where she is at that moment, once, instead of where the last thing landed.
 
+22. **A fast object makes a Search, and a hunt with nothing to go on searches sooner (added and built 2026-11-06).** *(User: "enemies should start a search quicker after aggroing and not aggroing on anything" and "a fast object should warrant a search, something moving that fast is bound to kill and no normal human can launch something that fast".)* Anything at Alarm Speed now makes a Search, so a thrown table or crate is more than one enemy's short look; a slower one stays a Check. An enemy who hasn't seen Ruby at all in the fight holds at the spot he knew for Unseen Hold Time, 1 s, instead of Aggro Time.
+
 ## Global Constraints
 
 - **Values that are my calls** (put in tooltips, retuned in play):
@@ -383,6 +385,6 @@
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, `docs/specs/2026-10-28-enemy-states-0.2.md`, this plan and `2026-10-30-enemy-group-jobs.md`.
 
 - [ ] **Step 1: CLAUDE.md.** A Group jobs bullet: kinds and steps, the clock, roles, the cap, matching, merging, filling, the reason that only rises, wary from the job, the count, and the one-flood rule. Update Searching, Senses (what it is), Knowledge (`TimesSentToLook`, `WasToldOfRuby` and who may tell) and the debug overlays (the jobs gizmo).
-- [ ] **Step 2: The manual.** The Path Grid section's warnings table gains the new "no path ... so he goes as near as he can get" line and the 5 m rule (decision 17). The tuning table gains Gunshot Extension, Dragged Distance, Known Spot Radius, Personal Space, Sight Follow Through, Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
+- [ ] **Step 2: The manual.** The Path Grid section's warnings table gains the new "no path ... so he goes as near as he can get" line and the 5 m rule (decision 17). The tuning table gains Unseen Hold Time, Gunshot Extension, Dragged Distance, Known Spot Radius, Personal Space, Sight Follow Through, Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
 - [ ] **Step 3: Spec and plan.** Spec Progress notes piece 5 part A built, part B pending. Tick this plan's steps and mark `2026-10-30-enemy-group-jobs.md` finished by this plan. Commit these files only.
 - [ ] **Step 4: End-of-piece review, in the background,** over the range both plans added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before part B, in one fix wave.
