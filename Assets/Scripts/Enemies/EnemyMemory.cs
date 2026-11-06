@@ -125,15 +125,18 @@ public class EnemyMemory
 
     private readonly List<float> _distractions = new();
     private float _lastDisturbance = float.NegativeInfinity;
+    private float _lastCounted = float.NegativeInfinity;
 
     /// <summary>
     /// Notes that something lesser happened while he was searching, and returns how many he has had
-    /// within memory seconds. One within gap of the last is the same disturbance and isn't new: a
-    /// thrown body thuds about ten times as it tumbles and a firefight is a run of shots, and each of
-    /// those is one thing to respond to, not a dozen. A new one adds to the count only when `counts`:
-    /// walking in, he still turns to look, but nothing adds up until he has reached the search.
+    /// within memory seconds. Two clocks. `isNew`: it is more than gap since the last disturbance of any
+    /// kind, so a thrown body's ten thuds and a firefight's run of shots are each one thing to respond to,
+    /// not a dozen. `counted`: it `counts` (walking in, he still turns to look, but nothing adds up until
+    /// he has reached the search) and is more than gap since the last one that was counted. They are
+    /// apart because one clock let an uncounted thud on the way in, or a body noticed, swallow the real
+    /// provocation that followed within the gap: no count, no pause, no scout.
     /// </summary>
-    public int NoteDistraction(float now, float memory, float gap, bool counts, out bool isNew)
+    public int NoteDistraction(float now, float memory, float gap, bool counts, out bool isNew, out bool counted)
     {
         // A loop rather than RemoveAll with a lambda: the lambda captures now and memory, so it
         // allocated on every sound an enemy hears while he searches. Same order kept.
@@ -145,10 +148,12 @@ public class EnemyMemory
         }
         _distractions.RemoveRange(kept, _distractions.Count - kept);
         isNew = now - _lastDisturbance >= gap;
-        if (isNew)
+        counted = counts && now - _lastCounted >= gap;
+        if (isNew) _lastDisturbance = now;
+        if (counted)
         {
-            _lastDisturbance = now;
-            if (counts) _distractions.Add(now);
+            _lastCounted = now;
+            _distractions.Add(now);
         }
         return _distractions.Count;
     }
@@ -157,6 +162,7 @@ public class EnemyMemory
     {
         _distractions.Clear();
         _lastDisturbance = float.NegativeInfinity;
+        _lastCounted = float.NegativeInfinity;
     }
 
     public bool KnowsBody(EnemyController body) => _bodies.Contains(body);

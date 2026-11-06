@@ -295,6 +295,8 @@ public class JobBoard
         best = float.MaxValue;
         foreach (EnemyController member in job.Members)
         {
+            // A scout is away on a check of his own and has no business with the job's spot, unless he is all there is.
+            if (member == job.Scout && job.Count > 1) continue;
             float distance = PathGrid.FlatDistance(member.transform.position, job.Point);
             if (distance >= best) continue;
             best = distance;
@@ -411,7 +413,7 @@ public class JobBoard
         GroupJob job = FindMatch(point);
         if (job == null)
         {
-            StartJob(who, new Incident(point, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority), JobKind.Search);
+            StartJob(who, new Incident(point, StimulusResponse.SearchForAttack, BehaviourMap.FromAggroPriority), JobKind.Search);
             return;
         }
 
@@ -424,7 +426,7 @@ public class JobBoard
             && who.Memory.NoteRaisedAt(job.Point, _intel.JobMatchRadius))
         {
             DebugLog.Info($"{who.name} has just lost Ruby near {job}: it becomes a search for an attack.", who);
-            bool restarted = Upgrade(job, new Incident(job.Point, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority), JobKind.Search);
+            bool restarted = Upgrade(job, new Incident(job.Point, StimulusResponse.SearchForAttack, BehaviourMap.FromAggroPriority), JobKind.Search);
             ChooseAfterRestart(job, restarted);
         }
 
@@ -589,11 +591,32 @@ public class JobBoard
             return who.Job != job;
         }
 
+        // Every member hears one shot in the same frame, so an exact time match means the first hearer has
+        // already moved, converted or signalled the job for this very shot: the rest find it done. Without
+        // it the shot is "inside the area" for them, they fall through to Distract and hold still while
+        // one member walks.
+        if (job.LastShotTakenAt == Time.time) return true;
+
+        // A signalling team keeps its beat. A second shot inside the area would turn the Check into a Search
+        // that restarts at the old place and never visits the signalled shot, so only a shot outside the
+        // area moves the signal, and within 1 m of the job UpdateSignal would make Upgrade return false and
+        // leave it in Signal for good.
+        if (job.Step == JobStep.Signal)
+        {
+            if (PathGrid.FlatDistance(job.Point, shot.Point) > _intel.SearchAreaRadius)
+            {
+                job.UpdateSignal(search);
+                job.NoteShotTaken();
+            }
+            return true;
+        }
+
         if (PathGrid.FlatDistance(job.Point, shot.Point) <= _intel.SearchAreaRadius)
         {
             if (job.Kind == JobKind.Check)
             {
                 DebugLog.Info($"{who.name} hears a gunshot at {job}'s place.", who);
+                job.NoteShotTaken();
                 ChooseAfterRestart(job, Upgrade(job, new Incident(job.Point, shot.Reason, shot.Priority), JobKind.Search));
                 return true;
             }
@@ -606,13 +629,8 @@ public class JobBoard
         if (job.Step is JobStep.Call or JobStep.Gather)
         {
             DebugLog.Info($"{who.name} hears a gunshot at {shot.Point}: {job} goes there instead.", who);
+            job.NoteShotTaken();
             ChooseAfterRestart(job, Upgrade(job, search, JobKind.Search));
-            return true;
-        }
-
-        if (job.Step == JobStep.Signal)
-        {
-            job.UpdateSignal(search);
             return true;
         }
 
@@ -620,6 +638,7 @@ public class JobBoard
         if (Time.time - job.LastSignalAt < who.DistractionGap) return false;
 
         job.BeginSignal(search, _intel.ReactTime);
+        job.NoteShotTaken();
         DebugLog.Info($"{who.name} hears a gunshot at {shot.Point} and signals {job}.", who);
         return true;
     }

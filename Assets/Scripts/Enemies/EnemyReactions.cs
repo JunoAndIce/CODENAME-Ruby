@@ -139,19 +139,22 @@ public class EnemyReactions
     {
         bool arrived = _enemy.Searching.ReachedSearch;
         bool counts = arrived && !incident.SaysNothingOfRuby;
-        int count = _enemy.Memory.NoteDistraction(Time.time, _enemy.DistractionMemory, _enemy.DistractionGap, counts, out bool isNew);
-        if (isNew && counts && count >= _enemy.DistractionThreshold)
+        int count = _enemy.Memory.NoteDistraction(Time.time, _enemy.DistractionMemory, _enemy.DistractionGap, counts, out bool isNew, out bool counted);
+        // The threshold reads the counted clock; the pause, the scout and the log read either, so a thud
+        // that only counted still turns him and sends a scout.
+        bool fresh = isNew || counted;
+        if (counted && count >= _enemy.DistractionThreshold)
         {
             _enemy.Memory.ClearDistractions();
             GoAfterRuby(count, incident);
             return true;
         }
 
-        _enemy.Searching.Distract(incident.Point, isNew);
+        _enemy.Searching.Distract(incident.Point, fresh);
         // Turning to look isn't all of it: one of the team goes to see, if the job can spare him.
-        if (isNew && _enemy.Intel != null) _enemy.Intel.SendScout(_enemy, incident);
+        if (fresh && _enemy.Intel != null) _enemy.Intel.SendScout(_enemy, incident);
         string tally = counts ? $"{count} of {_enemy.DistractionThreshold}" : arrived ? "not counted, it isn't Ruby doing anything" : "not counted, he hasn't reached the search";
-        DebugLog.Info($"{_enemy.name} {(isNew ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}): {tally}.", _enemy);
+        DebugLog.Info($"{_enemy.name} {(fresh ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}): {tally}.", _enemy);
         return true;
     }
 

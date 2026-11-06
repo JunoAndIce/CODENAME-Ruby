@@ -158,8 +158,12 @@ public class GroupJob
     public Incident SignalledShot { get; private set; }
     /// <summary>When the last signal began, so a run of shots doesn't stop the team again at every one.</summary>
     public float LastSignalAt { get; private set; } = float.NegativeInfinity;
+    /// <summary>When a gunshot last moved, converted or signalled the job, so the rest who heard the same shot find it done.</summary>
+    public float LastShotTakenAt { get; private set; } = float.NegativeInfinity;
     /// <summary>When a gunshot last added to the countdown, so one shot heard by the whole team adds once.</summary>
     public float LastExtendedAt { get; private set; } = float.NegativeInfinity;
+
+    internal void NoteShotTaken() => LastShotTakenAt = Time.time;
 
     internal void BeginSignal(Incident shot, float length)
     {

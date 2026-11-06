@@ -16,6 +16,7 @@ public class GridNavigator
     private const float ReplanInterval = 0.2f;
     private const float ProgressStep = 0.25f;   // closing less than this doesn't count as progress
     private const float ApproachRadius = 5f;    // how far from an unreachable point the nearest ground may be and still count as near it
+    private const float ApproachSameSpot = 0.5f;   // an approach spot this near the goal is the goal: nothing to warn about
     private const float ApproachReach = 1.5f;   // two sent to one spot block each other: close enough counts, as with a search's area
 
     // What the last move followed, for the debug line.
@@ -117,7 +118,9 @@ public class GridNavigator
         PathGrid grid = PathGrid.At(_agent.Body.position);
         if (grid == null) return false;
 
-        FindApproach(grid, point);
+        // A one-off decision, so it floods from where he stands now: the throttle would hand back the last
+        // goal's spot, and AggroState.Exit would start the search there while logging the new one.
+        FindApproach(grid, point, force: true);
         spot = _approachSpot;
         return _approachFound;
     }
@@ -370,7 +373,12 @@ public class GridNavigator
             return NavResult.Unreachable;
         }
 
-        if (!_approachWarned)
+        // His own flood can reach the goal although the goal's field gave no step (the field's last cell,
+        // a goal on clearance-blocked ground): the walk still happens, and a warning that says "0 m from
+        // it" would claim a detour that isn't one.
+        bool atGoal = FlatDistance(goal, _approachSpot) < ApproachSameSpot
+            || (grid.WorldToCell(goal, out Vector2Int goalCell) && grid.WorldToCell(_approachSpot, out Vector2Int spotCell) && goalCell == spotCell);
+        if (!_approachWarned && !atGoal)
         {
             Object context = _agent as Object;
             Debug.LogWarning($"{(context != null ? context.name : "agent")}: no path to {goal} on {grid.name} (too tight for the grid, or walled off), so he goes as near as he can get: {_approachSpot}, {FlatDistance(goal, _approachSpot):0.#} m from it.", context);
@@ -380,18 +388,23 @@ public class GridNavigator
         NavResult result = MoveToArea(GridArea.Circle(_approachSpot, ApproachReach), speed);
         if (result is NavResult.Moving or NavResult.Arrived) return result;
 
+        // Blocked is someone standing in the way: MoveToArea has already steered, and Fail would zero his
+        // velocity and warn every step, leaving him frozen even after the blocker moved. Keep going, as
+        // SearchingState.WalkToSpot does; Aggro's timers bound it. Only Unreachable fails.
+        if (result == NavResult.Blocked) return NavResult.Moving;
+
         Fail($"can't get near {goal} on {grid.name}: {FailureReason} — standing still.");
         return NavResult.Unreachable;
     }
 
     // Re-flooded when the point moves or the grid changes, throttled, so a target shifting inside a pocket
     // can't flood every step.
-    private void FindApproach(PathGrid grid, Vector3 goal)
+    private void FindApproach(PathGrid grid, Vector3 goal, bool force = false)
     {
         bool first = _approachField == null || _approachField.Grid != grid;
         if (first) _approachField = new FlowField(grid);
         bool stale = FlatDistance(goal, _approachGoal) > RefloodShift || grid.Version != _approachVersion;
-        if (!first && (!stale || Time.fixedTime < _nextApproach)) return;
+        if (!force && !first && (!stale || Time.fixedTime < _nextApproach)) return;
 
         _nextApproach = Time.fixedTime + ReplanInterval;
         _approachGoal = goal;

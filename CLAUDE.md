@@ -583,8 +583,8 @@ through the player never slows the walk.
   more than Dragged Distance (0.5 m, `HeldMovedBy`, so a charging throw's jiggle isn't it) from
   where he was grabbed, or thrown within one scan of the release from a spot he sees
   (`WasThrownWithin`), someone is plainly on the other end of the chain: `EnemyReactions.SeeChainMove`
-  teaches him where Ruby is right now, as Heard, and `Alert()`s him into Aggro. That and sight of her
-  are the only ways to Aggro through the senses. One knocked down or killed, or a flying enemy whose
+  teaches him where Ruby is right now, as Heard, and `Alert()`s him into Aggro. That, sight of her
+  and `EnemyReactions.GoAfterRuby` (a provoked searcher, see **Distraction**) are the only ways to Aggro through the senses. One knocked down or killed, or a flying enemy whose
   throw he didn't see, is a Search at the throw's origin (or where he lies), with no Aggro. He notices **corpses** within Body Notice Range in his
   view and clear sight, and **loose guns** in view and sight if he is armed. A body or gun he
   hasn't seen goes on the squad's books and he investigates it. A body the squad already knows he
@@ -603,7 +603,7 @@ through the player never slows the walk.
   `Enter`.
   `Investigate(Incident, walkThere = true)` lives in `EnemyReactions` (the senses call it there
   directly). It first upgrades a SearchForProblem to
-  **SearchForAttack** when he has seen Ruby or the newest news of her (his memory or the pool) is at
+  **SearchForAttack** when he knows of Ruby (`EnemyMemory.KnowsRuby`: he has seen her or been told) or the newest news of her (his memory or the pool) is at
   most Attack Near Time (15 s) old and within Attack Near Radius (20 m) of the point **on the same
   floor** (floors are independent), then makes him wary if it's an attack. It ignores Grabbed,
   Ragdoll, Dead, Rearm and Aggro. From Idle or Patrol it asks `Intel.Handle` to decide (see **Group
@@ -612,7 +612,7 @@ through the player never slows the walk.
   higher* priority (through `Intel.Handle`, as from Idle; a glance, or no `Intel`, `Retarget`s his own
   search): an equal or lower one never does, which is what stops flicker, but it is
   **noticed** (a distraction, below). A search from Aggro has
-  priority 6 (`SearchingState.FromAggroPriority`, one above the top of the scale), above every map
+  priority 6 (`BehaviourMap.FromAggroPriority`, one above the top of the scale), above every map
   row, so a sound can't swap his target while he's lost a player, though it still distracts him (a
   gunshot is the exception: it mobilises, see **Group jobs**). The state runs
   **steps**, `Walk`, `Look`, `StandDown` and `Done`, and a retarget starts them over. On a job the
@@ -679,8 +679,7 @@ through the player never slows the walk.
     takes him to Patrol, Aggressive since an attack search made him wary). Three failed spots in a row end
     his roaming and he sweeps where he stands. When the countdown ends **each finishes the walk he is on
     and looks there before he leaves**, picking no new spot, so the team drifts off in its own time, not
-    on one frame; he stays on the job meanwhile, so a new disturbance can't start a second job around him
-    (a Done job takes no one new).
+    on one frame; he stays on the job meanwhile, but `Covers` refuses a Done job, so a new disturbance can start a second job around him.
   - **The checker and followers.** In a Check one member goes to the spot and looks: the nearest to
     it (flat) when the team sets off, chosen once and kept (`CheckerOf` only reads the job), unless a
     nearer enemy joins in the first moments of Go. If he leaves in Go, the nearest of the rest takes
@@ -745,8 +744,8 @@ through the player never slows the walk.
   (`SearchingState.Distract`, `FaceToward`) and the search's timers and walk wait for Distraction
   Time (1 s), then carry on where they were; it never changes his target, reason or priority. Each
   officer counts his own (`EnemyMemory.NoteDistraction`): one within Distraction Gap (2 s) of the
-  last counted is the same disturbance (a tumbling thrown body thuds about ten times, and a firefight
-  is a run of shots), and each is forgotten after Distraction Memory (12 s). **The count ends with the
+  last disturbance of any kind is the same (a tumbling thrown body thuds about ten times, and a firefight
+  is a run of shots), and it counts only when it is also that far from the last counted one; each is forgotten after Distraction Memory (12 s). **The count ends with the
   search** (`SearchingState.Exit` clears it): a count left over made the next, unrelated search
   aggro on its first or second one. **Nothing counts until he has reached the search** (`SearchingState.ReachedSearch`: in a Search's area, at a Check's spot, or a Check's follower once the look begins): walking in he still turns to look. **What counts is whether Ruby is doing something, not its priority** (`Incident.SaysNothingOfRuby`): a low thud during a body search counts, a body or gun lying there doesn't, and he turns to look either way. The count portrays enemies provoked by her throwing things at them, who get tired of it and go after her. At Distraction Threshold
   (3) he has had enough: the count clears, he is taught where **she is at that moment**, once, as a Heard fact, not where the last thing landed, and `Alert()`s into Aggro.

@@ -116,13 +116,19 @@ public class EnemyMovement
         Intel intel = _enemy.Intel;
         if (intel == null) return false;
 
+        // Floors, not heights: an enemy's root stands about a metre above a cell's floor, which sits on
+        // SameFloorHeight, so a sub-millimetre difference in resting height decided whether spots were
+        // avoided at all. A point on no grid is on no floor, so nobody shares it.
+        PathGrid floor = PathGrid.At(point);
+        if (floor == null) return false;
+
         IReadOnlyList<EnemyController> enemies = intel.Enemies;
         for (int i = 0; i < enemies.Count; i++)
         {
             EnemyController other = enemies[i];
             if (other == null || other == _enemy || other.Health.IsDead || other.IsOverridden) continue;
             Vector3 at = other.transform.position;
-            if (Mathf.Abs(at.y - point.y) <= SameFloorHeight && PathGrid.FlatDistance(at, point) < _enemy.PersonalSpace) return true;
+            if (PathGrid.At(at) == floor && PathGrid.FlatDistance(at, point) < _enemy.PersonalSpace) return true;
         }
         return false;
     }

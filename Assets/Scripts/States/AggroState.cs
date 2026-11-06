@@ -92,7 +92,7 @@ public class AggroState : EnemyStateBase
                 DebugLog.Info($"{Enemy.name} can't reach {known}, where he lost Ruby: the search starts from {reachable}, the nearest he can get.", Enemy);
                 known = reachable;
             }
-            Enemy.RequestSearch(new SearchRequest(new Incident(known, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority), afterLostFight: true));
+            Enemy.RequestSearch(new SearchRequest(new Incident(known, StimulusResponse.SearchForAttack, BehaviourMap.FromAggroPriority), afterLostFight: true));
         }
         if (Enemy.IsArmed) Enemy.Arms.Lower();
     }

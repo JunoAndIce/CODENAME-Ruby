@@ -20,6 +20,8 @@ public class BehaviourMap : ScriptableObject
     /// <summary>Priorities run from 1 (least) to 5 (most). A search from Aggro sits one above, so it outranks every row.</summary>
     public const int MinPriority = 1;
     public const int MaxPriority = 5;
+    /// <summary>A search from Aggro outranks every map row (one above the top of the scale), so a sound can't pull him off a lost player.</summary>
+    public const int FromAggroPriority = MaxPriority + 1;
 
     [Serializable]
     public struct Row

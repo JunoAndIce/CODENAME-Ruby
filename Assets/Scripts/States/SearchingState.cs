@@ -22,9 +22,6 @@ public enum SearchStep { Walk, Look, StandDown, Done }
 /// </summary>
 public class SearchingState : EnemyStateBase
 {
-    // A search from Aggro outranks every map row (one above the top of the 1 to 5 scale), so a sound can't pull him off a lost player.
-    public const int FromAggroPriority = BehaviourMap.MaxPriority + 1;
-
     private Vector3 _target;
     private StimulusResponse _reason;
     private int _priority;
@@ -475,6 +472,10 @@ public class SearchingState : EnemyStateBase
 
             if (result == NavResult.Unreachable)
                 Debug.LogWarning($"{Enemy.name} can't reach what {job} sent him to check at {job.ScoutPoint} ({Enemy.Navigator.FailureReason}); he looks from where he stands.", Enemy);
+            // Unreachable has said why above. A stall or the limit has no line of its own, and "has checked"
+            // below would claim a check he didn't finish.
+            else if (result != NavResult.Arrived)
+                DebugLog.Info($"{Enemy.name} stopped short of {job.ScoutPoint} ({(result == NavResult.Blocked ? "something blocked the way" : $"Search Travel Limit of {Enemy.SearchTravelLimit:0.#}s ran out")}); he looks from where he stands.", Enemy);
             Enemy.Movement.FaceToward(job.ScoutPoint);
             _scoutBaseYaw = Enemy.transform.eulerAngles.y;
             _scoutLooking = true;
