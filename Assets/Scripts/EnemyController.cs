@@ -36,6 +36,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
     [Tooltip("How far he notices a loose body (thrown, tumbling or held) moving at Notice Speed or faster, with a clear line to it. Corpses and dropped guns aren't limited by this: see Body Notice Range and View Range.")]
     [SerializeField, Min(0f)] private float _motionRadius = 15f;
+    [Tooltip("How far a body on the chain must be moved from where it was grabbed, in metres measured flat, before he takes it as Ruby dragging it and goes for her. Keep it above the charging throw's jiggle (0.1 m).")]
+    [SerializeField, Min(0f)] private float _draggedDistance = 0.5f;
     [Tooltip("How close a corpse must be for him to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
     [SerializeField, Min(0f)] private float _bodyNoticeRange = 6f;
     [Tooltip("Seconds between his sweeps for moving bodies, corpses and loose guns. Each enemy starts at a random offset so a squad doesn't sweep on the same step.")]
@@ -124,6 +126,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public EnemyVision Vision { get; private set; }
     public EnemyReactions Reactions { get; private set; }
     public float MotionRadius => _motionRadius;
+    public float DraggedDistance => _draggedDistance;
     public float BodyNoticeRange => _bodyNoticeRange;
     public float ScanInterval => _scanInterval;
     /// <summary>The scene's shared pool, or null when there is none (an error was logged at Start).</summary>
@@ -430,6 +433,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>On the chain right now. A death mid-swing reads this to stay held.</summary>
     public bool IsHeld { get; private set; }
 
+    private Vector3 _heldFrom;
+
+    /// <summary>How far he has been moved from where he was grabbed, in flat metres; 0 when he isn't held. What tells a watcher Ruby is dragging him.</summary>
+    public float HeldMovedBy => IsHeld ? PathGrid.FlatDistance(_heldFrom, transform.position) : 0f;
+
     /// <summary>
     /// The job he is on, or null: a handful of enemies dealing with one thing together (GroupJob).
     /// Only the job board sets it, as it adds and removes members, and SearchingState gives him up on exit.
@@ -491,6 +499,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public void EnterGrabbed()
     {
         PopGun();
+        _heldFrom = transform.position;
         IsHeld = true;
         if (Health.IsDead) Dead.Grab();
         else _state.SetState(Grabbed);

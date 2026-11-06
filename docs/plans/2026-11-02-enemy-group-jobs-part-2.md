@@ -105,7 +105,7 @@
     - **Settled (user, 2026-11-04):**
       - **Which losses:** grabbed, knocked down or killed, and it alerts the job members **who saw it happen**. *("Since we will later add enemies walking around on search this will be easy for them to spot.")* One who leaves on his own (to Aggro, called away, can't reach) alerts nobody.
       - **The alert:** Aggro at once, **onto Ruby's location**. *("They aren't stupid. We will have flavor animations in between like getting surprised and other stuff but aggro is the end goal.")*
-    - **To plan with decisions 10 and 14,** which this settles the shape of: seeing it is what counts, and it teaches them where she is.
+    - **To plan with decisions 10 and 14,** which this settles the shape of: seeing it is what counts, and it teaches them where she is. **Decisions 10, 14 and 15 are planned as Task 8b, and the user changed them on 2026-11-06: nobody goes to Aggro unless he sees Ruby, or sees her moving an enemy on the chain (see Task 8b).**
 16. **Enemies search like people (added 2026-11-06, not yet planned to a task).** *(User: "When do enemies search get more robust and they start searching more humanlike without the stopping and turning. (More slow walking, Checking behind objects their view is blocked by, flushing out corners like officers)")*
     - **Moved up by the user: built straight after group jobs, as a small piece before squads (piece 6),** because this part doesn't need rooms. It replaces the roaming in Task 8, Step 1: today each enemy walks to a random spot, stops, and turns on the spot.
     - **Walking:** they walk slowly and scan as they go, instead of stopping to turn.
@@ -307,6 +307,54 @@
   - **Got up:** throw an officer, let him get up beside a thud job. He raises it to an attack for everyone in it, once.
   - **A lost fight:** five officers lose Ruby. The first three search together, the rest go to Patrol Aggressive.
   - **No one stuck:** nobody stands in Searching for good.
+
+---
+
+### Task 8b: Seeing an enemy go down (decisions 10, 14 and 15)
+
+**The user's rule (2026-11-06), replacing the Aggro in decisions 14 and 15:** *"For both enemies, on jobs or not, dont make them immediately aggro unless they can see Ruby. However, a grabbed enemy should walk over and search around the grabbed enemy. If Ruby starts dragging or moving the grabbed enemy, they should aggro her."*
+
+- **Sees Ruby:** Aggro, as always. Nothing here changes that.
+- **Sees an enemy grabbed, not moving:** he walks over and searches around him, on a job or not. This is a Search at the grabbed enemy, as a body found there is.
+- **Sees a grabbed enemy being moved:** Aggro, onto Ruby. He is taught her real position at that moment. It is the chain's source too, since the tether stamps her position on the host every step.
+- **Sees one knocked down, killed or thrown:** no Aggro. He searches at the origin of the throw, or where the body is when it has no origin. Below Notice Speed that takes the view (cone or close circle), because a body barely moving doesn't catch the eye from behind.
+
+**My readings, each a rule and not a fallback:**
+
+- **Moved** means held and more than Dragged Distance (new, 0.5 m, on the witness) from where he was grabbed, measured flat. A charging throw's jiggle is at most 0.1 m, and doesn't count.
+- **A throw isn't dragging.** Once let go he isn't held, so what follows is the flying-enemy Search at the throw's origin, even for one who watched the grab. Moving him on the chain is what proves someone is there on the other end of it.
+- **"Sees" a grabbed enemy** means the view with a clear line: a body standing still has no motion to notice from behind.
+- **A swung enemy he can't see in his view** keeps the all-round motion sense: at Notice Speed or more, a Search at the origin.
+- **A job at equal or higher priority already has it.** A member whose Search outranks or equals this is distracted by it, and a Search nearby is already searching the area. He doesn't drop it to walk over.
+- **Who did it doesn't matter.** Today only Ruby's chain and what it throws can do it.
+- **A job carries on.** A member grabbed leaves it through `SearchingState.Exit`, as today.
+
+**Files:** `Assets/Scripts/EnemyController.cs`, `Assets/Scripts/Squad/EnemySenses.cs`, `Assets/Scripts/Squad/EnemyReactions.cs`
+
+**Interfaces**
+
+- **Produces, on `EnemyController`:** `public float HeldMovedBy` (flat metres from where he was grabbed, 0 when not held), `public float DraggedDistance`.
+- **Produces, on `EnemyReactions`:** `internal void SeeDragged(EnemyController held)`.
+
+- [x] **Step 1: The grab's place.** `EnterGrabbed` records `transform.position`. `HeldMovedBy` reads it. A serialized `_draggedDistance`, default 0.5 m, with a tooltip.
+- [x] **Step 2: Held enemies.** `EnemySenses.ScanHeld`, first in `Scan`. For each other enemy: not held, forget him and go on (so the next grab counts anew). Out of view or sight, go on. Moved past his own Dragged Distance: `Reactions.SeeDragged`, and stop. Otherwise, once per hold and only once it was taken: `Notice(at, Body, ...)`, which already makes a Search at the point and says nothing of Ruby. Kept apart from `_reactedAt`, or watching a grab would blind him to the throw for Origin Lifetime. `Notice` returns whether it was taken.
+- [x] **Step 3: The reaction.** `SeeDragged` teaches `Player.transform.position` as a Heard fact, latches wary and `Alert()`s, logging only when that moved him.
+- [x] **Step 4: Tumbling at any speed.** In `Consider`, a tumbling enemy below Notice Speed counts when he is in view. A held one below it is `ScanHeld`'s. When `TryGetOrigin` finds nothing the point is only where he lies, so a judged-by-what-it-is `Incident` also sets `saysNothingOfRuby`.
+- [x] **Step 5: Compile and commit,** as in Task 3.
+- [ ] **Step 6: Play-test gate (the user).** No Inspector work. With `RUBY_DEBUG_LOGS` on:
+  - **Grabbed, on a job or not:** whip an enemy in front of another, then stand still. The other walks over and searches around him, and doesn't go to Aggro unless he sees you.
+  - **Dragged:** then walk off or reel him in. The watcher goes to Aggro ("sees ... being dragged").
+  - **Jiggle:** hold right click on him without moving him. Nobody takes it as dragging.
+  - **Thrown or killed in front of one:** a Search at the throw's spot, no Aggro.
+  - **Unseen:** do any of these behind a crate. Nothing happens.
+  - **Seen, in the open:** if the watcher can see you, he goes to Aggro as usual.
+
+**Review Focus for this task**
+
+- A grab and an immediate throw: the throw must still be noticed, with no blackout from the grab.
+- A corpse on the chain counts as a grabbed enemy, and a second grab of the same enemy counts anew.
+- A witness in Aggro or Rearm: Notice is ignored and not marked taken, so he reacts once he is free, if it's still going on.
+- The Search's place is where he was seen and doesn't follow him. A dragged one means Aggro anyway.
 
 ---
 

@@ -108,6 +108,21 @@ public class EnemyReactions
     /// </summary>
     public void BecomeWary() => _enemy.Memory.BecomeWary();
 
+    /// <summary>
+    /// He sees an enemy being moved on the chain: someone is on the other end of it, so he goes for
+    /// her. Taught where she is right now, once a scan while he watches, which is also the chain's
+    /// source: he doesn't go on knowing where she goes after he looks away. Only this and sight of her
+    /// send him to Aggro; a grab that isn't moving, a knockdown or a death is searched (EnemySenses).
+    /// </summary>
+    internal void SeeDragged(EnemyController held)
+    {
+        Vector3 ruby = _enemy.Player.transform.position;
+        _enemy.Memory.Learn(new RubyFact(ruby, Time.time, Knowledge.Heard));
+        BecomeWary();
+        if (_enemy.Alert())
+            DebugLog.Info($"{_enemy.name} sees {held.name} being dragged on the chain: he goes for Ruby at {ruby}.", _enemy);
+    }
+
     // Something lesser happened while he was searching. He turns to look at it and the search waits
     // a moment, but it isn't dropped or retargeted. Enough of them close together and the jig is
     // up: he aggros, and the disturbance's place (where a thing he saw came from, or where a sound

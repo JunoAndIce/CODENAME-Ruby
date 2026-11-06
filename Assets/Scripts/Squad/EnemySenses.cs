@@ -13,6 +13,7 @@ public class EnemySenses
     private readonly Dictionary<Rigidbody, float> _reactedAt = new();
     private readonly List<Rigidbody> _bodies = new();
     private readonly List<Rigidbody> _expired = new();
+    private readonly HashSet<EnemyController> _noticedHeld = new();
     private float _nextScan;
     private bool _warnedFullBuffer;
 
@@ -48,9 +49,9 @@ public class EnemySenses
     }
 
     /// <summary>
-    /// Every Scan Interval: looks for bodies moving within Motion Radius that he can see clearly
-    /// (a fast one is FastObject, a slower one MovingObject), for corpses and for loose guns. The
-    /// map decides what each is worth. A moving body is reacted to once per Origin Lifetime, so a
+    /// Every Scan Interval: looks for enemies on the chain, for bodies moving within Motion Radius that
+    /// he can see clearly (a fast one is FastObject, a slower one MovingObject), for corpses and for loose
+    /// guns. The map decides what each is worth. A moving body is reacted to once per Origin Lifetime, so a
     /// settled thrown body doesn't keep him searching.
     /// </summary>
     public void Scan()
@@ -62,11 +63,45 @@ public class EnemySenses
         // No Intel was reported at Start; there is nothing to report to or read the map from.
         if (_enemy.Intel == null) return;
 
+        ScanHeld();
+
         // Only the motion scan needs the stimulus rules (Notice and Alarm Speed, Origin Lifetime).
         // Intel reports their absence once, at enable; corpses and guns don't need them.
         if (Stimuli.Rules != null) ScanMotion(now);
         ScanCorpses();
         ScanLooseGuns();
+    }
+
+    // An enemy on the chain, in his view with a clear line. Standing where he was grabbed, he is walked
+    // over to and searched around; moved, someone is plainly on the other end, and that is the one thing
+    // short of seeing Ruby that sends him to Aggro. The view and not the all-round motion sense, because
+    // a body standing still has nothing to catch the eye from behind. Its own record rather than
+    // _reactedAt, or watching a grab would blind him to the throw that follows for Origin Lifetime.
+    private void ScanHeld()
+    {
+        IReadOnlyList<EnemyController> enemies = _enemy.Intel.Enemies;
+        for (int i = 0; i < enemies.Count; i++)
+        {
+            EnemyController other = enemies[i];
+            if (other == null || other == _enemy) continue;
+            if (!other.IsHeld)
+            {
+                _noticedHeld.Remove(other);
+                continue;
+            }
+
+            Vector3 at = other.transform.position;
+            if (!_enemy.InView(at) || !_enemy.HasClearSight(other.Body.worldCenterOfMass, other.transform)) continue;
+
+            if (other.HeldMovedBy > _enemy.DraggedDistance)
+            {
+                _enemy.Reactions.SeeDragged(other);
+                return;
+            }
+            // Marked only when taken: one he couldn't act on (in a fight, fetching a gun) may still send him.
+            if (!_noticedHeld.Contains(other) && Notice(at, StimulusKind.Body, $"{other.name} on the chain"))
+                _noticedHeld.Add(other);
+        }
     }
 
     private void ScanMotion(float now)
@@ -165,15 +200,16 @@ public class EnemySenses
         _enemy.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, makesSearch: true, saysNothingOfRuby: true), walkThere: false);
     }
 
-    private void Notice(Vector3 origin, StimulusKind kind, string what)
+    // True when he took it.
+    private bool Notice(Vector3 origin, StimulusKind kind, string what)
     {
-        if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return;
+        if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return false;
 
         DebugLog.Info($"{_enemy.name} notices {what}: {row.Response} at priority {row.Priority}.", _enemy);
         // A body or a gun is found, not heard: there is nothing to check, so it is a Search, and it says
         // nothing about where Ruby is.
         bool found = kind is StimulusKind.Body or StimulusKind.LooseGun;
-        _enemy.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: found, saysNothingOfRuby: found));
+        return _enemy.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: found, saysNothingOfRuby: found));
     }
 
     // A character is one body for this purpose, so a bone of a tumbling enemy isn't a body of its
@@ -194,13 +230,16 @@ public class EnemySenses
         EnemyController enemy = body.GetComponentInParent<EnemyController>();
         if (enemy != null && !enemy.IsHeld && !IsTumbling(body)) return;
 
+        // A body too slow to catch the eye still counts when it is an enemy down in front of him: one
+        // knocked down or killed may hardly move. Held and slow is ScanHeld's, which walks him over.
         float speed = body.linearVelocity.magnitude;
-        if (speed < Stimuli.Rules.NoticeSpeed) return;
+        if (speed < Stimuli.Rules.NoticeSpeed && (enemy == null || enemy.IsHeld || !_enemy.InView(body.position))) return;
         if (!_enemy.HasClearSight(body.worldCenterOfMass, body.transform)) return;
         if (_reactedAt.TryGetValue(body, out float reactedAt) && now - reactedAt < lifetime) return;
 
         var kind = speed >= Stimuli.Rules.AlarmSpeed ? StimulusKind.FastObject : StimulusKind.MovingObject;
-        Vector3 origin = Disturbance.TryGetOrigin(body, out Vector3 thrownFrom) ? thrownFrom : body.position;
+        bool hasOrigin = Disturbance.TryGetOrigin(body, out Vector3 thrownFrom);
+        Vector3 origin = hasOrigin ? thrownFrom : body.position;
 
         // A flying pistol or enemy is judged by what it is as well as how fast it moves: speed alone
         // would call a flung pistol a mere moving object, and a thrown enemy (a body) one too. Anything
@@ -226,8 +265,9 @@ public class EnemySenses
             // Its origin is where Ruby threw it from, so that is where they go, and it teaches where she
             // was: unlike a body lying found, it does say something about her. An enemy thrown past them
             // needs more than one enemy's short look, so it makes a Search there. A flying gun stays a
-            // Check: one knocked out of a hand or flung is far less alarming than a thrown body.
-            if (_enemy.Investigate(new Incident(origin, response, priority, makesSearch: isEnemy))) _reactedAt[body] = now;
+            // Check: one knocked out of a hand or flung is far less alarming than a thrown body. With no
+            // origin the point is only where it is, which says nothing about her.
+            if (_enemy.Investigate(new Incident(origin, response, priority, makesSearch: isEnemy, saysNothingOfRuby: !hasOrigin))) _reactedAt[body] = now;
             return;
         }
 
