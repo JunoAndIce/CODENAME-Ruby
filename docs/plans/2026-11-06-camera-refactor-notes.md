@@ -62,13 +62,18 @@ That logic measures distance **from the camera**. A camera looking straight down
 
 ## Seen in play: shadows sliding onto the bottom wall
 
-*(User, 2026-11-06: "the shadows look like they move onto the bottom wall when I walk towards it at low shadow distance (like 50, 100). At 200 it still happens but is faint.")*
+*(User, 2026-11-06: "the shadows look like they move onto the bottom wall when I walk towards it at low shadow distance (like 50, 100). At 200 it still happens but is faint." Two clips, the clearer at Shadow Distance 50, Cam Height 15, Peek Height 19.)*
 
-- **Walls are about 3 m tall,** and the camera looks straight down, so what shows of a wall is its top. Nothing shorter than a wall can truly cast a shadow onto that top, unless a character's model is over 3 m tall (*not checked*).
-- **It changes with Shadow Distance,** which moves nothing in the world. That points to something tied to the camera's shadow range, and not to a real shadow. *Untested.*
-- **Best guess, untested:** the edge between two cascades, which moves with the camera. As she walks the edge slides across the view, the wall top ends up on the other side of it, and it gets different shadow detail from the floor beside it. A wall top is also 3 m nearer the camera than the floor, so it can fall in a different cascade. The split points move with Shadow Distance, which could be why 200 looks different.
-- **This may also mean "the whole floor is in one band" above is too simple.** URP's bands may not be flat slices at a set depth, so read them from the debugger rather than from the numbers.
-- **The tests below tell these apart:** experiment 2 is the direct one for this, and experiment 3 shows the bands on screen.
+**What the clip shows:**
+
+- A wall's shadow should be a solid band from its foot out to about 2.5 m (3 m tall, sun at about 50 degrees). The outer edge of the band is right and stays still.
+- **Near the foot of the bottom wall the shadow is missing,** leaving a strip of lit floor between the band and the wall. The strip's edge is a shallow slant, which doesn't follow the wall or the direction of the sun.
+- **Under the camera the shadow is whole,** in a dome shape with a curved edge, reaching down to the wall. The dome follows the camera, not anything in the world.
+- So the "moving" shadow is that dome sweeping over the wall as she walks toward it. The real shadow isn't moving: what changes is where it is drawn correctly.
+
+**Best explanation, untested:** the dome is the edge of a cascade. The camera is about 15.7 m above the floor at these settings, and Shadow Distance 50 puts a split at about 15 m, so that split lands almost exactly on the floor. Inside the circle the floor uses one cascade, and outside it the next, and the outer one loses the bottom of the wall's shadow.
+
+**Not explained yet:** why the outer cascade loses it. The strip is roughly a metre wide, which looks too big for bias alone, by a rough estimate. Reading the numbers can't settle this, so experiments 3 and 4 below come first.
 
 ## Experiments, in order
 
