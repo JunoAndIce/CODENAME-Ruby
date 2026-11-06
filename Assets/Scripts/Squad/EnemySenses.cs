@@ -66,8 +66,10 @@ public class EnemySenses
         ScanHeld();
 
         // Only the motion scan needs the stimulus rules (Notice and Alarm Speed, Origin Lifetime).
-        // Intel reports their absence once, at enable; corpses and guns don't need them.
-        if (Stimuli.Rules != null) ScanMotion(now);
+        // Intel reports their absence once, at enable; corpses and guns don't need them. Skipped while
+        // he is too busy to act on it: nothing it finds is marked taken, so a body spun in front of him
+        // in a fight was swept, judged and refused again every scan.
+        if (Stimuli.Rules != null && !TooBusy) ScanMotion(now);
         ScanCorpses();
         ScanLooseGuns();
     }
@@ -110,10 +112,13 @@ public class EnemySenses
                 return;
             }
             // Marked only when taken: one he couldn't act on (in a fight, fetching a gun) may still send him.
-            if (!_noticedHeld.Contains(other) && Notice(at, StimulusKind.Body, $"{other.name} on the chain"))
+            if (!TooBusy && !_noticedHeld.Contains(other) && Notice(at, StimulusKind.Body, $"{other.name} on the chain"))
                 _noticedHeld.Add(other);
         }
     }
+
+    // In a fight or fetching a gun: Investigate would refuse whatever a search could come of.
+    private bool TooBusy => _enemy.CurrentState is AggroState or RearmState;
 
     private void ScanMotion(float now)
     {
