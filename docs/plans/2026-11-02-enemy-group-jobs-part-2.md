@@ -124,6 +124,8 @@
 18. **Distractions count only once he has reached the search (added and built 2026-11-06).** *(User: "enemies distraction count shouldn't count until they reach the search radius.")* Walking in he still turns and pauses for a new one, and it doesn't add up. A Check's follower never walks to the spot, so his count begins when the checker starts to look.
 19. **Ruby's last location is a radius (added and built 2026-11-06).** *(User: "Ruby's last location should be a radius so enemies don't constantly walk into each other to forcefully get into it.")* Known Spot Radius, 3 m, with a clear line to the spot, counts as there and starts the hold. One held up behind another just outside it, within twice the radius and no closer for Stuck Time, counts too.
 
+20. **Enemies respect each other's space (added and built 2026-11-06).** *(User: "Enemies need to respect each others space. They should respect a radius around each other." and "this applies to walking and pathing.")* Personal Space, 1.5 m on the enemy: any walk along any path bends away from anyone on his feet inside it, passing on his own right when head-on, and roaming and wandering spots avoid it when a few tries can. It bends the walk and doesn't add route costs, since others move. Squads' standing spots and fire lanes are still piece 6.
+
 ## Global Constraints
 
 - **Values that are my calls** (put in tooltips, retuned in play):
@@ -375,6 +377,6 @@
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, `docs/specs/2026-10-28-enemy-states-0.2.md`, this plan and `2026-10-30-enemy-group-jobs.md`.
 
 - [ ] **Step 1: CLAUDE.md.** A Group jobs bullet: kinds and steps, the clock, roles, the cap, matching, merging, filling, the reason that only rises, wary from the job, the count, and the one-flood rule. Update Searching, Senses (what it is), Knowledge (`TimesSentToLook`, `WasToldOfRuby` and who may tell) and the debug overlays (the jobs gizmo).
-- [ ] **Step 2: The manual.** The Path Grid section's warnings table gains the new "no path ... so he goes as near as he can get" line and the 5 m rule (decision 17). The tuning table gains Dragged Distance, Known Spot Radius, Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
+- [ ] **Step 2: The manual.** The Path Grid section's warnings table gains the new "no path ... so he goes as near as he can get" line and the 5 m rule (decision 17). The tuning table gains Dragged Distance, Known Spot Radius, Personal Space, Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
 - [ ] **Step 3: Spec and plan.** Spec Progress notes piece 5 part A built, part B pending. Tick this plan's steps and mark `2026-10-30-enemy-group-jobs.md` finished by this plan. Commit these files only.
 - [ ] **Step 4: End-of-piece review, in the background,** over the range both plans added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before part B, in one fix wave.

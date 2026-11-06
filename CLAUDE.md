@@ -741,6 +741,11 @@ A\* for individual ones**:
   turned only after reaching the corner.
   `TryFindSpotAway`, Aggro's backing off, keeps the plain test: a short step, and a margin would
   leave a cornered enemy nowhere to go.
+- **Personal space** (`EnemyMovement.MakeRoom`, Personal Space 1.5 m on the enemy). Walking any path, he curves away from any enemy on his
+  feet inside the radius, harder the closer they are, and one dead ahead adds a step to his own right, so two met head-on pass rather than
+  stop. It bends the walk and never the plan: routes don't cost extra near others, because they move. A bend into a wall isn't taken, so a
+  corridor too narrow to pass in still falls to the push rule. Roaming and wandering spots avoid others' radius when a few tries can
+  (`TryPickFreeSpot`). Someone standing still doesn't step aside.
 - **`Steering`** is the turning maths: `TurnToward` rotates a flat heading at most so many degrees
   (a zero direction returns the heading, a rule so a body standing on its point keeps its facing), and
   `SpeedToFit` caps speed so a full-rate turn still reaches a point instead of orbiting it (never

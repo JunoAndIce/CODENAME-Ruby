@@ -454,7 +454,7 @@ public class SearchingState : EnemyStateBase
                     return;
                 }
                 float radius = Enemy.Intel.SearchAreaRadius;
-                if (!Enemy.Navigator.PickSpotInArea(GridArea.Circle(job.Point, radius), radius * 0.5f, out _roamSpot))
+                if (!Enemy.Movement.TryPickFreeSpot(GridArea.Circle(job.Point, radius), radius * 0.5f, out _roamSpot))
                 {
                     FailSpot($"no spot to roam to ({Enemy.Navigator.FailureReason})", job);
                     Enemy.Stop();

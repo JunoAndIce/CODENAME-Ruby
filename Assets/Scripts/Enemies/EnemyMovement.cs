@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -10,6 +11,10 @@ using UnityEngine;
 public class EnemyMovement
 {
     private const float WanderSpotRadius = 0.5f;
+    private const float RoomStrength = 2f;      // how hard someone close bends his walk: at arm's length, about 60 degrees off his way
+    private const float RoomLookAhead = 0.75f;  // how far along the bent walk must be open ground, or he doesn't bend
+    private const float SameFloorHeight = 1f;   // farther apart than this in height, they aren't sharing a floor
+    private const int FreeSpotTries = 4;
 
     private readonly EnemyController _enemy;
     private readonly CapsuleCollider _capsule;
@@ -26,6 +31,7 @@ public class EnemyMovement
     /// <summary>
     /// Curved Movement for realism.
     /// He turns his walking heading at Turn Speed, and slows to fit the turn only for a point he must reach.
+    /// Every path the navigator follows comes through here, so all of them keep Personal Space (MakeRoom).
     /// </summary>
     public void MoveToward(Vector3 target, float speed, bool mustReach)
     {
@@ -39,11 +45,13 @@ public class EnemyMovement
         // Closer than 10 cm there is no direction worth turning to: keep the heading and speed.
         if (direction.sqrMagnitude > 0.01f)
         {
+            float distance = direction.magnitude;
+            direction = MakeRoom(direction);
             // Fit the speed only to a point he must reach. A flow-field step rolls ahead every
             // step, so there is nothing to orbit and the cap would only slow a chase on ordinary
             // bends; its last step, the goal cell, stops rolling and is a point he must reach.
             if (mustReach)
-                fitted = Steering.SpeedToFit(speed, _enemy.TurnSpeed, direction.magnitude, Vector3.Angle(heading, direction));
+                fitted = Steering.SpeedToFit(speed, _enemy.TurnSpeed, distance, Vector3.Angle(heading, direction));
             heading = Steering.TurnToward(heading, direction, _enemy.TurnSpeed * Time.fixedDeltaTime);
             transform.rotation = Quaternion.LookRotation(heading, Vector3.up);
         }
@@ -53,6 +61,86 @@ public class EnemyMovement
         // The fitted speed, so the animation sees him slow in a tight turn.
         IntendedSpeed = fitted;
         VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, heading * fitted));
+    }
+
+    // Bends a walk away from any enemy inside Personal Space, harder the closer he is, so they curve round
+    // each other instead of walking into each other's capsules and pushing. Equal weights block each other
+    // (PushLimit), so without this two in a doorway stood grinding until a timer ran out. One dead ahead also
+    // adds a step to his own right: met head-on, pushing straight back would only stop them both, and each
+    // going right is how two people pass. Only for one on his feet: a body down or on the chain isn't anyone
+    // to make room for. A bend into a wall isn't taken: he keeps to his way and the push rule handles it,
+    // because a corridor too narrow to pass in has no room to make. With no Intel there is no list of who
+    // else is here, which Start has already reported.
+    private Vector3 MakeRoom(Vector3 direction)
+    {
+        float space = _enemy.PersonalSpace;
+        Intel intel = _enemy.Intel;
+        if (space <= 0f || intel == null) return direction;
+
+        Vector3 position = _enemy.transform.position;
+        Vector3 forward = direction.normalized;
+        Vector3 right = new(forward.z, 0f, -forward.x);
+        Vector3 away = Vector3.zero;
+        IReadOnlyList<EnemyController> enemies = intel.Enemies;
+        for (int i = 0; i < enemies.Count; i++)
+        {
+            EnemyController other = enemies[i];
+            if (other == null || other == _enemy || other.Health.IsDead || other.IsOverridden) continue;
+
+            Vector3 offset = position - other.transform.position;
+            if (Mathf.Abs(offset.y) > SameFloorHeight) continue;
+            offset.y = 0f;
+            float gap = offset.magnitude;
+            if (gap >= space) continue;
+
+            float press = 1f - gap / space;
+            // Standing exactly on him there is no way out to read: back the way he was going.
+            Vector3 outward = gap > 0.001f ? offset / gap : -forward;
+            away += outward * press;
+            float ahead = Vector3.Dot(-outward, forward);
+            if (ahead > 0f) away += right * (ahead * press);
+        }
+        if (away == Vector3.zero) return direction;
+
+        Vector3 bent = forward + away * RoomStrength;
+        if (bent.sqrMagnitude < 0.0001f) return direction;
+
+        PathGrid grid = PathGrid.At(position);
+        if (grid == null || !grid.HasLineOfSight(position, position + bent.normalized * RoomLookAhead)) return direction;
+        return bent;
+    }
+
+    /// <summary>Whether another enemy on his feet stands within Personal Space of a point.</summary>
+    public bool IsSpaceTaken(Vector3 point)
+    {
+        Intel intel = _enemy.Intel;
+        if (intel == null) return false;
+
+        IReadOnlyList<EnemyController> enemies = intel.Enemies;
+        for (int i = 0; i < enemies.Count; i++)
+        {
+            EnemyController other = enemies[i];
+            if (other == null || other == _enemy || other.Health.IsDead || other.IsOverridden) continue;
+            Vector3 at = other.transform.position;
+            if (Mathf.Abs(at.y - point.y) <= SameFloorHeight && PathGrid.FlatDistance(at, point) < _enemy.PersonalSpace) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// A random spot in an area, at least minDistance from where he stands, and not inside anyone's space
+    /// when one can be found in a few tries. In a crowded area the last try stands: walking there and being
+    /// blocked is already handled, and a false here means something else, that the area has no ground.
+    /// </summary>
+    public bool TryPickFreeSpot(GridArea area, float minDistance, out Vector3 spot)
+    {
+        spot = area.Centre;
+        for (int i = 0; i < FreeSpotTries; i++)
+        {
+            if (!_enemy.Navigator.PickSpotInArea(area, minDistance, out spot)) return false;
+            if (!IsSpaceTaken(spot)) return true;
+        }
+        return true;
     }
 
     public void Stop()
@@ -76,7 +164,7 @@ public class EnemyMovement
             Stop();
             return;
         }
-        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, direction.normalized * speed));
+        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, MakeRoom(direction).normalized * speed));
     }
 
     /// <summary>
@@ -147,7 +235,7 @@ public class EnemyMovement
     public bool TryPickWanderSpot(PatrolPoint point, out Vector3 spot)
     {
         GridArea area = point.Area;
-        return _enemy.Navigator.PickSpotInArea(area, area.Span * 0.25f, out spot);
+        return TryPickFreeSpot(area, area.Span * 0.25f, out spot);
     }
 
     /// <summary>

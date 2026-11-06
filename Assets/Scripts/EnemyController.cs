@@ -12,6 +12,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _searchSpeed = 1.5f;
     [Tooltip("How fast the body turns while walking a path, in degrees a second: lower makes wider arcs round bends. The legs' own turn on the model (CharacterAnimator's Turn Speed) is separate.")]
     [SerializeField, Min(1f)] private float _turnSpeed = 720f;
+    [Tooltip("The room he keeps round other enemies, in metres from centre to centre. Walking any path he curves away from anyone inside this, harder the closer they are, and he doesn't choose a roaming or wandering spot inside it. Capsules touch at about 0.7 m, so below that it does nothing. 0 turns it off.")]
+    [SerializeField, Min(0f)] private float _personalSpace = 1.5f;
 
     [Header("Awareness")]
     [Tooltip("How far he sees in front of him, within View Angle, if in sight.")]
@@ -121,6 +123,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float MotionRadius => _motionRadius;
     public float DraggedDistance => _draggedDistance;
     public float KnownSpotRadius => _knownSpotRadius;
+    public float PersonalSpace => _personalSpace;
     public float BodyNoticeRange => _bodyNoticeRange;
     public float ScanInterval => _scanInterval;
     internal float GrabPopUp => _grabPopUp;
