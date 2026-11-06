@@ -114,9 +114,9 @@ public class EnemyReactions
     public void BecomeWary() => _enemy.Memory.BecomeWary();
 
     /// <summary>
-    /// He sees an enemy killed, or the chain drag or throw one: someone is plainly doing this, so he goes
+    /// He sees the chain drag or throw an enemy: someone is plainly on the other end of it, so he goes
     /// for her. Taught where she is right now, which is also the chain's source: he doesn't go on knowing
-    /// where she goes after he looks away. A grab that isn't moving, or a knockdown, is searched
+    /// where she goes after he looks away. A grab that isn't moving, a knockdown or a death is searched
     /// instead (EnemySenses).
     /// </summary>
     internal void SeeAttack(EnemyController victim, string how)

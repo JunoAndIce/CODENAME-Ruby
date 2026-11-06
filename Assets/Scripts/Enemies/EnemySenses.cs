@@ -15,6 +15,7 @@ public class EnemySenses
     private readonly List<Rigidbody> _bodies = new();
     private readonly List<Rigidbody> _expired = new();
     private readonly HashSet<EnemyController> _noticedHeld = new();
+    private readonly HashSet<EnemyController> _sawDie = new();
     private float _nextScan;
 
     public EnemySenses(EnemyController enemy)
@@ -75,10 +76,12 @@ public class EnemySenses
         ScanLooseGuns();
     }
 
-    // An enemy killed in his view with a clear line: he goes after Ruby, on a job together or not. A partner
-    // dying beside him and him only searching the body read as not caring, and it's the biggest provocation
-    // there is. A knockdown doesn't do this: it stays a Search at the throw spot (Consider), which keeps a
-    // step between a fall and a death. One scan's window, tested at the spot he died, as for a throw (ScanHeld).
+    // An enemy killed in his view with a clear line: he always goes to check where what killed him came from,
+    // on a job together or not, as a gunshot takes anyone searching. A partner dying beside him and him only
+    // searching the body read as not caring. No Aggro: he hasn't seen who did it. No origin means nothing
+    // shows where it came from, so he checks where the enemy died. A knockdown doesn't do this: it stays
+    // Consider's Search, which keeps a step between a fall and a death. One scan's window, tested at the
+    // spot he died, as for a throw (ScanHeld), and once each, since the window can span two scans.
     private void ScanDeaths()
     {
         float window = _enemy.ScanInterval + Time.fixedDeltaTime;
@@ -86,12 +89,17 @@ public class EnemySenses
         for (int i = 0; i < enemies.Count; i++)
         {
             EnemyController other = enemies[i];
-            if (other == null || other == _enemy || !other.Health.IsDead) continue;
+            if (other == null || other == _enemy || !other.Health.IsDead || _sawDie.Contains(other)) continue;
             if (!other.BodyState.WasKilledWithin(window, out Vector3 where)) continue;
             if (!_enemy.Vision.InView(where) || !_enemy.Vision.HasClearSight(where, other.transform)) continue;
 
-            _enemy.Reactions.SeeAttack(other, "killed");
-            return;
+            _sawDie.Add(other);
+            bool hasOrigin = Disturbance.TryGetOrigin(other.Body, out Vector3 source);
+            Vector3 point = hasOrigin ? source : where;
+            if (!_enemy.Intel.TryGetRow(point, StimulusKind.Body, out BehaviourMap.Row row)) continue;
+
+            DebugLog.Info($"{_enemy.name} sees {other.name} killed: he goes to check {(hasOrigin ? "where it came from" : "where he died, since nothing shows where it came from")}, {point}.", _enemy);
+            _enemy.Reactions.Investigate(new Incident(point, row.Response, row.Priority, makesSearch: true, saysNothingOfRuby: !hasOrigin, mobilises: true));
         }
     }
 

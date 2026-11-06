@@ -584,7 +584,7 @@ through the player never slows the walk.
   where he was grabbed, or thrown within one scan of the release from a spot he sees
   (`WasThrownWithin`), someone is plainly on the other end of the chain: `EnemyReactions.SeeAttack`
   teaches him where Ruby is right now, as Heard, and `Alert()`s him into Aggro. That, sight of her
-  and `EnemyReactions.GoAfterRuby` (a provoked searcher, see **Distraction**), and seeing an enemy killed (`ScanDeaths`, any enemy, in view with a clear line to the spot he died, within a scan of it), are the only ways to Aggro through the senses. One knocked down, or a flying enemy whose
+  and `EnemyReactions.GoAfterRuby` (a provoked searcher, see **Distraction**) are the only ways to Aggro through the senses. **Seeing an enemy killed** (`ScanDeaths`, any enemy, in view with a clear line to the spot he died, within a scan of it) always sends him to check where what killed him came from, as a gunshot does (`Incident.Mobilises`), or where he died if nothing shows it. `ImpactDamage` stamps a body with its killer's origin, since a hit doesn't otherwise. One knocked down, or a flying enemy whose
   throw he didn't see, is a Search at the throw's origin (or where he lies), with no Aggro. He notices **corpses** within Body Notice Range in his
   view and clear sight, and **loose guns** in view and sight if he is armed. A body or gun he
   hasn't seen goes on the squad's books and he investigates it. A body the squad already knows he

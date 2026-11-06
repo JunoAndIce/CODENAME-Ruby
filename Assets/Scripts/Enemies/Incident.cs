@@ -38,7 +38,7 @@ public readonly struct Incident
     public bool SaysNothingOfRuby { get; }
 
     /// <summary>
-    /// A gunshot: whoever is searching responds whatever its priority (JobBoard.Mobilise). Priority can't
+    /// A gunshot, or an enemy seen killed: whoever is searching responds whatever its priority (JobBoard.Mobilise). Priority can't
     /// say this: a shot could only ever distract a search at its level or above, which is how a team
     /// about to finish heard one and walked off as if nothing had happened.
     /// </summary>
