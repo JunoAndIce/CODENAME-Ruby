@@ -94,7 +94,7 @@ public class EnemySenses
             if (!other.IsHeld)
             {
                 _noticedHeld.Remove(other);
-                if (other.WasThrownWithin(throwWindow, out Vector3 from)
+                if (other.BodyState.WasThrownWithin(throwWindow, out Vector3 from)
                     && _enemy.InView(from) && _enemy.HasClearSight(from, other.transform))
                 {
                     _enemy.Reactions.SeeChainMove(other, "thrown off the chain");
@@ -106,7 +106,7 @@ public class EnemySenses
             Vector3 at = other.transform.position;
             if (!_enemy.InView(at) || !_enemy.HasClearSight(other.Body.worldCenterOfMass, other.transform)) continue;
 
-            if (other.HeldMovedBy > _enemy.DraggedDistance)
+            if (other.BodyState.HeldMovedBy > _enemy.DraggedDistance)
             {
                 _enemy.Reactions.SeeChainMove(other, "being dragged on the chain");
                 return;

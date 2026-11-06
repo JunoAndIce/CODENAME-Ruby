@@ -130,6 +130,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public EnemyMovement Movement { get; private set; }
     /// <summary>What he takes in each frame: sight of Ruby, what he learns and says, and the newest thing he knows.</summary>
     public EnemyAwareness Awareness { get; private set; }
+    /// <summary>His record of the chain, and the gun and corpse handling that goes with it.</summary>
+    public EnemyBodyState BodyState { get; private set; }
     public float MotionRadius => _motionRadius;
     public float DraggedDistance => _draggedDistance;
     public float KnownSpotRadius => _knownSpotRadius;
@@ -156,22 +158,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>Only on the chain does an enemy, alive or dead, stop bullets: a shield. Free, it lets them through.</summary>
     public bool StopsBullets => IsHeld;
 
-    /// <summary>Lets the gun go with the body's velocity, so it skids on the way the enemy was moving.</summary>
-    public void DropGun()
-    {
-        if (Arms != null) Arms.Drop(Body.linearVelocity);
-    }
-
-    // The grab knocks the gun out of his hand: a small hop up and away from his body, on top of
-    // how he was moving.
-    private void PopGun()
-    {
-        if (!IsArmed) return;
-        Vector3 outward = Arms.HeldGun.transform.position - transform.position;
-        outward.y = 0f;
-        outward = outward.sqrMagnitude > 0.0001f ? outward.normalized : transform.forward;
-        Arms.Drop(Body.linearVelocity + outward * _grabPopOut + Vector3.up * _grabPopUp);
-    }
+    internal float GrabPopUp => _grabPopUp;
+    internal float GrabPopOut => _grabPopOut;
+    internal float CorpseBrightness => _corpseBrightness;
 
     /// <summary>
     /// After giving up on every gun in reach, wait Route Retry Time before looking again. Without
@@ -272,9 +261,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // it. A default start at some remembered spot let a caller that forgot to ask search at the wrong place, silently.
     private SearchRequest? _pendingSearch;
 
-    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
-    private static readonly int ColorId = Shader.PropertyToID("_Color");
-
     private void Awake()
     {
         Body = GetComponent<Rigidbody>();
@@ -286,6 +272,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Reactions = new EnemyReactions(this);
         Movement = new EnemyMovement(this, _capsule);
         Awareness = new EnemyAwareness(this);
+        BodyState = new EnemyBodyState(this);
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
@@ -394,7 +381,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             if (Ragdoll.Standing) Ragdoll.Relaunch(VelocityUtil.Flatten(Body.linearVelocity));
             return;
         }
-        DropGun();
+        BodyState.DropGun();
         Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity));
         _state.SetState(Ragdoll);
     }
@@ -420,31 +407,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public bool CanBeGrabbed => true;
 
     /// <summary>On the chain right now. A death mid-swing reads this to stay held.</summary>
-    public bool IsHeld { get; private set; }
-
-    private Vector3 _heldFrom;
-
-    /// <summary>How far he has been moved from where he was grabbed, in flat metres; 0 when he isn't held. What tells a watcher Ruby is dragging him.</summary>
-    public float HeldMovedBy => IsHeld ? PathGrid.FlatDistance(_heldFrom, transform.position) : 0f;
-
-    private Vector3 _thrownFrom;
-    private float _thrownAt = float.NegativeInfinity;
-
-    /// <summary>
-    /// Whether the chain threw him within the last `within` seconds, and where he was when it let go. A
-    /// watcher tests that spot, not the body: a thrown body can be many metres off by his next scan.
-    /// </summary>
-    public bool WasThrownWithin(float within, out Vector3 from)
-    {
-        from = _thrownFrom;
-        return Time.time - _thrownAt <= within;
-    }
-
-    private void NoteThrown()
-    {
-        _thrownFrom = transform.position;
-        _thrownAt = Time.time;
-    }
+    public bool IsHeld => BodyState.IsHeld;
 
     /// <summary>
     /// The job he is on, or null: a handful of enemies dealing with one thing together (GroupJob).
@@ -506,9 +469,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     public void EnterGrabbed()
     {
-        PopGun();
-        _heldFrom = transform.position;
-        IsHeld = true;
+        BodyState.PopGun();
+        BodyState.NoteHeld();
         if (Health.IsDead) Dead.Grab();
         else _state.SetState(Grabbed);
     }
@@ -520,9 +482,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public void EndGrab(bool wasSpun)
     {
-        IsHeld = false;
         // Let go mid-spin he flies out along her aim, which is a throw to anyone watching. A plain drop isn't.
-        if (wasSpun) NoteThrown();
+        BodyState.NoteReleased(wasSpun);
         if (Health.IsDead)
         {
             Dead.LetGo(Body.linearVelocity);
@@ -534,32 +495,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         _state.SetState(Ragdoll);
     }
 
-    /// <summary>
-    /// Darkens every renderer on the enemy to Corpse Brightness, through property blocks so the
-    /// shared materials (and every other enemy using them) are untouched.
-    /// </summary>
-    public void Darken()
-    {
-        var block = new MaterialPropertyBlock();
-        foreach (Renderer rendered in GetComponentsInChildren<Renderer>())
-        {
-            Material material = rendered.sharedMaterial;
-            if (material == null) continue;
-
-            Color colour = material.HasProperty(BaseColorId) ? material.GetColor(BaseColorId) : material.color;
-            colour = new Color(colour.r * _corpseBrightness, colour.g * _corpseBrightness, colour.b * _corpseBrightness, colour.a);
-
-            rendered.GetPropertyBlock(block);
-            block.SetColor(BaseColorId, colour);   // URP Lit
-            block.SetColor(ColorId, colour);       // built-in and sprite shaders
-            rendered.SetPropertyBlock(block);
-        }
-    }
-
     public void Release(Vector3 velocity)
     {
-        IsHeld = false;
-        NoteThrown();
+        BodyState.NoteReleased(true);
         if (Health.IsDead)
         {
             Dead.LetGo(velocity);
