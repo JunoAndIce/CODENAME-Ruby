@@ -60,17 +60,29 @@ That logic measures distance **from the camera**. A camera looking straight down
 4. **The biases are on the large side for small characters.** High Normal Bias can detach or thin a character's shadow, so it looks like it floats or starts away from his feet.
 5. **The quality level matters.** Mobile has very different shadow settings: 1 cascade, a 1024 map, bias 1 and no soft shadows. Check which one you're looking at. A build may not use the editor's.
 
+## Seen in play: shadows sliding onto the bottom wall
+
+*(User, 2026-11-06: "the shadows look like they move onto the bottom wall when I walk towards it at low shadow distance (like 50, 100). At 200 it still happens but is faint.")*
+
+- **Walls are about 3 m tall,** and the camera looks straight down, so what shows of a wall is its top. Nothing shorter than a wall can truly cast a shadow onto that top, unless a character's model is over 3 m tall (*not checked*).
+- **It changes with Shadow Distance,** which moves nothing in the world. That points to something tied to the camera's shadow range, and not to a real shadow. *Untested.*
+- **Best guess, untested:** the edge between two cascades, which moves with the camera. As she walks the edge slides across the view, the wall top ends up on the other side of it, and it gets different shadow detail from the floor beside it. A wall top is also 3 m nearer the camera than the floor, so it can fall in a different cascade. The split points move with Shadow Distance, which could be why 200 looks different.
+- **This may also mean "the whole floor is in one band" above is too simple.** URP's bands may not be flat slices at a set depth, so read them from the debugger rather than from the numbers.
+- **The tests below tell these apart:** experiment 2 is the direct one for this, and experiment 3 shows the bands on screen.
+
 ## Experiments, in order
 
 Each is a settings change in the Inspector, and takes seconds to undo:
 
 1. **Write down what "weird" looks like first:** a screenshot or short clip, standing still, moving and peeking. Blocky, shimmering, floating and fading each point to a different cause above.
-2. **On `PC_RPAsset`, set Cascade Count to 1.** The whole map then covers the whole Shadow Distance.
-3. **Lower the camera and the distance together:** for example height 15, Peek Height scaled to keep the same ratio (about 19), and Shadow Distance about 25. Fewer metres means sharper shadows. This is the likeliest single fix.
-4. **Lower Normal Bias** a little at a time, watching for acne, the speckled stripes that appear when it's too low.
-5. **Use the Frame Debugger** (Window > Analysis) to see the shadow map being drawn, and how much of it the view uses.
+2. **Stand still and peek (Shift) toward the wall.** The camera moves and she doesn't. If the shadow slides anyway, it's tied to the camera and not to anything casting it. Also try peeking away from the wall.
+3. **Show the cascades on screen:** Window > Analysis > Rendering Debugger, Lighting tab, Lighting Debug Mode set to Shadow Cascades. Each band gets a colour, so you can see whether an edge crosses the wall as the shadow moves.
+4. **On `PC_RPAsset`, set Cascade Count to 1.** The whole map then covers the whole Shadow Distance. If the sliding stops, cascades were the cause.
+5. **Lower the camera and the distance together:** for example height 15, Peek Height scaled to keep the same ratio (about 19), and Shadow Distance about 25. Fewer metres means sharper shadows.
+6. **Lower Normal Bias** a little at a time, watching for acne, the speckled stripes that appear when it's too low.
+7. **Use the Frame Debugger** (Window > Analysis) to see the shadow map being drawn, and how much of it the view uses.
 
-If 3 helps, the fixed camera height in the simpler design should be chosen with it: a low height that clears the tallest wall, with Shadow Distance set just past the floor.
+If 5 helps, the fixed camera height in the simpler design should be chosen with it: a low height that clears the tallest wall, with Shadow Distance set just past the floor.
 
 ## Things to keep in mind when this is built
 
