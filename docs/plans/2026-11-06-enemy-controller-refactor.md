@@ -57,7 +57,7 @@
 - [x] **Step 1:** Move the bodies of `OnDrawGizmosSelected` and `OnDrawGizmos`, with `DrawRoute`, `DrawFlatArea`, `DrawFlatArc` and `DrawFlatCircle`, into the class. The two Unity messages stay on the controller as one-line calls, because Unity only calls them there.
 - [x] **Step 2:** Run the compile check. Expected: `compile-check: OK`.
 - [x] **Step 3:** Commit `EnemyGizmos.cs`, its `.meta` once Unity makes it, and the controller.
-- [ ] **Step 4: Play-test gate (the user).** Select an enemy in edit mode, in Play, and with `officer.prefab` open in Prefab Mode during Play. The same gizmos draw, with no errors.
+- [x] **Step 4: Play-test gate (the user). Passed 2026-11-06, as one combined run.** Select an enemy in edit mode, in Play, and with `officer.prefab` open in Prefab Mode during Play. The same gizmos draw, with no errors.
 
 ### Task 2: `EnemyMovement`
 
@@ -72,7 +72,7 @@
 - [x] **Step 2:** Change the callers to `Enemy.Movement.X`, about 28 sites in `States/`, leaving `Enemy.Stop()` as it is. `CanSeeSpot` stays with sight.
 - [x] **Step 3:** Run the compile check. Expected: `compile-check: OK`.
 - [x] **Step 4:** Commit.
-- [ ] **Step 5: Play-test gate (the user).** Patrol, chase, back away from Ruby, search and look around, return to a post, and rearm. All read as they did, and the legs animate at the same speed.
+- [x] **Step 5: Play-test gate (the user). Passed 2026-11-06, as one combined run.** Patrol, chase, back away from Ruby, search and look around, return to a post, and rearm. All read as they did, and the legs animate at the same speed.
 
 ### Task 3: `EnemyAwareness`
 
@@ -88,7 +88,7 @@ Not `EnemyKnowledge`: `Knowledge` is already the enum on `RubyFact`.
 - [x] **Step 1:** Move `SeesPlayer`, `UpdateKnowledge`, `LogBecameAggressive` and their five fields. `Update` on the controller calls `_state.Tick()`, then `Awareness.Update()`, then `DebugDrawPath()`, in that order. `IsAggressive` and the routes stay, since the table reads them. `DetectsPlayer` stays private on the controller as the table's predicate.
 - [x] **Step 2:** Run the compile check. Expected: `compile-check: OK`.
 - [x] **Step 3:** Commit.
-- [ ] **Step 4: Play-test gate (the user).** With `RUBY_DEBUG_LOGS` on: an enemy who sees Ruby calls out her position, others join, the pool publishes, and "is now aggressive" logs once per enemy.
+- [x] **Step 4: Play-test gate (the user). Passed 2026-11-06, as one combined run.** With `RUBY_DEBUG_LOGS` on: an enemy who sees Ruby calls out her position, others join, the pool publishes, and "is now aggressive" logs once per enemy.
 
 ### Task 4: `EnemyBodyState`
 
@@ -102,7 +102,7 @@ Not `EnemyKnowledge`: `Knowledge` is already the enum on `RubyFact`.
 - [x] **Step 1:** Move the chain's record, `DropGun`, `PopGun` and `Darken`, with the shader IDs. `EnterGrabbed`, `EndGrab` and `Release` stay on the controller, because they call `SetState`, and call the class. `IsHeld` stays a forward on the controller, because `StopsBullets` and `Stance` read it.
 - [x] **Step 2:** Run the compile check. Expected: `compile-check: OK`.
 - [x] **Step 3:** Commit.
-- [ ] **Step 4: Play-test gate (the user).** Grab, drag, spin, throw and drop an enemy, and kill one. The gun pops on the grab, a corpse darkens, and a watcher still reacts to the drag and the throw.
+- [x] **Step 4: Play-test gate (the user). Passed 2026-11-06, as one combined run.** Grab, drag, spin, throw and drop an enemy, and kill one. The gun pops on the grab, a corpse darkens, and a watcher still reacts to the drag and the throw.
 
 ### Task 5: Forwards out, and the file in order
 
@@ -113,4 +113,4 @@ Not `EnemyKnowledge`: `Knowledge` is already the enum on `RubyFact`.
 - [x] **Step 3:** `CLAUDE.md`: **Who owns what** names the new classes and drops "keeps one-line forwards". The Assemblies table and every other `Squad/` path become `Enemies/`, because the folder was renamed.
 - [x] **Step 4:** Run the compile check. Expected: `compile-check: OK`.
 - [x] **Step 5:** Commit. Run the end-of-plan review in the background, on the most capable model, against this plan's Global Constraints and Review Focus.
-- [ ] **Step 6: Play-test gate (the user).** One full run: a sound, a job, a throw, a fight, a lost fight and a search. No new warnings or errors in the log.
+- [x] **Step 6: Play-test gate (the user). Passed 2026-11-06, as one combined run.** One full run: a sound, a job, a throw, a fight, a lost fight and a search. No new warnings or errors in the log.

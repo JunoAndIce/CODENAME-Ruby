@@ -350,7 +350,7 @@
 - [x] **Step 3: The reaction.** `SeeChainMove` teaches `Player.transform.position` as a Heard fact, latches wary and `Alert()`s, logging only when that moved him.
 - [x] **Step 4: Tumbling at any speed.** In `Consider`, a tumbling enemy below Notice Speed counts when he is in view. A held one below it is `ScanHeld`'s. When `TryGetOrigin` finds nothing the point is only where he lies, so a judged-by-what-it-is `Incident` also sets `saysNothingOfRuby`.
 - [x] **Step 5: Compile and commit,** as in Task 3.
-- [ ] **Step 6: Play-test gate (the user).** No Inspector work. With `RUBY_DEBUG_LOGS` on:
+- [x] **Step 6: Play-test gate (the user).** Passed 2026-11-06. No Inspector work. With `RUBY_DEBUG_LOGS` on:
   - **Grabbed, on a job or not:** whip an enemy in front of another, then stand still. The other walks over and searches around him, and doesn't go to Aggro unless he sees you.
   - **Dragged:** then walk off or reel him in. The watcher goes to Aggro ("sees ... being dragged").
   - **Jiggle:** hold right click on him without moving him. Nobody takes it as dragging.
