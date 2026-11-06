@@ -106,6 +106,15 @@
       - **Which losses:** grabbed, knocked down or killed, and it alerts the job members **who saw it happen**. *("Since we will later add enemies walking around on search this will be easy for them to spot.")* One who leaves on his own (to Aggro, called away, can't reach) alerts nobody.
       - **The alert:** Aggro at once, **onto Ruby's location**. *("They aren't stupid. We will have flavor animations in between like getting surprised and other stuff but aggro is the end goal.")*
     - **To plan with decisions 10 and 14,** which this settles the shape of: seeing it is what counts, and it teaches them where she is.
+16. **Enemies search like people (added 2026-11-06, not yet planned to a task).** *(User: "When do enemies search get more robust and they start searching more humanlike without the stopping and turning. (More slow walking, Checking behind objects their view is blocked by, flushing out corners like officers)")*
+    - **Moved up by the user: built straight after group jobs, as a small piece before squads (piece 6),** because this part doesn't need rooms. It replaces the roaming in Task 8, Step 1: today each enemy walks to a random spot, stops, and turns on the spot.
+    - **Walking:** they walk slowly and scan as they go, instead of stopping to turn.
+    - **Choosing where to go:** instead of random spots, they go to places in the search area they can't currently see, such as behind crates and round corners, until they have seen them. The path grid and sight checks should be able to find these without hand-placed spots, but that is untested.
+    - **Stays in piece 8:** the pointman going in at a gesture, the others hanging back, room-by-room clearing and designer-edited hiding spots. Those need rooms (piece 7).
+    - Open, to settle when it's planned:
+      - How slow, and whether a search for a problem walks differently from one for an attack.
+      - Whether the team shares what it has seen, so two members don't clear the same corner.
+      - Whether a Check's look changes too, or only a Search.
 
 ## Global Constraints
 
@@ -286,14 +295,14 @@
 
 **Files:** `Assets/Scripts/Squad/Intel.cs`, `Assets/Scripts/Squad/GroupJob.cs`, `Assets/Scripts/Squad/EnemyMemory.cs`, `Assets/Scripts/States/SearchingState.cs`
 
-- [ ] **Step 0: The clock waits for the team (decision 12).** A Search's countdown starts once every member has reached the spot. One who can't reach it (no path, or Search Travel Limit run out) leaves the job, with a log line saying why, and goes back to his patrol. A Check is unchanged.
-- [ ] **Step 1: Roam.** In a Search's Search step each member walks random open spots within Search Area Radius (6 m, on `Intel`) of the job's place, looks at each for Look Time, and picks the next, until the job is Done. A run of failed spots ends his part with a log line. **Changed by the user's notes (2026-11-04):** a member starts on entering the radius with a clear line to the spot, not at the spot itself, and roams from then on while the countdown waits for the last one in. Each look lasts a random share of Look Time (Roam Look Variation, 0.5), and each member begins with one, so a team doesn't move on together. **Changed again (user, 2026-11-05), replacing "finishes on the same frame":** when the countdown ends, each member finishes the walk he is on and looks there before he leaves the job. He picks no new spot. A Check still ends together.
-- [ ] **Step 2: Joining from Aggro.** `Intel.JoinFromAggro(who, point)`, from `SearchingState.Enter` when he enters from Aggro:
+- [x] **Step 0: The clock waits for the team (decision 12).** A Search's countdown starts once every member has reached the spot. One who can't reach it (no path, or Search Travel Limit run out) leaves the job, with a log line saying why, and goes back to his patrol. A Check is unchanged.
+- [x] **Step 1: Roam.** In a Search's Search step each member walks random open spots within Search Area Radius (6 m, on `Intel`) of the job's place, looks at each for Look Time, and picks the next, until the job is Done. A run of failed spots ends his part with a log line. **Changed by the user's notes (2026-11-04):** a member starts on entering the radius with a clear line to the spot, not at the spot itself, and roams from then on while the countdown waits for the last one in. Each look lasts a random share of Look Time (Roam Look Variation, 0.5), and each member begins with one, so a team doesn't move on together. **Changed again (user, 2026-11-05), replacing "finishes on the same frame":** when the countdown ends, each member finishes the walk he is on and looks there before he leaves the job. He picks no new spot. A Check still ends together.
+- [x] **Step 2: Joining from Aggro.** `Intel.JoinFromAggro(who, point)`, from `SearchingState.Enter` when he enters from Aggro:
   - **A job within Job Match Radius:** he raises it to an attack (once per area, see below), and joins it if it has room. If it is full, he goes to Patrol Aggressive, as the spec has it.
   - **None:** he starts a Search for an attack at `point` with him as lead, recruits the free officers near him, and the rest of the fight's officers join as they lose her, up to three.
-- [ ] **Step 3: Once per area.** `EnemyMemory` remembers where he last raised a job. He raises again only when his search is at least Job Match Radius from that place.
-- [ ] **Step 4: Compile and commit,** as in Task 3.
-- [ ] **Step 5: Play-test gate (the user).** No Inspector work. In play:
+- [x] **Step 3: Once per area.** `EnemyMemory` remembers where he last raised a job. He raises again only when his search is at least Job Match Radius from that place.
+- [x] **Step 4: Compile and commit,** as in Task 3.
+- [x] **Step 5: Play-test gate (the user).** Passed 2026-11-06. No Inspector work. In play:
   - **A body:** an officer finds a corpse out of sight of three others, and the team searches it by roaming round it for Search Duration, then walks Aggressive.
   - **Got up:** throw an officer, let him get up beside a thud job. He raises it to an attack for everyone in it, once.
   - **A lost fight:** five officers lose Ruby. The first three search together, the rest go to Patrol Aggressive.

@@ -689,6 +689,10 @@ idle officer has a line to his post, and in play each alarm shows its count.
   other officers sit back")*. A spot is cleared once he has seen it.
 - Every officer on the team still senses as usual, so Ruby breaking from a spot in a cover man's
   cone is seen.
+- **Moved up (user, 2026-11-06):** the part that needs no rooms comes before piece 6: slow walking,
+  scanning as they go rather than stopping to turn, and going to places they can't currently see.
+  It is decision 16 in `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`. The pointman, the cover
+  men, room-by-room clearing and designer-edited spots stay here.
 
 ### 9. Breakables: light fixtures and props (much later)
 

@@ -1065,10 +1065,12 @@ the job in the pool, `docs/plans/2026-10-30-enemy-group-jobs.md` Tasks 1 and 2) 
 and 4 (one outcome per job, the checker and followers, `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`).
 A whole-branch review then found bugs and overloaded classes, and `docs/plans/2026-11-02-enemy-ai-fixes-and-refactor.md`
 fixed them and split the job engine, the knowledge pool, flood reading, sight and reactions out of
-`Intel` and `EnemyController` into the classes under **Enemy AI**. Part 2's Tasks 5 to 9 are still to
-come (moving objects judged by what they are, individual memory, fill and merge, search together
-and recovered officers, then its docs), and part 2's decisions 8 to 14 are recorded there but not
-built. Then squads, rooms, hiding spots and breakables.
+`Intel` and `EnemyController` into the classes under **Enemy AI**. Part 2's Tasks 5 to 8 are built
+(moving objects judged by what they are, individual memory, fill and merge, search together and
+recovered officers), and Task 9, its docs, is still to come, so **Enemy AI** doesn't describe all of
+them yet. Part 2's decisions 8 to 16 are recorded there but not all built. After group jobs comes a
+small piece, decision 16: searching like people (slow walking, scanning as they go, clearing what
+they can't see). Then squads, rooms, hiding spots and breakables.
 
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
 account of what is built, and its section on the Path Grid, colliders and navigation is written for
