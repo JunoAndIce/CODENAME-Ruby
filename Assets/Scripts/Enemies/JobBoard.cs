@@ -68,6 +68,15 @@ public class JobBoard
                     continue;
                 }
 
+                // The whole area has been looked at, so there's nothing left to count down to. Not before a
+                // look's length: the first member in can see an open room at a glance, and the team would
+                // arrive and leave in the same moment.
+                if (job.Step == JobStep.Search && job.Coverage != null && job.Coverage.AllSeen && job.StepElapsed >= job.Lead.LookTime)
+                {
+                    AdvanceTo(job, JobStep.Done, "has looked everywhere");
+                    continue;
+                }
+
                 // Before the Go and length checks, so a job still walking gets its fill's calls too.
                 AdvanceFill(job);
                 if (job.Step == JobStep.Go) continue;
@@ -676,6 +685,13 @@ public class JobBoard
         DebugLog.Info($"{job} sends {nearest.name} to check {thing} ({nearestDistance:0.#} m away); the rest carry on.", nearest);
     }
 
+    /// <summary>What the job's team hasn't looked at yet, built the first time it's asked for.</summary>
+    public SearchCoverage CoverageOf(GroupJob job)
+    {
+        if (job.Coverage == null) job.SetCoverage(new SearchCoverage(job.Point, _intel.SearchAreaRadius, _intel));
+        return job.Coverage;
+    }
+
     /// <summary>The scout has finished his check. He returns to the job's work, or leaves with it if it has ended.</summary>
     public void ScoutBack(GroupJob job, EnemyController who)
     {
@@ -688,6 +704,9 @@ public class JobBoard
         if (job.Step != JobStep.Search || Time.time - job.LastExtendedAt < who.DistractionGap) return;
 
         job.ExtendStep(_intel.GunshotExtension, LengthOf(JobStep.Search, job.Lead));
+        // Whatever they had cleared may not be clear now: they look again, or a team that had seen it all
+        // would finish straight through the shot.
+        job.SetCoverage(null);
         DebugLog.Info($"{who.name} has something serious in the search area: {job} now has {job.StepLength - job.StepElapsed:0.#}s left.", who);
     }
 

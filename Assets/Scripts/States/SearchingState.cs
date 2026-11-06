@@ -13,11 +13,11 @@ public enum SearchStep { Walk, Look, StandDown, Done }
 /// already known, or a scene with no Intel) he runs his own steps: a search for
 /// an attack looks for Search Duration, a check on a problem looks for Look Time and then stands down
 /// with a gesture. Which patrol he goes back to is the table's business (EnemyController.IsAggressive).
-/// **A Search's team roams its area:** each member starts as soon as he is inside Search Area Radius of
-/// the place with a clear line to it, walking random open spots there and looking at each for a random
-/// share of Look Time, so no two move on together. Its countdown starts once every member has come in
-/// (a member who can't reach the area is taken off the job). When it runs out each still finishes the walk
-/// he is on and looks there before he leaves, so the team drifts off one by one. One who enters it after losing a fight joins or starts a job at the spot he knew (AfterLostFight,
+/// **A Search's team clears its area:** each member starts as soon as he is inside Search Area Radius of
+/// the place with a clear line to it, creeping toward what nobody has looked at yet with his view sweeping
+/// as he goes (SearchCoverage). Its countdown starts once every member has come in (a member who can't
+/// reach the area is taken off the job), and it ends sooner if they have seen it all. Then each still
+/// finishes the walk he is on before he leaves, so the team drifts off one by one. One who enters it after losing a fight joins or starts a job at the spot he knew (AfterLostFight,
 /// Intel.JoinFromAggro), or goes back to patrol if the team there is full.
 /// </summary>
 public class SearchingState : EnemyStateBase
@@ -37,14 +37,15 @@ public class SearchingState : EnemyStateBase
     // The line about a stall outside the search area is said once per walk, not every step.
     private bool _loggedBlocked;
 
-    // Roaming, from the moment he enters a Search's area: he walks to a random open spot near the job's place,
-    // looks for a random share of Look Time, and picks the next. Reset by Begin, so an upgrade or a new place starts him over.
+    // Clearing, from the moment he enters a Search's area: he creeps toward what nobody has looked at yet,
+    // or looks about if nothing is free. Reset by Begin, so an upgrade or a new place starts him over.
     private enum RoamPhase { Pick, Walk, Look }
     private RoamPhase _roamPhase;
     private Vector3 _roamSpot;
     private float _roamLookTimer;
     private float _roamLookLength; // rolled for each look: a shared length had a team setting off on the same frame
     private float _roamBaseYaw;
+    private float _coverageTimer;  // until his next look at what the team hasn't seen: each scan, not each step
     private float _roamWalkTimer;  // the walk to this spot. The countdown ending doesn't end a walk, so this has to.
     private int _failedSpots;      // spots in a row he could not pick or reach
     private bool _roamGaveUp;      // too many failed in a row: he sweeps on the spot for the rest of the job
@@ -493,13 +494,21 @@ public class SearchingState : EnemyStateBase
         Enemy.Intel.ScoutBack(job, Enemy);
     }
 
-    // Walks random open spots within Search Area Radius of the job's place and looks about at each for a
-    // length of his own. Once the job's countdown has ended he picks no new spot: he finishes the walk
-    // and the look he is on, and only then is he done, so each leaves in his own time.
-    // The spots are PickSpotInArea's, ground joined to the place's own, so none is through a wall, and at
-    // least half the radius from where he stands, so each walk reads as roaming and not shuffling.
+    // Clears the area: he heads for the nearest place nobody on the team has looked at, creeping with his view
+    // sweeping across his way, and moves on as soon as anyone has seen it, so he only walks as far as he needs
+    // to see round the crate. With nothing free to head for he looks about where he stands until there is,
+    // or the job ends. Once the job's countdown is over he picks nothing new: he finishes the walk or look
+    // he is on, then he's done, so each leaves in his own time.
     private void Roam(GroupJob job)
     {
+        SearchCoverage coverage = Enemy.Intel.CoverageOf(job);
+        _coverageTimer -= Time.fixedDeltaTime;
+        if (_coverageTimer <= 0f)
+        {
+            _coverageTimer = Enemy.ScanInterval;
+            coverage.Look(Enemy);
+        }
+
         switch (_roamPhase)
         {
             case RoamPhase.Pick:
@@ -510,11 +519,9 @@ public class SearchingState : EnemyStateBase
                     DebugLog.Info($"{Enemy.name} has finished his last look on {job}.", Enemy);
                     return;
                 }
-                float radius = Enemy.Intel.SearchAreaRadius;
-                if (!Enemy.Movement.TryPickFreeSpot(GridArea.Circle(job.Point, radius), radius * 0.5f, out _roamSpot))
+                if (!coverage.TryClaimNearest(Enemy, out _roamSpot))
                 {
-                    FailSpot($"no spot to roam to ({Enemy.Navigator.FailureReason})", job);
-                    Enemy.Stop();
+                    BeginRoamLook();
                     return;
                 }
                 _roamPhase = RoamPhase.Walk;
@@ -522,20 +529,29 @@ public class SearchingState : EnemyStateBase
                 goto case RoamPhase.Walk;
 
             case RoamPhase.Walk:
-                // The countdown used to end every walk. Now only arriving does, so a walk that keeps "making
-                // progress" without getting there would keep him searching for good.
+                // Someone has seen it, him included, which is the usual way a walk ends.
+                if (!coverage.IsUnseen(_roamSpot))
+                {
+                    _failedSpots = 0;
+                    _roamPhase = RoamPhase.Pick;
+                    goto case RoamPhase.Pick;
+                }
+                // A walk that keeps "making progress" without getting there would keep him searching for good.
                 _roamWalkTimer += Time.fixedDeltaTime;
                 if (_roamWalkTimer >= Enemy.SearchTravelLimit)
                 {
+                    coverage.Clear(_roamSpot);
                     FailSpot($"didn't reach the spot at {_roamSpot} in {Enemy.SearchTravelLimit:0.#}s", job);
                     return;
                 }
-                NavResult result = Enemy.Movement.WanderTo(_roamSpot, Enemy.SearchSpeed);
+                NavResult result = Enemy.Movement.SweepTo(_roamSpot, Enemy.ClearingSpeed);
                 if (result == NavResult.Moving) return;
+                // There, or unable to get there: either way nobody needs to try it again.
+                coverage.Clear(_roamSpot);
                 if (result == NavResult.Arrived)
                 {
                     _failedSpots = 0;
-                    BeginRoamLook();
+                    _roamPhase = RoamPhase.Pick;
                     return;
                 }
                 FailSpot($"couldn't {(result == NavResult.Blocked ? "get to" : "reach")} the spot at {_roamSpot} ({Enemy.Navigator.FailureReason})", job);
@@ -660,14 +676,13 @@ public class SearchingState : EnemyStateBase
 
     // He is as close as he will get. He faces the spot, so the sweep he joins is about it and ends
     // on it, and tells the squad: a Check's first arrival moves the job from Go to its look, a Search's
-    // last one to its search. In a Search he starts with a look of random length, so two who come in
-    // together don't set off together.
+    // last one to its search. In a Search he goes straight on to clearing: no stop at the edge to look.
     private void Arrive(string why)
     {
         _arrived = true;
         Enemy.Movement.FaceToward(Job.Point);
         _lookBaseYaw = Enemy.transform.eulerAngles.y;
-        if (Job.Kind == JobKind.Search) BeginRoamLook();
+        if (Job.Kind == JobKind.Search) _roamPhase = RoamPhase.Pick;
         DebugLog.Info($"{why}.", Enemy);
         if (Enemy.Intel != null) Enemy.Intel.NoteArrived(Job, Enemy);
     }

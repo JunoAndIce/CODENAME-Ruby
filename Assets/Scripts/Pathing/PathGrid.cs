@@ -226,6 +226,38 @@ public class PathGrid : MonoBehaviour
         return candidates > 0;
     }
 
+    /// <summary>
+    /// Points about spacing metres apart on the area's open ground, into a list it clears first: only ground
+    /// joined to the area's resolved centre without leaving the area, the same ground RandomSpotInArea
+    /// picks from, so none is through a wall. False when the area has no open ground.
+    /// </summary>
+    public bool CollectAreaGround(GridArea area, Vector3 from, float spacing, List<Vector3> into)
+    {
+        into.Clear();
+        if (!ResolveArea(area, from, out Vector2Int start, out _)) return false;
+
+        if (_areaMark == null || _areaMark.Length != CellCount) _areaMark = new int[CellCount];
+        _areaGeneration++;
+        _areaCells.Clear();
+        MarkAreaCell(Index(start));
+
+        int stride = Mathf.Max(1, Mathf.RoundToInt(spacing / _cellSize));
+        for (int head = 0; head < _areaCells.Count; head++)
+        {
+            Vector2Int cell = CellOf(_areaCells[head]);
+            if (cell.x % stride == 0 && cell.y % stride == 0) into.Add(CellToWorld(cell));
+
+            foreach (Vector2Int step in Steps)
+            {
+                Vector2Int next = cell + step;
+                if (!CanStep(cell, step) || _areaMark[Index(next)] == _areaGeneration) continue;
+                if (!area.Contains(CellToWorld(next))) continue;
+                MarkAreaCell(Index(next));
+            }
+        }
+        return true;
+    }
+
     private void MarkAreaCell(int index)
     {
         _areaMark[index] = _areaGeneration;

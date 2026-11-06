@@ -802,7 +802,7 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
     together** (leaders, groups of two or three, followers breaking off and rejoining), is not
     built, and still needs its trigger now the level alert is gone. Decision 16 of the part 2 plan,
     searching like people (slow walking, scanning as they go, going to places in the search area
-    he can't see), comes next as a small piece before 6, because it doesn't need rooms. Its
+    he can't see), is built ahead of 6, because it doesn't need rooms. Its
     room-by-room clearing and hiding spots stay in pieces 7 and 8.
 - [ ] 6. Fighting together: squads and fire lanes
 - [ ] 7. Rooms and behaviour maps: activities, firing ranges, armories and alarms

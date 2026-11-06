@@ -668,18 +668,7 @@ through the player never slows the walk.
     from a zero duration froze every step at Stand Down Time 0. A job that empties during `Advance`
     is removed after the walk, so none misses a tick. A job's reason **only rises**: whatever one
     member knows is known to the team, and an attack makes every member wary at once.
-  - **A Search roams its area, and ends one by one** (`SearchingState.Roam`). A member starts as soon
-    as he is inside Search Area Radius (6 m, on `Intel`) of the place with a clear line to it, not at
-    the place itself, and from then on walks random open spots inside it, looking at each for a
-    random share of Look Time (Roam Look Variation) so a team doesn't move on together, each
-    beginning with a look of his own. **The countdown waits for the team:** the Search step starts when
-    every member has come in (`NoteArrived`), so one called from far away isn't left with no time. One
-    who can't reach the area, with no path or Search Travel Limit run out, is **taken off the job** and
-    goes back to his patrol, with a log line saying why (`DropFromSearch`; his search ends so the table
-    takes him to Patrol, Aggressive since an attack search made him wary). Three failed spots in a row end
-    his roaming and he sweeps where he stands. When the countdown ends **each finishes the walk he is on
-    and looks there before he leaves**, picking no new spot, so the team drifts off in its own time, not
-    on one frame; he stays on the job meanwhile, but `Covers` refuses a Done job, so a new disturbance can start a second job around him.
+  - **A Search clears its area, and ends one by one** (`SearchingState.Roam`, `SearchCoverage`). A member starts as soon as he is within Search Area Radius of the place with a clear line to it, on the job's floor, instead of walking to the spot: the radius alone would count him as there from the far side of a wall. Its countdown waits for every member to come in, and one who can't reach the area (no path, or Search Travel Limit) is taken off the job and goes back to patrol. **What's left is shared by the team:** points about a metre apart on ground joined to the place, cleared when anyone has one in view with a clear line, the same test as for Ruby. Each member heads for the nearest point nobody else has claimed, at Clearing Speed Factor (0.6) of Search Speed, with his body and view swinging Walk Sweep Angle (45) across his way (`EnemyMovement.SweepTo`) instead of stopping to turn, and moves on as soon as it's seen, so he walks only far enough to see round the crate. With nothing free he looks about where he stands, for a random share of Look Time. **Search Duration is the longest it lasts:** once they've seen it all, and at least a Look Time has passed, the job finishes ("has looked everywhere"). A gunshot in the area throws away what they've seen, so they look again. When it ends each finishes his walk or look and leaves in his own time, since a Done job takes no new member or sound. A Check doesn't do any of this: it stays one quick look.
   - **The checker and followers.** In a Check one member goes to the spot and looks: the nearest to
     it (flat) when the team sets off, chosen once and kept (`CheckerOf` only reads the job), unless a
     nearer enemy joins in the first moments of Go. If he leaves in Go, the nearest of the rest takes
@@ -1160,10 +1149,10 @@ the job in the pool, `docs/plans/2026-10-30-enemy-group-jobs.md` Tasks 1 and 2) 
 and overloaded classes, and `docs/plans/2026-11-02-enemy-ai-fixes-and-refactor.md` fixed them and
 split the job engine, the knowledge pool, flood reading, sight and reactions out of `Intel` and
 `EnemyController` into the classes under **Enemy AI**. Part 2's tasks and its decisions are built
-and described under **Enemy AI**, except decision 16, searching like people (slow walking, scanning
-as they go, clearing what they can't see), which is the next small piece, before squads. The user
+and described under **Enemy AI**, including decision 16, searching like people (slow walking, scanning
+as they go, clearing what they can't see). Squads come next. The user
 changed decisions 10, 14 and 15 (Task 8b): nobody goes to Aggro unless he sees Ruby, or sees her drag
-or throw an enemy on the chain; a grabbed enemy seen standing still is walked over to and searched
+or throw an enemy on the chain, and one who sees an enemy killed goes to check where it came from; a grabbed enemy seen standing still is walked over to and searched
 around, and a knockdown or death only searches. Piece 5's part B (patrol together: leaders, groups,
 breaking off) isn't built, and needs a trigger of its own now the level alert is gone. After the
 searching piece come squads, rooms, hiding spots and breakables.

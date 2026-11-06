@@ -19,6 +19,14 @@ public class EnemyMovement
     private readonly EnemyController _enemy;
     private readonly CapsuleCollider _capsule;
 
+    // The sweeping walk: he walks along _sweepWay while his body, and so his view, swings across it. The way
+    // has to be held apart from his facing, which every other walk reads it from. Each enemy has his own
+    // phase, so a team doesn't swing together.
+    private readonly float _sweepPhase = Random.Range(0f, Mathf.PI * 2f);
+    private bool _sweepNextMove;
+    private Vector3 _sweepWay;
+    private float _lastSweepStep = float.NegativeInfinity;
+
     public EnemyMovement(EnemyController enemy, CapsuleCollider capsule)
     {
         _enemy = enemy;
@@ -39,7 +47,12 @@ public class EnemyMovement
         Vector3 direction = target - transform.position;
         direction.y = 0f;
 
-        Vector3 heading = transform.forward;
+        // Picked up from his facing when a sweeping walk begins, then kept: he strays from it to look.
+        bool sweeping = _sweepNextMove;
+        _sweepNextMove = false;
+        if (sweeping && Time.fixedTime - _lastSweepStep > Time.fixedDeltaTime * 1.5f) _sweepWay = transform.forward;
+
+        Vector3 heading = sweeping ? _sweepWay : transform.forward;
         heading.y = 0f;
         float fitted = speed;
         // Closer than 10 cm there is no direction worth turning to: keep the heading and speed.
@@ -57,6 +70,14 @@ public class EnemyMovement
         }
         else if (heading.sqrMagnitude > 0.0001f)
             heading.Normalize();
+
+        if (sweeping)
+        {
+            _sweepWay = heading;
+            _lastSweepStep = Time.fixedTime;
+            float sweep = _enemy.WalkSweepAngle * Mathf.Sin(_sweepPhase + Time.fixedTime * Mathf.PI * 2f / _enemy.LookSweepPeriod);
+            if (heading.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(heading, Vector3.up) * Quaternion.Euler(0f, sweep, 0f);
+        }
 
         // The fitted speed, so the animation sees him slow in a tight turn.
         IntendedSpeed = fitted;
@@ -249,6 +270,18 @@ public class EnemyMovement
     /// enemy standing on the spot would count as arrived instead of blocked.
     /// </summary>
     public NavResult WanderTo(Vector3 spot, float speed) => WalkTo(spot, WanderSpotRadius, speed);
+
+    /// <summary>
+    /// The same walk, at a search's creep, with his body and view sweeping side to side across his way
+    /// instead of stopping to turn. Only the next move sweeps, so it can't outlive the walk that asked for it.
+    /// </summary>
+    public NavResult SweepTo(Vector3 spot, float speed)
+    {
+        _sweepNextMove = true;
+        NavResult result = WanderTo(spot, speed);
+        _sweepNextMove = false;
+        return result;
+    }
 
     /// <summary>Walk until within reach of a point, along an A* route.</summary>
     public NavResult WalkTo(Vector3 point, float reach, float speed) => _enemy.Navigator.MoveToArea(GridArea.Circle(point, reach), speed);

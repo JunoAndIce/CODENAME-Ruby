@@ -135,11 +135,16 @@ public class GroupJob
         if (who.Job == this) who.Job = null;
         if (Checker == who) Checker = null;
         if (Scout == who) Scout = null;
+        Coverage?.Release(who);
         if (Callee == who) Callee = null;
         _arrived.Remove(who);
     }
 
     internal void RestartClock() => StepElapsed = 0f;
+
+    /// <summary>What the team hasn't looked at yet, once someone has asked (JobBoard.CoverageOf). Null means not built, or thrown away to look again.</summary>
+    public SearchCoverage Coverage { get; private set; }
+    internal void SetCoverage(SearchCoverage coverage) => Coverage = coverage;
 
     /// <summary>The member gone to check a new sound away from the job, or null. One at a time: other sounds meanwhile only make the team turn.</summary>
     public EnemyController Scout { get; private set; }
@@ -256,6 +261,8 @@ public class GroupJob
         Checker = null;
         // The job has moved on from what he went to check, and everyone is sent afresh (FollowJob).
         Scout = null;
+        // A new place, or a check that has become a search: nothing here has been looked at.
+        Coverage = null;
         _arrived.Clear();
         _dropped.Clear();
         // Still calling people in: carry on, the walk will start from the new place afterwards.

@@ -12,6 +12,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _searchSpeed = 1.5f;
     [Tooltip("How fast the body turns while walking a path, in degrees a second: lower makes wider arcs round bends. The legs' own turn on the model (CharacterAnimator's Turn Speed) is separate.")]
     [SerializeField, Min(1f)] private float _turnSpeed = 720f;
+    [Tooltip("His speed while he clears a Search's area, as a multiple of Search Speed: below 1, so he creeps and looks. Walking in to the area stays at full Search Speed.")]
+    [SerializeField, Range(0.1f, 1f)] private float _clearingSpeedFactor = 0.6f;
+    [Tooltip("How far, in degrees, his body sweeps to each side of his way while he clears a Search's area. He keeps walking his way, and his view goes with his body.")]
+    [SerializeField, Range(0f, 90f)] private float _walkSweepAngle = 45f;
     [Tooltip("The room he keeps round other enemies, in metres from centre to centre. Walking any path he curves away from anyone inside this, harder the closer they are, and he doesn't choose a roaming or wandering spot inside it. Capsules touch at about 0.7 m, so below that it does nothing. 0 turns it off.")]
     [SerializeField, Min(0f)] private float _personalSpace = 1.5f;
 
@@ -32,7 +36,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _unseenHoldTime = 1f;
     [Tooltip("Height above the enemy's centre that sight is cast from.")]
     [SerializeField] private float _eyeHeight = 0.5f;
-    [Tooltip("How long he searches once he has reached the spot, in seconds. The walk there doesn't count.")]
+    [Tooltip("The longest a search lasts once he has reached the spot, in seconds. The walk there doesn't count, and a team that has looked at the whole area finishes sooner.")]
     [SerializeField, Min(0f)] private float _searchDuration = 5f;
     [Tooltip("How close he gets to a search spot, in metres. If something blocks the way once he's this near (another enemy already standing on the spot, say), he looks from where he stands instead of pushing at it.")]
     [SerializeField, Min(0.5f)] private float _searchReach = 1.5f;
@@ -60,7 +64,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Header("Looking")]
     [Tooltip("How long he looks around a spot he went to check, in seconds, before standing down. A search for an attack looks for Search Duration instead.")]
     [SerializeField, Min(0.1f)] private float _lookTime = 1.5f;
-    [Tooltip("How much each look varies while he roams a search, as a share of Look Time: at 0.5 each lasts from half to one and a half times Look Time. Rolled for every look, so a team doesn't move off together.")]
+    [Tooltip("How much each look varies while he waits in a search for somewhere free to go, as a share of Look Time: at 0.5 each lasts from half to one and a half times Look Time.")]
     [SerializeField, Range(0f, 0.9f)] private float _roamLookVariation = 0.5f;
     [Tooltip("How long he holds still after finding nothing, in seconds: the gesture, until there is an animation for it.")]
     [SerializeField, Min(0f)] private float _standDownTime = 1f;
@@ -137,6 +141,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
+    public float ClearingSpeed => _searchSpeed * _clearingSpeedFactor;
+    internal float WalkSweepAngle => _walkSweepAngle;
     public float AggroTime => _aggroTime;
     public float SightFollowThrough => _sightFollowThrough;
     public float UnseenHoldTime => _unseenHoldTime;

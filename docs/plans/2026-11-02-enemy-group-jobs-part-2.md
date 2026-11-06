@@ -110,15 +110,12 @@
       - **Which losses:** grabbed, knocked down or killed, and it alerts the job members **who saw it happen**. *("Since we will later add enemies walking around on search this will be easy for them to spot.")* One who leaves on his own (to Aggro, called away, can't reach) alerts nobody.
       - **The alert:** Aggro at once, **onto Ruby's location**. *("They aren't stupid. We will have flavor animations in between like getting surprised and other stuff but aggro is the end goal.")*
     - **To plan with decisions 10 and 14,** which this settles the shape of: seeing it is what counts, and it teaches them where she is. **Decisions 10, 14 and 15 are planned as Task 8b, and the user changed them on 2026-11-06: nobody goes to Aggro unless he sees Ruby, or sees her moving an enemy on the chain (see Task 8b).**
-16. **Enemies search like people (added 2026-11-06, not yet planned to a task).** *(User: "When do enemies search get more robust and they start searching more humanlike without the stopping and turning. (More slow walking, Checking behind objects their view is blocked by, flushing out corners like officers)")*
+16. **Enemies search like people (added and built 2026-11-06).** *(User: "When do enemies search get more robust and they start searching more humanlike without the stopping and turning. (More slow walking, Checking behind objects their view is blocked by, flushing out corners like officers)")*
     - **Moved up by the user: built straight after group jobs, as a small piece before squads (piece 6),** because this part doesn't need rooms. It replaces the roaming in Task 8, Step 1: today each enemy walks to a random spot, stops, and turns on the spot.
     - **Walking:** they walk slowly and scan as they go, instead of stopping to turn.
     - **Choosing where to go:** instead of random spots, they go to places in the search area they can't currently see, such as behind crates and round corners, until they have seen them. The path grid and sight checks should be able to find these without hand-placed spots, but that is untested.
     - **Stays in piece 8:** the pointman going in at a gesture, the others hanging back, room-by-room clearing and designer-edited hiding spots. Those need rooms (piece 7).
-    - Open, to settle when it's planned:
-      - How slow, and whether a search for a problem walks differently from one for an attack.
-      - Whether the team shares what it has seen, so two members don't clear the same corner.
-      - Whether a Check's look changes too, or only a Search.
+    - **Settled (user, 2026-11-06):** one slow speed for every search, Clearing Speed Factor 0.6 of Search Speed, with walking in at full speed. The team shares what it has seen, and two don't head for the same place. Once they've seen it all the search finishes early, so Search Duration is its longest. Only Searches change: a Check stays a quick look, and so does a scout's check.
 
 17. **A hunt gets as near as it can (added and built 2026-11-06).** *(User: "it happened when I stood RIGHT behind a crate. They \"lost\" aggro of me despite me not moving.")*
     - **Cause:** tight behind a crate, Ruby's cell can have no way in on the grid. Each hunter warned "no path" and stood still, the crate hid her, and Aggro Time ran out with her standing there. The search then began at the same spot, and a Search member who can't reach the spot is taken off it (decision 12).
