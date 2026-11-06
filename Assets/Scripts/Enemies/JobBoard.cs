@@ -615,20 +615,20 @@ public class JobBoard
         {
             if (job.Kind == JobKind.Check)
             {
-                DebugLog.Info($"{who.name} hears a gunshot at {job}'s place.", who);
+                DebugLog.Info($"{who.name} has something serious at {job}'s place.", who);
                 job.NoteShotTaken();
                 ChooseAfterRestart(job, Upgrade(job, new Incident(job.Point, shot.Reason, shot.Priority), JobKind.Search));
                 return true;
             }
 
-            Elevate(job, shot.Reason, $"{who.name} hears a gunshot");
+            Elevate(job, shot.Reason, $"{who.name} has something serious in the search area");
             ExtendForGunshot(job, who);
             return false;
         }
 
         if (job.Step is JobStep.Call or JobStep.Gather)
         {
-            DebugLog.Info($"{who.name} hears a gunshot at {shot.Point}: {job} goes there instead.", who);
+            DebugLog.Info($"{who.name} has something serious at {shot.Point}: {job} goes there instead.", who);
             job.NoteShotTaken();
             ChooseAfterRestart(job, Upgrade(job, search, JobKind.Search));
             return true;
@@ -639,7 +639,7 @@ public class JobBoard
 
         job.BeginSignal(search, _intel.ReactTime);
         job.NoteShotTaken();
-        DebugLog.Info($"{who.name} hears a gunshot at {shot.Point} and signals {job}.", who);
+        DebugLog.Info($"{who.name} has something serious at {shot.Point} and signals {job}.", who);
         return true;
     }
 
@@ -688,14 +688,14 @@ public class JobBoard
         if (job.Step != JobStep.Search || Time.time - job.LastExtendedAt < who.DistractionGap) return;
 
         job.ExtendStep(_intel.GunshotExtension, LengthOf(JobStep.Search, job.Lead));
-        DebugLog.Info($"{who.name} hears a gunshot in the search area: {job} now has {job.StepLength - job.StepElapsed:0.#}s left.", who);
+        DebugLog.Info($"{who.name} has something serious in the search area: {job} now has {job.StepLength - job.StepElapsed:0.#}s left.", who);
     }
 
     // The beat is over: everyone goes. It was outside the search area when signalled, which is more than
     // the 1 m that counts as the same place, so the job always moves and starts over from Go.
     private void GoToSignalledShot(GroupJob job)
     {
-        DebugLog.Info($"{job} goes to the gunshot at {job.SignalledShot.Point}.", _intel);
+        DebugLog.Info($"{job} goes to {job.SignalledShot.Point}.", _intel);
         ChooseAfterRestart(job, Upgrade(job, job.SignalledShot, JobKind.Search));
     }
 
