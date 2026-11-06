@@ -77,7 +77,7 @@ The scripts are split into assembly definitions so the systems can be lifted int
 | `Ruby.Weapons` | `Weapons/` | Core | guns, bullets, gun hands |
 | `Ruby.Animation` | `Animation/` | none | `IAnimatedCharacter`, `CharacterAnimator`, `CharacterAnimationSet`, the stance and weapon enums |
 | `Ruby.Animation.Editor` | `Animation/Editor/` | Animation | `CharacterControllerBuilder` and the set's Build Controller button |
-| `Ruby.Game` | the root, `States/` and `Enemies/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state, and in `Enemies/` the squad's brain and the enemy's parts: `Intel` (the scene's one hub), the plain classes it owns (`KnowledgePool`, `JobBoard` with `GroupJob`, `FloorReach`), each enemy's own parts (`EnemyMemory`, `EnemySenses`, `EnemyVision`, `EnemyReactions`), the value types they pass (`Incident`, `SearchRequest`) and the behaviour map with its `Severity` |
+| `Ruby.Game` | the root, `States/` and `Enemies/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state, and in `Enemies/` the squad's brain and the enemy's parts: `Intel` (the scene's one hub), the plain classes it owns (`KnowledgePool`, `JobBoard` with `GroupJob`, `FloorReach`), each enemy's own parts (`EnemyMemory`, `EnemySenses`, `EnemyVision`, `EnemyReactions`, `EnemyMovement`, `EnemyAwareness`, `EnemyBodyState`, `EnemyGizmos`), the value types they pass (`Incident`, `SearchRequest`) and the behaviour map with its `Severity` |
 | `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor` |
 
 The systems reach the game only through interfaces declared in their own assembly, which the
@@ -372,26 +372,27 @@ through the player never slows the walk.
 ### Enemy AI
 
 - **Who owns what.** `EnemyController` is the one MonoBehaviour per enemy: it holds every serialized
-  tuning field, the state machine, and the plain classes that do the deciding, each built in `Awake`:
-  `EnemyMemory` (what he knows), and, handed the controller to read, `EnemySenses` (hearing and
-  scans), `EnemyVision` (the view and the line to a point) and `EnemyReactions` (what he does about
-  what he senses), and the parts that carry the rest of the controller's old work: `EnemyMovement` (his
-  walking, turning and facing, and the walks the states ask for), `EnemyAwareness` (what he takes in each
-  frame: sight of Ruby, what he learns and says, and the newest thing he knows), `EnemyBodyState` (his
-  record of the chain, and the gun and corpse handling that goes with it) and `EnemyGizmos` (what he
-  draws in the Scene view, a static class the controller's two gizmo messages forward to). `Intel` is the scene's one hub and owns `KnowledgePool` (the shared picture),
-  `JobBoard` (group jobs, with the `FloorReach` calling uses) and the `FloorReach`es that speech and sound use. The plain
-  classes read the controller's tuning on every call, so retuning in the Inspector during Play still
-  works, and **no serialized field moves into them**: the scene holds route overrides and per-enemy
-  tuning on `EnemyController` and `Intel`, and `FormerlySerializedAs` can't carry a value to another
-  component. A new decision goes in the class that owns its
-  subject, not back in the controller.
+  tuning field, the state machine, and the plain classes that do the deciding, each built in
+  `Awake`: `EnemyMemory` (what he knows), and, handed the controller to read, `EnemySenses` (hearing
+  and scans), `EnemyVision` (the view and the line to a point) and `EnemyReactions` (what he does
+  about what he senses), and the parts that carry the rest of the controller's old work:
+  `EnemyMovement` (his walking, turning and facing, and the walks the states ask for),
+  `EnemyAwareness` (what he takes in each frame: sight of Ruby, what he learns and says, and the
+  newest thing he knows), `EnemyBodyState` (his record of the chain, and the gun and corpse handling
+  that goes with it) and `EnemyGizmos` (what he draws in the Scene view, a static class the
+  controller's two gizmo messages forward to). `Intel` is the scene's one hub and owns
+  `KnowledgePool` (the shared picture), `JobBoard` (group jobs, with the `FloorReach` calling uses)
+  and the `FloorReach`es that speech and sound use. The plain classes read the controller's tuning
+  on every call, so retuning in the Inspector during Play still works, and **no serialized field
+  moves into them**: the scene holds route overrides and per-enemy tuning on `EnemyController` and
+  `Intel`, and `FormerlySerializedAs` can't carry a value to another component. A new decision goes
+  in the class that owns its subject, not back in the controller.
 - **Order.** `Intel` runs at execution order -20, before the enemies (0): it advances every job's
   clock and publishes the pool first, so every member reads a job's new step on the same frame.
   Then each enemy's `Update` runs the machine (transitions, then the state's `Tick`) and
-  `UpdateKnowledge`; his `FixedUpdate` runs the state's `FixedTick` and then `EnemySenses.Scan`.
+  `EnemyAwareness.Update`; his `FixedUpdate` runs the state's `FixedTick` and then `EnemySenses.Scan`.
   Sounds arrive from the bus whenever a weapon or impact emits them, in any phase.
-- **Sight** (`EnemyVision.CanSeePlayer`, forwarded by `EnemyController`): a ray from eye height to
+- **Sight** (`EnemyVision.CanSeePlayer`): a ray from eye height to
   the player. **Anything solid blocks it except characters** (any body under the player or an enemy, so Ruby's own ragdoll bones
   never hide her). Unlike paths, sight is
   checked fresh every frame, so a crate or table can hide the player, while a prop lower than the eye

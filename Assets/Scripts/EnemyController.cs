@@ -190,7 +190,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     internal float ViewAngle => _viewAngle;
     internal float CloseRadius => _closeRadius;
     internal float GiveUpRadius => _giveUpRadius;
-    // Start fills it after Awake builds the Vision, so EnemyVision reads it here on every call.
+    // Start fills it after Awake builds the Vision, so the parts that read Ruby (EnemyMovement, EnemyAwareness, EnemyVision, EnemyGizmos) go through here on every call, never a copy taken in Awake.
     internal PlayerController Player => _player;
 
     public Rigidbody Body { get; private set; }
@@ -544,7 +544,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>In the Searching state right now. The job board reads it to check that a member of a job is searching.</summary>
     public bool IsSearching => _state.Current is SearchingState;
 
-    /// <summary>The state he is in, for EnemyReactions to read. Reaching the machine itself stays with the controller.</summary>
+    /// <summary>The state he is in, for EnemyReactions and EnemyAwareness to read. Reaching the machine itself stays with the controller.</summary>
     internal IState CurrentState => _state.Current;
 
     /// <summary>Ruby, while it's aiming at her.</summary>
