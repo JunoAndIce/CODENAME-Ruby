@@ -134,25 +134,25 @@ public class AggroState : EnemyStateBase
         {
             case Move.Chase:
                 // With her in sight he knows where she is; without, only what he has learned.
-                if (inSight) Enemy.PathToPlayer(Enemy.ChaseSpeed);
+                if (inSight) Enemy.Movement.PathToPlayer(Enemy.ChaseSpeed);
                 else ChaseWhatHeKnows();
                 break;
 
             case Move.Hold:
                 Enemy.Stop();
-                Enemy.FaceTarget();
+                Enemy.Movement.FaceTarget();
                 break;
 
             case Move.BackAway:
                 if (Enemy.Navigator.TryFindSpotAway(Enemy.PlayerTransform.position, BackAwayStep, out Vector3 spot))
                 {
-                    Enemy.StepAway(spot, Enemy.ChaseSpeed);
+                    Enemy.Movement.StepAway(spot, Enemy.ChaseSpeed);
                 }
                 else
                 {
                     // Cornered: stand and fight rather than grind into the wall.
                     Enemy.Stop();
-                    Enemy.FaceTarget();
+                    Enemy.Movement.FaceTarget();
                 }
                 break;
         }
@@ -164,7 +164,7 @@ public class AggroState : EnemyStateBase
     // Ruby was a metre past it. He stands there for Aggro Time first. A look-around animation comes later.
     private void ChaseWhatHeKnows()
     {
-        bool arrived = Enemy.ChaseKnown(Enemy.ChaseSpeed) == NavResult.Arrived;
+        bool arrived = Enemy.Movement.ChaseKnown(Enemy.ChaseSpeed) == NavResult.Arrived;
         if (!arrived && StalledBehindSomeone())
         {
             Enemy.Stop();

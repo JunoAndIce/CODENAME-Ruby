@@ -189,7 +189,7 @@ public class SearchingState : EnemyStateBase
             return;
         }
 
-        Enemy.FaceToward(_target);
+        Enemy.Movement.FaceToward(_target);
         BeginLook($"{Enemy.name} looks from where he stands");
     }
 
@@ -318,7 +318,7 @@ public class SearchingState : EnemyStateBase
         if (_distractLeft > 0f)
         {
             Enemy.Stop();
-            Enemy.FaceToward(_distractPoint);
+            Enemy.Movement.FaceToward(_distractPoint);
             return;
         }
 
@@ -331,7 +331,7 @@ public class SearchingState : EnemyStateBase
         switch (_step)
         {
             case SearchStep.Walk:
-                NavResult result = Enemy.WalkTo(_target, Enemy.SearchReach, Enemy.SearchSpeed);
+                NavResult result = Enemy.Movement.WalkTo(_target, Enemy.SearchReach, Enemy.SearchSpeed);
                 if (result == NavResult.Moving) return;
                 if (result == NavResult.Arrived)
                 {
@@ -344,7 +344,7 @@ public class SearchingState : EnemyStateBase
                 break;
 
             case SearchStep.Look:
-                Enemy.LookAround(_lookBaseYaw, _stepTimer, LookDuration);
+                Enemy.Movement.LookAround(_lookBaseYaw, _stepTimer, LookDuration);
                 break;
 
             default:
@@ -368,7 +368,7 @@ public class SearchingState : EnemyStateBase
         if (job.Step != JobStep.Call && job.Step != JobStep.Done && job.Callee == Enemy && job.Lead != null && job.Lead != Enemy)
         {
             Enemy.Stop();
-            Enemy.FaceToward(job.Lead.transform.position);
+            Enemy.Movement.FaceToward(job.Lead.transform.position);
             return;
         }
 
@@ -378,14 +378,14 @@ public class SearchingState : EnemyStateBase
                 // The lead looks at the enemy he is calling, and that enemy, who has only just been
                 // added, turns to face the lead. Before any call, and for anyone else, it is the spot.
                 Enemy.Stop();
-                if (job.Callee != null && job.Lead == Enemy) Enemy.FaceToward(job.Callee.transform.position);
-                else if (job.Callee == Enemy && job.Lead != null) Enemy.FaceToward(job.Lead.transform.position);
-                else Enemy.FaceToward(job.Point);
+                if (job.Callee != null && job.Lead == Enemy) Enemy.Movement.FaceToward(job.Callee.transform.position);
+                else if (job.Callee == Enemy && job.Lead != null) Enemy.Movement.FaceToward(job.Lead.transform.position);
+                else Enemy.Movement.FaceToward(job.Point);
                 return;
 
             case JobStep.Gather:
                 Enemy.Stop();
-                Enemy.FaceToward(job.Point);
+                Enemy.Movement.FaceToward(job.Point);
                 return;
 
             case JobStep.Go:
@@ -427,13 +427,13 @@ public class SearchingState : EnemyStateBase
         {
             // He is there and the job hasn't moved on yet: hold, facing the spot.
             Enemy.Stop();
-            Enemy.FaceToward(job.Point);
+            Enemy.Movement.FaceToward(job.Point);
             return;
         }
 
         // The job's clock, not his own, so a late arrival joins the sweep where it is and every
         // member ends it facing the spot together.
-        Enemy.LookAround(_lookBaseYaw, job.StepElapsed, Enemy.Intel.StepDuration(job));
+        Enemy.Movement.LookAround(_lookBaseYaw, job.StepElapsed, Enemy.Intel.StepDuration(job));
     }
 
     // Walks random open spots within Search Area Radius of the job's place and looks about at each for a
@@ -473,7 +473,7 @@ public class SearchingState : EnemyStateBase
                     FailSpot($"didn't reach the spot at {_roamSpot} in {Enemy.SearchTravelLimit:0.#}s", job);
                     return;
                 }
-                NavResult result = Enemy.WanderTo(_roamSpot, Enemy.SearchSpeed);
+                NavResult result = Enemy.Movement.WanderTo(_roamSpot, Enemy.SearchSpeed);
                 if (result == NavResult.Moving) return;
                 if (result == NavResult.Arrived)
                 {
@@ -486,7 +486,7 @@ public class SearchingState : EnemyStateBase
 
             case RoamPhase.Look:
                 _roamLookTimer += Time.fixedDeltaTime;
-                Enemy.LookAround(_roamBaseYaw, _roamLookTimer, _roamLookLength);
+                Enemy.Movement.LookAround(_roamBaseYaw, _roamLookTimer, _roamLookLength);
                 if (_roamLookTimer >= _roamLookLength) _roamPhase = RoamPhase.Pick;
                 return;
         }
@@ -528,13 +528,13 @@ public class SearchingState : EnemyStateBase
         if (offset.magnitude <= Enemy.FollowDistance)
         {
             Enemy.Stop();
-            Enemy.FaceToward(job.Point);
+            Enemy.Movement.FaceToward(job.Point);
             return;
         }
 
         // A checker on another floor or off every grid is the navigator's one warning, and he stands:
         // no walk to somewhere else.
-        Enemy.ChaseTo(checker.transform, Enemy.SearchSpeed * Enemy.FollowSpeedFactor);
+        Enemy.Movement.ChaseTo(checker.transform, Enemy.SearchSpeed * Enemy.FollowSpeedFactor);
     }
 
     // True once he has arrived this step, false while he is still walking, and false when he has been
@@ -555,7 +555,7 @@ public class SearchingState : EnemyStateBase
             return true;
         }
 
-        NavResult result = Enemy.WalkTo(job.Point, Enemy.SearchReach, Enemy.SearchSpeed);
+        NavResult result = Enemy.Movement.WalkTo(job.Point, Enemy.SearchReach, Enemy.SearchSpeed);
         if (result == NavResult.Moving) return false;
 
         if (result == NavResult.Unreachable)
@@ -608,7 +608,7 @@ public class SearchingState : EnemyStateBase
     private void Arrive(string why)
     {
         _arrived = true;
-        Enemy.FaceToward(Job.Point);
+        Enemy.Movement.FaceToward(Job.Point);
         _lookBaseYaw = Enemy.transform.eulerAngles.y;
         if (Job.Kind == JobKind.Search) BeginRoamLook();
         DebugLog.Info($"{why}.", Enemy);

@@ -95,7 +95,7 @@ public class PatrolState : EnemyStateBase
         if (_paused)
         {
             // Aggressive, he looks about at each point instead of standing.
-            if (Enemy.IsAggressive) Enemy.LookAround(_lookBaseYaw, _lookElapsed, _pauseDuration);
+            if (Enemy.IsAggressive) Enemy.Movement.LookAround(_lookBaseYaw, _lookElapsed, _pauseDuration);
             else Enemy.Stop();
             return;
         }
@@ -110,7 +110,7 @@ public class PatrolState : EnemyStateBase
 
         // Patrol speed is intentionally separate from chase speed — a patrolling enemy
         // that moves at chase speed reads as already alerted.
-        switch (Enemy.PatrolTo(point, Enemy.CurrentPatrolSpeed))
+        switch (Enemy.Movement.PatrolTo(point, Enemy.CurrentPatrolSpeed))
         {
             case NavResult.Arrived:
                 Arrive(point);
@@ -127,14 +127,14 @@ public class PatrolState : EnemyStateBase
     // Advance lands back on the only point, and no spot is held, so a fresh one is picked here.
     private void Wander(PatrolPoint point)
     {
-        if (!_hasSpot && !Enemy.TryPickWanderSpot(point, out _spot))
+        if (!_hasSpot && !Enemy.Movement.TryPickWanderSpot(point, out _spot))
         {
             WanderFailed();
             return;
         }
         _hasSpot = true;
 
-        switch (Enemy.WanderTo(_spot, Enemy.CurrentPatrolSpeed))
+        switch (Enemy.Movement.WanderTo(_spot, Enemy.CurrentPatrolSpeed))
         {
             case NavResult.Arrived:
                 _hasSpot = false;

@@ -116,7 +116,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private readonly StateMachine _state = new();
     private CapsuleCollider _capsule;
-    private float _intendedSpeed;   // the last move's speed, 0 once stopped
     private float _nextRearm;   // after giving up on a gun, no new attempt before this time
 
     public Rigidbody Body { get; private set; }
@@ -127,6 +126,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>His view cone, close circle and line of sight.</summary>
     public EnemyVision Vision { get; private set; }
     public EnemyReactions Reactions { get; private set; }
+    /// <summary>His walking, turning and facing, and the walks the states ask for.</summary>
+    public EnemyMovement Movement { get; private set; }
     public float MotionRadius => _motionRadius;
     public float DraggedDistance => _draggedDistance;
     public float KnownSpotRadius => _knownSpotRadius;
@@ -230,14 +231,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public Transform PlayerTransform => _player == null ? null : _player.transform;
 
     /// <summary>The speed of the last move it was told to make, 0 once stopped: how fast it's trying to go.</summary>
-    public float MoveSpeed => _intendedSpeed;
+    public float MoveSpeed => Movement.IntendedSpeed;
     public WeaponHold Weapon => IsArmed ? WeaponHold.Pistol : WeaponHold.None;
 
     /// <summary>What its body is doing, for its animation. Firing, it aims; moving otherwise, it runs.</summary>
     public AnimStance Stance => _state.Current switch
     {
-        AggroState => Aggro.Firing ? AnimStance.Aim : _intendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
-        RearmState => _intendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
+        AggroState => Aggro.Firing ? AnimStance.Aim : Movement.IntendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
+        RearmState => Movement.IntendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
         GrabbedState => AnimStance.Restrained,
         RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen,
         // Tied upright on the chain, a corpse is restrained like the living; off it, it keeps its pose.
@@ -267,7 +268,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // it. A default start at some remembered spot let a caller that forgot to ask search at the wrong place, silently.
     private SearchRequest? _pendingSearch;
 
-    private const float WanderSpotRadius = 0.5f;
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
     private int _seesFrame = -1;
@@ -285,6 +285,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Senses = new EnemySenses(this);
         Vision = new EnemyVision(this);
         Reactions = new EnemyReactions(this);
+        Movement = new EnemyMovement(this, _capsule);
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
@@ -587,131 +588,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         _state.SetState(Ragdoll);
     }
 
-    /// <summary>
-    /// Curved Movement for realism.
-    /// He turns his walking heading at Turn Speed, and slows to fit the turn only for a point he must reach.
-    /// </summary>
-    public void MoveToward(Vector3 target, float speed, bool mustReach)
-    {
-        Vector3 direction = target - transform.position;
-        direction.y = 0f;
+    /// <summary>Forwards to EnemyMovement.MoveToward; IPathAgent needs it here.</summary>
+    public void MoveToward(Vector3 target, float speed, bool mustReach) => Movement.MoveToward(target, speed, mustReach);
 
-        Vector3 heading = transform.forward;
-        heading.y = 0f;
-        float fitted = speed;
-        // Closer than 10 cm there is no direction worth turning to: keep the heading and speed.
-        if (direction.sqrMagnitude > 0.01f)
-        {
-            // Fit the speed only to a point he must reach. A flow-field step rolls ahead every
-            // step, so there is nothing to orbit and the cap would only slow a chase on ordinary
-            // bends; its last step, the goal cell, stops rolling and is a point he must reach.
-            if (mustReach)
-                fitted = Steering.SpeedToFit(speed, _turnSpeed, direction.magnitude, Vector3.Angle(heading, direction));
-            heading = Steering.TurnToward(heading, direction, _turnSpeed * Time.fixedDeltaTime);
-            transform.rotation = Quaternion.LookRotation(heading, Vector3.up);
-        }
-        else if (heading.sqrMagnitude > 0.0001f)
-            heading.Normalize();
-
-        // The fitted speed, so the animation sees him slow in a tight turn.
-        _intendedSpeed = fitted;
-        VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, heading * fitted));
-    }
-
-    /// <summary>
-    /// Backs toward a spot while facing the player: an armed enemy giving ground keeps its gun on
-    /// her instead of turning its back, which MoveToward would do.
-    /// </summary>
-    public void StepAway(Vector3 spot, float speed)
-    {
-        _intendedSpeed = speed;
-        FaceTarget();
-        Vector3 direction = spot - transform.position;
-        direction.y = 0f;
-        if (direction.sqrMagnitude < 0.0001f)
-        {
-            Stop();
-            return;
-        }
-        VelocityUtil.SetFlatVelocity(Body, PushLimit.Limit(_capsule, direction.normalized * speed));
-    }
-
-    /// <summary>
-    /// Turns his body toward a heading about Y, at Turn Speed, and says whether he's facing it.
-    /// For standing at his post: facing the way he started once he's back.
-    /// </summary>
-    public bool TurnToYaw(float yaw)
-    {
-        Vector3 goal = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
-        Vector3 heading = transform.forward;
-        heading.y = 0f;
-        if (heading.sqrMagnitude > 0.0001f && Vector3.Angle(heading, goal) < 1f) return true;
-
-        heading = Steering.TurnToward(heading, goal, _turnSpeed * Time.fixedDeltaTime);
-        transform.rotation = Quaternion.LookRotation(heading, Vector3.up);
-        return false;
-    }
-
-    /// <summary>Face a point at once, ignoring height: forward must never tilt, or the body drives vertically.</summary>
-    public void FaceToward(Vector3 point)
-    {
-        Vector3 direction = point - transform.position;
-        direction.y = 0f;
-        if (direction.sqrMagnitude < 0.0001f) return;
-        transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
-    }
-
-    /// <summary>
-    /// Stops and turns his body side to side about where he was facing, baseYaw, so a look reads as
-    /// looking about. The look lasts duration, and the sweep is stretched to a whole number of
-    /// sweeps within it, so he ends facing the way he began: a fixed period left a 1.5 s look 70
-    /// degrees off the spot he'd been looking at. It sets the heading about Y alone: his root never
-    /// pitches in play, and a tilt would drive him off the floor. For FixedTick, where the walk also
-    /// writes the heading.
-    /// </summary>
-    public void LookAround(float baseYaw, float elapsed, float duration)
-    {
-        Stop();
-        duration = Mathf.Max(duration, 0.01f);
-        float sweeps = Mathf.Max(1f, Mathf.Round(duration / _lookSweepPeriod));
-        float sweep = _lookSweepAngle * Mathf.Sin(Mathf.Min(elapsed, duration) * Mathf.PI * 2f * sweeps / duration);
-        transform.rotation = Quaternion.Euler(0f, baseYaw + sweep, 0f);
-    }
-
-    /// <summary>Face the player, ignoring height — otherwise forward tilts and we drive vertically.</summary>
-    public void FaceTarget()
-    {
-        if (_player == null) return;
-
-        Vector3 target = _player.transform.position;
-        target.y = transform.position.y;
-        transform.LookAt(target);
-    }
-
-    /// <summary>Pathfind to a fixed point around walls; stops on arrival.</summary>
-    public NavResult PathTo(Vector3 target, float speed) => Navigator.MoveTo(target, speed);
-
-    /// <summary>Walk to a patrol point's area along an A* route.</summary>
-    public NavResult PatrolTo(PatrolPoint point, float speed) => Navigator.MoveToArea(point.Area, speed);
-
-    /// <summary>
-    /// A random spot in a wandered area, at least a quarter of the way across it from here (half a
-    /// circle's radius), so each walk reads as roaming rather than shuffling.
-    /// </summary>
-    public bool TryPickWanderSpot(PatrolPoint point, out Vector3 spot)
-    {
-        GridArea area = point.Area;
-        return Navigator.PickSpotInArea(area, area.Span * 0.25f, out spot);
-    }
-
-    /// <summary>
-    /// Walk to a wander spot, as an area just big enough to arrive in: with a wider one, another
-    /// enemy standing on the spot would count as arrived instead of blocked.
-    /// </summary>
-    public NavResult WanderTo(Vector3 spot, float speed) => WalkTo(spot, WanderSpotRadius, speed);
-
-    /// <summary>Walk until within reach of a point, along an A* route.</summary>
-    public NavResult WalkTo(Vector3 point, float reach, float speed) => Navigator.MoveToArea(GridArea.Circle(point, reach), speed);
+    /// <summary>Forwards to EnemyMovement.Stop; states keep calling Enemy.Stop().</summary>
+    public void Stop() => Movement.Stop();
 
     /// <summary>
     /// Where Ruby most likely is, as far as he knows: the newer of his own memory and the published
@@ -731,45 +612,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         return Memory.TryGetNewestRuby(pool, out fact);
     }
 
-    /// <summary>
-    /// Chase the newest thing he knows of Ruby, not Ruby herself, so breaking sight can drop a fight.
-    /// Arrived when he is on the spot; Unreachable (and stopped) when he has nothing to go on.
-    /// </summary>
-    public NavResult ChaseKnown(float speed)
-    {
-        if (!TryGetNewestRuby(out Vector3 point))
-        {
-            Stop();
-            return NavResult.Unreachable;
-        }
-        // A place and not a point: enemies of equal weight block each other, so several sent to one
-        // point pushed at each other to get onto it. The line stops him counting as there from the far
-        // side of a wall.
-        if (PathGrid.FlatDistance(transform.position, point) <= _knownSpotRadius && CanSeeSpot(point))
-        {
-            Stop();
-            return NavResult.Arrived;
-        }
-        return Navigator.MoveTo(point, speed, getClose: true);
-    }
-
-    /// <summary>Chase the player along this floor's shared flow field, or as near as he can get when she stands where the grid has no way in.</summary>
-    public void PathToPlayer(float speed)
-    {
-        if (_player != null) Navigator.ChaseTo(_player.transform, speed, getClose: true);
-    }
-
-    /// <summary>
-    /// Chase another body along its floor's shared field, which every chaser of it reads (a team
-    /// following its checker). Stops and warns once when it is on another floor or no grid.
-    /// </summary>
-    public void ChaseTo(Transform target, float speed) => Navigator.ChaseTo(target, speed);
-
-    public void Stop()
-    {
-        _intendedSpeed = 0f;
-        VelocityUtil.SetFlatVelocity(Body, Vector3.zero);
-    }
+    internal float TurnSpeed => _turnSpeed;
+    internal float LookSweepAngle => _lookSweepAngle;
+    internal float LookSweepPeriod => _lookSweepPeriod;
 
     internal Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
 

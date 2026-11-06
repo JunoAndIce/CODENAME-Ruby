@@ -48,11 +48,11 @@ public class IdleState : EnemyStateBase
         if (!AwayFromPost)
         {
             Enemy.Stop();
-            Enemy.TurnToYaw(Enemy.PostYaw);
+            Enemy.Movement.TurnToYaw(Enemy.PostYaw);
             return;
         }
 
-        if (_gaveUp || Enemy.PathTo(Enemy.PostPosition, Enemy.CurrentPatrolSpeed) != NavResult.Moving)
+        if (_gaveUp || Enemy.Movement.PathTo(Enemy.PostPosition, Enemy.CurrentPatrolSpeed) != NavResult.Moving)
             Enemy.Stop();
     }
 }

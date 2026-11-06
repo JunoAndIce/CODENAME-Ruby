@@ -78,7 +78,7 @@ public class RearmState : EnemyStateBase
 
         // Toward the pivot, a goal that holds still: the nearest point on the gun shifts as the enemy
         // moves, and a goal that shifts every step re-plans every step.
-        NavResult result = Enemy.WalkTo(_target.transform.position, Enemy.BodyRadius + StretchReach, Enemy.ChaseSpeed);
+        NavResult result = Enemy.Movement.WalkTo(_target.transform.position, Enemy.BodyRadius + StretchReach, Enemy.ChaseSpeed);
         if (result == NavResult.Arrived)
         {
             // Arrived means the grid can't bring it any nearer, so it stretches or moves on.
