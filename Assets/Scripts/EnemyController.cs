@@ -26,6 +26,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _giveUpRadius = 18f;
     [Tooltip("Seconds out of contact (out of sight, or beyond Give Up Radius) before aggro turns to searching.")]
     [SerializeField] private float _aggroTime = 1.5f;
+    [Tooltip("For this long after he loses sight of Ruby in a fight, in seconds, he still knows where she is, because he watched where she went. So running round a crate in plain view doesn't lose him at once. Higher is harder to shake. 0: he only ever knows where he last saw her.")]
+    [SerializeField, Min(0f)] private float _sightFollowThrough = 1f;
     [Tooltip("Height above the enemy's centre that sight is cast from.")]
     [SerializeField] private float _eyeHeight = 0.5f;
     [Tooltip("How long he searches once he has reached the spot, in seconds. The walk there doesn't count.")]
@@ -134,6 +136,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
     public float AggroTime => _aggroTime;
+    public float SightFollowThrough => _sightFollowThrough;
     public float SearchDuration => _searchDuration;
     public float SearchTravelLimit => _searchTravelLimit;
     public float SearchReach => _searchReach;

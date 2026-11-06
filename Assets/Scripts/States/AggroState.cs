@@ -5,7 +5,7 @@ using UnityEngine;
 /// field. Armed with her in sight, it keeps its gun's band: it closes in to Min Distance, holds in
 /// the metre above that, and backs away inside it, still facing her. Firing happens alongside all
 /// of these, not as its own state. Out of sight it chases what it knows of her (its memory and the
-/// squad's stale pool), never her true position. LostPlayer flips, never while in contact, after
+/// squad's stale pool), not her true position, once Sight Follow Through has run out. LostPlayer flips, never while in contact, after
 /// Aggro Time out of contact, after holding Aggro Time at the known spot without sight of her, or at
 /// once with nothing to go on; the table then sends the enemy to search.
 /// </summary>
@@ -102,8 +102,9 @@ public class AggroState : EnemyStateBase
             DebugLog.Info($"{Enemy.name} has nothing to go on: he can't see Ruby and knows nothing of where she is, so he searches where he stands.", Enemy);
         _loggedNothing = nothing;
 
-        // Sight coming back means the fight carries on: the dwell starts over.
-        if (hasSight)
+        // Sight coming back means the fight carries on: the dwell starts over. So does following her
+        // through: where she is keeps changing, so he isn't holding anywhere.
+        if (hasSight || Enemy.Awareness.FollowingThrough)
         {
             _holdingAtKnown = false;
             _dwellTimer = 0f;
@@ -133,8 +134,10 @@ public class AggroState : EnemyStateBase
         switch (Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance))
         {
             case Move.Chase:
-                // With her in sight he knows where she is; without, only what he has learned.
-                if (inSight) Enemy.Movement.PathToPlayer(Enemy.ChaseSpeed);
+                // With her in sight, or just gone from it, he knows where she is; otherwise only what he
+                // has learned. The shared field while following through: the known spot moves every step
+                // then, and a field of his own would re-flood each quarter metre she ran.
+                if (inSight || Enemy.Awareness.FollowingThrough) Enemy.Movement.PathToPlayer(Enemy.ChaseSpeed);
                 else ChaseWhatHeKnows();
                 break;
 

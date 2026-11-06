@@ -419,7 +419,8 @@ through the player never slows the walk.
   when she dropped out of sight he walked back to the old spot, again and again as she stepped in
   and out of range. (The other fix, treating her as gone past the radius even in plain sight, would
   have him ignore her standing in the open.) Out of sight he chases **what he knows**, not where she
-  really is (see **Knowledge**), and the fight ends one of three ways, never while he is in contact:
+  really is (see **Knowledge**), though for Sight Follow Through (1 s) after losing her he still knows
+  where she is (`EnemyAwareness.FollowingThrough`, on the shared chase field, not called out), because he watched where she went: knowing only the corner she vanished at, he lost her the moment she ducked round a crate in plain view. The fight ends one of three ways, never while he is in contact:
   - Aggro Time (1.5 s) of walking without contact (out of sight, or past the radius, even in
     sight: he then searches where he last saw her). The timer is suspended while he holds at the
     spot, because counting the walk toward the hold cut it short.

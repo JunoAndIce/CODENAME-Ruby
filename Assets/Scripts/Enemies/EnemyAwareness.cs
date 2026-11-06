@@ -17,6 +17,7 @@ public class EnemyAwareness
     private bool _wasSeeing;
     private float _nextSpeak;
     private bool _wasAggressive;
+    private float _lastSawAt = float.NegativeInfinity;
 
     public EnemyAwareness(EnemyController enemy)
     {
@@ -82,6 +83,15 @@ public class EnemyAwareness
         }
     }
 
+    /// <summary>
+    /// He lost sight of her only a moment ago, hunting her: for Sight Follow Through he still knows where
+    /// she is, because he watched where she went. All he ever knew otherwise was the corner she vanished
+    /// at, so ducking round a crate in plain view lost him at once: it stood in for a real look at which
+    /// way she ran, and needs no guess at her heading. Over quickly, so breaking sight and staying gone
+    /// still drops a fight.
+    /// </summary>
+    public bool FollowingThrough => !SeesPlayer && _enemy.CurrentState == _enemy.Aggro && Time.time - _lastSawAt <= _enemy.SightFollowThrough;
+
     // Remembering and speaking aren't states: they run beside the machine. What he sees he knows at
     // once; calling it out is bounded by Speak Interval so a long sighting isn't a shout per frame.
     private void UpdateKnowledge()
@@ -89,6 +99,7 @@ public class EnemyAwareness
         bool sees = SeesPlayer;
         if (sees)
         {
+            _lastSawAt = Time.time;
             var fact = new RubyFact(_enemy.Player.transform.position, Time.time, Knowledge.Seen);
             _enemy.Memory.Learn(fact);
             if (_enemy.Intel != null && (!_wasSeeing || Time.time >= _nextSpeak))
@@ -96,6 +107,11 @@ public class EnemyAwareness
                 _nextSpeak = Time.time + _enemy.SpeakInterval;
                 _enemy.Intel.Say(_enemy, fact);
             }
+        }
+        // Not called out: nobody else watched where she went, and they have their own eyes to follow through with.
+        else if (FollowingThrough)
+        {
+            _enemy.Memory.Learn(new RubyFact(_enemy.Player.transform.position, Time.time, Knowledge.Seen));
         }
         _wasSeeing = sees;
     }
