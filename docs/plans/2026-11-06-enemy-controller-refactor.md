@@ -54,9 +54,9 @@
 - **Produces:** `internal static class EnemyGizmos` with `DrawSelected(EnemyController enemy)` and `DrawRoutes(EnemyController enemy)`.
 - **Consumes:** the controller's existing getters for what it draws (`EyePosition`, `ViewAngle`, `CloseRadius`, `GiveUpRadius`, `MotionRadius`, `BodyNoticeRange`, `AttackNearRadius`, `AttackNearTime`, `KnownSpotRadius`, `SafeRoute`, `AggressiveRoute`). None is added.
 
-- [ ] **Step 1:** Move the bodies of `OnDrawGizmosSelected` and `OnDrawGizmos`, with `DrawRoute`, `DrawFlatArea`, `DrawFlatArc` and `DrawFlatCircle`, into the class. The two Unity messages stay on the controller as one-line calls, because Unity only calls them there.
-- [ ] **Step 2:** Run the compile check. Expected: `compile-check: OK`.
-- [ ] **Step 3:** Commit `EnemyGizmos.cs`, its `.meta` once Unity makes it, and the controller.
+- [x] **Step 1:** Move the bodies of `OnDrawGizmosSelected` and `OnDrawGizmos`, with `DrawRoute`, `DrawFlatArea`, `DrawFlatArc` and `DrawFlatCircle`, into the class. The two Unity messages stay on the controller as one-line calls, because Unity only calls them there.
+- [x] **Step 2:** Run the compile check. Expected: `compile-check: OK`.
+- [x] **Step 3:** Commit `EnemyGizmos.cs`, its `.meta` once Unity makes it, and the controller.
 - [ ] **Step 4: Play-test gate (the user).** Select an enemy in edit mode, in Play, and with `officer.prefab` open in Prefab Mode during Play. The same gizmos draw, with no errors.
 
 ### Task 2: `EnemyMovement`
@@ -68,10 +68,10 @@
 - **Produces:** `public EnemyMovement Movement { get; }` on the controller, and on the class: `IntendedSpeed`, `MoveToward`, `Stop`, `StepAway`, `TurnToYaw`, `FaceToward`, `FaceTarget`, `LookAround`, `PathTo`, `PatrolTo`, `TryPickWanderSpot`, `WanderTo`, `WalkTo`, `ChaseKnown`, `PathToPlayer` and `ChaseTo`, with their signatures unchanged.
 - **Consumes:** `Body`, the capsule (passed to the constructor), `Navigator`, `Player`, and the tuning: `_turnSpeed`, `_lookSweepAngle`, `_lookSweepPeriod`, `_knownSpotRadius`.
 
-- [ ] **Step 1:** Move the methods and `_intendedSpeed` into the class, along with `WanderSpotRadius`. `MoveToward` and `Stop` stay on the controller as forwards for `IPathAgent`. `MoveSpeed` and `Stance` read `Movement.IntendedSpeed`.
-- [ ] **Step 2:** Change the callers to `Enemy.Movement.X`, about 28 sites in `States/`, leaving `Enemy.Stop()` as it is. `CanSeeSpot` stays with sight.
-- [ ] **Step 3:** Run the compile check. Expected: `compile-check: OK`.
-- [ ] **Step 4:** Commit.
+- [x] **Step 1:** Move the methods and `_intendedSpeed` into the class, along with `WanderSpotRadius`. `MoveToward` and `Stop` stay on the controller as forwards for `IPathAgent`. `MoveSpeed` and `Stance` read `Movement.IntendedSpeed`.
+- [x] **Step 2:** Change the callers to `Enemy.Movement.X`, about 28 sites in `States/`, leaving `Enemy.Stop()` as it is. `CanSeeSpot` stays with sight.
+- [x] **Step 3:** Run the compile check. Expected: `compile-check: OK`.
+- [x] **Step 4:** Commit.
 - [ ] **Step 5: Play-test gate (the user).** Patrol, chase, back away from Ruby, search and look around, return to a post, and rearm. All read as they did, and the legs animate at the same speed.
 
 ### Task 3: `EnemyAwareness`
@@ -85,9 +85,9 @@ Not `EnemyKnowledge`: `Knowledge` is already the enum on `RubyFact`.
 - **Produces:** `public EnemyAwareness Awareness { get; }` on the controller, and on the class: `Update()`, `TryGetNewestRuby(out Vector3)` and `TryGetNewestRubyFact(out RubyFact)`.
 - **Consumes:** `Memory`, `Intel`, `Vision`, `Player`, `CurrentState`, a new internal `SpeakInterval`, and an internal way to read the aggressive log's values.
 
-- [ ] **Step 1:** Move `SeesPlayer`, `UpdateKnowledge`, `LogBecameAggressive` and their five fields. `Update` on the controller calls `_state.Tick()`, then `Awareness.Update()`, then `DebugDrawPath()`, in that order. `IsAggressive` and the routes stay, since the table reads them. `DetectsPlayer` stays private on the controller as the table's predicate.
-- [ ] **Step 2:** Run the compile check. Expected: `compile-check: OK`.
-- [ ] **Step 3:** Commit.
+- [x] **Step 1:** Move `SeesPlayer`, `UpdateKnowledge`, `LogBecameAggressive` and their five fields. `Update` on the controller calls `_state.Tick()`, then `Awareness.Update()`, then `DebugDrawPath()`, in that order. `IsAggressive` and the routes stay, since the table reads them. `DetectsPlayer` stays private on the controller as the table's predicate.
+- [x] **Step 2:** Run the compile check. Expected: `compile-check: OK`.
+- [x] **Step 3:** Commit.
 - [ ] **Step 4: Play-test gate (the user).** With `RUBY_DEBUG_LOGS` on: an enemy who sees Ruby calls out her position, others join, the pool publishes, and "is now aggressive" logs once per enemy.
 
 ### Task 4: `EnemyBodyState`
@@ -99,18 +99,18 @@ Not `EnemyKnowledge`: `Knowledge` is already the enum on `RubyFact`.
 - **Produces:** `public EnemyBodyState BodyState { get; }` on the controller, and on the class: `IsHeld`, `HeldMovedBy`, `WasThrownWithin(float, out Vector3)`, `NoteHeld()`, `NoteReleased(bool thrown)`, `DropGun()`, `PopGun()` and `Darken()`.
 - **Consumes:** `Body`, `Arms`, and the tuning: `_grabPopUp`, `_grabPopOut`, `_corpseBrightness`.
 
-- [ ] **Step 1:** Move the chain's record, `DropGun`, `PopGun` and `Darken`, with the shader IDs. `EnterGrabbed`, `EndGrab` and `Release` stay on the controller, because they call `SetState`, and call the class. `IsHeld` stays a forward on the controller, because `StopsBullets` and `Stance` read it.
-- [ ] **Step 2:** Run the compile check. Expected: `compile-check: OK`.
-- [ ] **Step 3:** Commit.
+- [x] **Step 1:** Move the chain's record, `DropGun`, `PopGun` and `Darken`, with the shader IDs. `EnterGrabbed`, `EndGrab` and `Release` stay on the controller, because they call `SetState`, and call the class. `IsHeld` stays a forward on the controller, because `StopsBullets` and `Stance` read it.
+- [x] **Step 2:** Run the compile check. Expected: `compile-check: OK`.
+- [x] **Step 3:** Commit.
 - [ ] **Step 4: Play-test gate (the user).** Grab, drag, spin, throw and drop an enemy, and kill one. The gun pops on the grab, a corpse darkens, and a watcher still reacts to the drag and the throw.
 
 ### Task 5: Forwards out, and the file in order
 
 **Files:** modify `Assets/Scripts/EnemyController.cs`, `Assets/Scripts/Enemies/*.cs`, `Assets/Scripts/States/*.cs`, `CLAUDE.md`
 
-- [ ] **Step 1:** Remove the one-line forwards to `Vision` and `Reactions` (`InView`, `InContactWithPlayer`, `SightBlocker`, `CanSeePlayer`, `HasClearSight`, `DistanceToPlayer`, `Investigate`, `BecomeWary`, `CanJoinJob`), about 23 call sites, which call `Enemy.Vision.X` or `Enemy.Reactions.X` directly. `CanSeeSpot` moves onto `EnemyVision` only once the user's uncommitted whitespace change to that file is committed or dropped; until then it stays on the controller.
-- [ ] **Step 2:** Put the controller in one order: tuning, getters, parts, lifecycle, the table, external transitions, the search request, stance. Moves only.
-- [ ] **Step 3:** `CLAUDE.md`: **Who owns what** names the new classes and drops "keeps one-line forwards". The Assemblies table and every other `Squad/` path become `Enemies/`, because the folder was renamed.
-- [ ] **Step 4:** Run the compile check. Expected: `compile-check: OK`.
-- [ ] **Step 5:** Commit. Run the end-of-plan review in the background, on the most capable model, against this plan's Global Constraints and Review Focus.
+- [x] **Step 1:** Remove the one-line forwards to `Vision` and `Reactions` (`InView`, `InContactWithPlayer`, `SightBlocker`, `CanSeePlayer`, `HasClearSight`, `DistanceToPlayer`, `Investigate`, `BecomeWary`, `CanJoinJob`), about 23 call sites, which call `Enemy.Vision.X` or `Enemy.Reactions.X` directly. `CanSeeSpot` moves onto `EnemyVision` only once the user's uncommitted whitespace change to that file is committed or dropped; until then it stays on the controller.
+- [x] **Step 2:** Put the controller in one order: tuning, getters, parts, lifecycle, the table, external transitions, the search request, stance. Moves only.
+- [x] **Step 3:** `CLAUDE.md`: **Who owns what** names the new classes and drops "keeps one-line forwards". The Assemblies table and every other `Squad/` path become `Enemies/`, because the folder was renamed.
+- [x] **Step 4:** Run the compile check. Expected: `compile-check: OK`.
+- [x] **Step 5:** Commit. Run the end-of-plan review in the background, on the most capable model, against this plan's Global Constraints and Review Focus.
 - [ ] **Step 6: Play-test gate (the user).** One full run: a sound, a job, a throw, a fight, a lost fight and a search. No new warnings or errors in the log.
