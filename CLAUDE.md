@@ -405,7 +405,9 @@ through the player never slows the walk.
   about Y), so this only covers one placed pitched in the scene. Idle officers aggro on sight like
   the rest; an unarmed one also goes for a free gun in reach. Aggro keeps contact all round, within
   Give Up Radius (18.5 m). Damage and getting up from a ragdoll (thrown or dropped) enter Aggro from
-  any AI state.
+  any AI state. Short of seeing her, only one thing sends him to Aggro from a sense: seeing the
+  chain drag or throw an enemy (see **Senses**). A grabbed enemy standing still, a knockdown, a
+  death, a job mate lost: he searches, and goes to Aggro only if Ruby then comes into view.
 - **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
   sight, it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
   backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyMovement.StepAway`),
@@ -432,6 +434,12 @@ through the player never slows the walk.
   The search starts from where the hunt was leading, or where he stands when he knew nothing:
   `AggroState.Exit` requests it (see **Searching**), and only when `LostPlayer` is what's sending
   him there, since Exit also runs on the way to Rearm, Grabbed, Ragdoll and Dead.
+  The chase is a **hunt** (`GridNavigator`'s `getClose`): tight behind a crate, Ruby's cell can have no
+  way in on the grid, and a hunter with no path used to stand still and warn while the crate hid her
+  and Aggro Time ran out with her standing there. He now walks to the ground he can reach nearest her,
+  within 5 m, and warns once; no ground in reach still stops and says so. A lost fight's search
+  starts from that ground too (`TryGetNearestReachable`), because a Search member who can't reach
+  his spot is taken off the job.
 - **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
   Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
   up within 0.3 m of its body's surface, measured to the nearest point of the gun's colliders
@@ -468,7 +476,7 @@ through the player never slows the walk.
   have him pushing at it for good. Idle activities (a desk, a TV) are a later piece.
 - **Patrol Normal and Aggressive.** These are modes of Patrol, not states. `IsAggressive` is
   **derived on every read, never stored**: he has been after Ruby (`EnemyMemory.Wary`, set by any
-  search for an attack, including the one after a lost fight, and by a glance at a known body) or has seen her (`HasSeenRuby`). Neither is
+  search for an attack, including the one after a lost fight, and by a glance at a known body) or knows she is about (`KnowsRuby`: he has seen her, or a job mate who had told him). Neither is
   ever cleared, so he never goes back. **`EnemyReactions.BecomeWary()` is the one writer of `Wary`**,
   so there is one place to change or log it and no enemy can latch wary by a route nobody can find.
   `BecomeWaryAt(at, why)` is for something sensed at a spot: when that is his own job's place it goes
@@ -487,7 +495,11 @@ through the player never slows the walk.
 - **Knowledge** (`Enemies/`). An officer's memory (`EnemyMemory`) holds the newest fact about Ruby
   (`RubyFact`: position, time and a `Knowledge` source, Seen, Heard, Told or Pool), whether he has
   **ever seen her** (`HasSeenRuby`, never cleared), and the bodies and loose guns he has already
-  taken in. Between two things he knows, **the newer by time wins**, and on a tie his own beats the
+  taken in. Two more records are his alone and never expire within a level:
+  `TimesSentToLook` (how many jobs he has been put on, against Sent To Look Threshold) and
+  `WasToldOfRuby` (a job mate who had seen her told him she is about). `KnowsRuby` is
+  `HasSeenRuby || WasToldOfRuby`, and it is what `IsAggressive` and the problem-to-attack upgrade
+  read. Being told is not seeing: only `HasSeenRuby` lets him tell others in turn (see **Group jobs**). Between two things he knows, **the newer by time wins**, and on a tie his own beats the
   pool's, because it needed no publish to reach him. `EnemyAwareness.TryGetNewestRuby` combines his
   memory with the pool's published snapshot and is what Aggro chases once she's out of sight.
   Seeing, remembering and speaking aren't states: `EnemyAwareness.Update` runs beside the machine.
@@ -549,8 +561,31 @@ through the player never slows the walk.
 - **Senses** (`EnemySenses`, one per officer, scanned from `FixedUpdate` every Scan Interval at a
   staggered phase). He notices **bodies in motion** within Motion Radius that he can see clearly:
   at Notice Speed a MovingObject, at Alarm Speed a FastObject, once per Origin Lifetime for each
-  body, and only a *taken* reaction counts as one. An officer on his feet is never a moving body,
-  only one held on the chain or tumbling. He notices **corpses** within Body Notice Range in his
+  body, and only a *taken* reaction counts as one. **A moving thing is judged by what it is as well as
+  how fast it goes:** a flying pistol also reads as a LooseGun and a flying enemy as a Body, and the
+  stronger of the two rows wins, the response by `Severity` and the priority by number, each on its
+  own, an Ignore row adding nothing (an Ignore at 5 must not lift a real row's priority); the log
+  names which row each came from. Its point is its origin, where Ruby threw it from, and it teaches
+  where she was; with no origin it is only where it lies, which says nothing of her. A flying enemy
+  makes a **Search** there, and so does anything at Alarm Speed (something that fast could kill, and
+  no ordinary person throws it); a slower gun or crate stays a Check. An officer on his feet is never
+  a moving body, only one held on the chain or tumbling, and a **tumbling enemy in his view counts at
+  any speed**, since one knocked down or killed may hardly move. The sweep's buffer is shared and
+  **grows** when a sweep fills it (walls and bodies share the Default layer, so no mask can leave
+  the walls out, and a full buffer used to drop bodies with a warning). The motion scan is skipped
+  while he is in Aggro or Rearm: `Investigate` would refuse whatever it found, and a refused body
+  isn't marked taken, so it was swept, judged and refused again every scan.
+  **Enemies on the chain** (`ScanHeld`, first in each scan): another enemy held on the chain, in his
+  view with a clear line (the view and not the all-round motion sense, because a body standing
+  still has nothing to catch the eye from behind). Standing where he was grabbed, he is walked over
+  to and searched around, once per hold and only once the reaction was taken, kept apart from the
+  motion scan's record or watching a grab would blind him to the throw for Origin Lifetime. Moved
+  more than Dragged Distance (0.5 m, `HeldMovedBy`, so a charging throw's jiggle isn't it) from
+  where he was grabbed, or thrown within one scan of the release from a spot he sees
+  (`WasThrownWithin`), someone is plainly on the other end of the chain: `EnemyReactions.SeeChainMove`
+  teaches him where Ruby is right now, as Heard, and `Alert()`s him into Aggro. That and sight of her
+  are the only ways to Aggro through the senses. One knocked down or killed, or a flying enemy whose
+  throw he didn't see, is a Search at the throw's origin (or where he lies), with no Aggro. He notices **corpses** within Body Notice Range in his
   view and clear sight, and **loose guns** in view and sight if he is armed. A body or gun he
   hasn't seen goes on the squad's books and he investigates it. A body the squad already knows he
   **glances** at: he faces it and looks from where he stands without walking to it, and is wary
@@ -578,7 +613,8 @@ through the player never slows the walk.
   search): an equal or lower one never does, which is what stops flicker, but it is
   **noticed** (a distraction, below). A search from Aggro has
   priority 6 (`SearchingState.FromAggroPriority`, one above the top of the scale), above every map
-  row, so a sound can't swap his target while he's lost a player, though it still distracts him. The state runs
+  row, so a sound can't swap his target while he's lost a player, though it still distracts him (a
+  gunshot is the exception: it mobilises, see **Group jobs**). The state runs
   **steps**, `Walk`, `Look`, `StandDown` and `Done`, and a retarget starts them over. On a job the
   job's clock runs the steps and he plays his part (see **Group jobs**); what follows is a search
   of his own:
@@ -623,15 +659,28 @@ through the player never slows the walk.
     himself joins at once, since he is reacting to the sound and not to a call). Each is checked again as he's
     called (he may have gone to Aggro, been grabbed or taken by another job in the second since),
     and a stale name isn't added. **Gather:** the team faces the spot for Gather Time (0.75 s).
-    **Go:** waits for the first member to arrive.
-  - **One clock, one outcome.** The job, not its members, decides when a step ends, so a team looks,
-    gestures and finishes on the same frame: members each timing their own look is how one said all
+    **Go:** a Check waits for the checker to arrive, a Search for every member (see below).
+  - **One clock, one outcome.** The job, not its members, decides when a step ends, so a Check's team looks,
+    gestures and finishes on the same frame (a Search ends differently, below): members each timing their own look is how one said all
     clear while another walked off aggressive. A step's length (Look Time, Stand Down Time or Search
     Duration, from the lead's tuning) is **fixed when the step begins** (`StepLength`), so a lead
     who leaves mid-step can't stretch or cut it. Go has no length and waits explicitly: inferring it
     from a zero duration froze every step at Stand Down Time 0. A job that empties during `Advance`
     is removed after the walk, so none misses a tick. A job's reason **only rises**: whatever one
     member knows is known to the team, and an attack makes every member wary at once.
+  - **A Search roams its area, and ends one by one** (`SearchingState.Roam`). A member starts as soon
+    as he is inside Search Area Radius (6 m, on `Intel`) of the place with a clear line to it, not at
+    the place itself, and from then on walks random open spots inside it, looking at each for a
+    random share of Look Time (Roam Look Variation) so a team doesn't move on together, each
+    beginning with a look of his own. **The countdown waits for the team:** the Search step starts when
+    every member has come in (`NoteArrived`), so one called from far away isn't left with no time. One
+    who can't reach the area, with no path or Search Travel Limit run out, is **taken off the job** and
+    goes back to his patrol, with a log line saying why (`DropFromSearch`; his search ends so the table
+    takes him to Patrol, Aggressive since an attack search made him wary). Three failed spots in a row end
+    his roaming and he sweeps where he stands. When the countdown ends **each finishes the walk he is on
+    and looks there before he leaves**, picking no new spot, so the team drifts off in its own time, not
+    on one frame; he stays on the job meanwhile, so a new disturbance can't start a second job around him
+    (a Done job takes no one new).
   - **The checker and followers.** In a Check one member goes to the spot and looks: the nearest to
     it (flat) when the team sets off, chosen once and kept (`CheckerOf` only reads the job), unless a
     nearer enemy joins in the first moments of Go. If he leaves in Go, the nearest of the rest takes
@@ -646,6 +695,39 @@ through the player never slows the walk.
     (`HandleAtOwnJob`, `RaiseJobAt`): it upgrades or converts the job for everyone, or raises it to
     an attack for everyone, and only what the job didn't take is a distraction for him. At the job's place he never
     latches `Wary` alone, because everyone on the job goes wary together; away from it, what he senses is his own and he does. A glance at the job's place can raise its reason, but never converts, moves or restarts it.
+  - **Filling and merging** (every Intel Interval, one pass each). **Fill:** each open job still
+    recruiting with room has its lead look again for free enemies within Speech Range along the floor
+    (`FindCallees`, one flood per job, read at once) and call them in one at a time as at the start, so
+    one who joins a team already walking is called and not snapped in; skipped while a call is queued,
+    and checked cheaply first so a level with nobody free costs no flood. **Merge:** two open jobs whose
+    places are within Job Match Radius become one. **The older stays**: its members first, then the
+    younger's up to the cap, joined at once with no call, with the higher reason and priority, a
+    Search if either is, and the place of the higher priority (a tie stays put, so a merge doesn't move a
+    team for nothing). One pair merges per interval. **Extras** who don't fit: on a problem they are
+    dismissed to patrol (`SearchingState.Dismiss`); on an attack each starts a Search of his own at a
+    spot Job Match Radius + 2 m to 2.5 times it from the merged place (three tries, never at another
+    open job's place, so it can't merge straight back), else is dismissed with a log line.
+  - **Joining from Aggro** (`JobBoard.JoinFromAggro`, from `SearchingState.Enter` on a request marked
+    `AfterLostFight`). One who starts a search from Aggro, after a lost fight or on getting up from a
+    grab, joins or starts a job at the spot he knew. Where a job's place is within Job Match Radius he
+    makes a Check, or a job not yet an attack, a Search for an attack for everyone, **once per area**
+    (`EnemyMemory.NoteRaisedAt`: again only when his search is that far from where he last raised one,
+    so the flip from Aggro to Searching and back can't raise it each time), and joins it if it has room;
+    a full or past-recruiting job dismisses him to Patrol Aggressive, since he is wary by then. With no
+    job there he leads a Search for an attack and calls in the free officers. A lost-fight team past
+    the cap goes to Patrol Aggressive and starts no job of its own.
+  - **Individual memory and telling** (`JobBoard.JoinMember`, the one place an officer is put on a
+    job, so every route in counts and tells). Each time he is put on a job he wasn't on (started,
+    joined, called, filled, merged out; a retarget, a distraction and a glance don't count) his
+    `TimesSentToLook` rises, and at Sent To Look Threshold (3, on the officer) the job is raised to
+    an attack for everyone, so two thuds ending all clear make the third a search for an attack. It
+    fires once for him for good (`==`, not `>=`: afterwards he is only wary, and a wary officer alone
+    doesn't raise a job). **Telling:** if any member has seen Ruby himself, every member who doesn't
+    know learns the newest of the seers' facts as **Told** (`WasToldOfRuby`; the newer by time wins),
+    before anyone moves, and a seer on the job raises it to an attack. **Only one who saw her tells**
+    (`HasSeenRuby`, never `WasToldOfRuby`), so being told can't chain: a told officer who could tell
+    would carry one sighting down every chain of jobs through the level, the removed level alert by
+    another door.
   - **Gunshots always mobilise** (`Incident.Mobilises`, `JobBoard.Mobilise`), whatever the priority, for anyone searching: priority let one pass as a distraction, and a team about to finish walked off from it. One with no running job, a lone searcher or a member finishing his last look, joins or leads a Search at the shot. Inside the job's Search Area Radius, a Check becomes a Search on the spot, and a Search's countdown gains Gunshot Extension (4.5 s, on `Intel`; once per Distraction Gap, the time left capped at a full Search Duration), and it also counts as a provocation. Elsewhere, while calling or gathering the job just moves; otherwise the team **signals** (`JobStep.Signal`: stopped and facing the shot for React Time) and then all go, as a Search, at most once per Distraction Gap. A signal isn't merged, because a merge would lose the shot.
   - **Sending one to check** (`JobBoard.SendScout`, `GroupJob.Scout`). When a member notices something new that only distracts him, away from the search area, the job sends its nearest member to it, never a Check's checker, only on a team of two or more and one at a time: a Search once it's counting, a Check while it's going or looking. He walks there, looks for Look Time and comes back (`SearchingState.CheckForJob`). If the job has ended by then he leaves with it, and if it starts over it takes him with it. A body or gun lying there, or a gunshot, never sends one. It still counts as a provocation.
   - **Membership invariants,** checked where membership changes. **One job per enemy:** `GroupJob.Add`
@@ -668,19 +750,21 @@ through the player never slows the walk.
   search** (`SearchingState.Exit` clears it): a count left over made the next, unrelated search
   aggro on its first or second one. **Nothing counts until he has reached the search** (`SearchingState.ReachedSearch`: in a Search's area, at a Check's spot, or a Check's follower once the look begins): walking in he still turns to look. **What counts is whether Ruby is doing something, not its priority** (`Incident.SaysNothingOfRuby`): a low thud during a body search counts, a body or gun lying there doesn't, and he turns to look either way. The count portrays enemies provoked by her throwing things at them, who get tired of it and go after her. At Distraction Threshold
   (3) he has had enough: the count clears, he is taught where **she is at that moment**, once, as a Heard fact, not where the last thing landed, and `Alert()`s into Aggro.
-  A search from Aggro (priority 6) is outranked by nothing, so every sound distracts a lost-fight
-  searcher. Idle and patrolling officers aren't distractible: they go and check.
+  A search from Aggro (priority 6) is outranked by nothing, so a sound only distracts a lost-fight
+  searcher, except a gunshot, which mobilises everyone searching whatever the priority (see **Group
+  jobs**); what `Mobilise` leaves over (a shot in the area they already search, or one right after the
+  last) is a distraction like the rest, and a distraction away from the search may send one scout. Idle and patrolling officers aren't distractible: they go and check.
 - **Debug overlays**, only in the editor, and the heavy ones off by default: `PathGrid`'s Always
   Show Grid and Show Open Cells draw the whole floor, and `Intel`'s Show Sound Range draws each
   recent sound's reach (the cells its flood covered, shaded by distance, beside the circle the same
   loudness would cover in open air). Draw cost grows with the grid's cell count, so leave them off unless
   you're looking at them. With `Intel` selected in Play, each open job shows as a ring at its place
   (cyan for a Check, orange for a Search), a line from the lead to
-  every member and from each member to the spot, the checker ringed, and a label with the job's id,
+  every member and from each member to the spot, the checker ringed, the scout ringed too with a ring where he was sent and a line to it, and a label with the job's id,
   kind, step, members over cap, reason, priority and checker. `Intel` also marks, in Play whenever
   Gizmos are on (no toggle), each open job's Job Match Radius (in edit mode, with `Intel` selected, the same ring round `Intel`, for sizing it), where Ruby was last reported ("reported Xs ago") and the bodies and
   loose guns the squad has on its books. An officer selected in Play also draws Attack Near Radius
-  round where Ruby was last reported, orange, while the report is recent enough. Every officer's routes show
+  round where Ruby was last reported, orange, with Known Spot Radius inside it, while the report is recent enough. Every officer's routes show
   faintly, cyan for Safe and orange for Aggressive.
 
 ### Pathing
@@ -1071,22 +1155,25 @@ Enemy States 0.2 (`2026-10-28-enemy-states-0.2.md`) is built piece by piece: pie
 cone), 2 and 3 (knowledge, the pool, senses and the behaviour map, built to
 `docs/plans/2026-10-28-enemy-knowledge-and-senses.md`), 4 (smaller states: search steps, Patrol
 Aggressive, the idle post, built to `docs/plans/2026-10-30-enemy-smaller-states.md`) and 10
-(corners and curves) are done. Group jobs (piece 5) are partly built: part 1 (word of mouth and
-the job in the pool, `docs/plans/2026-10-30-enemy-group-jobs.md` Tasks 1 and 2) and part 2's Tasks 3
-and 4 (one outcome per job, the checker and followers, `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`).
-A whole-branch review then found bugs and overloaded classes, and `docs/plans/2026-11-02-enemy-ai-fixes-and-refactor.md`
-fixed them and split the job engine, the knowledge pool, flood reading, sight and reactions out of
-`Intel` and `EnemyController` into the classes under **Enemy AI**. Part 2's Tasks 5 to 8 are built
-(moving objects judged by what they are, individual memory, fill and merge, search together and
-recovered officers), and Task 9, its docs, is still to come, so **Enemy AI** doesn't describe all of
-them yet. Part 2's decisions 8 to 16 are recorded there but not all built. After group jobs comes a
-small piece, decision 16: searching like people (slow walking, scanning as they go, clearing what
-they can't see). Then squads, rooms, hiding spots and breakables.
+(corners and curves) are done. **Group jobs (piece 5, part A) are done**: part 1 (word of mouth and
+the job in the pool, `docs/plans/2026-10-30-enemy-group-jobs.md` Tasks 1 and 2) and part 2
+(`docs/plans/2026-11-02-enemy-group-jobs-part-2.md`). A whole-branch review between them found bugs
+and overloaded classes, and `docs/plans/2026-11-02-enemy-ai-fixes-and-refactor.md` fixed them and
+split the job engine, the knowledge pool, flood reading, sight and reactions out of `Intel` and
+`EnemyController` into the classes under **Enemy AI**. Part 2's tasks and its decisions are built
+and described under **Enemy AI**, except decision 16, searching like people (slow walking, scanning
+as they go, clearing what they can't see), which is the next small piece, before squads. The user
+changed decisions 10, 14 and 15 (Task 8b): nobody goes to Aggro unless he sees Ruby, or sees her drag
+or throw an enemy on the chain; a grabbed enemy seen standing still is walked over to and searched
+around, and a knockdown or death only searches. Piece 5's part B (patrol together: leaders, groups,
+breaking off) isn't built, and needs a trigger of its own now the level alert is gone. After the
+searching piece come squads, rooms, hiding spots and breakables.
 
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
 account of what is built, and its section on the Path Grid, colliders and navigation is written for
-new coders. It deliberately says nothing about enemy work still in progress, such as group jobs:
-the user's rule is that the manual waits until a piece is done.
+new coders. It deliberately says nothing about enemy work still in progress, such as group jobs
+(done, but part of the enemy states work): the user's rule is that the manual waits until all of
+enemy states is finished.
 
 ## Unity/git
 

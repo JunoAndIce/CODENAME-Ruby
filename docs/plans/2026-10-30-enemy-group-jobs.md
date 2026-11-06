@@ -1,5 +1,7 @@
 # Enemy Group Jobs Implementation Plan (Enemy States 0.2, piece 5, part A: check and search together)
 
+> **Finished by `2026-11-02-enemy-group-jobs-part-2.md` (2026-11-06).** Tasks 1 and 2 were built from this plan. Its Tasks 3 to 5 were superseded and are not to be built from; the part 2 plan built piece 5's part A in their place. Part B (patrol together) is still to be planned.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Each task ends in a play-test gate the user runs, so stop after each task's review and wait for them. Never hand-edit `.prefab`, `.unity` or `.asset` YAML: scene and asset work is the user's, done in the Inspector.
 
 **Goal:** Officers who sense the same thing deal with it together. The first to sense it starts a **job**, calls in the free officers near him (three in all), and the team checks it as one: one goes to the spot while the others follow slowly behind, he looks, and he either stands everyone down or finds something and the team searches. Officers who lose Ruby in a fight form a search team of up to three, and the rest go back on patrol. An officer who sees Ruby tells everyone in earshot, and they join his fight.

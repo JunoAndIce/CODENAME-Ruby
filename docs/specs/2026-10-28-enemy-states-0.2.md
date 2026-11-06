@@ -796,7 +796,14 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
 - [x] 2. Knowledge: memory and the shared pool
 - [x] 3. Senses and what they weigh
 - [x] 4. Smaller states inside the main ones
-- [ ] 5. Group jobs
+- [x] 5. Group jobs
+  - Part A (check and search together) is built, to `docs/plans/2026-10-30-enemy-group-jobs.md`
+    Tasks 1 and 2 and `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`. Part B, **Patrol
+    together** (leaders, groups of two or three, followers breaking off and rejoining), is not
+    built, and still needs its trigger now the level alert is gone. Decision 16 of the part 2 plan,
+    searching like people (slow walking, scanning as they go, going to places in the search area
+    he can't see), comes next as a small piece before 6, because it doesn't need rooms. Its
+    room-by-room clearing and hiding spots stay in pieces 7 and 8.
 - [ ] 6. Fighting together: squads and fire lanes
 - [ ] 7. Rooms and behaviour maps: activities, firing ranges, armories and alarms
 - [ ] 8. Clearing hiding spots
