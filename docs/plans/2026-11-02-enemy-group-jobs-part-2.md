@@ -126,6 +126,8 @@
 
 20. **Enemies respect each other's space (added and built 2026-11-06).** *(User: "Enemies need to respect each others space. They should respect a radius around each other." and "this applies to walking and pathing.")* Personal Space, 1.5 m on the enemy: any walk along any path bends away from anyone on his feet inside it, passing on his own right when head-on, and roaming and wandering spots avoid it when a few tries can. It bends the walk and doesn't add route costs, since others move. Squads' standing spots and fire lanes are still piece 6.
 
+21. **Distractions are Ruby provoking them (added and built 2026-11-06).** *(User: "its not really being spooked into aggro, moreso being triggered by Ruby throwing things and threatenign them and they get tired of it and aggro her.")* So priority doesn't decide what counts: a priority 3 thud during a priority 5 search does. A body or gun lying there doesn't, since it isn't her doing anything; he still turns. When he has had enough he is taught where she is at that moment, once, instead of where the last thing landed.
+
 ## Global Constraints
 
 - **Values that are my calls** (put in tooltips, retuned in play):

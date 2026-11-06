@@ -30,9 +30,9 @@ public readonly struct Incident
     /// </summary>
     public bool MakesSearch { get; }
     /// <summary>
-    /// The point isn't where Ruby may be, so it isn't taught as a fact about her: a body or gun lies wherever
-    /// it ended up. A separate question from MakesSearch: a flying enemy makes a Search, and its point is
-    /// where she threw it from.
+    /// It isn't Ruby doing anything: a body or gun lies wherever it ended up, so it doesn't add to what
+    /// provokes him into going after her (EnemyReactions.Distract). A separate question from MakesSearch: a
+    /// flying enemy makes a Search, and that one is her doing.
     /// </summary>
     public bool SaysNothingOfRuby { get; }
 

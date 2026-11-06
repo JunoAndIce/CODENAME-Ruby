@@ -663,9 +663,8 @@ through the player never slows the walk.
   last counted is the same disturbance (a tumbling thrown body thuds about ten times, and a firefight
   is a run of shots), and each is forgotten after Distraction Memory (12 s). **The count ends with the
   search** (`SearchingState.Exit` clears it): a count left over made the next, unrelated search
-  aggro on its first or second one. **Nothing counts until he has reached the search** (`SearchingState.ReachedSearch`: in a Search's area, at a Check's spot, or a Check's follower once the look begins): walking in he still turns to look. At Distraction Threshold
-  (3) **the jig is up**: the count clears, he is taught the disturbance's place (where a thing he saw came from, or where a sound happened) as a Heard fact
-  (unless it was a body or gun lying found, `SaysNothingOfRuby`) and `Alert()`s into Aggro.
+  aggro on its first or second one. **Nothing counts until he has reached the search** (`SearchingState.ReachedSearch`: in a Search's area, at a Check's spot, or a Check's follower once the look begins): walking in he still turns to look. **What counts is whether Ruby is doing something, not its priority** (`Incident.SaysNothingOfRuby`): a low thud during a body search counts, a body or gun lying there doesn't, and he turns to look either way. The count portrays enemies provoked by her throwing things at them, who get tired of it and go after her. At Distraction Threshold
+  (3) he has had enough: the count clears, he is taught where **she is at that moment**, once, as a Heard fact, not where the last thing landed, and `Alert()`s into Aggro.
   A search from Aggro (priority 6) is outranked by nothing, so every sound distracts a lost-fight
   searcher. Idle and patrolling officers aren't distractible: they go and check.
 - **Debug overlays**, only in the editor, and the heavy ones off by default: `PathGrid`'s Always

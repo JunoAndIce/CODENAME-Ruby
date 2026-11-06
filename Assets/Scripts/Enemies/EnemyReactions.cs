@@ -124,29 +124,45 @@ public class EnemyReactions
     }
 
     // Something lesser happened while he was searching. He turns to look at it and the search waits
-    // a moment, but it isn't dropped or retargeted. Enough of them close together and the jig is
-    // up: he aggros, and the disturbance's place (where a thing he saw came from, or where a sound
-    // happened) is where he takes Ruby to be,
-    // so Aggro has somewhere to go. A body or gun says nothing about her, so he goes to Aggro with
-    // what he already knows, and searches where he stands if that is nothing. Nothing counts until he has
-    // reached the search: what he passes on the way is why he is going, not a sign something is wrong
-    // with where he has got to. He still turns to look.
+    // a moment, but it isn't dropped or retargeted. Enough of them close together and he has had
+    // enough of Ruby provoking him: she keeps throwing things and threatening them, so he goes after her.
+    // So what counts is whether she is doing something, not how serious it is: a low-priority thud
+    // during a body search is one more thing thrown at them. A body or gun lying there isn't her doing
+    // anything, and nothing counts until he has reached the search, because what he passes on the way is
+    // why he is going. He still turns to look at both.
     private bool Distract(Incident incident)
     {
-        bool counts = _enemy.Searching.ReachedSearch;
+        bool arrived = _enemy.Searching.ReachedSearch;
+        bool counts = arrived && !incident.SaysNothingOfRuby;
         int count = _enemy.Memory.NoteDistraction(Time.time, _enemy.DistractionMemory, _enemy.DistractionGap, counts, out bool isNew);
         if (isNew && counts && count >= _enemy.DistractionThreshold)
         {
             _enemy.Memory.ClearDistractions();
-            if (!incident.SaysNothingOfRuby) _enemy.Memory.Learn(new RubyFact(incident.Point, Time.time, Knowledge.Heard));
-            DebugLog.Info($"{_enemy.name}: Enemies have been disturbed too much! ({count} disturbances in {_enemy.DistractionMemory:0.#}s, the last {incident}); he aggros.", _enemy);
-            _enemy.Alert();
+            GoAfterRuby(count, incident);
             return true;
         }
 
         _enemy.Searching.Distract(incident.Point, isNew);
-        DebugLog.Info($"{_enemy.name} {(isNew ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}): {(counts ? $"{count} of {_enemy.DistractionThreshold}" : "not counted, he hasn't reached the search")}.", _enemy);
+        string tally = counts ? $"{count} of {_enemy.DistractionThreshold}" : arrived ? "not counted, it isn't Ruby doing anything" : "not counted, he hasn't reached the search";
+        DebugLog.Info($"{_enemy.name} {(isNew ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}): {tally}.", _enemy);
         return true;
+    }
+
+    // He is going after her and not after the last thing she threw, so he is taught where she is right
+    // now, once: going to where a crate landed would have him charge the crate. He doesn't go on knowing
+    // where she goes after this. With no Ruby in the scene there is no one to go after.
+    private void GoAfterRuby(int count, Incident last)
+    {
+        PlayerController ruby = _enemy.Player;
+        if (ruby == null)
+        {
+            Debug.LogWarning($"{_enemy.name} has had enough of being provoked, but the scene has no player to go after, so he carries on searching.", _enemy);
+            return;
+        }
+
+        _enemy.Memory.Learn(new RubyFact(ruby.transform.position, Time.time, Knowledge.Heard));
+        DebugLog.Info($"{_enemy.name}: Enemies have been disturbed too much! ({count} disturbances in {_enemy.DistractionMemory:0.#}s, the last {last}); he goes after Ruby at {ruby.transform.position}.", _enemy);
+        _enemy.Alert();
     }
 
     /// <summary>
