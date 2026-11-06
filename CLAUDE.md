@@ -673,10 +673,10 @@ through the player never slows the walk.
   recent sound's reach (the cells its flood covered, shaded by distance, beside the circle the same
   loudness would cover in open air). Draw cost grows with the grid's cell count, so leave them off unless
   you're looking at them. With `Intel` selected in Play, each open job shows as a ring at its place
-  (cyan for a Check, orange for a Search, plus a ring of Job Match Radius), a line from the lead to
+  (cyan for a Check, orange for a Search), a line from the lead to
   every member and from each member to the spot, the checker ringed, and a label with the job's id,
   kind, step, members over cap, reason, priority and checker. `Intel` also marks, in Play whenever
-  Gizmos are on (no toggle), where Ruby was last reported ("reported Xs ago") and the bodies and
+  Gizmos are on (no toggle), each open job's Job Match Radius (in edit mode, with `Intel` selected, the same ring round `Intel`, for sizing it), where Ruby was last reported ("reported Xs ago") and the bodies and
   loose guns the squad has on its books. An officer selected in Play also draws Attack Near Radius
   round where Ruby was last reported, orange, while the report is recent enough. Every officer's routes show
   faintly, cyan for Safe and orange for Aggressive.

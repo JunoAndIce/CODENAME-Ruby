@@ -382,14 +382,22 @@ public class Intel : MonoBehaviour
 
     // Each open job: a ring at its place, a line from its lead to every member, and a label with its
     // kind, step and member count. Only while Intel is selected, so a crowded level isn't cluttered.
+    // In edit mode there are no jobs, so Job Match Radius is drawn round Intel itself, to judge its size against the level.
     private void OnDrawGizmosSelected()
     {
-        if (!Application.isPlaying) return;
+        if (!Application.isPlaying)
+        {
+            Gizmos.color = SearchJobColor;
+            DrawCircle(transform.position, _jobMatchRadius);
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(transform.position + Vector3.right * _jobMatchRadius, $"Job Match Radius {_jobMatchRadius:0.#} m");
+#endif
+            return;
+        }
 
         foreach (GroupJob job in _board.Jobs)
         {
-            Gizmos.color = job.Kind == JobKind.Search ? new Color(1f, 0.45f, 0.1f) : new Color(0.2f, 0.9f, 0.9f);
-            DrawCircle(job.Point, _jobMatchRadius);
+            Gizmos.color = JobColor(job);
             DrawCircle(job.Point, 0.6f);
             EnemyController lead = job.Lead;
             foreach (EnemyController member in job.Members)
@@ -406,13 +414,26 @@ public class Intel : MonoBehaviour
         }
     }
 
+    private static readonly Color SearchJobColor = new(1f, 0.45f, 0.1f);
+    private static readonly Color CheckJobColor = new(0.2f, 0.9f, 0.9f);
+    private static Color JobColor(GroupJob job) => job.Kind == JobKind.Search ? SearchJobColor : CheckJobColor;
+
     // Ruby's last reported spot and how stale it is: the picture the squad is working from. Bodies
-    // and loose guns the squad has on its books are marked too.
+    // and loose guns the squad has on its books are marked too. So is each job's Job Match Radius,
+    // without Intel selected, because a sound or a sight in the ring goes to that job instead of starting
+    // one, and that decides what you see the squad do. A Done job's isn't: it no longer takes anything.
     private void OnDrawGizmos()
     {
         if (!Application.isPlaying) return;
 
         if (_showSoundRange) DrawSounds();
+
+        foreach (GroupJob job in _board.Jobs)
+        {
+            if (job.Step == JobStep.Done) continue;
+            Gizmos.color = JobColor(job);
+            DrawCircle(job.Point, _jobMatchRadius);
+        }
 
         if (Published.RubyReported)
         {
