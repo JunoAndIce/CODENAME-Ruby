@@ -30,7 +30,7 @@ internal static class EnemyGizmos
         // Around where he last heard or saw of Ruby, while that report is recent enough: a
         // disturbance inside this circle is searched for as an attack. Playing doesn't mean he has woken:
         // the prefab open in Prefab Mode during Play never runs Awake, so it has no Memory to ask.
-        if (Application.isPlaying && enemy.Memory != null && enemy.TryGetNewestRubyFact(out RubyFact news) && Time.time - news.Time <= enemy.AttackNearTime)
+        if (Application.isPlaying && enemy.Memory != null && enemy.Awareness.TryGetNewestRubyFact(out RubyFact news) && Time.time - news.Time <= enemy.AttackNearTime)
         {
             Gizmos.color = new Color(1f, 0.55f, 0.1f, 0.6f);
             DrawFlatCircle(news.Position + Vector3.up * 0.1f, enemy.AttackNearRadius);

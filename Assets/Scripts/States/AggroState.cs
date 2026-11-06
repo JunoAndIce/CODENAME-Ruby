@@ -41,7 +41,7 @@ public class AggroState : EnemyStateBase
     }
 
     // Out of sight and he knows nothing of her: no rule but "search where he stands".
-    private bool NothingToGoOn => !Enemy.CanSeePlayer() && !Enemy.TryGetNewestRuby(out _);
+    private bool NothingToGoOn => !Enemy.CanSeePlayer() && !Enemy.Awareness.TryGetNewestRuby(out _);
 
     /// <summary>Armed, with Ruby in sight, in range and on her feet: it's shooting, so its body aims.</summary>
     public bool Firing { get; private set; }
@@ -77,7 +77,7 @@ public class AggroState : EnemyStateBase
             // He has been after her, whether or not he ever got a clear look. One who joined by word of
             // mouth and never saw her would otherwise lose the fight and go back to a Normal patrol.
             Enemy.Reactions.BecomeWary();
-            Vector3 known = Enemy.TryGetNewestRuby(out Vector3 newest) ? newest : Enemy.transform.position;
+            Vector3 known = Enemy.Awareness.TryGetNewestRuby(out Vector3 newest) ? newest : Enemy.transform.position;
             // A spot with no way in would take everyone off the job for not reaching it, so the search
             // starts from the ground nearest it. Its area still takes in where she was.
             if (Enemy.Navigator.TryGetNearestReachable(known, out Vector3 reachable) && reachable != known)
@@ -188,7 +188,7 @@ public class AggroState : EnemyStateBase
     // counts as there. Farther out it is someone else's problem to clear, and Aggro Time bounds it.
     private bool StalledBehindSomeone()
     {
-        if (!Enemy.TryGetNewestRuby(out Vector3 known)) return false;
+        if (!Enemy.Awareness.TryGetNewestRuby(out Vector3 known)) return false;
 
         // A newer fact is a new walk: how close he got to the old spot says nothing about this one.
         if (PathGrid.FlatDistance(known, _stallSpot) > StallProgress)

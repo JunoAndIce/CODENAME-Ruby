@@ -165,7 +165,7 @@ public class EnemyMovement
     /// </summary>
     public NavResult ChaseKnown(float speed)
     {
-        if (!_enemy.TryGetNewestRuby(out Vector3 point))
+        if (!_enemy.Awareness.TryGetNewestRuby(out Vector3 point))
         {
             Stop();
             return NavResult.Unreachable;

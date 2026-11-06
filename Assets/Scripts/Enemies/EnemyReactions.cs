@@ -174,7 +174,7 @@ public class EnemyReactions
             return true;
         }
 
-        if (_enemy.TryGetNewestRubyFact(out RubyFact fact))
+        if (_enemy.Awareness.TryGetNewestRubyFact(out RubyFact fact))
         {
             float age = Time.time - fact.Time;
             float distance = PathGrid.FlatDistance(fact.Position, point);

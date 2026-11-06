@@ -128,6 +128,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public EnemyReactions Reactions { get; private set; }
     /// <summary>His walking, turning and facing, and the walks the states ask for.</summary>
     public EnemyMovement Movement { get; private set; }
+    /// <summary>What he takes in each frame: sight of Ruby, what he learns and says, and the newest thing he knows.</summary>
+    public EnemyAwareness Awareness { get; private set; }
     public float MotionRadius => _motionRadius;
     public float DraggedDistance => _draggedDistance;
     public float KnownSpotRadius => _knownSpotRadius;
@@ -196,6 +198,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     internal float DistractionMemory => _distractionMemory;
     internal float DistractionGap => _distractionGap;
     internal float AttackNearTime => _attackNearTime;
+    internal float SpeakInterval => _speakInterval;
+    internal float AggressiveSpeedFactor => _aggressiveSpeedFactor;
     internal float AttackNearRadius => _attackNearRadius;
     internal int SentToLookThreshold => _sentToLookThreshold;
     public PatrolRoute SafeRoute => _safeRoute;
@@ -270,11 +274,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
-    private int _seesFrame = -1;
-    private bool _seesPlayer;
-    private bool _wasSeeing;
-    private float _nextSpeak;
-    private bool _wasAggressive;
 
     private void Awake()
     {
@@ -286,6 +285,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Vision = new EnemyVision(this);
         Reactions = new EnemyReactions(this);
         Movement = new EnemyMovement(this, _capsule);
+        Awareness = new EnemyAwareness(this);
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
@@ -368,23 +368,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private void Update()
     {
         _state.Tick();
-        UpdateKnowledge();
-        LogBecameAggressive();
+        Awareness.Update();
         DebugDrawPath();
-    }
-
-    // IsAggressive is derived, so nothing "enters" it; this catches the moment it turns true, once,
-    // and says why and which route he'll walk. It never goes false again.
-    private void LogBecameAggressive()
-    {
-        bool aggressive = IsAggressive;
-        if (aggressive && !_wasAggressive)
-        {
-            string why = Memory.HasSeenRuby ? "he has seen Ruby" : Memory.WasToldOfRuby ? "he has been told of Ruby" : "he has been sent after her";
-            string route = HasAggressiveRoute ? "his Aggressive route" : HasActiveRoute ? "his Safe route (he has no Aggressive one)" : "no route: he stays at his post, alert";
-            DebugLog.Info($"{name} is now aggressive: {why}. From here he patrols at {_aggressiveSpeedFactor:0.##}x ({CurrentPatrolSpeed:0.##} m/s, from {_patrolSpeed:0.##}) on {route}, looking around at each point.", this);
-        }
-        _wasAggressive = aggressive;
     }
 
     private void FixedUpdate()
@@ -594,67 +579,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>Forwards to EnemyMovement.Stop; states keep calling Enemy.Stop().</summary>
     public void Stop() => Movement.Stop();
 
-    /// <summary>
-    /// Where Ruby most likely is, as far as he knows: the newer of his own memory and the published
-    /// pool. Works from memory alone when the scene has no Intel. False when he knows nothing.
-    /// </summary>
-    public bool TryGetNewestRuby(out Vector3 point)
-    {
-        bool known = TryGetNewestRubyFact(out RubyFact fact);
-        point = fact.Position;
-        return known;
-    }
-
-    /// <summary>The whole newest fact about Ruby, with when and how he knows it. False when he knows nothing.</summary>
-    public bool TryGetNewestRubyFact(out RubyFact fact)
-    {
-        IntelSnapshot pool = Intel != null ? Intel.Published : IntelSnapshot.Empty;
-        return Memory.TryGetNewestRuby(pool, out fact);
-    }
-
     internal float TurnSpeed => _turnSpeed;
     internal float LookSweepAngle => _lookSweepAngle;
     internal float LookSweepPeriod => _lookSweepPeriod;
 
     internal Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
-
-    /// <summary>
-    /// Whether he has Ruby in his eyes this frame: noticed, or already hunting her with a clear line
-    /// to her, at any distance. Not only within Give Up Radius: Aggro chases her whenever she's in
-    /// sight, so past the radius he followed her without learning where she was, and when she dropped
-    /// out of sight he turned round and walked back to the old spot. The radius only decides when the
-    /// hunt ends (InContactWithPlayer). Alive and on his feet only: a corpse, a held or a tumbling
-    /// enemy sees and says nothing. Cached per frame, like CanSeePlayer.
-    /// </summary>
-    private bool SeesPlayer
-    {
-        get
-        {
-            if (_seesFrame == Time.frameCount) return _seesPlayer;
-            _seesFrame = Time.frameCount;
-            _seesPlayer = !Health.IsDead && !IsOverridden
-                && (DetectsPlayer() || (_state.Current == Aggro && CanSeePlayer()));
-            return _seesPlayer;
-        }
-    }
-
-    // Remembering and speaking aren't states: they run beside the machine. What he sees he knows at
-    // once; calling it out is bounded by Speak Interval so a long sighting isn't a shout per frame.
-    private void UpdateKnowledge()
-    {
-        bool sees = SeesPlayer;
-        if (sees)
-        {
-            var fact = new RubyFact(_player.transform.position, Time.time, Knowledge.Seen);
-            Memory.Learn(fact);
-            if (Intel != null && (!_wasSeeing || Time.time >= _nextSpeak))
-            {
-                _nextSpeak = Time.time + _speakInterval;
-                Intel.Say(this, fact);
-            }
-        }
-        _wasSeeing = sees;
-    }
 
     // Detection: noticed means in his view, and in sight. Sight lives in EnemyVision; these forwards
     // keep every state, sense and the editor calling the controller as before.
