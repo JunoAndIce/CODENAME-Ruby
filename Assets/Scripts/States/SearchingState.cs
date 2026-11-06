@@ -275,7 +275,7 @@ public class SearchingState : EnemyStateBase
     // still walking in when a Search's countdown ends keeps walking, so his limit keeps running.
     private void TickJob()
     {
-        if (_arrived || Job.Step is JobStep.Call or JobStep.Gather or JobStep.StandDown) return;
+        if (_arrived || Job.Step is JobStep.Call or JobStep.Gather or JobStep.StandDown or JobStep.Signal) return;
         if (Job.Step == JobStep.Done && !FinishingSearch(Job)) return;
 
         EnemyController checker = Enemy.Intel != null ? Enemy.Intel.CheckerOf(Job) : null;
@@ -381,6 +381,12 @@ public class SearchingState : EnemyStateBase
                 if (job.Callee != null && job.Lead == Enemy) Enemy.Movement.FaceToward(job.Callee.transform.position);
                 else if (job.Callee == Enemy && job.Lead != null) Enemy.Movement.FaceToward(job.Lead.transform.position);
                 else Enemy.Movement.FaceToward(job.Point);
+                return;
+
+            // A gunshot elsewhere: the team stops and faces it for a beat before they all go.
+            case JobStep.Signal:
+                Enemy.Stop();
+                Enemy.Movement.FaceToward(job.SignalledShot.Point);
                 return;
 
             case JobStep.Gather:

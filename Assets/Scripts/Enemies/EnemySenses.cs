@@ -45,7 +45,7 @@ public class EnemySenses
         if (!_enemy.Intel.TryGetRow(stimulus.Position, stimulus.Kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} hears {stimulus.Kind} from {stimulus.Position}: {row.Response} at priority {row.Priority}.", _enemy);
-        _enemy.Reactions.Investigate(new Incident(stimulus.Position, row.Response, row.Priority));
+        _enemy.Reactions.Investigate(new Incident(stimulus.Position, row.Response, row.Priority, mobilises: stimulus.Kind == StimulusKind.Gunshot));
     }
 
     /// <summary>

@@ -40,6 +40,8 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0f)] private float _callTime = 0.6f;
     [Tooltip("How far from a search's place, in metres, its members roam while they search. A member starts as soon as he is this near with a clear line to the place, and the search's countdown starts when the last member has.")]
     [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
+    [Tooltip("How much a gunshot inside a search's area adds to its countdown, in seconds. Shots within a member's Distraction Gap count as one, and the time left never goes above a full Search Duration, so a firefight can't keep a search going for good.")]
+    [SerializeField, Min(0f)] private float _gunshotExtension = 4.5f;
 
     [Header("Debug")]
     [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
@@ -88,6 +90,7 @@ public class Intel : MonoBehaviour
     public float ReactTime => _reactTime;
     public float CallTime => _callTime;
     public float SearchAreaRadius => _searchAreaRadius;
+    public float GunshotExtension => _gunshotExtension;
 
     /// <summary>
     /// The behaviour map every enemy reads. Null only when the asset is missing, which OnEnable
@@ -313,6 +316,9 @@ public class Intel : MonoBehaviour
 
     /// <summary>Whether a point is at a job's place (see JobBoard.Covers).</summary>
     public bool Covers(GroupJob job, Vector3 point) => _board.Covers(job, point);
+
+    /// <summary>A searcher hears a gunshot (see JobBoard.Mobilise).</summary>
+    public bool Mobilise(EnemyController who, Incident shot) => _board.Mobilise(who, shot);
 
     /// <summary>A member's stimulus at his own job's place (see JobBoard.HandleAtOwnJob).</summary>
     public bool HandleAtOwnJob(EnemyController who, SearchRequest request) => _board.HandleAtOwnJob(who, request);

@@ -7,11 +7,12 @@ public enum JobKind { Check, Search }
 /// <summary>
 /// Where a job has got to. A Check goes Call, Gather, Go, Look, StandDown, Done; a Search goes
 /// Call, Go, Search, Done. Call is the lead reacting to what he heard and then calling in the others
-/// one at a time, so nobody is on the job before he has reacted. The job's clock moves it along
-/// (JobBoard advances it); members read the step and run their own role. Values are never saved, so
-/// they may be reordered, and nothing compares them by order.
+/// one at a time, so nobody is on the job before he has reacted. Signal can interrupt any of them from Go
+/// on: a gunshot elsewhere, the team stopped and facing it for a beat before they all go (JobBoard.Mobilise).
+/// The job's clock moves it along (JobBoard advances it); members read the step and run their own role.
+/// Values are never saved, so they may be reordered, and nothing compares them by order.
 /// </summary>
-public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done }
+public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done, Signal }
 
 /// <summary>
 /// A few enemies dealing with one thing together. A plain object, held by JobBoard, with members, a
@@ -138,6 +139,31 @@ public class GroupJob
     }
 
     internal void RestartClock() => StepElapsed = 0f;
+
+    /// <summary>The gunshot the team is signalling about, in Signal: where they face, and where they go when it ends.</summary>
+    public Incident SignalledShot { get; private set; }
+    /// <summary>When the last signal began, so a run of shots doesn't stop the team again at every one.</summary>
+    public float LastSignalAt { get; private set; } = float.NegativeInfinity;
+    /// <summary>When a gunshot last added to the countdown, so one shot heard by the whole team adds once.</summary>
+    public float LastExtendedAt { get; private set; } = float.NegativeInfinity;
+
+    internal void BeginSignal(Incident shot, float length)
+    {
+        SignalledShot = shot;
+        LastSignalAt = Time.time;
+        SetStep(JobStep.Signal, length);
+    }
+
+    // Another shot during the signal: they go to the newest. The beat isn't started over.
+    internal void UpdateSignal(Incident shot) => SignalledShot = shot;
+
+    /// <summary>Adds to the time this step has left, without taking the time left past cap. Time already above the cap is left alone.</summary>
+    internal void ExtendStep(float extra, float cap)
+    {
+        float left = StepLength - StepElapsed;
+        StepLength = StepElapsed + Mathf.Max(left, Mathf.Min(left + extra, cap));
+        LastExtendedAt = Time.time;
+    }
 
     // Every step change records its length too, so none can begin without one.
     internal void SetStep(JobStep step, float length)

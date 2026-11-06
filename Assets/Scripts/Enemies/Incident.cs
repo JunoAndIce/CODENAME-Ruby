@@ -10,8 +10,9 @@ using UnityEngine;
 /// </summary>
 public readonly struct Incident
 {
-    public Incident(Vector3 point, StimulusResponse reason, int priority, bool makesSearch = false, bool saysNothingOfRuby = false)
+    public Incident(Vector3 point, StimulusResponse reason, int priority, bool makesSearch = false, bool saysNothingOfRuby = false, bool mobilises = false)
     {
+        Mobilises = mobilises;
         Point = point;
         Reason = reason;
         Priority = priority;
@@ -36,7 +37,14 @@ public readonly struct Incident
     /// </summary>
     public bool SaysNothingOfRuby { get; }
 
-    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, MakesSearch, SaysNothingOfRuby);
+    /// <summary>
+    /// A gunshot: whoever is searching responds whatever its priority (JobBoard.Mobilise). Priority can't
+    /// say this: a shot could only ever distract a search at its level or above, which is how a team
+    /// about to finish heard one and walked off as if nothing had happened.
+    /// </summary>
+    public bool Mobilises { get; }
+
+    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, MakesSearch, SaysNothingOfRuby, Mobilises);
 
     // The "reason at point" the logs print, so it reads the same wherever it is written.
     public override string ToString() => $"{Reason} at {Point}";

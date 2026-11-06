@@ -87,6 +87,9 @@ public class JobBoard
                     case JobStep.Search:
                         AdvanceTo(job, JobStep.Done, "finishes searching");
                         break;
+                    case JobStep.Signal:
+                        GoToSignalledShot(job);
+                        break;
                 }
             }
         }
@@ -562,6 +565,83 @@ public class JobBoard
     }
 
     /// <summary>
+    /// A searcher hears a gunshot. Enemies always go to the sound of a new shot: letting it pass as a
+    /// distraction had a team about to finish walk off as if nothing had happened. True when it was taken;
+    /// false leaves it to the caller as a distraction, for a shot in the area they are already searching
+    /// or one right after the last. In order:
+    /// 1. **He has no running job** (a search of his own, or finishing his last look after a countdown):
+    ///    the squad decides as for any new thing, and he joins or leads a Search at the shot.
+    /// 2. **It's inside the job's search area:** a Check becomes a Search on the spot, and a Search's
+    ///    countdown gets Gunshot Extension. There is nowhere new to go.
+    /// 3. **Still calling or gathering:** the team is standing and facing already, so the job just moves.
+    /// 4. **Otherwise** he signals: the team stops and faces it for React Time, then all go, as a Search.
+    /// Every member hears the same shot, so the first one does this and the rest find it done.
+    /// </summary>
+    public bool Mobilise(EnemyController who, Incident shot)
+    {
+        var search = new Incident(shot.Point, shot.Reason, shot.Priority, makesSearch: true);
+        GroupJob job = who.Job;
+
+        if (job == null || job.Step == JobStep.Done)
+        {
+            // Not taken if it left him where he was: a full team has the shot, and he carries on.
+            Handle(who, search);
+            return who.Job != job;
+        }
+
+        if (PathGrid.FlatDistance(job.Point, shot.Point) <= _intel.SearchAreaRadius)
+        {
+            if (job.Kind == JobKind.Check)
+            {
+                DebugLog.Info($"{who.name} hears a gunshot at {job}'s place.", who);
+                ChooseAfterRestart(job, Upgrade(job, new Incident(job.Point, shot.Reason, shot.Priority), JobKind.Search));
+                return true;
+            }
+
+            Elevate(job, shot.Reason, $"{who.name} hears a gunshot");
+            ExtendForGunshot(job, who);
+            return false;
+        }
+
+        if (job.Step is JobStep.Call or JobStep.Gather)
+        {
+            DebugLog.Info($"{who.name} hears a gunshot at {shot.Point}: {job} goes there instead.", who);
+            ChooseAfterRestart(job, Upgrade(job, search, JobKind.Search));
+            return true;
+        }
+
+        if (job.Step == JobStep.Signal)
+        {
+            job.UpdateSignal(search);
+            return true;
+        }
+
+        // The team has only just been sent. A shot every second must not stop them every second.
+        if (Time.time - job.LastSignalAt < who.DistractionGap) return false;
+
+        job.BeginSignal(search, _intel.ReactTime);
+        DebugLog.Info($"{who.name} hears a gunshot at {shot.Point} and signals {job}.", who);
+        return true;
+    }
+
+    // Only a Search that has started counting has a countdown to add to: one still in Go hasn't begun.
+    private void ExtendForGunshot(GroupJob job, EnemyController who)
+    {
+        if (job.Step != JobStep.Search || Time.time - job.LastExtendedAt < who.DistractionGap) return;
+
+        job.ExtendStep(_intel.GunshotExtension, LengthOf(JobStep.Search, job.Lead));
+        DebugLog.Info($"{who.name} hears a gunshot in the search area: {job} now has {job.StepLength - job.StepElapsed:0.#}s left.", who);
+    }
+
+    // The beat is over: everyone goes. It was outside the search area when signalled, which is more than
+    // the 1 m that counts as the same place, so the job always moves and starts over from Go.
+    private void GoToSignalledShot(GroupJob job)
+    {
+        DebugLog.Info($"{job} goes to the gunshot at {job.SignalledShot.Point}.", _intel);
+        ChooseAfterRestart(job, Upgrade(job, job.SignalledShot, JobKind.Search));
+    }
+
+    /// <summary>
     /// A member has learned something that makes the whole job an attack, at its place (an attack
     /// sensed, or a glance at a known body): the job's reason rises and everyone goes wary together,
     /// so he can't latch wary alone while the job says all clear. False when the point is elsewhere or
@@ -679,9 +759,10 @@ public class JobBoard
     }
 
     // A job still being worked: someone leads it and it hasn't reached its gesture or its end. A team a
-    // moment from finishing shouldn't swallow a job that is only starting, so StandDown is left out.
+    // moment from finishing shouldn't swallow a job that is only starting, so StandDown is left out. So is
+    // a team signalling: a merge would start the job over and lose the shot they are about to go to.
     private static bool Working(GroupJob job) =>
-        job.Lead != null && job.Step != JobStep.StandDown && job.Step != JobStep.Done;
+        job.Lead != null && job.Step != JobStep.StandDown && job.Step != JobStep.Done && job.Step != JobStep.Signal;
 
     // Two open jobs about one place are one job. Only the first pair found (the list is oldest first)
     // merges in a firing and the next waits for the next interval: that keeps this walk simple while

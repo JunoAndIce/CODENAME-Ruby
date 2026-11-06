@@ -51,6 +51,11 @@ public class EnemyReactions
 
         if (_enemy.CurrentState is SearchingState)
         {
+            // A gunshot goes to the squad whatever its priority. What it left over, a shot in the area
+            // they are already searching or one right after the last, is one more thing Ruby is doing.
+            if (incident.Mobilises && walkThere && _enemy.Intel != null)
+                return _enemy.Intel.Mobilise(_enemy, incident) || Distract(incident);
+
             // On a job, anything at its place goes to the job first: a find or a flying enemy turns a check
             // into a search and a more serious thing upgrades it, for the whole team. Only what the job didn't take
             // is a distraction for him, and a glance never changes the job, so it never retargets him.

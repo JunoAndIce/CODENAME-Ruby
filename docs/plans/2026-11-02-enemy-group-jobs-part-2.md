@@ -42,6 +42,7 @@
 7. **Calling is staged, for the animations (added 2026-11-02).** When an officer hears a sound he reacts to it first, as he does. **Anyone added to the job is added after the lead has reacted,** so a recruit doesn't turn the moment the sound is heard: he turns afterwards, in answer to the officer who calls him. The caller **looks at the nearest officer to call him,** then the next nearest, one at a time. Built as a new first job step, `Call`, in Task 4.
 8. **A job sends one to check a new sound (added 2026-11-03, not yet planned to a task).** *(User: "Enemies in a job, should send one enemy to the source of a new sound, or distraction to scope it out/check it out. They should return to the job if they complete the check only. If the search ends before they make it back, they simply return to their patrol route.")*
    - When a job's members sense a new sound, or something that is now only a distraction, **the job sends one member to its source** to check it out. The rest carry on with the job.
+   - **Settled (user, 2026-11-06), not yet built:** the nearest member goes, never a Check's checker, only on a team of two or more, and one at a time; other sounds meanwhile only make them turn. It still counts toward them having had enough of Ruby. A body or gun he finds raises the job as usual.
    - **He returns to the job only once his check is complete.**
    - **If the job ends before he makes it back,** he goes straight back to his patrol route.
    - Until it's built, a member's lesser stimulus stays a distraction (fix plan Task 2).
@@ -50,7 +51,8 @@
      - Does every distraction send someone, or only one not already being checked?
      - Does it still count toward the jig?
      - What if his check finds something: does it convert his job, or start a new one?
-9. **Gunshots always mobilise (added 2026-11-03, not yet planned to a task).** *(User: "When enemies are searching a spot, it feels strange that they will hear a gunshot, but if their search is about to end, it looks like they just ignore the gunshot sound and walk away like nothing is happening. We want officers to respond to gunshots by ALWAYS going to the sound of new gunshots any officers in a job, first signals to the people in the job before mobilizing.")*
+9. **Gunshots always mobilise (added 2026-11-03, built 2026-11-06).** *(User: "When enemies are searching a spot, it feels strange that they will hear a gunshot, but if their search is about to end, it looks like they just ignore the gunshot sound and walk away like nothing is happening. We want officers to respond to gunshots by ALWAYS going to the sound of new gunshots any officers in a job, first signals to the people in the job before mobilizing.")*
+   - **Settled (user, 2026-11-06):** the hearer signals, and the team stops and faces the shot for React Time, then all go as a Search. Everyone searching responds, including a team standing down, a member finishing his last look and a lone searcher. Any gunshot counts, whoever fired it.
    - **Officers always go to the sound of a new gunshot.** A search that is about to end, or one at an equal or higher priority, must not let a gunshot pass as a mere distraction and then walk off as if nothing happened.
    - **On a job, the officer who hears it first signals to the others on his job, then they mobilise** toward it.
    - My reading, to confirm when it's planned: the whole job goes, so this is the exception to decision 8's "send one". Until it's built, a gunshot at or below a searcher's priority stays a distraction.
@@ -86,7 +88,8 @@
       - Does a Check's Look wait for the team the same way: **settled (user, 2026-11-04): no, only a Search.** In a Check only the checker walks to the spot.
       - An unreachable attack search makes him wary: does he go back to his Aggressive route?
       - Should being taken off log why, as other membership changes do?
-13. **A gunshot extends the search (added 2026-11-03, not yet planned to a task).** *(User: "A gunshot should extend the search timer for 4-5 more seconds.")*
+13. **A gunshot extends the search (added 2026-11-03, built 2026-11-06).** *(User: "A gunshot should extend the search timer for 4-5 more seconds.")*
+    - **Settled (user, 2026-11-06):** Gunshot Extension, 4.5 s on `Intel`, for a shot inside the search area. Shots within Distraction Gap count as one, and the time left can't go above a full Search Duration. A shot elsewhere moves the search instead (decision 9), which starts a full countdown there.
     - A gunshot heard during a search adds 4 to 5 seconds to its timer. This sits beside decision 9 (gunshots always mobilise).
     - Open, to settle when it's planned:
       - A tuning value on the controller: one number, or a random range?
@@ -380,6 +383,6 @@
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, `docs/specs/2026-10-28-enemy-states-0.2.md`, this plan and `2026-10-30-enemy-group-jobs.md`.
 
 - [ ] **Step 1: CLAUDE.md.** A Group jobs bullet: kinds and steps, the clock, roles, the cap, matching, merging, filling, the reason that only rises, wary from the job, the count, and the one-flood rule. Update Searching, Senses (what it is), Knowledge (`TimesSentToLook`, `WasToldOfRuby` and who may tell) and the debug overlays (the jobs gizmo).
-- [ ] **Step 2: The manual.** The Path Grid section's warnings table gains the new "no path ... so he goes as near as he can get" line and the 5 m rule (decision 17). The tuning table gains Dragged Distance, Known Spot Radius, Personal Space, Sight Follow Through, Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
+- [ ] **Step 2: The manual.** The Path Grid section's warnings table gains the new "no path ... so he goes as near as he can get" line and the 5 m rule (decision 17). The tuning table gains Gunshot Extension, Dragged Distance, Known Spot Radius, Personal Space, Sight Follow Through, Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
 - [ ] **Step 3: Spec and plan.** Spec Progress notes piece 5 part A built, part B pending. Tick this plan's steps and mark `2026-10-30-enemy-group-jobs.md` finished by this plan. Commit these files only.
 - [ ] **Step 4: End-of-piece review, in the background,** over the range both plans added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before part B, in one fix wave.
