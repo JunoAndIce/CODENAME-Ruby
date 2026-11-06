@@ -438,6 +438,25 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>How far he has been moved from where he was grabbed, in flat metres; 0 when he isn't held. What tells a watcher Ruby is dragging him.</summary>
     public float HeldMovedBy => IsHeld ? PathGrid.FlatDistance(_heldFrom, transform.position) : 0f;
 
+    private Vector3 _thrownFrom;
+    private float _thrownAt = float.NegativeInfinity;
+
+    /// <summary>
+    /// Whether the chain threw him within the last `within` seconds, and where he was when it let go. A
+    /// watcher tests that spot, not the body: a thrown body can be many metres off by his next scan.
+    /// </summary>
+    public bool WasThrownWithin(float within, out Vector3 from)
+    {
+        from = _thrownFrom;
+        return Time.time - _thrownAt <= within;
+    }
+
+    private void NoteThrown()
+    {
+        _thrownFrom = transform.position;
+        _thrownAt = Time.time;
+    }
+
     /// <summary>
     /// The job he is on, or null: a handful of enemies dealing with one thing together (GroupJob).
     /// Only the job board sets it, as it adds and removes members, and SearchingState gives him up on exit.
@@ -513,6 +532,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public void EndGrab(bool wasSpun)
     {
         IsHeld = false;
+        // Let go mid-spin he flies out along her aim, which is a throw to anyone watching. A plain drop isn't.
+        if (wasSpun) NoteThrown();
         if (Health.IsDead)
         {
             Dead.LetGo(Body.linearVelocity);
@@ -549,6 +570,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public void Release(Vector3 velocity)
     {
         IsHeld = false;
+        NoteThrown();
         if (Health.IsDead)
         {
             Dead.LetGo(velocity);

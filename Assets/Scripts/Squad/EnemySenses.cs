@@ -73,12 +73,17 @@ public class EnemySenses
     }
 
     // An enemy on the chain, in his view with a clear line. Standing where he was grabbed, he is walked
-    // over to and searched around; moved, someone is plainly on the other end, and that is the one thing
-    // short of seeing Ruby that sends him to Aggro. The view and not the all-round motion sense, because
-    // a body standing still has nothing to catch the eye from behind. Its own record rather than
-    // _reactedAt, or watching a grab would blind him to the throw that follows for Origin Lifetime.
+    // over to and searched around; dragged or thrown, someone is plainly on the other end, and that is
+    // the one thing short of seeing Ruby that sends him to Aggro. The view and not the all-round motion
+    // sense, because a body standing still has nothing to catch the eye from behind. Its own record
+    // rather than _reactedAt, or a grab he had taken would blind him to what follows for Origin Lifetime.
     private void ScanHeld()
     {
+        // One more physics step than the scan's interval, so a throw between two of his scans falls
+        // inside one of them. The spot it left from, not the body: at 90 m/s it is 18 m off by then. A
+        // flying body he only saw after that isn't a throw he saw: that is Consider's Search at its origin.
+        float throwWindow = _enemy.ScanInterval + Time.fixedDeltaTime;
+
         IReadOnlyList<EnemyController> enemies = _enemy.Intel.Enemies;
         for (int i = 0; i < enemies.Count; i++)
         {
@@ -87,6 +92,12 @@ public class EnemySenses
             if (!other.IsHeld)
             {
                 _noticedHeld.Remove(other);
+                if (other.WasThrownWithin(throwWindow, out Vector3 from)
+                    && _enemy.InView(from) && _enemy.HasClearSight(from, other.transform))
+                {
+                    _enemy.Reactions.SeeChainMove(other, "thrown off the chain");
+                    return;
+                }
                 continue;
             }
 
@@ -95,7 +106,7 @@ public class EnemySenses
 
             if (other.HeldMovedBy > _enemy.DraggedDistance)
             {
-                _enemy.Reactions.SeeDragged(other);
+                _enemy.Reactions.SeeChainMove(other, "being dragged on the chain");
                 return;
             }
             // Marked only when taken: one he couldn't act on (in a fight, fetching a gun) may still send him.

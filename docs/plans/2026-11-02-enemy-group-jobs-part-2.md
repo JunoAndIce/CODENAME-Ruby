@@ -317,12 +317,13 @@
 - **Sees Ruby:** Aggro, as always. Nothing here changes that.
 - **Sees an enemy grabbed, not moving:** he walks over and searches around him, on a job or not. This is a Search at the grabbed enemy, as a body found there is.
 - **Sees a grabbed enemy being moved:** Aggro, onto Ruby. He is taught her real position at that moment. It is the chain's source too, since the tether stamps her position on the host every step.
-- **Sees one knocked down, killed or thrown:** no Aggro. He searches at the origin of the throw, or where the body is when it has no origin. Below Notice Speed that takes the view (cone or close circle), because a body barely moving doesn't catch the eye from behind.
+- **Sees a throw (user, 2026-11-06: "aggro on the throw if they see it"):** Aggro, onto Ruby. The chain lets go of an enemy in his view with a clear line, or flings him out of a spin.
+- **Sees one knocked down or killed, or a flying enemy whose throw he didn't see:** no Aggro. He searches at the origin of the throw, or where the body is when it has no origin. Below Notice Speed that takes the view (cone or close circle), because a body barely moving doesn't catch the eye from behind.
 
 **My readings, each a rule and not a fallback:**
 
 - **Moved** means held and more than Dragged Distance (new, 0.5 m, on the witness) from where he was grabbed, measured flat. A charging throw's jiggle is at most 0.1 m, and doesn't count.
-- **A throw isn't dragging.** Once let go he isn't held, so what follows is the flying-enemy Search at the throw's origin, even for one who watched the grab. Moving him on the chain is what proves someone is there on the other end of it.
+- **Seeing the throw** is tested at the spot the enemy left from, within one scan of the release (Scan Interval plus a physics step), because a thrown body can be 18 m off by the next scan. A plain drop isn't a throw, and a crate or gun thrown isn't covered: it stays what the motion sense makes it.
 - **"Sees" a grabbed enemy** means the view with a clear line: a body standing still has no motion to notice from behind.
 - **A swung enemy he can't see in his view** keeps the all-round motion sense: at Notice Speed or more, a Search at the origin.
 - **A job at equal or higher priority already has it.** A member whose Search outranks or equals this is distracted by it, and a Search nearby is already searching the area. He doesn't drop it to walk over.
@@ -333,25 +334,28 @@
 
 **Interfaces**
 
-- **Produces, on `EnemyController`:** `public float HeldMovedBy` (flat metres from where he was grabbed, 0 when not held), `public float DraggedDistance`.
-- **Produces, on `EnemyReactions`:** `internal void SeeDragged(EnemyController held)`.
+- **Produces, on `EnemyController`:** `public float HeldMovedBy` (flat metres from where he was grabbed, 0 when not held), `public float DraggedDistance`, `public bool WasThrownWithin(float within, out Vector3 from)`.
+- **Produces, on `EnemyReactions`:** `internal void SeeChainMove(EnemyController victim, string how)`.
 
 - [x] **Step 1: The grab's place.** `EnterGrabbed` records `transform.position`. `HeldMovedBy` reads it. A serialized `_draggedDistance`, default 0.5 m, with a tooltip.
-- [x] **Step 2: Held enemies.** `EnemySenses.ScanHeld`, first in `Scan`. For each other enemy: not held, forget him and go on (so the next grab counts anew). Out of view or sight, go on. Moved past his own Dragged Distance: `Reactions.SeeDragged`, and stop. Otherwise, once per hold and only once it was taken: `Notice(at, Body, ...)`, which already makes a Search at the point and says nothing of Ruby. Kept apart from `_reactedAt`, or watching a grab would blind him to the throw for Origin Lifetime. `Notice` returns whether it was taken.
-- [x] **Step 3: The reaction.** `SeeDragged` teaches `Player.transform.position` as a Heard fact, latches wary and `Alert()`s, logging only when that moved him.
+- [x] **Step 2: Held enemies.** `EnemySenses.ScanHeld`, first in `Scan`. For each other enemy: not held, forget him and go on (so the next grab counts anew). Out of view or sight, go on. Moved past his own Dragged Distance: `Reactions.SeeChainMove`, and stop. Not held but thrown within the window, with the spot he left from in view and sight: the same. Otherwise, once per hold and only once it was taken: `Notice(at, Body, ...)`, which already makes a Search at the point and says nothing of Ruby. Kept apart from `_reactedAt`, or watching a grab would blind him to the throw for Origin Lifetime. `Notice` returns whether it was taken.
+- [x] **Step 3: The reaction.** `SeeChainMove` teaches `Player.transform.position` as a Heard fact, latches wary and `Alert()`s, logging only when that moved him.
 - [x] **Step 4: Tumbling at any speed.** In `Consider`, a tumbling enemy below Notice Speed counts when he is in view. A held one below it is `ScanHeld`'s. When `TryGetOrigin` finds nothing the point is only where he lies, so a judged-by-what-it-is `Incident` also sets `saysNothingOfRuby`.
 - [x] **Step 5: Compile and commit,** as in Task 3.
 - [ ] **Step 6: Play-test gate (the user).** No Inspector work. With `RUBY_DEBUG_LOGS` on:
   - **Grabbed, on a job or not:** whip an enemy in front of another, then stand still. The other walks over and searches around him, and doesn't go to Aggro unless he sees you.
   - **Dragged:** then walk off or reel him in. The watcher goes to Aggro ("sees ... being dragged").
   - **Jiggle:** hold right click on him without moving him. Nobody takes it as dragging.
-  - **Thrown or killed in front of one:** a Search at the throw's spot, no Aggro.
+  - **Thrown in front of one:** he goes to Aggro ("sees ... thrown off the chain").
+  - **Thrown from out of his sight, past him:** a Search at the throw's spot, no Aggro.
+  - **Killed or knocked down in front of one:** a Search at the throw's spot, no Aggro.
   - **Unseen:** do any of these behind a crate. Nothing happens.
   - **Seen, in the open:** if the watcher can see you, he goes to Aggro as usual.
 
 **Review Focus for this task**
 
-- A grab and an immediate throw: the throw must still be noticed, with no blackout from the grab.
+- A grab and an immediate throw: the throw must still be seen, with no blackout from the grab.
+- A throw between two of his scans must fall inside one window, and a repeat inside the window is harmless, because `Alert` only moves him once.
 - A corpse on the chain counts as a grabbed enemy, and a second grab of the same enemy counts anew.
 - A witness in Aggro or Rearm: Notice is ignored and not marked taken, so he reacts once he is free, if it's still going on.
 - The Search's place is where he was seen and doesn't follow him. A dragged one means Aggro anyway.
