@@ -2,29 +2,41 @@ using UnityEngine;
 
 /// <summary>
 /// One thing an enemy has judged worth reacting to: where it happened, what the map says to do about
-/// it, how much it outranks other things, and whether it was a find. These four used to travel
-/// through every call as a loose tuple, and a fifth value added to one call but missed in another
-/// would have compiled. Built once, where the stimulus is first judged (EnemySenses), and passed on
-/// whole. Readonly, so a changed reason (a problem judged to be an attack) is a new value.
+/// it, how much it outranks other things, whether it calls for a Search, and whether it says nothing
+/// about Ruby. These used to travel through every call as a loose tuple, and a new value added to one
+/// call but missed in another would have compiled. Built once, where the stimulus is first judged
+/// (EnemySenses), and passed on whole. Readonly, so a changed reason (a problem judged to be an attack)
+/// is a new value.
 /// </summary>
 public readonly struct Incident
 {
-    public Incident(Vector3 point, StimulusResponse reason, int priority, bool isFind = false)
+    public Incident(Vector3 point, StimulusResponse reason, int priority, bool makesSearch = false, bool saysNothingOfRuby = false)
     {
         Point = point;
         Reason = reason;
         Priority = priority;
-        IsFind = isFind;
+        MakesSearch = makesSearch;
+        SaysNothingOfRuby = saysNothingOfRuby;
     }
 
     /// <summary>Where it came from: a sound's origin, a thrown body's release point, or where a body lies.</summary>
     public Vector3 Point { get; }
     public StimulusResponse Reason { get; }
     public int Priority { get; }
-    /// <summary>A body or gun sighting, which says nothing about where Ruby is.</summary>
-    public bool IsFind { get; }
+    /// <summary>
+    /// There is no need to send one enemy to see: a job about this is a Search, and it turns a Check at
+    /// its place into one whatever its priority. A body or gun lying found, and an enemy seen flying or on
+    /// the chain.
+    /// </summary>
+    public bool MakesSearch { get; }
+    /// <summary>
+    /// The point isn't where Ruby may be, so it isn't taught as a fact about her: a body or gun lies wherever
+    /// it ended up. A separate question from MakesSearch: a flying enemy makes a Search, and its point is
+    /// where she threw it from.
+    /// </summary>
+    public bool SaysNothingOfRuby { get; }
 
-    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, IsFind);
+    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, MakesSearch, SaysNothingOfRuby);
 
     // The "reason at point" the logs print, so it reads the same wherever it is written.
     public override string ToString() => $"{Reason} at {Point}";

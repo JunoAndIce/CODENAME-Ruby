@@ -29,7 +29,6 @@ public class EnemyReactions
     /// or not, so it always ends on an aggressive patrol. With walkThere false he looks from where
     /// he stands instead of going to the point (a glance at a body the squad already knows).
     /// On a job, a stimulus at the job's place goes to the job first (Intel.HandleAtOwnJob, BecomeWaryAt).
-    /// The incident's IsFind marks a body or gun sighting, which says nothing about where Ruby is.
     /// </summary>
     public bool Investigate(Incident incident, bool walkThere)
     {
@@ -52,8 +51,8 @@ public class EnemyReactions
 
         if (_enemy.CurrentState is SearchingState)
         {
-            // On a job, anything at its place goes to the job first: a find turns a check into a search
-            // and a more serious thing upgrades it, for the whole team. Only what the job didn't take
+            // On a job, anything at its place goes to the job first: a find or a flying enemy turns a check
+            // into a search and a more serious thing upgrades it, for the whole team. Only what the job didn't take
             // is a distraction for him, and a glance never changes the job, so it never retargets him.
             GroupJob own = _enemy.Job;
             bool atOwnJob = own != null && _enemy.Intel != null && _enemy.Intel.Covers(own, incident.Point);
@@ -121,7 +120,7 @@ public class EnemyReactions
         if (counted && count >= _enemy.DistractionThreshold)
         {
             _enemy.Memory.ClearDistractions();
-            if (!incident.IsFind) _enemy.Memory.Learn(new RubyFact(incident.Point, Time.time, Knowledge.Heard));
+            if (!incident.SaysNothingOfRuby) _enemy.Memory.Learn(new RubyFact(incident.Point, Time.time, Knowledge.Heard));
             DebugLog.Info($"{_enemy.name}: Enemies have been disturbed too much! ({count} disturbances in {_enemy.DistractionMemory:0.#}s, the last {incident}); he aggros.", _enemy);
             _enemy.Alert();
             return true;

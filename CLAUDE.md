@@ -539,8 +539,8 @@ through the player never slows the walk.
   numbers are saved by assets and a value added later takes the next number whatever its place in the
   order. `GroupJob.Elevate` compares by it, never by the enum. A value with no
   place in `Severity` logs an error (and is ranked by its enum number meanwhile). What a row
-  produced travels as an **`Incident`** (point, reason, priority and whether it was a find, built once where the stimulus is
-  judged and passed on whole, so a fifth value can't be added to one call and missed in another).
+  produced travels as an **`Incident`** (point, reason, priority, whether it makes a Search and whether it says nothing of
+  Ruby, built once where the stimulus is judged and passed on whole, so a new value can't be added to one call and missed in another).
 - **Senses** (`EnemySenses`, one per officer, scanned from `FixedUpdate` every Scan Interval at a
   staggered phase). He notices **bodies in motion** within Motion Radius that he can see clearly:
   at Notice Speed a MovingObject, at Alarm Speed a FastObject, once per Origin Lifetime for each
@@ -601,13 +601,14 @@ through the player never slows the walk.
   - **Starting and matching.** `Intel.Handle` is the one decision for an enemy who senses
     something he may act on. A job whose place is within Job Match Radius (10 m, **on the same
     floor**: `Covers`) already has it. A more serious thing upgrades that job; **a find (a body
-    or a loose gun) turns a Check into a Search whatever its priority**, because it is found and
-    the check is over; a stronger reason (an attack, on a problem job) raises it at the same
+    or a loose gun) or an enemy seen flying or on the chain turns a Check into a Search whatever its
+    priority** (`Incident.MakesSearch`), because the check is over: a flying enemy's Search is at the
+    throw's origin, a find's where it lies, and a flying gun stays a Check. A stronger reason (an attack, on a problem job) raises it at the same
     priority. He joins if it is still recruiting (a Check until it looks, a Search until it's done,
     never past the cap), taking himself off any job he was on. If it can't take him, an enemy
     off any job leaves it to the job; one already on a job **stays on his own**, and the thing is a
     distraction for him, because dropping him left him searching with no job. With nothing
-    matching he starts a job and **leads** it: a find starts a Search, anything else a Check.
+    matching he starts a job and **leads** it: whatever makes a Search starts one, anything else a Check.
   - **Steps.** A Check goes Call, Gather, Go, Look, StandDown, Done; a Search goes Call, Go, Search,
     Done. A lead with nobody to call skips Call, and a Check of one skips Gather too. **Call:** the
     lead reacts alone for React Time (0.5 s), then calls the free enemies within Speech Range along
@@ -660,7 +661,7 @@ through the player never slows the walk.
   search** (`SearchingState.Exit` clears it): a count left over made the next, unrelated search
   aggro on its first or second one. At Distraction Threshold
   (3) **the jig is up**: the count clears, he is taught the disturbance's place (where a thing he saw came from, or where a sound happened) as a Heard fact
-  (unless it was a body or gun, `isFind`, which says nothing about Ruby) and `Alert()`s into Aggro.
+  (unless it was a body or gun lying found, `SaysNothingOfRuby`) and `Alert()`s into Aggro.
   A search from Aggro (priority 6) is outranked by nothing, so every sound distracts a lost-fight
   searcher. Idle and patrolling officers aren't distractible: they go and check.
 - **Debug overlays**, only in the editor, and the heavy ones off by default: `PathGrid`'s Always

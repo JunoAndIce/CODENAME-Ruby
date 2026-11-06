@@ -329,20 +329,21 @@ public class JobBoard
     /// it's left alone. An enemy already on a job is dealt with at its own place first
     /// (HandleAtOwnJob); this is for a thing **elsewhere**. In order:
     /// 1. **An open job is handling this** (its place is within Job Match Radius). A more serious
-    ///    thing upgrades it, a find turns a check into a search, and a stronger reason (an attack,
+    ///    thing upgrades it, a find or a flying enemy turns a check into a search, and a stronger reason (an attack,
     ///    where the job is a problem) raises it for every member even at the same priority. If it is
     ///    still recruiting and has room he joins, taking himself off any job he was on. Otherwise
     ///    he leaves it alone: he never just stands there as a second job on the same thing. One
     ///    already on a job **stays on it** (the return is his own job) and the caller makes the thing
     ///    a distraction, so he is never left in Searching with no job.
     /// 2. **Nothing is.** He starts a job and becomes its lead, and calls in the free enemies near
-    ///    him, nearest first, up to the cap. A find (a body, a loose gun) is already found, so it
-    ///    starts a Search; anything else is a Check, for a checker to go and see.
+    ///    him, nearest first, up to the cap. A find (a body, a loose gun) is already found, and an
+    ///    enemy thrown past him needs no checking, so each starts a Search; anything else is a Check, for
+    ///    a checker to go and see.
     /// Every decision logs a line naming the job, so what the squad did is readable in the Console.
     /// </summary>
     public GroupJob Handle(EnemyController who, Incident incident)
     {
-        JobKind kind = incident.IsFind ? JobKind.Search : JobKind.Check;
+        JobKind kind = incident.MakesSearch ? JobKind.Search : JobKind.Check;
         GroupJob own = who.Job;
 
         GroupJob match = FindMatch(incident.Point);
@@ -534,14 +535,15 @@ public class JobBoard
         return floor != null && floor == PathGrid.At(point);
     }
 
-    // A thing at a job's place changes the job when it is more serious, or when it is a find and the
-    // job is only a check: a body or a gun is found whatever its priority, so the check is over.
+    // A thing at a job's place changes the job when it is more serious, or when it makes a search and the
+    // job is only a check: a body or a gun is found, and an enemy has been thrown, whatever its priority,
+    // so the check is over.
     private static bool Converts(GroupJob job, Incident incident) =>
-        incident.Priority > job.Priority || (incident.IsFind && job.Kind == JobKind.Check);
+        incident.Priority > job.Priority || (incident.MakesSearch && job.Kind == JobKind.Check);
 
     /// <summary>
     /// A member's stimulus **at his own job's place** (the caller has tested Covers), before anything
-    /// else: a more serious thing upgrades the job, and a find turns a check into a search, for every
+    /// else: a more serious thing upgrades the job, and a find or a flying enemy turns a check into a search, for every
     /// member, so the team never splits on it. True when the job took it, so he needn't be distracted;
     /// false when it changed nothing, and the caller makes it a distraction. An attack is raised for
     /// the team through RaiseJobAt, before this is reached. A glance (walkThere false, a find already
@@ -553,7 +555,7 @@ public class JobBoard
         GroupJob own = who.Job;
         if (own == null || !request.WalkThere || !Covers(own, incident.Point) || !Converts(own, incident)) return false;
 
-        bool restarted = Upgrade(own, incident, incident.IsFind ? JobKind.Search : JobKind.Check);
+        bool restarted = Upgrade(own, incident, incident.MakesSearch ? JobKind.Search : JobKind.Check);
         DebugLog.Info($"{who.name} upgrades {own}: {incident}.", who);
         ChooseAfterRestart(own, restarted);
         return true;

@@ -162,7 +162,7 @@ public class EnemySenses
         // On a job at its place, the job goes wary for everyone, not just the one who looked.
         _enemy.BecomeWary(at, $"{_enemy.name} glances at {what}");
         DebugLog.Info($"{_enemy.name} sees {what}: he looks at it from where he stands and is wary.", _enemy);
-        _enemy.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, isFind: true), walkThere: false);
+        _enemy.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, makesSearch: true, saysNothingOfRuby: true), walkThere: false);
     }
 
     private void Notice(Vector3 origin, StimulusKind kind, string what)
@@ -170,8 +170,10 @@ public class EnemySenses
         if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} notices {what}: {row.Response} at priority {row.Priority}.", _enemy);
-        // A body or a gun is found, not heard: it says nothing about where Ruby is.
-        _enemy.Investigate(new Incident(origin, row.Response, row.Priority, isFind: kind is StimulusKind.Body or StimulusKind.LooseGun));
+        // A body or a gun is found, not heard: there is nothing to check, so it is a Search, and it says
+        // nothing about where Ruby is.
+        bool found = kind is StimulusKind.Body or StimulusKind.LooseGun;
+        _enemy.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: found, saysNothingOfRuby: found));
     }
 
     // A character is one body for this purpose, so a bone of a tumbling enemy isn't a body of its
@@ -221,9 +223,11 @@ public class EnemySenses
             else Stronger(speedRow, whatRow, kind, whatKind, out response, out priority, out responseFrom, out priorityFrom);
 
             DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: it is a {whatKind}. {response} (from {responseFrom}) at priority {priority} (from {priorityFrom}).", _enemy);
-            // Not a find, though it is a body or a gun: its origin is where Ruby threw it from, so
-            // the search goes there, as a check. A find would send him to where it landed.
-            if (_enemy.Investigate(new Incident(origin, response, priority))) _reactedAt[body] = now;
+            // Its origin is where Ruby threw it from, so that is where they go, and it teaches where she
+            // was: unlike a body lying found, it does say something about her. An enemy thrown past them
+            // needs more than one enemy's short look, so it makes a Search there. A flying gun stays a
+            // Check: one knocked out of a hand or flung is far less alarming than a thrown body.
+            if (_enemy.Investigate(new Incident(origin, response, priority, makesSearch: isEnemy))) _reactedAt[body] = now;
             return;
         }
 
