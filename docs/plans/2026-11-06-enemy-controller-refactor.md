@@ -6,7 +6,7 @@
 
 **Architecture:** The same pattern as `EnemyVision` and `EnemyReactions`: plain classes built in `Awake`, handed the controller, reading its tuning on every call so retuning in Play keeps working. The gizmos become a static class, because they draw in edit mode, when `Awake` hasn't run.
 
-**Tech Stack:** Unity 6000.5.10f1, C# 9, assemblies as in `CLAUDE.md`. All new files go in `Assets/Scripts/Squad/`, in `Ruby.Game`.
+**Tech Stack:** Unity 6000.5.10f1, C# 9, assemblies as in `CLAUDE.md`. All new files go in `Assets/Scripts/Enemies/`, in `Ruby.Game`.
 
 **Spec:** none: a refactor. It follows Part B of `2026-11-02-enemy-ai-fixes-and-refactor.md`, which split `EnemyVision` and `EnemyReactions` out, and its rules.
 
@@ -31,7 +31,7 @@
 - **`SetState` stays on the controller,** behind `Alert`, `KnockDown`, `EnterGrabbed`, `EndGrab`, `Release` and `BeginSearch`. States never name each other, and `BuildTransitions` stays one place.
 - **`IPathAgent`, `IGrabbable`, `IKnockdown`, `IBulletTarget` and `IAnimatedCharacter` stay implemented on the controller,** because Unity finds them on the component. `MoveToward` and `Stop` remain as one-line forwards for that reason, and states keep calling `Enemy.Stop()`.
 - **Names say Enemy, never Officer.** Comments explain why, and travel with their code unchanged.
-- **Working tree:** never stage, revert or edit `Assets/BehaviourMap.asset`, `Assets/StimulusRules.asset`, `Assets/Prefabs/officer.prefab`, `Assets/Prefabs/Table.prefab`, `Assets/Scenes/SampleScene.unity`, `Assets/Scripts/PlayerController.cs`, `Assets/Scripts/Squad/EnemyVision.cs` or `docs/plans/Enemy knowledge notes.md`. Stage named files only.
+- **Working tree:** never stage, revert or edit `Assets/BehaviourMap.asset`, `Assets/StimulusRules.asset`, `Assets/Prefabs/officer.prefab`, `Assets/Prefabs/Table.prefab`, `Assets/Scenes/SampleScene.unity`, `Assets/Scripts/PlayerController.cs`, `Assets/Scripts/Enemies/EnemyVision.cs` or `docs/plans/Enemy knowledge notes.md`. Stage named files only.
 - **Verification:** `python tools/compile_check.py` must end `compile-check: OK` after every task. There are no automated tests, so the gates are play.
 - **The manual doesn't change.** It describes behaviour, and none changes.
 
@@ -47,7 +47,7 @@
 
 ### Task 1: `EnemyGizmos`
 
-**Files:** create `Assets/Scripts/Squad/EnemyGizmos.cs`; modify `Assets/Scripts/EnemyController.cs`
+**Files:** create `Assets/Scripts/Enemies/EnemyGizmos.cs`; modify `Assets/Scripts/EnemyController.cs`
 
 **Interfaces**
 
@@ -61,7 +61,7 @@
 
 ### Task 2: `EnemyMovement`
 
-**Files:** create `Assets/Scripts/Squad/EnemyMovement.cs`; modify `Assets/Scripts/EnemyController.cs`, `Assets/Scripts/States/*.cs`
+**Files:** create `Assets/Scripts/Enemies/EnemyMovement.cs`; modify `Assets/Scripts/EnemyController.cs`, `Assets/Scripts/States/*.cs`
 
 **Interfaces**
 
@@ -78,7 +78,7 @@
 
 Not `EnemyKnowledge`: `Knowledge` is already the enum on `RubyFact`.
 
-**Files:** create `Assets/Scripts/Squad/EnemyAwareness.cs`; modify `Assets/Scripts/EnemyController.cs`, and `Assets/Scripts/Squad/*.cs` and `Assets/Scripts/States/*.cs` for callers
+**Files:** create `Assets/Scripts/Enemies/EnemyAwareness.cs`; modify `Assets/Scripts/EnemyController.cs`, and `Assets/Scripts/Enemies/*.cs` and `Assets/Scripts/States/*.cs` for callers
 
 **Interfaces**
 
@@ -92,7 +92,7 @@ Not `EnemyKnowledge`: `Knowledge` is already the enum on `RubyFact`.
 
 ### Task 4: `EnemyBodyState`
 
-**Files:** create `Assets/Scripts/Squad/EnemyBodyState.cs`; modify `Assets/Scripts/EnemyController.cs`
+**Files:** create `Assets/Scripts/Enemies/EnemyBodyState.cs`; modify `Assets/Scripts/EnemyController.cs`
 
 **Interfaces**
 
@@ -106,11 +106,11 @@ Not `EnemyKnowledge`: `Knowledge` is already the enum on `RubyFact`.
 
 ### Task 5: Forwards out, and the file in order
 
-**Files:** modify `Assets/Scripts/EnemyController.cs`, `Assets/Scripts/Squad/*.cs`, `Assets/Scripts/States/*.cs`, `CLAUDE.md`
+**Files:** modify `Assets/Scripts/EnemyController.cs`, `Assets/Scripts/Enemies/*.cs`, `Assets/Scripts/States/*.cs`, `CLAUDE.md`
 
 - [ ] **Step 1:** Remove the one-line forwards to `Vision` and `Reactions` (`InView`, `InContactWithPlayer`, `SightBlocker`, `CanSeePlayer`, `HasClearSight`, `DistanceToPlayer`, `Investigate`, `BecomeWary`, `CanJoinJob`), about 23 call sites, which call `Enemy.Vision.X` or `Enemy.Reactions.X` directly. `CanSeeSpot` moves onto `EnemyVision` only once the user's uncommitted whitespace change to that file is committed or dropped; until then it stays on the controller.
 - [ ] **Step 2:** Put the controller in one order: tuning, getters, parts, lifecycle, the table, external transitions, the search request, stance. Moves only.
-- [ ] **Step 3:** `CLAUDE.md`: **Who owns what** names the new classes and drops "keeps one-line forwards".
+- [ ] **Step 3:** `CLAUDE.md`: **Who owns what** names the new classes and drops "keeps one-line forwards". The Assemblies table and every other `Squad/` path become `Enemies/`, because the folder was renamed.
 - [ ] **Step 4:** Run the compile check. Expected: `compile-check: OK`.
 - [ ] **Step 5:** Commit. Run the end-of-plan review in the background, on the most capable model, against this plan's Global Constraints and Review Focus.
 - [ ] **Step 6: Play-test gate (the user).** One full run: a sound, a job, a throw, a fight, a lost fight and a search. No new warnings or errors in the log.
