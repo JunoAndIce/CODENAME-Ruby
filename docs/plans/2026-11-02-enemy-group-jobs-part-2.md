@@ -116,6 +116,11 @@
       - Whether the team shares what it has seen, so two members don't clear the same corner.
       - Whether a Check's look changes too, or only a Search.
 
+17. **A hunt gets as near as it can (added and built 2026-11-06).** *(User: "it happened when I stood RIGHT behind a crate. They \"lost\" aggro of me despite me not moving.")*
+    - **Cause:** tight behind a crate, Ruby's cell can have no way in on the grid. Each hunter warned "no path" and stood still, the crate hid her, and Aggro Time ran out with her standing there. The search then began at the same spot, and a Search member who can't reach the spot is taken off it (decision 12).
+    - **The rule:** a hunt (`GridNavigator`'s `getClose`, Aggro's chase of Ruby or of what he knows) walks to the ground he can reach nearest her, within 5 m, and warns once. A lost fight's search starts from that ground too. Other walks still stop and say so.
+    - **The Motion Radius sweep's buffer now grows** instead of warning and dropping bodies. Walls and bodies share the Default layer, so a mask can't leave walls out without moving them to a layer of their own in the scene.
+
 ## Global Constraints
 
 - **Values that are my calls** (put in tooltips, retuned in play):
@@ -367,6 +372,6 @@
 **Files:** `CLAUDE.md`, `docs/manual/design-manual.html`, `docs/CODENAME-Ruby-Design-Manual.pdf`, `docs/specs/2026-10-28-enemy-states-0.2.md`, this plan and `2026-10-30-enemy-group-jobs.md`.
 
 - [ ] **Step 1: CLAUDE.md.** A Group jobs bullet: kinds and steps, the clock, roles, the cap, matching, merging, filling, the reason that only rises, wary from the job, the count, and the one-flood rule. Update Searching, Senses (what it is), Knowledge (`TimesSentToLook`, `WasToldOfRuby` and who may tell) and the debug overlays (the jobs gizmo).
-- [ ] **Step 2: The manual.** The tuning table gains Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
+- [ ] **Step 2: The manual.** The Path Grid section's warnings table gains the new "no path ... so he goes as near as he can get" line and the 5 m rule (decision 17). The tuning table gains Job Cap, Job Match Radius, Gather Time, Follow Distance, Follow Speed Factor, Search Area Radius and Sent To Look Threshold. The senses and Searching text change, and the planned list shrinks.
 - [ ] **Step 3: Spec and plan.** Spec Progress notes piece 5 part A built, part B pending. Tick this plan's steps and mark `2026-10-30-enemy-group-jobs.md` finished by this plan. Commit these files only.
 - [ ] **Step 4: End-of-piece review, in the background,** over the range both plans added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before part B, in one fix wave.

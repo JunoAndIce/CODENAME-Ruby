@@ -739,13 +739,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             Stop();
             return NavResult.Unreachable;
         }
-        return Navigator.MoveTo(point, speed);
+        return Navigator.MoveTo(point, speed, getClose: true);
     }
 
-    /// <summary>Chase the player along this floor's shared flow field.</summary>
+    /// <summary>Chase the player along this floor's shared flow field, or as near as he can get when she stands where the grid has no way in.</summary>
     public void PathToPlayer(float speed)
     {
-        if (_player != null) Navigator.ChaseTo(_player.transform, speed);
+        if (_player != null) Navigator.ChaseTo(_player.transform, speed, getClose: true);
     }
 
     /// <summary>

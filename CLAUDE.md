@@ -718,7 +718,7 @@ A\* for individual ones**:
 - **`GridNavigator`** ties them together and moves any `IPathAgent`: it plans, and the agent steers
   (facing, velocity scheme). There are **no silent fallbacks**: chases and point walks stop
   and log a warning saying why (once per message, so a goal that keeps moving repeats it); area moves report Blocked/Unreachable, and patrol skips that point
-  with a warning. Grid line of sight ignores the cell the agent already stands in, which near a wall
+  with a warning. **The one rule beside that is a hunt** (`getClose`, Aggro's chase of Ruby or of what he knows): with no path, he walks to the ground he can reach nearest her, within 5 m, and warns once. A body can stand where the grid has no way in, tight behind a crate, and an enemy who stood still lost her when his timer ran out though she hadn't moved. Grid line of sight ignores the cell the agent already stands in, which near a wall
   is clearance-blocked.
 - **Lines keep the margin too.** `HasLineOfSight(from, to, minClearance)` needs every cell after the
   first to have that clearance. The navigator's shortcut and beeline (`HasClearLine`) ask for

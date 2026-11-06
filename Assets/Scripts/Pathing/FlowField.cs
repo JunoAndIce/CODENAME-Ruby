@@ -125,6 +125,38 @@ public class FlowField
     }
 
     /// <summary>
+    /// The cell the last flood reached nearest a point, searching outward up to maxCells rings. False
+    /// when none is that close. Reads the last flood and never re-floods.
+    /// </summary>
+    public bool TryGetNearestReached(Vector3 point, int maxCells, out Vector3 spot)
+    {
+        spot = point;
+        if (!_flooded || !_hasGoal) return false;
+
+        _grid.WorldToCell(point, out Vector2Int centre);
+        for (int r = 0; r <= maxCells; r++)
+        {
+            int bestSqr = int.MaxValue;
+            for (int dz = -r; dz <= r; dz++)
+            {
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) != r) continue;   // this ring only
+
+                    var cell = new Vector2Int(centre.x + dx, centre.y + dz);
+                    int sqr = dx * dx + dz * dz;
+                    if (sqr >= bestSqr || !_grid.InBounds(cell) || !IsReached(_grid.Index(cell))) continue;
+
+                    bestSqr = sqr;
+                    spot = _grid.CellToWorld(cell);
+                }
+            }
+            if (bestSqr != int.MaxValue) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Every cell the last flood reached, with its plain path metres from the goal. Appends to the
     /// lists. For debug drawing: it walks the whole grid, so never call it per frame.
     /// </summary>

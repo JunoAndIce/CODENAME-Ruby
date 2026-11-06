@@ -7,7 +7,8 @@ using UnityEngine;
 /// </summary>
 public class EnemySenses
 {
-    private static readonly Collider[] Nearby = new Collider[64];
+    // Shared, and grown whenever a sweep fills it (ScanMotion).
+    private static Collider[] Nearby = new Collider[64];
 
     private readonly EnemyController _enemy;
     private readonly Dictionary<Rigidbody, float> _reactedAt = new();
@@ -15,7 +16,6 @@ public class EnemySenses
     private readonly List<Rigidbody> _expired = new();
     private readonly HashSet<EnemyController> _noticedHeld = new();
     private float _nextScan;
-    private bool _warnedFullBuffer;
 
     public EnemySenses(EnemyController enemy)
     {
@@ -125,12 +125,12 @@ public class EnemySenses
         float lifetime = Stimuli.Rules.OriginLifetime;
         Forget(now, lifetime);
 
-        int count = Physics.OverlapSphereNonAlloc(_enemy.transform.position, _enemy.MotionRadius, Nearby, ~0, QueryTriggerInteraction.Ignore);
-        if (count == Nearby.Length && !_warnedFullBuffer)
-        {
-            _warnedFullBuffer = true;
-            Debug.LogWarning($"{_enemy.name}: {Nearby.Length} colliders are within Motion Radius, which fills his sense buffer, so some nearby bodies weren't considered. Reduce Motion Radius or the clutter.", _enemy);
-        }
+        // Walls and floors share the Default layer with the bodies, so no mask can leave them out and they
+        // fill the buffer too. A full buffer may have dropped the one body that matters, so it grows and
+        // sweeps again; it only allocates when it grows, and the size is kept for every enemy after.
+        int count;
+        while ((count = Physics.OverlapSphereNonAlloc(_enemy.transform.position, _enemy.MotionRadius, Nearby, ~0, QueryTriggerInteraction.Ignore)) == Nearby.Length)
+            Nearby = new Collider[Nearby.Length * 2];
 
         _bodies.Clear();
         for (int i = 0; i < count; i++)

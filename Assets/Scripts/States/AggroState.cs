@@ -72,6 +72,13 @@ public class AggroState : EnemyStateBase
             // mouth and never saw her would otherwise lose the fight and go back to a Normal patrol.
             Enemy.Reactions.BecomeWary();
             Vector3 known = Enemy.TryGetNewestRuby(out Vector3 newest) ? newest : Enemy.transform.position;
+            // A spot with no way in would take everyone off the job for not reaching it, so the search
+            // starts from the ground nearest it. Its area still takes in where she was.
+            if (Enemy.Navigator.TryGetNearestReachable(known, out Vector3 reachable) && reachable != known)
+            {
+                DebugLog.Info($"{Enemy.name} can't reach {known}, where he lost Ruby: the search starts from {reachable}, the nearest he can get.", Enemy);
+                known = reachable;
+            }
             Enemy.RequestSearch(new SearchRequest(new Incident(known, StimulusResponse.SearchForAttack, SearchingState.FromAggroPriority), afterLostFight: true));
         }
         if (Enemy.IsArmed) Enemy.Arms.Lower();
