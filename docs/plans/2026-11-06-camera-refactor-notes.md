@@ -73,7 +73,11 @@ That logic measures distance **from the camera**. A camera looking straight down
 
 **Best explanation, untested:** the dome is the edge of a cascade. The camera is about 15.7 m above the floor at these settings, and Shadow Distance 50 puts a split at about 15 m, so that split lands almost exactly on the floor. Inside the circle the floor uses one cascade, and outside it the next, and the outer one loses the bottom of the wall's shadow.
 
-**Not explained yet:** why the outer cascade loses it. The strip is roughly a metre wide, which looks too big for bias alone, by a rough estimate. Reading the numbers can't settle this, so experiments 3 and 4 below come first.
+**Confirmed in play (user, 2026-11-06):** Cascade Count 1 on `PC_RPAsset` fixes it, with Cam Height 15 and Peek Height 19. With one cascade there is no edge to sweep across the view. Keep it for this camera: nearly everything it sees is about the same distance away, so cascades have nothing to gain. All of the shadow map then goes on one band, instead of a quarter each.
+
+**Shadow Distance to go with it:** it only has to reach the far corners of the view, and anything past that wastes detail. By rough sums for a 16:9 screen, those corners are about 23 m from the camera at height 15 and about 29 m peeking at 19. Shadows fade over the last 10% or so, so about 35 clears them. At the old heights of 35 and 44 the peeking corner is about 50 m, right at the old Shadow Distance, so shadows would have faded in the corners there. *Untested.*
+
+**Still not explained:** why the outer cascade lost the shadow. The strip is roughly a metre wide, which looks too big for bias alone, by a rough estimate. Reading the numbers can't settle this, so experiments 3 and 4 below come first.
 
 ## Experiments, in order
 
