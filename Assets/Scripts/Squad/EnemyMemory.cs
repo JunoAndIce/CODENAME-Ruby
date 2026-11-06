@@ -124,14 +124,16 @@ public class EnemyMemory
     }
 
     private readonly List<float> _distractions = new();
+    private float _lastDisturbance = float.NegativeInfinity;
 
     /// <summary>
     /// Notes that something lesser happened while he was searching, and returns how many he has had
-    /// within memory seconds. One within gap of the last is the same disturbance and isn't counted
-    /// again: a thrown body thuds about ten times as it tumbles and a firefight is a run of shots,
-    /// and each of those is one thing to respond to, not a dozen.
+    /// within memory seconds. One within gap of the last is the same disturbance and isn't new: a
+    /// thrown body thuds about ten times as it tumbles and a firefight is a run of shots, and each of
+    /// those is one thing to respond to, not a dozen. A new one adds to the count only when `counts`:
+    /// walking in, he still turns to look, but nothing adds up until he has reached the search.
     /// </summary>
-    public int NoteDistraction(float now, float memory, float gap, out bool counted)
+    public int NoteDistraction(float now, float memory, float gap, bool counts, out bool isNew)
     {
         // A loop rather than RemoveAll with a lambda: the lambda captures now and memory, so it
         // allocated on every sound an enemy hears while he searches. Same order kept.
@@ -142,12 +144,20 @@ public class EnemyMemory
             _distractions[kept++] = _distractions[i];
         }
         _distractions.RemoveRange(kept, _distractions.Count - kept);
-        counted = _distractions.Count == 0 || now - _distractions[_distractions.Count - 1] >= gap;
-        if (counted) _distractions.Add(now);
+        isNew = now - _lastDisturbance >= gap;
+        if (isNew)
+        {
+            _lastDisturbance = now;
+            if (counts) _distractions.Add(now);
+        }
         return _distractions.Count;
     }
 
-    public void ClearDistractions() => _distractions.Clear();
+    public void ClearDistractions()
+    {
+        _distractions.Clear();
+        _lastDisturbance = float.NegativeInfinity;
+    }
 
     public bool KnowsBody(EnemyController body) => _bodies.Contains(body);
     public void RememberBody(EnemyController body) => _bodies.Add(body);

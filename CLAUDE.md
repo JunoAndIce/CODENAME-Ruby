@@ -419,7 +419,7 @@ through the player never slows the walk.
   - Aggro Time (1.5 s) of walking without contact (out of sight, or past the radius, even in
     sight: he then searches where he last saw her). The timer is suspended while he holds at the
     spot, because counting the walk toward the hold cut it short.
-  - Arriving at the spot he knew and **holding there for Aggro Time**. Reaching it doesn't end the
+  - Arriving at the spot he knew and **holding there for Aggro Time**. The spot is a place and not a point: within Known Spot Radius (3 m) with a clear line to it, or held up just outside that behind another hunter, he counts as there, so several don't push at each other to stand on it. Reaching it doesn't end the
     hunt: giving up the instant he arrived dropped fights while Ruby was a metre past it. Sight
     coming back, or a newer fact that moves the spot, restarts the hold.
   - Knowing nothing about where she is: he searches where he stands, with a log line.
@@ -659,7 +659,7 @@ through the player never slows the walk.
   last counted is the same disturbance (a tumbling thrown body thuds about ten times, and a firefight
   is a run of shots), and each is forgotten after Distraction Memory (12 s). **The count ends with the
   search** (`SearchingState.Exit` clears it): a count left over made the next, unrelated search
-  aggro on its first or second one. At Distraction Threshold
+  aggro on its first or second one. **Nothing counts until he has reached the search** (`SearchingState.ReachedSearch`: in a Search's area, at a Check's spot, or a Check's follower once the look begins): walking in he still turns to look. At Distraction Threshold
   (3) **the jig is up**: the count clears, he is taught the disturbance's place (where a thing he saw came from, or where a sound happened) as a Heard fact
   (unless it was a body or gun lying found, `SaysNothingOfRuby`) and `Alert()`s into Aggro.
   A search from Aggro (priority 6) is outranked by nothing, so every sound distracts a lost-fight

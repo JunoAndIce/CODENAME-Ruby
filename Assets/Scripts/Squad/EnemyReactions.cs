@@ -128,11 +128,14 @@ public class EnemyReactions
     // up: he aggros, and the disturbance's place (where a thing he saw came from, or where a sound
     // happened) is where he takes Ruby to be,
     // so Aggro has somewhere to go. A body or gun says nothing about her, so he goes to Aggro with
-    // what he already knows, and searches where he stands if that is nothing.
+    // what he already knows, and searches where he stands if that is nothing. Nothing counts until he has
+    // reached the search: what he passes on the way is why he is going, not a sign something is wrong
+    // with where he has got to. He still turns to look.
     private bool Distract(Incident incident)
     {
-        int count = _enemy.Memory.NoteDistraction(Time.time, _enemy.DistractionMemory, _enemy.DistractionGap, out bool counted);
-        if (counted && count >= _enemy.DistractionThreshold)
+        bool counts = _enemy.Searching.ReachedSearch;
+        int count = _enemy.Memory.NoteDistraction(Time.time, _enemy.DistractionMemory, _enemy.DistractionGap, counts, out bool isNew);
+        if (isNew && counts && count >= _enemy.DistractionThreshold)
         {
             _enemy.Memory.ClearDistractions();
             if (!incident.SaysNothingOfRuby) _enemy.Memory.Learn(new RubyFact(incident.Point, Time.time, Knowledge.Heard));
@@ -141,8 +144,8 @@ public class EnemyReactions
             return true;
         }
 
-        _enemy.Searching.Distract(incident.Point, counted);
-        DebugLog.Info($"{_enemy.name} {(counted ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}): {count} of {_enemy.DistractionThreshold}.", _enemy);
+        _enemy.Searching.Distract(incident.Point, isNew);
+        DebugLog.Info($"{_enemy.name} {(isNew ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}): {(counts ? $"{count} of {_enemy.DistractionThreshold}" : "not counted, he hasn't reached the search")}.", _enemy);
         return true;
     }
 

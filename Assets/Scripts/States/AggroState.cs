@@ -19,6 +19,10 @@ public class AggroState : EnemyStateBase
     private bool _holdingAtKnown;   // out of sight and standing on the spot he knew
     private float _dwellTimer;      // how long he has held there
     private bool _loggedNothing;    // the nothing-to-go-on line is logged on its rising edge only
+    private float _closestToKnown;  // the nearest he has got to the spot he knew, for noticing he is held up
+    private float _stallTimer;
+    private Vector3 _stallSpot;
+    private const float StallProgress = 0.25f;   // closing less than this isn't getting anywhere
 
     public AggroState(EnemyController enemy) : base(enemy) { }
 
@@ -49,6 +53,8 @@ public class AggroState : EnemyStateBase
         _holdingAtKnown = false;
         _dwellTimer = 0f;
         _loggedNothing = false;
+        _closestToKnown = float.PositiveInfinity;
+        _stallTimer = 0f;
         _hadSight = Enemy.CanSeePlayer();
     }
 
@@ -159,6 +165,11 @@ public class AggroState : EnemyStateBase
     private void ChaseWhatHeKnows()
     {
         bool arrived = Enemy.ChaseKnown(Enemy.ChaseSpeed) == NavResult.Arrived;
+        if (!arrived && StalledBehindSomeone())
+        {
+            Enemy.Stop();
+            arrived = true;
+        }
         if (arrived && !_holdingAtKnown)
         {
             _dwellTimer = 0f;
@@ -170,6 +181,31 @@ public class AggroState : EnemyStateBase
             _dwellTimer = 0f;
         }
         _holdingAtKnown = arrived;
+    }
+
+    // Hunters lined up in a corridor: the first stops at the edge of the known spot's radius and the next
+    // is held up just outside it, pushing at his back. Close to the edge and no closer for Stuck Time, he
+    // counts as there. Farther out it is someone else's problem to clear, and Aggro Time bounds it.
+    private bool StalledBehindSomeone()
+    {
+        if (!Enemy.TryGetNewestRuby(out Vector3 known)) return false;
+
+        // A newer fact is a new walk: how close he got to the old spot says nothing about this one.
+        if (PathGrid.FlatDistance(known, _stallSpot) > StallProgress)
+        {
+            _stallSpot = known;
+            _closestToKnown = float.PositiveInfinity;
+        }
+
+        float distance = PathGrid.FlatDistance(Enemy.transform.position, known);
+        if (distance < _closestToKnown - StallProgress)
+        {
+            _closestToKnown = distance;
+            _stallTimer = 0f;
+            return false;
+        }
+        _stallTimer += Time.fixedDeltaTime;
+        return _stallTimer >= Enemy.StuckTime && distance <= Enemy.KnownSpotRadius * 2f;
     }
 
     private enum Move { Chase, Hold, BackAway }

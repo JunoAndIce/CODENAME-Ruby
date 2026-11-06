@@ -74,6 +74,20 @@ public class SearchingState : EnemyStateBase
     public StimulusResponse Reason => Job != null ? Job.Reason : _reason;
     public int Priority => Job != null ? Job.Priority : _priority;
 
+    /// <summary>
+    /// He has got to the search and isn't still on his way: in a Search's area, at a Check's spot, or
+    /// on a job-less search past its walk. A Check's follower never walks to the spot, so for him it
+    /// is once the checker has begun to look.
+    /// </summary>
+    public bool ReachedSearch
+    {
+        get
+        {
+            if (Job == null) return _step != SearchStep.Walk;
+            return _arrived || (Job.Kind == JobKind.Check && Job.Step is JobStep.Look or JobStep.StandDown or JobStep.Done);
+        }
+    }
+
     private void Apply(SearchRequest request)
     {
         _target = request.Incident.Point;
@@ -584,9 +598,7 @@ public class SearchingState : EnemyStateBase
         PathGrid grid = PathGrid.At(position);
         if (grid == null || grid != PathGrid.At(job.Point)) return false;
 
-        Vector3 spot = job.Point;
-        spot.y = Enemy.EyePosition.y;
-        return Enemy.HasClearSight(spot, null);
+        return Enemy.CanSeeSpot(job.Point);
     }
 
     // He is as close as he will get. He faces the spot, so the sweep he joins is about it and ends

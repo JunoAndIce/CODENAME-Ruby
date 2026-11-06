@@ -38,6 +38,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _motionRadius = 15f;
     [Tooltip("How far a body on the chain must be moved from where it was grabbed, in metres measured flat, before he takes it as Ruby dragging it and goes for her. Keep it above the charging throw's jiggle (0.1 m).")]
     [SerializeField, Min(0f)] private float _draggedDistance = 0.5f;
+    [Tooltip("How close he must get to where he last knew Ruby was, in metres measured flat and with a clear line to it, to count as there and hold. A place and not a point, so several hunters don't push at each other to stand on one spot.")]
+    [SerializeField, Min(0f)] private float _knownSpotRadius = 3f;
     [Tooltip("How close a corpse must be for him to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
     [SerializeField, Min(0f)] private float _bodyNoticeRange = 6f;
     [Tooltip("Seconds between his sweeps for moving bodies, corpses and loose guns. Each enemy starts at a random offset so a squad doesn't sweep on the same step.")]
@@ -127,6 +129,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public EnemyReactions Reactions { get; private set; }
     public float MotionRadius => _motionRadius;
     public float DraggedDistance => _draggedDistance;
+    public float KnownSpotRadius => _knownSpotRadius;
     public float BodyNoticeRange => _bodyNoticeRange;
     public float ScanInterval => _scanInterval;
     /// <summary>The scene's shared pool, or null when there is none (an error was logged at Start).</summary>
@@ -739,6 +742,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             Stop();
             return NavResult.Unreachable;
         }
+        // A place and not a point: enemies of equal weight block each other, so several sent to one
+        // point pushed at each other to get onto it. The line stops him counting as there from the far
+        // side of a wall.
+        if (PathGrid.FlatDistance(transform.position, point) <= _knownSpotRadius && CanSeeSpot(point))
+        {
+            Stop();
+            return NavResult.Arrived;
+        }
         return Navigator.MoveTo(point, speed, getClose: true);
     }
 
@@ -823,6 +834,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     public bool HasClearSight(Vector3 point, Transform target) => Vision.HasClearSight(point, target);
 
+    /// <summary>A clear line at his eye height to a place on the floor. Raised to his eyes because a spot can lie at or under floor level, where the floor itself would block it.</summary>
+    internal bool CanSeeSpot(Vector3 point)
+    {
+        point.y = EyePosition.y;
+        return HasClearSight(point, null);
+    }
+
     public float DistanceToPlayer() => Vision.DistanceToPlayer();
 
     private void HandleDamaged(float amount) => Alert();
@@ -873,6 +891,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         {
             Gizmos.color = new Color(1f, 0.55f, 0.1f, 0.6f);
             DrawFlatCircle(news.Position + Vector3.up * 0.1f, _attackNearRadius);
+            DrawFlatCircle(news.Position + Vector3.up * 0.1f, _knownSpotRadius);
         }
 
         // The gun's engagement band: fires out to Range, closes in only to Min Distance. In edit
