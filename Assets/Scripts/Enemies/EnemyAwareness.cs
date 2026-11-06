@@ -77,7 +77,7 @@ public class EnemyAwareness
             if (_seesFrame == Time.frameCount) return _seesPlayer;
             _seesFrame = Time.frameCount;
             _seesPlayer = !_enemy.Health.IsDead && !_enemy.IsOverridden
-                && (_enemy.Vision.DetectsPlayer() || (_enemy.CurrentState == _enemy.Aggro && _enemy.CanSeePlayer()));
+                && (_enemy.Vision.DetectsPlayer() || (_enemy.CurrentState == _enemy.Aggro && _enemy.Vision.CanSeePlayer()));
             return _seesPlayer;
         }
     }

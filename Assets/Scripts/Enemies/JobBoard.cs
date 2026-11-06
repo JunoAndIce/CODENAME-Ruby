@@ -158,7 +158,7 @@ public class JobBoard
     // restarts whichever clock times the call.
     private bool CallIn(GroupJob job, EnemyController next)
     {
-        if (next == null || !next.CanJoinJob(job.Priority) || job.WasDropped(next))
+        if (next == null || !next.Reactions.CanJoinJob(job.Priority) || job.WasDropped(next))
         {
             DebugLog.Info($"{job.Lead.name} doesn't call {(next != null ? next.name : "an officer who is gone")}: he is no longer free.", job.Lead);
             return false;
@@ -813,7 +813,7 @@ public class JobBoard
     {
         IReadOnlyList<EnemyController> enemies = _intel.Enemies;
         for (int i = 0; i < enemies.Count; i++)
-            if (enemies[i] != job.Lead && enemies[i].CanJoinJob(job.Priority) && !job.WasDropped(enemies[i])) return true;
+            if (enemies[i] != job.Lead && enemies[i].Reactions.CanJoinJob(job.Priority) && !job.WasDropped(enemies[i])) return true;
         return false;
     }
 
@@ -845,7 +845,7 @@ public class JobBoard
             EnemyController enemy = enemies[i];
             // One this job dropped for not reaching the spot isn't called back. His own stimulus (Handle)
             // can still put him on it: that is a new thing he heard or saw, and stimuli are bounded.
-            if (enemy == lead || !enemy.CanJoinJob(job.Priority) || job.WasDropped(enemy)) continue;
+            if (enemy == lead || !enemy.Reactions.CanJoinJob(job.Priority) || job.WasDropped(enemy)) continue;
             // An enemy off the grid is no candidate and, unlike a listener, is not warned about.
             if (_calling.Measure(enemy, _intel.SpeechRange, out float metres) != FloorReach.Standing.InRange) continue;
             _candidates.Add(new Candidate { Enemy = enemy, Metres = metres });

@@ -118,57 +118,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private CapsuleCollider _capsule;
     private float _nextRearm;   // after giving up on a gun, no new attempt before this time
 
-    public Rigidbody Body { get; private set; }
-    /// <summary>What he knows about Ruby: his own sightings and what he was told.</summary>
-    public EnemyMemory Memory { get; private set; }
-    /// <summary>What he hears, and what else he notices without sight.</summary>
-    public EnemySenses Senses { get; private set; }
-    /// <summary>His view cone, close circle and line of sight.</summary>
-    public EnemyVision Vision { get; private set; }
-    public EnemyReactions Reactions { get; private set; }
-    /// <summary>His walking, turning and facing, and the walks the states ask for.</summary>
-    public EnemyMovement Movement { get; private set; }
-    /// <summary>What he takes in each frame: sight of Ruby, what he learns and says, and the newest thing he knows.</summary>
-    public EnemyAwareness Awareness { get; private set; }
-    /// <summary>His record of the chain, and the gun and corpse handling that goes with it.</summary>
-    public EnemyBodyState BodyState { get; private set; }
     public float MotionRadius => _motionRadius;
     public float DraggedDistance => _draggedDistance;
     public float KnownSpotRadius => _knownSpotRadius;
     public float BodyNoticeRange => _bodyNoticeRange;
     public float ScanInterval => _scanInterval;
-    /// <summary>The scene's shared pool, or null when there is none (an error was logged at Start).</summary>
-    public Intel Intel { get; private set; }
-    public Health Health { get; private set; }
-    public IRagdollBody RagdollBody { get; private set; }
-    public GridNavigator Navigator { get; private set; }
-    public IdleState Idle { get; private set; }
-    public PatrolState Patrol { get; private set; }
-    public SearchingState Searching { get; private set; }
-    public AggroState Aggro { get; private set; }
-    public RearmState Rearm { get; private set; }
-    public GrabbedState Grabbed { get; private set; }
-    public RagdollState Ragdoll { get; private set; }
-    public DeadState Dead { get; private set; }
-    /// <summary>The enemy's gun hand, or null on an enemy built without one.</summary>
-    public GunHolder Arms { get; private set; }
-    public bool IsArmed => Arms != null && Arms.IsArmed;
-    /// <summary>The player is on her feet. Nobody shoots a body.</summary>
-    public bool PlayerIsUp => _player != null && _player.CanAct;
-    /// <summary>Only on the chain does an enemy, alive or dead, stop bullets: a shield. Free, it lets them through.</summary>
-    public bool StopsBullets => IsHeld;
-
     internal float GrabPopUp => _grabPopUp;
     internal float GrabPopOut => _grabPopOut;
     internal float CorpseBrightness => _corpseBrightness;
-
-    /// <summary>
-    /// After giving up on every gun in reach, wait Route Retry Time before looking again. Without
-    /// it, an enemy with only unreachable guns around would flicker between hunting and re-arming.
-    /// </summary>
-    public void WaitBeforeRearming() => _nextRearm = Time.time + _routeRetryTime;
-
-    private bool WantsGun() => Arms != null && !Arms.IsArmed && _rearmRadius > 0f && Time.time >= _nextRearm && Rearm.CanFindGun();
 
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
@@ -223,43 +180,53 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float BodyRadius => _capsule.radius * Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.z));
     public Transform PlayerTransform => _player == null ? null : _player.transform;
 
-    /// <summary>The speed of the last move it was told to make, 0 once stopped: how fast it's trying to go.</summary>
-    public float MoveSpeed => Movement.IntendedSpeed;
-    public WeaponHold Weapon => IsArmed ? WeaponHold.Pistol : WeaponHold.None;
+    internal float TurnSpeed => _turnSpeed;
+    internal float LookSweepAngle => _lookSweepAngle;
+    internal float LookSweepPeriod => _lookSweepPeriod;
 
-    /// <summary>What its body is doing, for its animation. Firing, it aims; moving otherwise, it runs.</summary>
-    public AnimStance Stance => _state.Current switch
-    {
-        AggroState => Aggro.Firing ? AnimStance.Aim : Movement.IntendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
-        RearmState => Movement.IntendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
-        GrabbedState => AnimStance.Restrained,
-        RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen,
-        // Tied upright on the chain, a corpse is restrained like the living; off it, it keeps its pose.
-        DeadState => IsHeld ? AnimStance.Restrained : AnimStance.Frozen,
-        _ => AnimStance.Rest,
-    };
+    internal Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
 
-    /// <summary>
-    /// Held, knocked down or dead: an override state (EnemyStateBase.IsOverride) is running, so the
-    /// AI neither senses nor reacts. The one test for it. KnockDown keeps its own set.
-    /// </summary>
-    public bool IsOverridden => _state.Current is EnemyStateBase { IsOverride: true };
+    public float ViewRange => _viewRange;
+    internal float ViewAngle => _viewAngle;
+    internal float CloseRadius => _closeRadius;
+    internal float GiveUpRadius => _giveUpRadius;
+    // Start fills it after Awake builds the Vision, so EnemyVision reads it here on every call.
+    internal PlayerController Player => _player;
 
-    /// <summary>In the Searching state right now. The job board reads it to check that a member of a job is searching.</summary>
-    public bool IsSearching => _state.Current is SearchingState;
-
-    /// <summary>The state he is in, for EnemyReactions to read. Reaching the machine itself stays with the controller.</summary>
-    internal IState CurrentState => _state.Current;
-
-    /// <summary>Ruby, while it's aiming at her.</summary>
-    public bool TryFindTarget(out Vector3 point)
-    {
-        point = _player != null ? _player.transform.position : default;
-        return _player != null && Stance == AnimStance.Aim;
-    }
-    // The one way into Searching: whoever sends him there asks first (RequestSearch) and Enter takes
-    // it. A default start at some remembered spot let a caller that forgot to ask search at the wrong place, silently.
-    private SearchRequest? _pendingSearch;
+    public Rigidbody Body { get; private set; }
+    /// <summary>What he knows about Ruby: his own sightings and what he was told.</summary>
+    public EnemyMemory Memory { get; private set; }
+    /// <summary>What he hears, and what else he notices without sight.</summary>
+    public EnemySenses Senses { get; private set; }
+    /// <summary>His view cone, close circle and line of sight.</summary>
+    public EnemyVision Vision { get; private set; }
+    public EnemyReactions Reactions { get; private set; }
+    /// <summary>His walking, turning and facing, and the walks the states ask for.</summary>
+    public EnemyMovement Movement { get; private set; }
+    /// <summary>What he takes in each frame: sight of Ruby, what he learns and says, and the newest thing he knows.</summary>
+    public EnemyAwareness Awareness { get; private set; }
+    /// <summary>His record of the chain, and the gun and corpse handling that goes with it.</summary>
+    public EnemyBodyState BodyState { get; private set; }
+    /// <summary>The scene's shared pool, or null when there is none (an error was logged at Start).</summary>
+    public Intel Intel { get; private set; }
+    public Health Health { get; private set; }
+    public IRagdollBody RagdollBody { get; private set; }
+    public GridNavigator Navigator { get; private set; }
+    public IdleState Idle { get; private set; }
+    public PatrolState Patrol { get; private set; }
+    public SearchingState Searching { get; private set; }
+    public AggroState Aggro { get; private set; }
+    public RearmState Rearm { get; private set; }
+    public GrabbedState Grabbed { get; private set; }
+    public RagdollState Ragdoll { get; private set; }
+    public DeadState Dead { get; private set; }
+    /// <summary>The enemy's gun hand, or null on an enemy built without one.</summary>
+    public GunHolder Arms { get; private set; }
+    public bool IsArmed => Arms != null && Arms.IsArmed;
+    /// <summary>The player is on her feet. Nobody shoots a body.</summary>
+    public bool PlayerIsUp => _player != null && _player.CanAct;
+    /// <summary>Only on the chain does an enemy, alive or dead, stop bullets: a shield. Free, it lets them through.</summary>
+    public bool StopsBullets => IsHeld;
 
     private void Awake()
     {
@@ -291,43 +258,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
         BuildTransitions();
     }
-
-    // The whole transition graph, in one place. States never name each other.
-    private void BuildTransitions()
-    {
-        At(Idle, Aggro, new FuncPredicate(DetectsPlayer));
-        At(Patrol, Aggro, new FuncPredicate(DetectsPlayer));
-        At(Searching, Aggro, new FuncPredicate(DetectsPlayer));
-
-        At(Aggro, Searching, new FuncPredicate(() => Aggro.LostPlayer));
-
-        // Unarmed with a free gun in reach: he goes for it from any AI state. The rows above are listed
-        // first, so they win: an unarmed enemy who notices Ruby takes Aggro first, and Aggro hands on to Rearm.
-        At(Idle, Rearm, new FuncPredicate(WantsGun));
-        At(Patrol, Rearm, new FuncPredicate(WantsGun));
-        At(Searching, Rearm, new FuncPredicate(WantsGun));
-        At(Aggro, Rearm, new FuncPredicate(WantsGun));
-        // Always back to the hunt: an enemy only loses its gun to Ruby, so it knows she's around.
-        At(Rearm, Aggro, new FuncPredicate(() => Rearm.Armed || Rearm.GaveUp));
-
-        At(Searching, Patrol, new FuncPredicate(() => Searching.Finished && HasActiveRoute));
-        At(Searching, Idle, new FuncPredicate(() => Searching.Finished && !HasActiveRoute));
-
-        // The route he walks follows how aggressive he is (IsAggressive), so becoming aggressive can hand an
-        // idle enemy a route to walk, or leave a patroller with none for his mode and send him to his post.
-        At(Idle, Patrol, new FuncPredicate(() => HasActiveRoute));
-        At(Patrol, Idle, new FuncPredicate(() => !HasActiveRoute));
-
-        At(Ragdoll, Aggro, new FuncPredicate(() => Ragdoll.GotUp && !Health.IsDead));
-
-        Any(Dead, new FuncPredicate(() => Health.IsDead));
-    }
-
-    private void At(IState from, IState to, IPredicate condition)
-        => _state.AddTransition(from, to, condition);
-
-    private void Any(EnemyStateBase to, IPredicate condition)
-        => _state.AddAnyTransition(to, condition);
 
     private void Start()
     {
@@ -366,6 +296,74 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             Senses.Scan();
     }
 
+    private void OnValidate()
+    {
+        // Give-up must sit outside both view range and the close circle, or the enemy aggros and
+        // de-aggros in the same frame.
+        _giveUpRadius = Mathf.Max(_giveUpRadius, Mathf.Max(_viewRange, _closeRadius) + 1f);
+    }
+
+    // Play-mode path overlay: visible in the Scene view without selecting the enemy.
+    private void DebugDrawPath()
+    {
+        Vector3[] corners = Navigator.Corners;
+        if (corners == null) return;
+
+        for (int i = 1; i < corners.Length; i++)
+            Debug.DrawLine(corners[i - 1], corners[i], Color.yellow);
+    }
+
+    private void OnDrawGizmosSelected() => EnemyGizmos.DrawSelected(this);
+
+    private void OnDrawGizmos() => EnemyGizmos.DrawRoutes(this);
+
+    // The whole transition graph, in one place. States never name each other.
+    private void BuildTransitions()
+    {
+        At(Idle, Aggro, new FuncPredicate(DetectsPlayer));
+        At(Patrol, Aggro, new FuncPredicate(DetectsPlayer));
+        At(Searching, Aggro, new FuncPredicate(DetectsPlayer));
+
+        At(Aggro, Searching, new FuncPredicate(() => Aggro.LostPlayer));
+
+        // Unarmed with a free gun in reach: he goes for it from any AI state. The rows above are listed
+        // first, so they win: an unarmed enemy who notices Ruby takes Aggro first, and Aggro hands on to Rearm.
+        At(Idle, Rearm, new FuncPredicate(WantsGun));
+        At(Patrol, Rearm, new FuncPredicate(WantsGun));
+        At(Searching, Rearm, new FuncPredicate(WantsGun));
+        At(Aggro, Rearm, new FuncPredicate(WantsGun));
+        // Always back to the hunt: an enemy only loses its gun to Ruby, so it knows she's around.
+        At(Rearm, Aggro, new FuncPredicate(() => Rearm.Armed || Rearm.GaveUp));
+
+        At(Searching, Patrol, new FuncPredicate(() => Searching.Finished && HasActiveRoute));
+        At(Searching, Idle, new FuncPredicate(() => Searching.Finished && !HasActiveRoute));
+
+        // The route he walks follows how aggressive he is (IsAggressive), so becoming aggressive can hand an
+        // idle enemy a route to walk, or leave a patroller with none for his mode and send him to his post.
+        At(Idle, Patrol, new FuncPredicate(() => HasActiveRoute));
+        At(Patrol, Idle, new FuncPredicate(() => !HasActiveRoute));
+
+        At(Ragdoll, Aggro, new FuncPredicate(() => Ragdoll.GotUp && !Health.IsDead));
+
+        Any(Dead, new FuncPredicate(() => Health.IsDead));
+    }
+
+    private void At(IState from, IState to, IPredicate condition)
+        => _state.AddTransition(from, to, condition);
+
+    private void Any(EnemyStateBase to, IPredicate condition)
+        => _state.AddAnyTransition(to, condition);
+
+    private bool DetectsPlayer() => Vision.DetectsPlayer();
+
+    /// <summary>
+    /// After giving up on every gun in reach, wait Route Retry Time before looking again. Without
+    /// it, an enemy with only unreachable guns around would flicker between hunting and re-arming.
+    /// </summary>
+    public void WaitBeforeRearming() => _nextRearm = Time.time + _routeRetryTime;
+
+    private bool WantsGun() => Arms != null && !Arms.IsArmed && _rearmRadius > 0f && Time.time >= _nextRearm && Rearm.CanFindGun();
+
     /// <summary>
     /// Knocked off its feet by a hit (ImpactDamage): ragdolls tumbling at the velocity the hit left
     /// it with, then gets up into Aggro. Held on the chain or already down, the hit only hurts, so
@@ -387,7 +385,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     }
 
     // Externally driven transitions. Nothing can poll for these, so they bypass the table.
-    // Investigate is one too: a sound happens once, so there is nothing for the table to poll.
+    // EnemyReactions.Investigate is one too: a sound happens once, so there is nothing for the table to poll.
     /// <summary>Sends him into Aggro (hurt, or told by an enemy who sees Ruby). True when that moved him: not when he was already there, or can't act.</summary>
     public bool Alert()
     {
@@ -397,11 +395,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         return true;
     }
 
-    /// <summary>Forwards to EnemyReactions.Investigate, so the senses call it where they always have.</summary>
-    public bool Investigate(Incident incident, bool walkThere = true) => Reactions.Investigate(incident, walkThere);
-
-    /// <summary>Forwards to EnemyReactions.BecomeWaryAt.</summary>
-    internal void BecomeWary(Vector3 at, string why) => Reactions.BecomeWaryAt(at, why);
+    private void HandleDamaged(float amount) => Alert();
 
     // Corpses too: a dead enemy stays a body the chain can swing and throw.
     public bool CanBeGrabbed => true;
@@ -414,58 +408,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// Only the job board sets it, as it adds and removes members, and SearchingState gives him up on exit.
     /// </summary>
     public GroupJob Job { get; internal set; }
-
-    /// <summary>Forwards to EnemyReactions.CanJoinJob.</summary>
-    public bool CanJoinJob(int priority) => Reactions.CanJoinJob(priority);
-
-    /// <summary>
-    /// Sends him to a job's place for its reason, as a search: requested from Idle or Patrol, a
-    /// retarget if he is already searching (which includes SearchingState.Enter itself: the machine has
-    /// made Searching current before calling it, so a job joined from there retargets and never calls
-    /// SetState). The job board has already put him on the job's member list.
-    /// A search for an attack makes him wary, as any other does.
-    /// </summary>
-    internal void FollowJob(GroupJob job)
-    {
-        if (job.Reason == StimulusResponse.SearchForAttack) Reactions.BecomeWary();
-        // Built here rather than kept on the job: a job doesn't remember whether its latest trigger was
-        // a find, and the search doesn't read it, so it carries none.
-        var request = new SearchRequest(new Incident(job.Point, job.Reason, job.Priority));
-        if (_state.Current is SearchingState)
-        {
-            Searching.Retarget(request);
-            return;
-        }
-
-        BeginSearch(request);
-    }
-
-    /// <summary>
-    /// Starts a search from Idle or Patrol. Ask before the transition: SearchingState.Enter takes the
-    /// request, and entering with none is an error. Aggro's exit asks alone (RequestSearch), because
-    /// the table makes that transition.
-    /// </summary>
-    internal void BeginSearch(SearchRequest request)
-    {
-        RequestSearch(request);
-        _state.SetState(Searching);
-    }
-
-    /// <summary>
-    /// Asks for the search the next entry into Searching will begin: the one way in. Whoever moves him
-    /// there asks first (Investigate, FollowJob), or Aggro on its way out after a lost fight. A search
-    /// already running takes Retarget instead, which has no Enter.
-    /// </summary>
-    internal void RequestSearch(SearchRequest request) => _pendingSearch = request;
-
-    /// <summary>Hands over the pending request and clears it. SearchingState.Enter is the only caller.</summary>
-    internal bool TakeSearchRequest(out SearchRequest request)
-    {
-        request = _pendingSearch.GetValueOrDefault();
-        bool had = _pendingSearch.HasValue;
-        _pendingSearch = null;
-        return had;
-    }
 
     public void EnterGrabbed()
     {
@@ -517,64 +459,98 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>Forwards to EnemyMovement.Stop; states keep calling Enemy.Stop().</summary>
     public void Stop() => Movement.Stop();
 
-    internal float TurnSpeed => _turnSpeed;
-    internal float LookSweepAngle => _lookSweepAngle;
-    internal float LookSweepPeriod => _lookSweepPeriod;
-
-    internal Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
-
-    // Detection: noticed means in his view, and in sight. Sight lives in EnemyVision; these forwards
-    // keep every state, sense and the editor calling the controller as before.
-    private bool DetectsPlayer() => Vision.DetectsPlayer();
-
-    public bool InView(Vector3 point) => Vision.InView(point);
-
-    public float ViewRange => _viewRange;
-    internal float ViewAngle => _viewAngle;
-    internal float CloseRadius => _closeRadius;
-    internal float GiveUpRadius => _giveUpRadius;
-    // Start fills it after Awake builds the Vision, so EnemyVision reads it here on every call.
-    internal PlayerController Player => _player;
-
-    public bool InView(Vector3 point, float range) => Vision.InView(point, range);
-
-    public bool InContactWithPlayer() => Vision.InContactWithPlayer();
-
-    public Collider SightBlocker => Vision.SightBlocker;
-
-    public bool CanSeePlayer() => Vision.CanSeePlayer();
-
-    public bool HasClearSight(Vector3 point, Transform target) => Vision.HasClearSight(point, target);
-
     /// <summary>A clear line at his eye height to a place on the floor. Raised to his eyes because a spot can lie at or under floor level, where the floor itself would block it.</summary>
     internal bool CanSeeSpot(Vector3 point)
     {
         point.y = EyePosition.y;
-        return HasClearSight(point, null);
+        return Vision.HasClearSight(point, null);
     }
 
-    public float DistanceToPlayer() => Vision.DistanceToPlayer();
+    // The one way into Searching: whoever sends him there asks first (RequestSearch) and Enter takes
+    // it. A default start at some remembered spot let a caller that forgot to ask search at the wrong place, silently.
+    private SearchRequest? _pendingSearch;
 
-    private void HandleDamaged(float amount) => Alert();
-
-    private void OnValidate()
+    /// <summary>
+    /// Sends him to a job's place for its reason, as a search: requested from Idle or Patrol, a
+    /// retarget if he is already searching (which includes SearchingState.Enter itself: the machine has
+    /// made Searching current before calling it, so a job joined from there retargets and never calls
+    /// SetState). The job board has already put him on the job's member list.
+    /// A search for an attack makes him wary, as any other does.
+    /// </summary>
+    internal void FollowJob(GroupJob job)
     {
-        // Give-up must sit outside both view range and the close circle, or the enemy aggros and
-        // de-aggros in the same frame.
-        _giveUpRadius = Mathf.Max(_giveUpRadius, Mathf.Max(_viewRange, _closeRadius) + 1f);
+        if (job.Reason == StimulusResponse.SearchForAttack) Reactions.BecomeWary();
+        // Built here rather than kept on the job: a job doesn't remember whether its latest trigger was
+        // a find, and the search doesn't read it, so it carries none.
+        var request = new SearchRequest(new Incident(job.Point, job.Reason, job.Priority));
+        if (_state.Current is SearchingState)
+        {
+            Searching.Retarget(request);
+            return;
+        }
+
+        BeginSearch(request);
     }
 
-    // Play-mode path overlay: visible in the Scene view without selecting the enemy.
-    private void DebugDrawPath()
+    /// <summary>
+    /// Starts a search from Idle or Patrol. Ask before the transition: SearchingState.Enter takes the
+    /// request, and entering with none is an error. Aggro's exit asks alone (RequestSearch), because
+    /// the table makes that transition.
+    /// </summary>
+    internal void BeginSearch(SearchRequest request)
     {
-        Vector3[] corners = Navigator.Corners;
-        if (corners == null) return;
-
-        for (int i = 1; i < corners.Length; i++)
-            Debug.DrawLine(corners[i - 1], corners[i], Color.yellow);
+        RequestSearch(request);
+        _state.SetState(Searching);
     }
 
-    private void OnDrawGizmosSelected() => EnemyGizmos.DrawSelected(this);
+    /// <summary>
+    /// Asks for the search the next entry into Searching will begin: the one way in. Whoever moves him
+    /// there asks first (Investigate, FollowJob), or Aggro on its way out after a lost fight. A search
+    /// already running takes Retarget instead, which has no Enter.
+    /// </summary>
+    internal void RequestSearch(SearchRequest request) => _pendingSearch = request;
 
-    private void OnDrawGizmos() => EnemyGizmos.DrawRoutes(this);
+    /// <summary>Hands over the pending request and clears it. SearchingState.Enter is the only caller.</summary>
+    internal bool TakeSearchRequest(out SearchRequest request)
+    {
+        request = _pendingSearch.GetValueOrDefault();
+        bool had = _pendingSearch.HasValue;
+        _pendingSearch = null;
+        return had;
+    }
+
+    /// <summary>The speed of the last move it was told to make, 0 once stopped: how fast it's trying to go.</summary>
+    public float MoveSpeed => Movement.IntendedSpeed;
+    public WeaponHold Weapon => IsArmed ? WeaponHold.Pistol : WeaponHold.None;
+
+    /// <summary>What its body is doing, for its animation. Firing, it aims; moving otherwise, it runs.</summary>
+    public AnimStance Stance => _state.Current switch
+    {
+        AggroState => Aggro.Firing ? AnimStance.Aim : Movement.IntendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
+        RearmState => Movement.IntendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
+        GrabbedState => AnimStance.Restrained,
+        RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen,
+        // Tied upright on the chain, a corpse is restrained like the living; off it, it keeps its pose.
+        DeadState => IsHeld ? AnimStance.Restrained : AnimStance.Frozen,
+        _ => AnimStance.Rest,
+    };
+
+    /// <summary>
+    /// Held, knocked down or dead: an override state (EnemyStateBase.IsOverride) is running, so the
+    /// AI neither senses nor reacts. The one test for it. KnockDown keeps its own set.
+    /// </summary>
+    public bool IsOverridden => _state.Current is EnemyStateBase { IsOverride: true };
+
+    /// <summary>In the Searching state right now. The job board reads it to check that a member of a job is searching.</summary>
+    public bool IsSearching => _state.Current is SearchingState;
+
+    /// <summary>The state he is in, for EnemyReactions to read. Reaching the machine itself stays with the controller.</summary>
+    internal IState CurrentState => _state.Current;
+
+    /// <summary>Ruby, while it's aiming at her.</summary>
+    public bool TryFindTarget(out Vector3 point)
+    {
+        point = _player != null ? _player.transform.position : default;
+        return _player != null && Stance == AnimStance.Aim;
+    }
 }

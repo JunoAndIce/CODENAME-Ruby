@@ -30,7 +30,7 @@ public class EnemyReactions
     /// he stands instead of going to the point (a glance at a body the squad already knows).
     /// On a job, a stimulus at the job's place goes to the job first (Intel.HandleAtOwnJob, BecomeWaryAt).
     /// </summary>
-    public bool Investigate(Incident incident, bool walkThere)
+    public bool Investigate(Incident incident, bool walkThere = true)
     {
         if (incident.Reason == StimulusResponse.Ignore)
         {

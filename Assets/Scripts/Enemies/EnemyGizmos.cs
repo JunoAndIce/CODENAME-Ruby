@@ -10,8 +10,8 @@ internal static class EnemyGizmos
         // The view, flat at eye height: green when the player is noticed, red when she's in the
         // view but hidden, grey otherwise. Edit mode has no player to test, so it stays grey.
         bool tracking = Application.isPlaying && enemy.Player != null;
-        bool inView = tracking && enemy.InView(enemy.Player.transform.position);
-        Gizmos.color = inView ? (enemy.CanSeePlayer() ? Color.green : Color.red) : Color.grey;
+        bool inView = tracking && enemy.Vision.InView(enemy.Player.transform.position);
+        Gizmos.color = inView ? (enemy.Vision.CanSeePlayer() ? Color.green : Color.red) : Color.grey;
         Vector3 eye = enemy.EyePosition;
         DrawFlatCircle(eye, enemy.CloseRadius);
         // Pitched straight up or down he has no facing and no cone (see InView), so draw none
@@ -51,7 +51,7 @@ internal static class EnemyGizmos
         // Sight line in play: green when the player is in view, red when something static is in the way.
         if (Application.isPlaying && enemy.Player != null)
         {
-            Gizmos.color = enemy.CanSeePlayer() ? Color.green : Color.red;
+            Gizmos.color = enemy.Vision.CanSeePlayer() ? Color.green : Color.red;
             Gizmos.DrawLine(enemy.EyePosition, enemy.Player.transform.position);
         }
     }

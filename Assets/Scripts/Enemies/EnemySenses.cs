@@ -45,7 +45,7 @@ public class EnemySenses
         if (!_enemy.Intel.TryGetRow(stimulus.Position, stimulus.Kind, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} hears {stimulus.Kind} from {stimulus.Position}: {row.Response} at priority {row.Priority}.", _enemy);
-        _enemy.Investigate(new Incident(stimulus.Position, row.Response, row.Priority));
+        _enemy.Reactions.Investigate(new Incident(stimulus.Position, row.Response, row.Priority));
     }
 
     /// <summary>
@@ -95,7 +95,7 @@ public class EnemySenses
             {
                 _noticedHeld.Remove(other);
                 if (other.BodyState.WasThrownWithin(throwWindow, out Vector3 from)
-                    && _enemy.InView(from) && _enemy.HasClearSight(from, other.transform))
+                    && _enemy.Vision.InView(from) && _enemy.Vision.HasClearSight(from, other.transform))
                 {
                     _enemy.Reactions.SeeChainMove(other, "thrown off the chain");
                     return;
@@ -104,7 +104,7 @@ public class EnemySenses
             }
 
             Vector3 at = other.transform.position;
-            if (!_enemy.InView(at) || !_enemy.HasClearSight(other.Body.worldCenterOfMass, other.transform)) continue;
+            if (!_enemy.Vision.InView(at) || !_enemy.Vision.HasClearSight(other.Body.worldCenterOfMass, other.transform)) continue;
 
             if (other.BodyState.HeldMovedBy > _enemy.DraggedDistance)
             {
@@ -158,7 +158,7 @@ public class EnemySenses
             if (_enemy.Memory.KnowsBody(enemy)) continue;
 
             Vector3 at = enemy.transform.position;
-            if (!_enemy.InView(at, _enemy.BodyNoticeRange) || !_enemy.HasClearSight(at, enemy.transform)) continue;
+            if (!_enemy.Vision.InView(at, _enemy.BodyNoticeRange) || !_enemy.Vision.HasClearSight(at, enemy.transform)) continue;
 
             // Known to the squad but not to him: he stops and looks at it where he stands, and is wary
             // from then on, but doesn't go to it: someone has already been. Unknown to both: it goes
@@ -187,7 +187,7 @@ public class EnemySenses
             if (gun == null || !gun.IsResting || _enemy.Memory.KnowsGun(gun)) continue;
 
             Vector3 at = gun.transform.position;
-            if (!_enemy.InView(at, _enemy.ViewRange) || !_enemy.HasClearSight(at, gun.transform)) continue;
+            if (!_enemy.Vision.InView(at, _enemy.ViewRange) || !_enemy.Vision.HasClearSight(at, gun.transform)) continue;
 
             bool squadKnows = _enemy.Intel.Published.KnowsGun(gun);
             _enemy.Intel.ReportGun(gun);
@@ -211,9 +211,9 @@ public class EnemySenses
         if (row.Response == StimulusResponse.Ignore) return;
 
         // On a job at its place, the job goes wary for everyone, not just the one who looked.
-        _enemy.BecomeWary(at, $"{_enemy.name} glances at {what}");
+        _enemy.Reactions.BecomeWaryAt(at, $"{_enemy.name} glances at {what}");
         DebugLog.Info($"{_enemy.name} sees {what}: he looks at it from where he stands and is wary.", _enemy);
-        _enemy.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, makesSearch: true, saysNothingOfRuby: true), walkThere: false);
+        _enemy.Reactions.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, makesSearch: true, saysNothingOfRuby: true), walkThere: false);
     }
 
     // True when he took it.
@@ -225,7 +225,7 @@ public class EnemySenses
         // A body or a gun is found, not heard: there is nothing to check, so it is a Search, and it says
         // nothing about where Ruby is.
         bool found = kind is StimulusKind.Body or StimulusKind.LooseGun;
-        return _enemy.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: found, saysNothingOfRuby: found));
+        return _enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: found, saysNothingOfRuby: found));
     }
 
     // A character is one body for this purpose, so a bone of a tumbling enemy isn't a body of its
@@ -249,8 +249,8 @@ public class EnemySenses
         // A body too slow to catch the eye still counts when it is an enemy down in front of him: one
         // knocked down or killed may hardly move. Held and slow is ScanHeld's, which walks him over.
         float speed = body.linearVelocity.magnitude;
-        if (speed < Stimuli.Rules.NoticeSpeed && (enemy == null || enemy.IsHeld || !_enemy.InView(body.position))) return;
-        if (!_enemy.HasClearSight(body.worldCenterOfMass, body.transform)) return;
+        if (speed < Stimuli.Rules.NoticeSpeed && (enemy == null || enemy.IsHeld || !_enemy.Vision.InView(body.position))) return;
+        if (!_enemy.Vision.HasClearSight(body.worldCenterOfMass, body.transform)) return;
         if (_reactedAt.TryGetValue(body, out float reactedAt) && now - reactedAt < lifetime) return;
 
         var kind = speed >= Stimuli.Rules.AlarmSpeed ? StimulusKind.FastObject : StimulusKind.MovingObject;
@@ -283,7 +283,7 @@ public class EnemySenses
             // needs more than one enemy's short look, so it makes a Search there. A flying gun stays a
             // Check: one knocked out of a hand or flung is far less alarming than a thrown body. With no
             // origin the point is only where it is, which says nothing about her.
-            if (_enemy.Investigate(new Incident(origin, response, priority, makesSearch: isEnemy, saysNothingOfRuby: !hasOrigin))) _reactedAt[body] = now;
+            if (_enemy.Reactions.Investigate(new Incident(origin, response, priority, makesSearch: isEnemy, saysNothingOfRuby: !hasOrigin))) _reactedAt[body] = now;
             return;
         }
 
@@ -291,7 +291,7 @@ public class EnemySenses
 
         DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: {row.Response} at priority {row.Priority}.", _enemy);
         // Recorded only when he took it: one he ignored (mid-fight, say) may still send him later.
-        if (_enemy.Investigate(new Incident(origin, row.Response, row.Priority))) _reactedAt[body] = now;
+        if (_enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority))) _reactedAt[body] = now;
     }
 
     // The stronger of two rows: response by severity, priority by number, each taken on its own. An

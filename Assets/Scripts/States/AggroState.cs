@@ -33,15 +33,15 @@ public class AggroState : EnemyStateBase
     {
         get
         {
-            if (Enemy.InContactWithPlayer()) return false;
+            if (Enemy.Vision.InContactWithPlayer()) return false;
             if (_lostTimer >= Enemy.AggroTime) return true;
-            if (Enemy.CanSeePlayer()) return false;
+            if (Enemy.Vision.CanSeePlayer()) return false;
             return NothingToGoOn || (_holdingAtKnown && _dwellTimer >= Enemy.AggroTime);
         }
     }
 
     // Out of sight and he knows nothing of her: no rule but "search where he stands".
-    private bool NothingToGoOn => !Enemy.CanSeePlayer() && !Enemy.Awareness.TryGetNewestRuby(out _);
+    private bool NothingToGoOn => !Enemy.Vision.CanSeePlayer() && !Enemy.Awareness.TryGetNewestRuby(out _);
 
     /// <summary>Armed, with Ruby in sight, in range and on her feet: it's shooting, so its body aims.</summary>
     public bool Firing { get; private set; }
@@ -55,7 +55,7 @@ public class AggroState : EnemyStateBase
         _loggedNothing = false;
         _closestToKnown = float.PositiveInfinity;
         _stallTimer = 0f;
-        _hadSight = Enemy.CanSeePlayer();
+        _hadSight = Enemy.Vision.CanSeePlayer();
     }
 
     // The search starts from what he knew, or from where he stands when he knew nothing. Exit also runs
@@ -92,9 +92,9 @@ public class AggroState : EnemyStateBase
 
     public override void Tick()
     {
-        bool hasSight = Enemy.CanSeePlayer();
+        bool hasSight = Enemy.Vision.CanSeePlayer();
         if (_hadSight && !hasSight)
-            DebugLog.Info($"{Enemy.name} lost sight of {Enemy.PlayerTransform.name} — blocked by {(Enemy.SightBlocker != null ? Enemy.SightBlocker.name : "something")}.", Enemy);
+            DebugLog.Info($"{Enemy.name} lost sight of {Enemy.PlayerTransform.name} — blocked by {(Enemy.Vision.SightBlocker != null ? Enemy.Vision.SightBlocker.name : "something")}.", Enemy);
         _hadSight = hasSight;
 
         bool nothing = NothingToGoOn;
@@ -115,7 +115,7 @@ public class AggroState : EnemyStateBase
 
         // Suspended while he holds at the known spot: this timer only ends a hunt on its way there, and
         // counting the walk toward the hold cut it short. A newer point resumes it where it was.
-        if (Enemy.InContactWithPlayer()) _lostTimer = 0f;
+        if (Enemy.Vision.InContactWithPlayer()) _lostTimer = 0f;
         else if (!_holdingAtKnown) _lostTimer += Time.deltaTime;
     }
 
@@ -129,8 +129,8 @@ public class AggroState : EnemyStateBase
 
         bool armed = Enemy.IsArmed;
         float minDistance = armed ? Enemy.Arms.HeldGun.MinDistance : 0f;
-        bool inSight = Enemy.CanSeePlayer();
-        switch (Engage(armed, inSight, Enemy.DistanceToPlayer(), minDistance))
+        bool inSight = Enemy.Vision.CanSeePlayer();
+        switch (Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance))
         {
             case Move.Chase:
                 // With her in sight he knows where she is; without, only what he has learned.
@@ -225,7 +225,7 @@ public class AggroState : EnemyStateBase
         // Only within range: beyond it he runs with the gun down, and a gun turned toward her
         // would twist off his hand.
         Vector3 player = Enemy.PlayerTransform.position;
-        Firing = Enemy.CanSeePlayer() && Enemy.PlayerIsUp && Enemy.Arms.InRange(player);
+        Firing = Enemy.Vision.CanSeePlayer() && Enemy.PlayerIsUp && Enemy.Arms.InRange(player);
         if (!Firing)
         {
             Enemy.Arms.Lower();

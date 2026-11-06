@@ -77,7 +77,7 @@ The scripts are split into assembly definitions so the systems can be lifted int
 | `Ruby.Weapons` | `Weapons/` | Core | guns, bullets, gun hands |
 | `Ruby.Animation` | `Animation/` | none | `IAnimatedCharacter`, `CharacterAnimator`, `CharacterAnimationSet`, the stance and weapon enums |
 | `Ruby.Animation.Editor` | `Animation/Editor/` | Animation | `CharacterControllerBuilder` and the set's Build Controller button |
-| `Ruby.Game` | the root, `States/` and `Squad/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state, and in `Squad/` the squad's brain and the enemy's parts: `Intel` (the scene's one hub), the plain classes it owns (`KnowledgePool`, `JobBoard` with `GroupJob`, `FloorReach`), each enemy's own parts (`EnemyMemory`, `EnemySenses`, `EnemyVision`, `EnemyReactions`), the value types they pass (`Incident`, `SearchRequest`) and the behaviour map with its `Severity` |
+| `Ruby.Game` | the root, `States/` and `Enemies/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state, and in `Enemies/` the squad's brain and the enemy's parts: `Intel` (the scene's one hub), the plain classes it owns (`KnowledgePool`, `JobBoard` with `GroupJob`, `FloorReach`), each enemy's own parts (`EnemyMemory`, `EnemySenses`, `EnemyVision`, `EnemyReactions`), the value types they pass (`Incident`, `SearchRequest`) and the behaviour map with its `Severity` |
 | `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor` |
 
 The systems reach the game only through interfaces declared in their own assembly, which the
@@ -329,7 +329,7 @@ how characters author movement:
   on the throw, never its angle.
 
 Anything that steers by `transform.forward` must flatten its look target first — see
-`EnemyController.FaceTarget()`. Aiming at a full 3D position tilts forward and drives the body
+`EnemyMovement.FaceTarget()`. Aiming at a full 3D position tilts forward and drives the body
 vertically.
 
 ### Weight
@@ -375,13 +375,16 @@ through the player never slows the walk.
   tuning field, the state machine, and the plain classes that do the deciding, each built in `Awake`:
   `EnemyMemory` (what he knows), and, handed the controller to read, `EnemySenses` (hearing and
   scans), `EnemyVision` (the view and the line to a point) and `EnemyReactions` (what he does about
-  what he senses). `Intel` is the scene's one hub and owns `KnowledgePool` (the shared picture),
+  what he senses), and the parts that carry the rest of the controller's old work: `EnemyMovement` (his
+  walking, turning and facing, and the walks the states ask for), `EnemyAwareness` (what he takes in each
+  frame: sight of Ruby, what he learns and says, and the newest thing he knows), `EnemyBodyState` (his
+  record of the chain, and the gun and corpse handling that goes with it) and `EnemyGizmos` (what he
+  draws in the Scene view, a static class the controller's two gizmo messages forward to). `Intel` is the scene's one hub and owns `KnowledgePool` (the shared picture),
   `JobBoard` (group jobs, with the `FloorReach` calling uses) and the `FloorReach`es that speech and sound use. The plain
   classes read the controller's tuning on every call, so retuning in the Inspector during Play still
   works, and **no serialized field moves into them**: the scene holds route overrides and per-enemy
   tuning on `EnemyController` and `Intel`, and `FormerlySerializedAs` can't carry a value to another
-  component. `EnemyController` keeps one-line forwards (`Investigate`, `CanSeePlayer`, `InView`...) so
-  states, senses and the editor call it as before. A new decision goes in the class that owns its
+  component. A new decision goes in the class that owns its
   subject, not back in the controller.
 - **Order.** `Intel` runs at execution order -20, before the enemies (0): it advances every job's
   clock and publishes the pool first, so every member reads a job's new step on the same frame.
@@ -404,12 +407,12 @@ through the player never slows the walk.
   any AI state.
 - **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
   sight, it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
-  backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyController.StepAway`),
+  backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyMovement.StepAway`),
   standing its ground when cornered. It fires alongside all of that, whenever she's in sight, in
   range and on her feet (`AggroState.Firing`); firing is not a state. It only aims within range:
   beyond it he runs with the gun down. Contact holds while the player is in sight within
   Give Up Radius. **Past the radius, sight still teaches him where she is and he calls it out**
-  (`EnemyController.SeesPlayer` counts an Aggro enemy's clear line at any distance); the radius
+  (`EnemyAwareness.SeesPlayer` counts an Aggro enemy's clear line at any distance); the radius
   only decides when the hunt ends. He used to chase her real position whenever she was in sight but
   learn it only within the radius, so past it he followed her without updating what he knew, and
   when she dropped out of sight he walked back to the old spot, again and again as she stepped in
@@ -479,11 +482,11 @@ through the player never slows the walk.
   instead of standing. The table has `Idle` to `Patrol` when `HasActiveRoute`, and `Patrol` to
   `Idle` when not, so becoming aggressive can hand an idle officer a route to walk. Nothing may ask "does he
   patrol?" without saying for which mode: `HasPatrolRoute` is gone.
-- **Knowledge** (`Squad/`). An officer's memory (`EnemyMemory`) holds the newest fact about Ruby
+- **Knowledge** (`Enemies/`). An officer's memory (`EnemyMemory`) holds the newest fact about Ruby
   (`RubyFact`: position, time and a `Knowledge` source, Seen, Heard, Told or Pool), whether he has
   **ever seen her** (`HasSeenRuby`, never cleared), and the bodies and loose guns he has already
   taken in. Between two things he knows, **the newer by time wins**, and on a tie his own beats the
-  pool's, because it needed no publish to reach him. `EnemyController.TryGetNewestRuby` combines his
+  pool's, because it needed no publish to reach him. `EnemyAwareness.TryGetNewestRuby` combines his
   memory with the pool's published snapshot and is what Aggro chases once she's out of sight.
   Seeing, remembering and speaking aren't states: `UpdateKnowledge` runs beside the machine.
 - **The shared pool** (`KnowledgePool`, a plain class that `Intel`, one per scene, owns and ticks;
@@ -561,8 +564,8 @@ through the player never slows the walk.
   `LastKnownPlayerPosition` are gone: a caller that forgot to stage the target searched at some
   remembered spot without a word.) One already searching takes `Retarget` instead, which has no
   `Enter`.
-  `Investigate(Incident, walkThere = true)` lives in `EnemyReactions` (`EnemyController.Investigate`
-  forwards, so the senses call it where they always have). It first upgrades a SearchForProblem to
+  `Investigate(Incident, walkThere = true)` lives in `EnemyReactions` (the senses call it there
+  directly). It first upgrades a SearchForProblem to
   **SearchForAttack** when he has seen Ruby or the newest news of her (his memory or the pool) is at
   most Attack Near Time (15 s) old and within Attack Near Radius (20 m) of the point **on the same
   floor** (floors are independent), then makes him wary if it's an attack. It ignores Grabbed,
@@ -592,7 +595,7 @@ through the player never slows the walk.
     false he faces the point and looks from where he stands: that is the glance.
   - **A search's disturbances end with it:** `SearchingState.Exit` clears his distraction count and
     takes him off his job.
-- **Group jobs** (`JobBoard` and `GroupJob`, in `Squad/`). A few enemies dealing with one thing
+- **Group jobs** (`JobBoard` and `GroupJob`, in `Enemies/`). A few enemies dealing with one thing
   together. `Intel` owns the board, ticks it every frame (`Advance`) and forwards what the enemies
   call (`Handle`, `Leave`, `NoteArrived`, `CheckerOf`...). A job **never moves anyone**: each member's
   state machine reads it (`EnemyController.Job`) and plays his part in `SearchingState`, so the
@@ -741,7 +744,7 @@ A\* for individual ones**:
   (a zero direction returns the heading, a rule so a body standing on its point keeps its facing), and
   `SpeedToFit` caps speed so a full-rate turn still reaches a point instead of orbiting it (never
   below a tenth of the speed, which keeps the floor's turning circle inside `CornerReach`, and a
-  point right behind from freezing him). `EnemyController.MoveToward` turns its walking heading at
+  point right behind from freezing him). `EnemyMovement.MoveToward` turns its walking heading at
   Turn Speed (720 degrees a second, separate from `CharacterAnimator`'s 360 degree leg turn), so
   bends are arcs. **It slows to fit only for points he must reach** (a goal on a clear line, a route
   corner, a field's last step: `IPathAgent.MoveToward`'s `mustReach`, which `GridNavigator.Steer`
@@ -786,7 +789,7 @@ re-enter Ragdoll and would drop the knockdown silently). `RagdollState.Standing`
 covers the get-up and the moment after it before the table moves on: done in a physics step, it's
 sent hunting in the next `Update`, and a hit in between still meets a standing enemy.
 
-**Dead enemies are corpses, never destroyed.** `DeadState` darkens the enemy (`EnemyController.Darken`,
+**Dead enemies are corpses, never destroyed.** `DeadState` darkens the enemy (`EnemyBodyState.Darken`,
 Corpse Brightness through MaterialPropertyBlocks, so shared materials are untouched) and keeps its
 body, which the chain can still grab, swing and throw (`CanBeGrabbed` is always true). The state
 tracks the body: **held** while the rope has it (a death mid-swing stays on the chain, read from
