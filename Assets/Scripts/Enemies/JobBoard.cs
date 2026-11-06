@@ -624,6 +624,45 @@ public class JobBoard
         return true;
     }
 
+    /// <summary>
+    /// A member has noticed something new that the job can't take: it sends one to check it, and the rest
+    /// carry on. Nothing happens unless all of this holds, because each is a reason not to:
+    /// - It isn't a body or gun lying there, which is only for the books, or a gunshot, which moves everyone.
+    /// - The team has two or more, and nobody is out already.
+    /// - It's away from the area they are already searching.
+    /// - A Search has started counting, or a Check is going or looking. Before a Search counts, a member sent
+    ///   off would hold up a countdown that waits for everyone. After a Check's look there is nothing to come back to.
+    /// The nearest goes, never a Check's checker, who has the job's own spot to reach.
+    /// </summary>
+    public void SendScout(EnemyController who, Incident thing)
+    {
+        GroupJob job = who.Job;
+        if (job == null || thing.SaysNothingOfRuby || thing.Mobilises || job.Count < 2 || job.Scout != null) return;
+        if (!(job.Kind == JobKind.Search ? job.Step == JobStep.Search : job.Step is JobStep.Go or JobStep.Look)) return;
+        if (PathGrid.FlatDistance(job.Point, thing.Point) <= _intel.SearchAreaRadius) return;
+
+        EnemyController nearest = null;
+        float nearestDistance = float.MaxValue;
+        foreach (EnemyController member in job.Members)
+        {
+            if (member == null || member == job.Checker) continue;
+            float distance = PathGrid.FlatDistance(member.transform.position, thing.Point);
+            if (distance >= nearestDistance) continue;
+            nearest = member;
+            nearestDistance = distance;
+        }
+        if (nearest == null) return;
+
+        job.SendScout(nearest, thing.Point);
+        DebugLog.Info($"{job} sends {nearest.name} to check {thing} ({nearestDistance:0.#} m away); the rest carry on.", nearest);
+    }
+
+    /// <summary>The scout has finished his check. He returns to the job's work, or leaves with it if it has ended.</summary>
+    public void ScoutBack(GroupJob job, EnemyController who)
+    {
+        if (job.Scout == who) job.ScoutBack();
+    }
+
     // Only a Search that has started counting has a countdown to add to: one still in Go hasn't begun.
     private void ExtendForGunshot(GroupJob job, EnemyController who)
     {

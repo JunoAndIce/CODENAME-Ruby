@@ -134,11 +134,25 @@ public class GroupJob
         if (!_members.Remove(who)) return;
         if (who.Job == this) who.Job = null;
         if (Checker == who) Checker = null;
+        if (Scout == who) Scout = null;
         if (Callee == who) Callee = null;
         _arrived.Remove(who);
     }
 
     internal void RestartClock() => StepElapsed = 0f;
+
+    /// <summary>The member gone to check a new sound away from the job, or null. One at a time: other sounds meanwhile only make the team turn.</summary>
+    public EnemyController Scout { get; private set; }
+    /// <summary>Where the scout has gone.</summary>
+    public Vector3 ScoutPoint { get; private set; }
+
+    internal void SendScout(EnemyController who, Vector3 point)
+    {
+        Scout = who;
+        ScoutPoint = point;
+    }
+
+    internal void ScoutBack() => Scout = null;
 
     /// <summary>The gunshot the team is signalling about, in Signal: where they face, and where they go when it ends.</summary>
     public Incident SignalledShot { get; private set; }
@@ -236,6 +250,8 @@ public class GroupJob
     internal void Restart(float gatherLength)
     {
         Checker = null;
+        // The job has moved on from what he went to check, and everyone is sent afresh (FollowJob).
+        Scout = null;
         _arrived.Clear();
         _dropped.Clear();
         // Still calling people in: carry on, the walk will start from the new place afterwards.

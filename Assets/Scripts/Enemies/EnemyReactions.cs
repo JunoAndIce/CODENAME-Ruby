@@ -148,6 +148,8 @@ public class EnemyReactions
         }
 
         _enemy.Searching.Distract(incident.Point, isNew);
+        // Turning to look isn't all of it: one of the team goes to see, if the job can spare him.
+        if (isNew && _enemy.Intel != null) _enemy.Intel.SendScout(_enemy, incident);
         string tally = counts ? $"{count} of {_enemy.DistractionThreshold}" : arrived ? "not counted, it isn't Ruby doing anything" : "not counted, he hasn't reached the search";
         DebugLog.Info($"{_enemy.name} {(isNew ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}): {tally}.", _enemy);
         return true;

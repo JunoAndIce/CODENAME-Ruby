@@ -59,6 +59,11 @@ public class SearchingState : EnemyStateBase
     // He was on a job when last looked at. Seeing it gone while he is still searching means he was
     // taken off it without leaving the state, and his job-less steps are from some earlier search.
     private bool _onJob;
+    // Sent off to check a new sound (JobBoard.SendScout): he walks there, looks, and comes back to the job.
+    private bool _scouting;
+    private bool _scoutLooking;
+    private float _scoutTimer;
+    private float _scoutBaseYaw;
 
     public SearchingState(EnemyController enemy) : base(enemy) { }
 
@@ -179,6 +184,7 @@ public class SearchingState : EnemyStateBase
         _roamGaveUp = false;
         _roamFinished = false;
         _walkTimer = 0f;
+        _scouting = false;
         _onJob = Job != null;
         // A member's steps are the job's, not his own.
         if (Job != null) return;
@@ -372,6 +378,14 @@ public class SearchingState : EnemyStateBase
             return;
         }
 
+        // Before the steps: he keeps to his check whatever they do, and comes back when it's done. If the job
+        // starts over it clears this and sends him with the rest; if it ends, he leaves with it.
+        if (job.Scout == Enemy)
+        {
+            CheckForJob(job);
+            return;
+        }
+
         switch (job.Step)
         {
             case JobStep.Call:
@@ -440,6 +454,42 @@ public class SearchingState : EnemyStateBase
         // The job's clock, not his own, so a late arrival joins the sweep where it is and every
         // member ends it facing the spot together.
         Enemy.Movement.LookAround(_lookBaseYaw, job.StepElapsed, Enemy.Intel.StepDuration(job));
+    }
+
+    // Walks to what he was sent to check, and looks at it for Look Time. A stall looks from where he has got
+    // to, as a Check does. A walk that never arrives ends at Search Travel Limit, and no path says so.
+    private void CheckForJob(GroupJob job)
+    {
+        if (!_scouting)
+        {
+            _scouting = true;
+            _scoutLooking = false;
+            _scoutTimer = 0f;
+        }
+
+        _scoutTimer += Time.fixedDeltaTime;
+        if (!_scoutLooking)
+        {
+            NavResult result = Enemy.Movement.WalkTo(job.ScoutPoint, Enemy.SearchReach, Enemy.SearchSpeed);
+            if (result == NavResult.Moving && _scoutTimer < Enemy.SearchTravelLimit) return;
+
+            if (result == NavResult.Unreachable)
+                Debug.LogWarning($"{Enemy.name} can't reach what {job} sent him to check at {job.ScoutPoint} ({Enemy.Navigator.FailureReason}); he looks from where he stands.", Enemy);
+            Enemy.Movement.FaceToward(job.ScoutPoint);
+            _scoutBaseYaw = Enemy.transform.eulerAngles.y;
+            _scoutLooking = true;
+            _scoutTimer = 0f;
+            return;
+        }
+
+        Enemy.Movement.LookAround(_scoutBaseYaw, _scoutTimer, Enemy.LookTime);
+        if (_scoutTimer < Enemy.LookTime) return;
+
+        _scouting = false;
+        // A fresh roam brings him back into the search's area, or ends him at once if the countdown is over.
+        _roamPhase = RoamPhase.Pick;
+        DebugLog.Info($"{Enemy.name} has checked {job.ScoutPoint}: he comes back to {job}.", Enemy);
+        Enemy.Intel.ScoutBack(job, Enemy);
     }
 
     // Walks random open spots within Search Area Radius of the job's place and looks about at each for a

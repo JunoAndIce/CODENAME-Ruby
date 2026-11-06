@@ -320,6 +320,12 @@ public class Intel : MonoBehaviour
     /// <summary>A searcher hears a gunshot (see JobBoard.Mobilise).</summary>
     public bool Mobilise(EnemyController who, Incident shot) => _board.Mobilise(who, shot);
 
+    /// <summary>A member noticed something new away from the job (see JobBoard.SendScout).</summary>
+    public void SendScout(EnemyController who, Incident thing) => _board.SendScout(who, thing);
+
+    /// <summary>The scout has finished his check (see JobBoard.ScoutBack).</summary>
+    public void ScoutBack(GroupJob job, EnemyController who) => _board.ScoutBack(job, who);
+
     /// <summary>A member's stimulus at his own job's place (see JobBoard.HandleAtOwnJob).</summary>
     public bool HandleAtOwnJob(EnemyController who, SearchRequest request) => _board.HandleAtOwnJob(who, request);
 
@@ -414,6 +420,13 @@ public class Intel : MonoBehaviour
             }
             // The checker is ringed: he's the one who goes, and the rest trail him.
             if (job.Checker != null) DrawCircle(job.Checker.transform.position, 0.9f);
+            // The scout too, with where he has gone.
+            if (job.Scout != null)
+            {
+                DrawCircle(job.Scout.transform.position, 0.9f);
+                DrawCircle(job.ScoutPoint, 0.6f);
+                Gizmos.DrawLine(job.Scout.transform.position + Vector3.up * 0.2f, job.ScoutPoint);
+            }
 #if UNITY_EDITOR
             UnityEditor.Handles.Label(job.Point + Vector3.up * 1.4f, $"#{job.Id} {job.Kind} · {job.Step} · {job.Count}/{job.Cap}\n{job.Reason}, priority {job.Priority}{(job.Checker != null ? $"\nchecker {job.Checker.name}" : "")}");
 #endif
