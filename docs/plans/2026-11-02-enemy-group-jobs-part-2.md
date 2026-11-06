@@ -389,4 +389,4 @@
 
   **Narrowed by the user's rule:** job behaviour, senses and searching stay out of the manual and its PDF until all of enemy states is finished. Only the Path Grid warning row (decision 17) was added, and the PDF rebuilt. The tuning rows and the senses and Searching text wait.
 - [x] **Step 3: Spec and plan.** Spec Progress notes piece 5 part A built, part B pending. Tick this plan's steps and mark `2026-10-30-enemy-group-jobs.md` finished by this plan. Commit these files only.
-- [ ] **Step 4: End-of-piece review, in the background,** over the range both plans added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before part B, in one fix wave.
+- [x] **Step 4: End-of-piece review, in the background,** over the range both plans added, on the most capable model. Point it at the interim rules and Review Focus. Fix what it says must change before part B, in one fix wave.
