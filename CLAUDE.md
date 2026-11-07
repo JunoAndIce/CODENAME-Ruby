@@ -409,8 +409,9 @@ through the player never slows the walk. **Enemies don't shove props that block 
   chain drag or throw an enemy (see **Senses**). A grabbed enemy standing still, a knockdown, a
   death, a job mate lost: he searches, and goes to Aggro only if Ruby then comes into view.
 - **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
-  sight, it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
-  backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyMovement.StepAway`),
+  sight and a fight to belong to, he walks to a firing spot of his own (see **Fights**); with no spot
+  (or no fight) it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
+  backs away facing her inside it (inside Min Distance he backs away with a spot too) (`GridNavigator.TryFindSpotAway`, `EnemyMovement.StepAway`),
   standing its ground when cornered. It fires alongside all of that, whenever she's in sight, in
   range and on her feet (`AggroState.Firing`); firing is not a state. It only aims within range:
   beyond it he runs with the gun down. Contact holds while the player is in sight within
@@ -482,8 +483,24 @@ through the player never slows the walk. **Enemies don't shove props that block 
   when he leaves Aggro (`AggroState.Exit`), loses his gun or knows nothing of her, and the board's prune is
   the guarantee that a claim never outlives its member. Selected, he draws his spot and a line to it.
   With `Intel` selected in Play, a line joins each fight's main members, with a ring per role (main red,
-  standby light grey). Paths don't cost more through a squadmate's lane: the chase field is one shared
-  flood per floor.
+  standby light grey). Lanes are kept by spot scoring and by holding fire (see **Fire lanes**); paths don't cost more
+  through a squadmate's lane, which is deferred: the chase field is one shared flood per floor and can't
+  hold a detour per enemy.
+  **Fire lanes** (`FireLane`, a static check in `Enemies/`). Before he fires, a capsule from his gun's muzzle
+  to Ruby (flat, his body radius plus Lane Margin 0.15 m) is tested against every other member of his
+  fight, main and standby, skipping the destroyed and anyone overridden. Each is judged where he stands
+  and where his velocity takes him in Lead Time (0.3 s): a distance from a segment, no physics query, no
+  allocation. Bullets don't hit enemies on their feet, so this is about looking right: nobody fires through
+  a squadmate. One in his lane makes him hold fire and nothing else: he keeps aiming at her, so his stance
+  stays Aim and the gun isn't lowered and raised each beat (`AggroState.HoldFire`), and the line
+  "X holds: Y is in his lane" is logged once per hold (in his lane again within 1 s of leaving it is the
+  same hold). If the squadmate is walking out of it (clear of the lane after Lane Beat, 0.5 s, and moving
+  faster than 0.5 m/s) he waits that beat; a standing one, or one still there after it, makes him re-pick
+  his spot at once, with `FiringSpots.TryPick`'s lane weight (4, against a best ordinary score near 3.3)
+  on spots whose shot would cross that squadmate, and none of them taken. Such a pick is asked for no more
+  often than the normal cadence after it. Finding nothing, he keeps his spot and goes on holding fire,
+  saying so once per hold, and tries again on the next beat of the cadence: never fires through.
+  Unarmed, or in no fight, there is no lane check.
 - **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
   Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
   up within 0.3 m of its body's surface, measured to the nearest point of the gun's colliders

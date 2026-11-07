@@ -804,7 +804,11 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
     searching like people (slow walking, scanning as they go, going to places in the search area
     he can't see), is built ahead of 6, because it doesn't need rooms. Its
     room-by-room clearing and hiding spots stay in pieces 7 and 8.
-- [ ] 6. Fighting together: squads and fire lanes
+- [x] 6. Fighting together: squads and fire lanes
+  - Built to `docs/plans/2026-11-06-enemy-squads.md`. Paths don't cost more through a squadmate's lane:
+    deferred, because the chase field is one shared flood per floor and can't hold a detour per enemy,
+    and it would need re-flooding as lanes move (decision 1 of the plan). Spot scoring and holding
+    fire keep the lanes instead.
 - [ ] 7. Rooms and behaviour maps: activities, firing ranges, armories and alarms
 - [ ] 8. Clearing hiding spots
 - [ ] 9. Breakables: light fixtures and props (much later)
