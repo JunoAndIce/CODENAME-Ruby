@@ -190,6 +190,17 @@ public class AggroState : EnemyStateBase
         float band = holdingBack ? StandbyBand(minDistance, inSight) : minDistance;
         Move move = Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance, band);
         // Backing away inside the gun's Min Distance stays as it is; everywhere else a spot of his own decides.
+        // Backed away while still walking to a spot: that route cuts inside Min Distance, and walking in again
+        // next step would loop. The spot is dropped and left alone for a while, and he picks another.
+        if (move == Move.BackAway && _hasSpot && !_atSpot)
+        {
+            DebugLog.Info($"{Enemy.name} was backed away from Ruby on his way to his firing spot: he drops it and picks another.", Enemy);
+            _avoid = _spot;
+            _avoidUntil = Time.time + AvoidTime;
+            Enemy.Fight?.Release(Enemy);
+            _hasSpot = false;
+            _pickNow = true;
+        }
         bool atSpot = move != Move.BackAway && armed && knowsHer && Enemy.Fight != null && MoveToSpot(inSight);
         switch (atSpot ? Move.None : move)
         {
@@ -320,6 +331,7 @@ public class AggroState : EnemyStateBase
             DebugLog.Info($"{Enemy.name}'s firing spot was taken by a main squad member: he picks another.", Enemy);
             _hasSpot = false;
             _atSpot = false;
+            _pickNow = true;   // remembered across the gap: a pick a moment ago must not leave him with no spot until the next interval
         }
 
         if (Time.time >= _lastPick + RepickGap)
@@ -378,7 +390,7 @@ public class AggroState : EnemyStateBase
         // A stated rule, not a quiet fallback: with no spot he keeps his band. Once per fight, or a walled-off
         // Ruby would log it every second for everyone.
         if (fight.FirstNoSpot())
-            DebugLog.Info($"{Enemy.name} found no firing spot (none walkable, reachable, unclaimed and in a clear shot) in {fight}: he keeps his band.", Enemy);
+            DebugLog.Info($"{Enemy.name} found no firing spot (none walkable, reachable, unclaimed and in a clear shot, or he is cut off from her) in {fight}: he keeps his band.", Enemy);
     }
 
     // The band has moved on past his spot by more than half the spacing: standby's starts behind the main

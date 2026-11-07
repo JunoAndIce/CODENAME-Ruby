@@ -91,6 +91,15 @@ public static class FiringSpots
         FlowField reach = grid.FieldToward(who.PlayerTransform);
         reach.Refresh();
 
+        // He must be on the field too: ground joined to her says nothing of whether he can walk to it. A body
+        // beside a wall stands in a clearance-blocked cell; TryGetDistance snaps to walkable ground as the agent does.
+        // Cut off, he takes the no-spot rule on the once-a-second cadence, not four failed walks a second.
+        if (!reach.TryGetDistance(who.transform.position, out _))
+        {
+            fight.Release(who);
+            return false;
+        }
+
         float spacing = who.SquadSpacing;
         float y = who.transform.position.y;
         Vector3 here = who.transform.position;
@@ -100,17 +109,21 @@ public static class FiringSpots
         bool hasCurrent = fight.TryGetClaim(who, out Vector3 current);
         if (hasCurrent)
         {
-            // His own spot is a candidate with a bonus, unless it has gone bad: out of the band by more than
-            // half a spacing (the band moves with main), or no longer reachable.
+            // His own spot is a candidate with a bonus, unless it has gone bad: past the band's far side by more
+            // than half a spacing (the band moves with main), inside the gun's Min Distance (no slack there: he
+            // would walk in, be backed away, and walk in again), or no longer reachable. Within the slack its band
+            // term is full, so a collapsed band cannot make a spot a centimetre off the ring lose to a fresh one.
             float ring = PathGrid.FlatDistance(current, ruby);
-            if (ring >= bandNear - spacing * 0.5f && ring <= bandFar + spacing * 0.5f
-                && TryScore(who, fight, grid, reach, current, ruby, here, bandNear, bandFar, spacing, avoid, out float score))
+            if (ring >= bandNear && ring <= bandFar + spacing * 0.5f
+                && TryScore(who, fight, grid, reach, current, ruby, here, bandNear, bandFar, spacing, avoid, out float score, keeping: true))
                 Candidates.Add(new Candidate { Spot = current, Score = score + KeepMargin });
         }
 
-        for (int r = 0; r < Rings; r++)
+        // A band narrower than half a spacing is one ring: three would be the same spots evaluated three times.
+        int rings = bandFar - bandNear < spacing * 0.5f ? 1 : Rings;
+        for (int r = 0; r < rings; r++)
         {
-            float radius = Mathf.Lerp(bandNear, bandFar, (r + 0.5f) / Rings);
+            float radius = Mathf.Lerp(bandNear, bandFar, (r + 0.5f) / rings);
             for (int a = 0; a < Angles; a++)
             {
                 float angle = a * (360f / Angles) * Mathf.Deg2Rad;
@@ -171,20 +184,27 @@ public static class FiringSpots
     // What the spot scores, or false when it is rejected outright: not walkable, off the chase field, within
     // the spacing of a claim that outranks his, or the spot he just failed to reach.
     private static bool TryScore(EnemyController who, Fight fight, PathGrid grid, FlowField reach, Vector3 spot, Vector3 ruby,
-        Vector3 here, float bandNear, float bandFar, float spacing, Vector3? avoid, out float score)
+        Vector3 here, float bandNear, float bandFar, float spacing, Vector3? avoid, out float score, bool keeping = false)
     {
         score = 0f;
         if (!grid.WorldToCell(spot, out Vector2Int cell) || !grid.IsWalkable(cell)) return false;
         if (!reach.TryGetDistance(spot, out _)) return false;
         if (avoid.HasValue && PathGrid.FlatDistance(spot, avoid.Value) < spacing * 0.5f) return false;
         if (fight.IsClaimedNear(spot, spacing, who)) return false;
+        // A walk that cuts the gun's Min Distance circle round her would be turned back by backing away: the
+        // straight line there must stay outside it. He is already inside it only while backing away, which is
+        // not a walk to a spot.
+        float gunMin = who.Arms.HeldGun.MinDistance;
+        if (PathGrid.FlatDistance(here, ruby) >= gunMin && DistanceToSegment(ruby, here, spot) < gunMin) return false;
 
         float range = who.Arms.HeldGun.Range;
         float near = 1f - Mathf.Clamp01(PathGrid.FlatDistance(here, spot) / range);
 
         float mid = (bandNear + bandFar) * 0.5f;
-        float half = Mathf.Max(0.01f, (bandFar - bandNear) * 0.5f);
-        float band = 1f - Mathf.Clamp01(Mathf.Abs(PathGrid.FlatDistance(spot, ruby) - mid) / half);
+        // Floored at half a spacing: a collapsed band (standby's, against Range) would score every spot off the
+        // ring by a centimetre as zero.
+        float half = Mathf.Max(spacing * 0.5f, (bandFar - bandNear) * 0.5f);
+        float band = keeping ? 1f : 1f - Mathf.Clamp01(Mathf.Abs(PathGrid.FlatDistance(spot, ruby) - mid) / half);
 
         float spotAngle = Mathf.Atan2(spot.z - ruby.z, spot.x - ruby.x) * Mathf.Rad2Deg;
         float gap = 180f;
