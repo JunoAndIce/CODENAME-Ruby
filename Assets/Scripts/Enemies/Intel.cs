@@ -323,7 +323,7 @@ public class Intel : MonoBehaviour
     /// <summary>A member noticed something new away from the job (see JobBoard.SendScout).</summary>
     public void SendScout(EnemyController who, Incident thing) => _board.SendScout(who, thing);
 
-    /// <summary>What a job's team hasn't looked at yet (see JobBoard.CoverageOf).</summary>
+    /// <summary>What a job's team hasn't walked yet (see JobBoard.CoverageOf).</summary>
     public SearchCoverage CoverageOf(GroupJob job) => _board.CoverageOf(job);
 
     /// <summary>The scout has finished his check (see JobBoard.ScoutBack).</summary>
@@ -423,9 +423,12 @@ public class Intel : MonoBehaviour
             }
             // The checker is ringed: he's the one who goes, and the rest trail him.
             if (job.Checker != null) DrawCircle(job.Checker.transform.position, 0.9f);
-            // What the team hasn't looked at yet.
+            // What the team hasn't walked yet, and larger, what nobody could reach and only needs seeing.
             if (job.Coverage != null)
-                foreach (Vector3 point in job.Coverage.Unseen) Gizmos.DrawWireCube(point + Vector3.up * 0.1f, Vector3.one * 0.15f);
+            {
+                foreach (Vector3 point in job.Coverage.Unvisited) Gizmos.DrawWireCube(point + Vector3.up * 0.1f, Vector3.one * 0.15f);
+                foreach (Vector3 point in job.Coverage.LookOnly) Gizmos.DrawWireCube(point + Vector3.up * 0.1f, Vector3.one * 0.4f);
+            }
             // The scout too, with where he has gone.
             if (job.Scout != null)
             {
