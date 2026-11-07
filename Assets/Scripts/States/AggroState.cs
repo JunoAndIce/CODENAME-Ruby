@@ -13,6 +13,11 @@ public class AggroState : EnemyStateBase
 {
     private const float HoldBand = 1f;       // metres above Min Distance where an armed enemy stands still: without it, it jitters between advancing and backing off
     private const float BackAwayStep = 2f;   // how far ahead a backing-away enemy looks for open floor
+    private const float SpotReach = 0.5f;    // how close to his firing spot counts as there
+    private const float SpotLeave = 1f;      // shoved this far off it, he walks back: a wider gap than SpotReach, or he'd twitch at its edge
+    private const float PickInterval = 1f;   // seconds between the picks of a spot he holds, staggered per enemy
+    private const float RepickGap = 0.25f;   // no pick sooner than this after the last, whatever asked: a changing band or a blocked shot can't make him pick every step
+    private const float AvoidTime = 3f;      // a spot he couldn't reach is left alone this long, or the pick would choose it again
 
     private float _lostTimer;
     private bool _hadSight;
@@ -24,6 +29,16 @@ public class AggroState : EnemyStateBase
     private bool _sawHer;           // he has had her in sight at some point in this fight
     private Vector3 _stallSpot;
     private const float StallProgress = 0.25f;   // closing less than this isn't getting anywhere
+
+    // His firing spot (see FiringSpots). The claim lives in the fight; these are his own side of it.
+    private bool _hasSpot;
+    private Vector3 _spot;
+    private bool _atSpot;           // standing on it, holding and facing her
+    private bool _pickNow;          // something asked for a new spot at once (a walk that failed)
+    private float _nextPick;
+    private float _lastPick = float.NegativeInfinity;
+    private Vector3 _avoid;
+    private float _avoidUntil;
 
     public AggroState(EnemyController enemy) : base(enemy) { }
 
@@ -69,6 +84,11 @@ public class AggroState : EnemyStateBase
         _stallTimer = 0f;
         _hadSight = Enemy.Vision.CanSeePlayer();
         _sawHer = _hadSight;
+        _hasSpot = false;
+        _atSpot = false;
+        _pickNow = false;
+        _lastPick = float.NegativeInfinity;
+        _avoidUntil = 0f;
         // Rearm hands back through here, so a re-join is a no-op that keeps his place. With no Intel
         // he fights alone, as already reported at Start.
         if (Enemy.Intel != null) Enemy.Intel.Join(Enemy);
@@ -88,6 +108,8 @@ public class AggroState : EnemyStateBase
     public override void Exit()
     {
         Firing = false;
+        // Rearming, grabbed or searching, he holds no spot (the board drops it too, if he leaves the fight).
+        ReleaseSpot();
         if (LostPlayer)
         {
             // He has been after her, whether or not he ever got a clear look. One who joined by word of
@@ -158,12 +180,22 @@ public class AggroState : EnemyStateBase
         float minDistance = armed ? Enemy.Arms.HeldGun.MinDistance : 0f;
         bool inSight = Enemy.Vision.CanSeePlayer();
         bool holdingBack = armed && Enemy.IsStandby;
+        // Spots are for an armed fighter who knows where she is: in sight, or just gone from it. Past that he
+        // chases what he knows, as ever, and holds none.
+        bool knowsHer = inSight || Enemy.Awareness.FollowingThrough;
+        if (!armed || !knowsHer || Enemy.Fight == null) ReleaseSpot();
         // The band only stops a standby member closing in; backing away stays inside the gun's own
         // Min Distance, as for main. Backing off to the band was radial from her and flip-flopped at the
         // edge of sight.
         float band = holdingBack ? StandbyBand(minDistance, inSight) : minDistance;
-        switch (Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance, band))
+        Move move = Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance, band);
+        // Backing away inside the gun's Min Distance stays as it is; everywhere else a spot of his own decides.
+        bool atSpot = move != Move.BackAway && armed && knowsHer && Enemy.Fight != null && MoveToSpot(inSight);
+        switch (atSpot ? Move.None : move)
         {
+            case Move.None:
+                break;
+
             case Move.Chase:
                 // With her in sight, or just gone from it, he knows where she is; otherwise only what he
                 // has learned. The shared field while following through: the known spot moves every step
@@ -272,11 +304,102 @@ public class AggroState : EnemyStateBase
         Vector3 point;
         if (inSight) point = Enemy.PlayerTransform.position;
         else if (!Enemy.Awareness.TryGetNewestRuby(out point)) return gunMin;
-        if (!Enemy.Fight.TryGetMainReach(point, out float farthest)) return gunMin;
-        return Mathf.Max(gunMin, Mathf.Min(farthest + Enemy.StandbyDistance, Enemy.Arms.HeldGun.Range - HoldBand));
+        return FiringSpots.StandbyStart(Enemy, Enemy.Fight, point, gunMin);
     }
 
-    private enum Move { Chase, Hold, BackAway }
+    // Walks to his firing spot and holds there facing her, picking a new one when it is due. False when he has
+    // none (the pick found nothing, or the walk could not get there), and the band behaviour applies this step.
+    private bool MoveToSpot(bool inSight)
+    {
+        Fight fight = Enemy.Fight;
+        Vector3 ruby = Enemy.PlayerTransform.position;   // he knows where she is: in sight, or following through
+
+        bool displaced = _hasSpot && !fight.TryGetClaim(Enemy, out _);   // a main member took it
+        if (displaced)
+        {
+            DebugLog.Info($"{Enemy.name}'s firing spot was taken by a main squad member: he picks another.", Enemy);
+            _hasSpot = false;
+            _atSpot = false;
+        }
+
+        if (Time.time >= _lastPick + RepickGap)
+        {
+            // At once: asked for, displaced, the band has moved on past half a spacing, or his shot is blocked
+            // (holding at the spot and no longer seeing her). Otherwise about once a second.
+            bool due = _pickNow || displaced || Time.time >= _nextPick || (_hasSpot && (OutsideBand(fight, ruby) || (_atSpot && !inSight)));
+            if (due) PickSpot(fight, ruby);
+        }
+        if (!_hasSpot) return false;
+
+        if (_atSpot && PathGrid.FlatDistance(Enemy.transform.position, _spot) > SpotLeave) _atSpot = false;
+        if (!_atSpot)
+        {
+            NavResult result = Enemy.Movement.WalkTo(_spot, SpotReach, Enemy.ChaseSpeed);
+            if (result == NavResult.Arrived) _atSpot = true;
+            else if (result == NavResult.Blocked || result == NavResult.Unreachable)
+            {
+                DebugLog.Info($"{Enemy.name} cannot get to his firing spot ({result}: {Enemy.Navigator.FailureReason}): he drops it and picks another.", Enemy);
+                _avoid = _spot;
+                _avoidUntil = Time.time + AvoidTime;
+                fight.Release(Enemy);
+                _hasSpot = false;
+                _pickNow = true;
+                return false;
+            }
+        }
+        if (_atSpot)
+        {
+            Enemy.Stop();
+            Enemy.Movement.FaceTarget();
+        }
+        return true;
+    }
+
+    private void PickSpot(Fight fight, Vector3 ruby)
+    {
+        _lastPick = Time.time;
+        _nextPick = Time.time + PickInterval * Random.Range(0.8f, 1.2f);
+        _pickNow = false;
+        Vector3? avoid = Time.time < _avoidUntil ? _avoid : (Vector3?)null;
+        if (FiringSpots.TryPick(Enemy, fight, ruby, out Vector3 spot, avoid))
+        {
+            if (!_hasSpot || PathGrid.FlatDistance(spot, _spot) > 0.01f)
+            {
+                DebugLog.Info($"{Enemy.name} takes a firing spot {PathGrid.FlatDistance(spot, ruby):0.#} m from Ruby ({(Enemy.IsStandby ? "standby" : "main")}).", Enemy);
+                _atSpot = false;
+            }
+            _spot = spot;
+            _hasSpot = true;
+            return;
+        }
+
+        _hasSpot = false;
+        _atSpot = false;
+        // A stated rule, not a quiet fallback: with no spot he keeps his band. Once per fight, or a walled-off
+        // Ruby would log it every second for everyone.
+        if (fight.FirstNoSpot())
+            DebugLog.Info($"{Enemy.name} found no firing spot (none walkable, reachable, unclaimed and in a clear shot) in {fight}: he keeps his band.", Enemy);
+    }
+
+    // The band has moved on past his spot by more than half the spacing: standby's starts behind the main
+    // squad and follows it, and Ruby moves. Half a spacing of slack so he doesn't shuffle each time main shifts.
+    private bool OutsideBand(Fight fight, Vector3 ruby)
+    {
+        if (!FiringSpots.TryGetBand(Enemy, fight, ruby, out float near, out float far)) return false;
+        float ring = PathGrid.FlatDistance(_spot, ruby);
+        float slack = Enemy.SquadSpacing * 0.5f;
+        return ring < near - slack || ring > far + slack;
+    }
+
+    private void ReleaseSpot()
+    {
+        if (!_hasSpot) return;
+        Enemy.Fight?.Release(Enemy);
+        _hasSpot = false;
+        _atSpot = false;
+    }
+
+    private enum Move { None, Chase, Hold, BackAway }
 
     // Unarmed, or blind to her, the hunt has to find her. Armed with her in sight, the gun's band decides.
     private static Move Engage(bool armed, bool inSight, float distance, float minDistance, float band)

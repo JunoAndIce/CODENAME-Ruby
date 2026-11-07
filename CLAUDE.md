@@ -460,6 +460,27 @@ through the player never slows the walk. **Enemies don't shove props that block 
   included. He still fires when she is in range and in sight. Out of sight he measures from where he
   knows she is, and `ChaseKnown` stops him that far from the spot. With no main member in contact he
   keeps the gun's band; an unarmed one is as before.
+  **Firing spots** (`FiringSpots`, a static picker, with claims kept in the `Fight`). An armed member
+  with Ruby in sight, or following through, walks to a spot of his own and holds there facing her, firing
+  as before, so a fight spreads into a loose crossfire instead of closing along one line. The pick is
+  round where he knows she is (her true position only in sight or following through; past that he chases
+  what he knows and holds no spot): 16 angles on 3 rings across his band (main: the gun's Min Distance out
+  to Range less the hold band; standby: the band above, from its start). A candidate must be walkable and
+  on the floor's shared chase field (`FieldToward`, read with `TryGetDistance`: "ground he can reach",
+  out to the field's own bound; it refreshes only when read as a route, so the pick asks it to with
+  `FlowField.Refresh`), and not within Squad Spacing (2 m, on `EnemyController`) of a claim. Of those the
+  score favours near where he stands, the middle of the band, a different angle from his squadmates', and
+  not on a squadmate's line to her; the best few (a budget of 4) then get an eye-height ray, anything solid
+  but characters blocking it, as sight does. His current spot is kept unless a new one beats it by a margin.
+  He re-picks about once a second (staggered), and at once when his spot falls more than half a spacing
+  outside his band (standby's band follows main), his shot is blocked, a main member takes his spot, or a
+  walk to it is refused (that spot is left alone for 3 s); never sooner than 0.25 s after the last pick.
+  Main picks before standby by rank: a standby claim never blocks a main pick, and a main claim near a
+  standby's takes it (`Fight.DropStandbyClaimsNear`, and he finds the claim gone and picks again);
+  standby never takes a main member's spot. Backing away inside Min Distance is as before, and cornered he
+  stands and fights. With no spot he keeps the band behaviour, with a log line once per fight. Claims go
+  when he leaves Aggro (`AggroState.Exit`), loses his gun or knows nothing of her, and the board's prune is
+  the guarantee that a claim never outlives its member. Selected, he draws his spot and a line to it.
   With `Intel` selected in Play, a line joins each fight's main members, with a ring per role (main red,
   standby light grey). Paths don't cost more through a squadmate's lane: the chase field is one shared
   flood per floor.

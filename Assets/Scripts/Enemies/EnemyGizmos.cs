@@ -64,6 +64,14 @@ internal static class EnemyGizmos
             Gizmos.DrawWireSphere(enemy.transform.position, enemy.RearmRadius);
         }
 
+        // The firing spot he has claimed in his fight, and the way he'd walk to it.
+        if (Application.isPlaying && enemy.TryGetFiringSpot(out Vector3 firingSpot))
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(firingSpot, 0.4f);
+            Gizmos.DrawLine(enemy.transform.position, firingSpot);
+        }
+
         // Sight line in play: green when the player is in view, red when something static is in the way.
         if (Application.isPlaying && enemy.Player != null)
         {

@@ -171,6 +171,12 @@ public class FlowField
         }
     }
 
+    /// <summary>
+    /// Re-floods if the target has changed cell or the grid has changed, throttled as the route readers are.
+    /// TryGetDistance never re-floods, so a caller that only measures (and walks by some other means) asks for this first.
+    /// </summary>
+    public void Refresh() => RefreshIfStale();
+
     /// <summary>True when position stands in the goal's cell: as close as the grid can get.</summary>
     public bool IsAtGoal(Vector3 position)
     {

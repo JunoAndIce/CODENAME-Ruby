@@ -59,6 +59,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     [Tooltip("How much farther back than the main squad an armed standby enemy holds, in metres: his band starts at the farthest main member's distance from Ruby plus this. With no main member yet he keeps his gun's own band.")]
     [SerializeField, Min(0f)] private float _standbyDistance = 3f;
+    [Tooltip("The least distance between two fighters' firing spots, in metres, measured flat. Each armed enemy in a fight claims a spot of his own round Ruby and nobody else takes one this close to it. Also how far past his band Ruby moves before he picks again (half of it).")]
+    [SerializeField, Min(0.5f)] private float _squadSpacing = 2f;
 
     [Header("Suspicion")]
     [Tooltip("A disturbance within this distance of where Ruby was last reported is searched for as an attack, not a problem, while that report is recent (Attack Near Time). Measured flat, in metres.")]
@@ -451,6 +453,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public bool IsStandby => Fight != null && !Fight.IsMain(this);
 
     public float StandbyDistance => _standbyDistance;
+    public float SquadSpacing => _squadSpacing;
+
+    /// <summary>The firing spot he has claimed in his fight, for the gizmo and the state. False with none.</summary>
+    public bool TryGetFiringSpot(out Vector3 spot)
+    {
+        spot = default;
+        return Fight != null && Fight.TryGetClaim(this, out spot);
+    }
 
     public void EnterGrabbed()
     {

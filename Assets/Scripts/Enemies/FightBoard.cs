@@ -123,7 +123,10 @@ public class FightBoard
             EnemyController member = members[i];
             if (Fighting(member)) continue;
             members.RemoveAt(i);
-            if (member == null) continue;   // destroyed: nothing to clear
+            // The one place a claim is guaranteed to go with its owner, whichever way he left (dead, grabbed,
+            // destroyed). A destroyed key is still the same dictionary key.
+            fight.Release(member);
+            if (member == null) continue;   // destroyed: nothing more to clear
             member.Fight = null;
             DebugLog.Info($"{member.name} leaves {fight}.", _intel);
         }
