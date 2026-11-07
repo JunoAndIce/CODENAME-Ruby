@@ -5,7 +5,7 @@ using UnityEngine;
 /// field. Armed with her in sight, it keeps its gun's band: it closes in to Min Distance, holds in
 /// the metre above that, and backs away inside it, still facing her. Firing happens alongside all
 /// of these, not as its own state. Out of sight it chases what it knows of her (its memory and the
-/// squad's stale pool), not her true position, once Sight Follow Through has run out. LostPlayer flips, never while in contact, after
+/// squad's stale pool), not her true position, once Sight Follow Through has run out. LostPlayer flips, never while in contact (his own, or a fight mate's: see Fights), after
 /// Aggro Time out of contact, after holding Aggro Time at the known spot without sight of her, or at
 /// once with nothing to go on; the table then sends the enemy to search.
 /// </summary>
@@ -47,9 +47,10 @@ public class AggroState : EnemyStateBase
     // How long he stands at the spot he knew. If he has seen her in this fight she may well be just past
     // it. If he hasn't (he got up from a throw, or something hit him), there is nothing he is waiting on:
     // he stood for Aggro Time while the team that came to check finished and left without him.
-    private bool SquadInContact() => Enemy.Fight != null && Enemy.Intel.AnyInContact(Enemy.Fight, Enemy);
-
     private float HoldTime => _sawHer ? Enemy.AggroTime : Enemy.UnseenHoldTime;
+
+    // A fight mate with her in contact: the fight goes on for him too.
+    private bool SquadInContact() => Enemy.Fight != null && Enemy.Intel.AnyInContact(Enemy.Fight, Enemy);
 
     // Out of sight and he knows nothing of her: no rule but "search where he stands".
     private bool NothingToGoOn => !Enemy.Vision.CanSeePlayer() && !Enemy.Awareness.TryGetNewestRuby(out _);
@@ -123,9 +124,15 @@ public class AggroState : EnemyStateBase
         // A mate's contact counts like his own: the fight ends when every member has been out of
         // contact for Aggro Time, so both timers start over while someone has her.
         bool squadContact = SquadInContact();
-        if (hasSight || Enemy.Awareness.FollowingThrough || squadContact)
+        if (hasSight || Enemy.Awareness.FollowingThrough)
         {
             _holdingAtKnown = false;
+            _dwellTimer = 0f;
+        }
+        // Only the dwell: clearing the hold flag here and setting it again in FixedTick logged "reached
+        // the spot" every frame.
+        else if (squadContact)
+        {
             _dwellTimer = 0f;
         }
         else if (_holdingAtKnown)
@@ -151,15 +158,27 @@ public class AggroState : EnemyStateBase
         float minDistance = armed ? Enemy.Arms.HeldGun.MinDistance : 0f;
         bool inSight = Enemy.Vision.CanSeePlayer();
         bool holdingBack = armed && Enemy.IsStandby;
-        if (holdingBack) minDistance = StandbyMinDistance(minDistance, inSight);
-        switch (Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance))
+        // The band only stops a standby member closing in; backing away stays inside the gun's own
+        // Min Distance, as for main. Backing off to the band was radial from her and flip-flopped at the
+        // edge of sight.
+        float band = holdingBack ? StandbyBand(minDistance, inSight) : minDistance;
+        switch (Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance, band))
         {
             case Move.Chase:
                 // With her in sight, or just gone from it, he knows where she is; otherwise only what he
                 // has learned. The shared field while following through: the known spot moves every step
                 // then, and a field of his own would re-flood each quarter metre she ran.
-                if (inSight || Enemy.Awareness.FollowingThrough) Enemy.Movement.PathToPlayer(Enemy.ChaseSpeed);
-                else ChaseWhatHeKnows(holdingBack ? minDistance : 0f);
+                if (inSight || Enemy.Awareness.FollowingThrough)
+                {
+                    // Following through he still holds at his band, or he'd run at her past it each time sight left.
+                    if (holdingBack && !inSight && Enemy.Vision.DistanceToPlayer() <= band + HoldBand)
+                    {
+                        Enemy.Stop();
+                        Enemy.Movement.FaceTarget();
+                    }
+                    else Enemy.Movement.PathToPlayer(Enemy.ChaseSpeed);
+                }
+                else ChaseWhatHeKnows(holdingBack ? band + HoldBand : 0f);
                 break;
 
             case Move.Hold:
@@ -194,6 +213,8 @@ public class AggroState : EnemyStateBase
             Enemy.Stop();
             arrived = true;
         }
+        // Held with a mate in contact nothing else ends the hold, so he faces her rather than nothing.
+        if (arrived && SquadInContact()) Enemy.Movement.FaceTarget();
         if (arrived && !_holdingAtKnown)
         {
             _dwellTimer = 0f;
@@ -229,27 +250,38 @@ public class AggroState : EnemyStateBase
             return false;
         }
         _stallTimer += Time.fixedDeltaTime;
+        // Held for Stuck Time and then let go, so he tries the walk again: the man ahead may have moved,
+        // and a stall that never reset left him standing for good.
+        if (_stallTimer >= Enemy.StuckTime * 2f)
+        {
+            _stallTimer = 0f;
+            return false;
+        }
         return _stallTimer >= Enemy.StuckTime && distance <= Enemy.KnownSpotRadius * 2f;
     }
 
-    // An armed standby member's band starts behind the main squad: the farthest main member's distance
-    // from her plus Standby Distance, read every step so it follows them in and out. Out of sight it is
-    // measured from where he knows she is, never her true position. With no main member to measure from,
-    // or nothing known, it is the gun's own band: there is nobody to hold back behind.
-    private float StandbyMinDistance(float gunMin, bool inSight)
+    // An armed standby member's band starts behind the main squad: the farthest main member in contact
+    // with her, plus Standby Distance, read every step so it follows them in and out. A main member out
+    // of sight, walking in or rearming says nothing of where the fight is, so only those in contact
+    // count. It never passes the gun's Range (less the hold band), or he'd retreat out of range of a Ruby
+    // he could shoot, and never falls below the gun's own Min Distance. Out of sight it is measured from
+    // where he knows she is, never her true position. With nobody in contact to measure from, or nothing
+    // known, it is the gun's own band: there is nobody to hold back behind.
+    private float StandbyBand(float gunMin, bool inSight)
     {
         Vector3 point;
         if (inSight) point = Enemy.PlayerTransform.position;
         else if (!Enemy.Awareness.TryGetNewestRuby(out point)) return gunMin;
-        return Enemy.Fight.TryGetMainReach(point, out float farthest) ? farthest + Enemy.StandbyDistance : gunMin;
+        if (!Enemy.Fight.TryGetMainReach(point, out float farthest)) return gunMin;
+        return Mathf.Max(gunMin, Mathf.Min(farthest + Enemy.StandbyDistance, Enemy.Arms.HeldGun.Range - HoldBand));
     }
 
     private enum Move { Chase, Hold, BackAway }
 
     // Unarmed, or blind to her, the hunt has to find her. Armed with her in sight, the gun's band decides.
-    private static Move Engage(bool armed, bool inSight, float distance, float minDistance)
+    private static Move Engage(bool armed, bool inSight, float distance, float minDistance, float band)
     {
-        if (!armed || !inSight || distance > minDistance + HoldBand) return Move.Chase;
+        if (!armed || !inSight || distance > band + HoldBand) return Move.Chase;
         return distance < minDistance ? Move.BackAway : Move.Hold;
     }
 

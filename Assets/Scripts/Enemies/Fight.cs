@@ -34,7 +34,7 @@ public class Fight
     internal List<EnemyController> StandbyList => _standby;
 
     /// <summary>
-    /// How far the farthest main member stands from a point, measured flat. False with no main member
+    /// How far the farthest main member in contact with Ruby stands from a point, measured flat. False with no main member
     /// to measure, so the caller says what applies then instead of this inventing a distance.
     /// </summary>
     public bool TryGetMainReach(Vector3 point, out float farthest)
@@ -44,7 +44,8 @@ public class Fight
         for (int i = 0; i < _main.Count; i++)
         {
             EnemyController member = _main[i];
-            if (member == null) continue;
+            // Only those with her in contact: one out of sight or walking in says nothing of the fight's range.
+            if (member == null || !member.Vision.InContactWithPlayer()) continue;
             float distance = PathGrid.FlatDistance(member.transform.position, point);
             if (!any || distance > farthest) farthest = distance;
             any = true;

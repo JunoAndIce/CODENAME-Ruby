@@ -453,11 +453,13 @@ through the player never slows the walk. **Enemies don't shove props that block 
   the board, and `IsStandby` reads it. On no grid he fights alone, with one warning. **Contact is shared:**
   `AggroState.LostPlayer` is false, and both of its timers start over, while a fight mate has Ruby in
   contact, so a member behind a wall doesn't give up while another has her. **Standby holds back:** an
-  armed standby member's band starts at the farthest main member's flat distance from her plus Standby
-  Distance (3 m, on `EnemyController`), read each step so it follows them, in place of the gun's Min
-  Distance (backing away and standing when cornered work from the same figure). He still fires when she
-  is in range and in sight. Out of sight he measures from where he knows she is, and `ChaseKnown` stops
-  him that far from the spot. With no main member he keeps the gun's band; an unarmed one is as before.
+  armed standby member's band is the farthest main member **in contact with her** (flat distance) plus
+  Standby Distance (3 m, on `EnemyController`), read each step so it follows them, held below the gun's
+  Range less the hold band and above its Min Distance. The band only stops him closing in: he backs away
+  only inside the gun's own Min Distance, as main does, and holds anywhere between, following through
+  included. He still fires when she is in range and in sight. Out of sight he measures from where he
+  knows she is, and `ChaseKnown` stops him that far from the spot. With no main member in contact he
+  keeps the gun's band; an unarmed one is as before.
   With `Intel` selected in Play, a line joins each fight's main members, with a ring per role (main red,
   standby light grey). Paths don't cost more through a squadmate's lane: the chase field is one shared
   flood per floor.
