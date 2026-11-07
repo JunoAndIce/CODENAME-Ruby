@@ -114,7 +114,7 @@ public static class FiringSpots
             // would walk in, be backed away, and walk in again), or no longer reachable. Within the slack its band
             // term is full, so a collapsed band cannot make a spot a centimetre off the ring lose to a fresh one.
             float ring = PathGrid.FlatDistance(current, ruby);
-            if (ring >= bandNear && ring <= bandFar + spacing * 0.5f
+            if (InKeepBand(who, ring, bandNear, bandFar, spacing * 0.5f)
                 && TryScore(who, fight, grid, reach, current, ruby, here, bandNear, bandFar, spacing, avoid, out float score, keeping: true))
                 Candidates.Add(new Candidate { Spot = current, Score = score + KeepMargin });
         }
@@ -159,6 +159,14 @@ public static class FiringSpots
         fight.Release(who);
         return false;
     }
+
+    /// <summary>
+    /// Whether a spot he holds, at this distance from Ruby, still counts as in his band: half a spacing of slack
+    /// either side, except that the gun's Min Distance is strict for everyone (inside it he is backed away, so a
+    /// spot there would loop). One test for the pick's keep and AggroState's re-pick, so the two cannot disagree.
+    /// </summary>
+    public static bool InKeepBand(EnemyController who, float ring, float near, float far, float slack)
+        => ring >= Mathf.Max(who.Arms.HeldGun.MinDistance, near - slack) && ring <= far + slack;
 
     /// <summary>Whether a straight line at eye height from a spot to Ruby crosses nothing solid but characters: the rule sight uses.</summary>
     public static bool HasClearShot(EnemyController who, Vector3 spot, Vector3 ruby)
