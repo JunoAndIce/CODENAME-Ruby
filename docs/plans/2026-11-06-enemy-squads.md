@@ -78,6 +78,8 @@
 
 ### Task 3: Fire lanes
 
+> **Built and taken out (user, 2026-11-07: "remove fire lanes").** Built in `c9965f0` and `f07e390`, reverted. In play, spots were dropped for being backed away from Ruby on the walk in 829 times out of 1,111 picks (23 of about 96 before lanes), and the squads read as broken: "We're getting too deep." The steps below are left unticked on purpose.
+
 **Files:** modify `States/AggroState.cs`, `Enemies/EnemyVision.cs` only once the user's uncommitted edit is committed (otherwise a new `Enemies/FireLane.cs`), `Enemies/FiringSpots.cs`, `CLAUDE.md`, `docs/specs/2026-10-28-enemy-states-0.2.md`.
 
 **Interfaces**

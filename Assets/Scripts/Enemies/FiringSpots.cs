@@ -6,7 +6,7 @@ using UnityEngine;
 /// fight spreads into a loose crossfire instead of everyone closing along one line. A static class of
 /// pure picking, with reused buffers: it runs for every armed fighter about once a second, so it
 /// allocates nothing. It never walks anyone; AggroState does that and asks again when the spot stops
-/// making sense. Weights are constants here so the lane rule sits beside them.
+/// making sense. Weights are constants here so the next scorer (fire lanes) adds one beside them.
 /// </summary>
 public static class FiringSpots
 {
@@ -21,7 +21,6 @@ public static class FiringSpots
     private const float LineWeight = 1f;          // subtracted: not on a squadmate's line to her
     private const float SpreadFullAngle = 60f;    // degrees from the nearest squadmate that count as fully spread
     private const float LineWidth = 1.5f;         // metres either side of a squadmate's line that count as on it
-    private const float LaneWeight = 4f;           // subtracted from a spot whose shot crosses the squadmate in his lane: heavy enough that any clear spot beats it
     private const float KeepMargin = 0.4f;        // a new spot must beat his current one by this, or he stays: near-equal spots flickered
 
     private const int ShotBudget = 4;             // clear-shot rays per pick: the best few, never every candidate
@@ -70,14 +69,9 @@ public static class FiringSpots
     /// Picks his spot round ruby, which the caller passes only when he knows where she is (in sight, or just
     /// gone from it): nothing here reads her true position otherwise. The pick is claimed in the fight, so
     /// nobody else takes it. False when no candidate is walkable, reachable, unclaimed and in a clear shot;
-    /// his claim is then released and the caller says what applies. avoid is a spot he just failed to reach. laneBlocker is the squadmate standing in his lane (see FireLane):
-    /// spots whose shot would cross him are weighted down, none is taken, and on finding nothing his claim is
-    /// kept, since he holds fire where he stands and the caller says so. leaveSpot is for the pick asked for
-    /// because he is blocked at his spot: it is no candidate then, whatever the lane test says of it, since
-    /// his gun sits off his centre line and a spot can pass a test made from the body and fail the one from the
-    /// muzzle; handing back the spot he is blocked at would leave him holding fire there for good.
+    /// his claim is then released and the caller says what applies. avoid is a spot he just failed to reach.
     /// </summary>
-    public static bool TryPick(EnemyController who, Fight fight, Vector3 ruby, out Vector3 spot, Vector3? avoid = null, EnemyController laneBlocker = null, bool leaveSpot = false)
+    public static bool TryPick(EnemyController who, Fight fight, Vector3 ruby, out Vector3 spot, Vector3? avoid = null)
     {
         spot = default;
         if (who.PlayerTransform == null || !TryGetBand(who, fight, ruby, out float bandNear, out float bandFar))
@@ -113,7 +107,7 @@ public static class FiringSpots
         Candidates.Clear();
 
         bool hasCurrent = fight.TryGetClaim(who, out Vector3 current);
-        if (hasCurrent && !leaveSpot)
+        if (hasCurrent)
         {
             // His own spot is a candidate with a bonus, unless it has gone bad: past the band's far side by more
             // than half a spacing (the band moves with main), inside the gun's Min Distance (no slack there: he
@@ -121,7 +115,7 @@ public static class FiringSpots
             // term is full, so a collapsed band cannot make a spot a centimetre off the ring lose to a fresh one.
             float ring = PathGrid.FlatDistance(current, ruby);
             if (InKeepBand(who, ring, bandNear, bandFar, spacing * 0.5f)
-                && TryScore(who, fight, grid, reach, current, ruby, here, bandNear, bandFar, spacing, avoid, laneBlocker, out float score, keeping: true))
+                && TryScore(who, fight, grid, reach, current, ruby, here, bandNear, bandFar, spacing, avoid, out float score, keeping: true))
                 Candidates.Add(new Candidate { Spot = current, Score = score + KeepMargin });
         }
 
@@ -136,7 +130,7 @@ public static class FiringSpots
                 Vector3 candidate = new(ruby.x + Mathf.Cos(angle) * radius, y, ruby.z + Mathf.Sin(angle) * radius);
                 // The ring step is wider than the spacing, so a candidate at the current spot's cell is the same spot.
                 if (hasCurrent && PathGrid.FlatDistance(candidate, current) < 0.01f) continue;
-                if (TryScore(who, fight, grid, reach, candidate, ruby, here, bandNear, bandFar, spacing, avoid, laneBlocker, out float score))
+                if (TryScore(who, fight, grid, reach, candidate, ruby, here, bandNear, bandFar, spacing, avoid, out float score))
                     Candidates.Add(new Candidate { Spot = candidate, Score = score });
             }
         }
@@ -150,13 +144,6 @@ public static class FiringSpots
             if (best < 0) break;
 
             Candidate pick = Candidates[best];
-            // Weighted down above, and refused here: a spot still in his lane is no answer to being in it.
-            if (laneBlocker != null && FireLane.Blocks(who, laneBlocker, pick.Spot, ruby))
-            {
-                pick.Score = float.NegativeInfinity;
-                Candidates[best] = pick;
-                continue;
-            }
             if (HasClearShot(who, pick.Spot, ruby))
             {
                 spot = pick.Spot;
@@ -169,7 +156,7 @@ public static class FiringSpots
             Candidates[best] = pick;
         }
 
-        if (laneBlocker == null || !hasCurrent) fight.Release(who);
+        fight.Release(who);
         return false;
     }
 
@@ -205,7 +192,7 @@ public static class FiringSpots
     // What the spot scores, or false when it is rejected outright: not walkable, off the chase field, within
     // the spacing of a claim that outranks his, or the spot he just failed to reach.
     private static bool TryScore(EnemyController who, Fight fight, PathGrid grid, FlowField reach, Vector3 spot, Vector3 ruby,
-        Vector3 here, float bandNear, float bandFar, float spacing, Vector3? avoid, EnemyController laneBlocker, out float score, bool keeping = false)
+        Vector3 here, float bandNear, float bandFar, float spacing, Vector3? avoid, out float score, bool keeping = false)
     {
         score = 0f;
         if (!grid.WorldToCell(spot, out Vector2Int cell) || !grid.IsWalkable(cell)) return false;
@@ -239,7 +226,6 @@ public static class FiringSpots
         float spread = Mathf.Clamp01(gap / SpreadFullAngle);
 
         score = NearWeight * near + BandWeight * band + SpreadWeight * spread - LineWeight * line;
-        if (laneBlocker != null && FireLane.Blocks(who, laneBlocker, spot, ruby)) score -= LaneWeight;
         return true;
     }
 

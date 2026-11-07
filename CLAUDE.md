@@ -409,9 +409,8 @@ through the player never slows the walk. **Enemies don't shove props that block 
   chain drag or throw an enemy (see **Senses**). A grabbed enemy standing still, a knockdown, a
   death, a job mate lost: he searches, and goes to Aggro only if Ruby then comes into view.
 - **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
-  sight and a fight to belong to, he walks to a firing spot of his own (see **Fights**); with no spot
-  (or no fight) it keeps the gun's band: it closes in to Min Distance, holds in the metre above it, and
-  backs away facing her inside it (inside Min Distance he backs away with a spot too) (`GridNavigator.TryFindSpotAway`, `EnemyMovement.StepAway`),
+  sight, it walks to a firing spot of his own (see **Fights**), and with no spot keeps the gun's band:
+  it closes in to Min Distance, holds in the metre above it, and backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyMovement.StepAway`),
   standing its ground when cornered. It fires alongside all of that, whenever she's in sight, in
   range and on her feet (`AggroState.Firing`); firing is not a state. It only aims within range:
   beyond it he runs with the gun down. Contact holds while the player is in sight within
@@ -483,26 +482,11 @@ through the player never slows the walk. **Enemies don't shove props that block 
   when he leaves Aggro (`AggroState.Exit`), loses his gun or knows nothing of her, and the board's prune is
   the guarantee that a claim never outlives its member. Selected, he draws his spot and a line to it.
   With `Intel` selected in Play, a line joins each fight's main members, with a ring per role (main red,
-  standby light grey). Lanes are kept by spot scoring and by holding fire (see **Fire lanes**); paths don't cost more
-  through a squadmate's lane, which is deferred: the chase field is one shared flood per floor and can't
-  hold a detour per enemy.
-  **Fire lanes** (`FireLane`, a static check in `Enemies/`). Before he fires, a capsule from his gun's muzzle
-  to Ruby (flat, his body radius plus Lane Margin 0.15 m) is tested against every other member of his
-  fight, main and standby, skipping the destroyed and anyone overridden. Each is judged where he stands
-  and where his velocity takes him in Lead Time (0.3 s): a distance from a segment, no physics query, no
-  allocation. Bullets don't hit enemies on their feet, so this is about looking right: nobody fires through
-  a squadmate. One in his lane makes him hold fire and nothing else: he keeps aiming at her, so his stance
-  stays Aim and the gun isn't lowered and raised each beat (`AggroState.HoldFire`), and the line
-  "X holds: Y is in his lane" is logged once per episode (in his lane again, even behind another squadmate, within 1 s of the last block is the
-  same hold). If the squadmate is walking out of it (clear of the lane after Lane Beat, 0.5 s, and moving
-  faster than 0.5 m/s) he waits that beat; a standing one, or one still there after it, makes him re-pick
-  his spot at once, with `FiringSpots.TryPick`'s lane weight (4, against a best ordinary score near 3.3)
-  on spots whose shot would cross that squadmate (lead position included, as in the hold), none of them
-  taken, and the spot he is blocked at not a candidate at all (his gun sits off his centre line, so a test
-  from his body could pass it). Every pick in the episode keeps clear of the last blocker, not only that one.
-  A failed such pick is not repeated sooner than the normal cadence; a successful one doesn't hold the next off. Finding nothing, he keeps his spot and goes on holding fire,
-  saying so once per episode, and tries again on the next beat of the cadence: never fires through.
-  Unarmed, or in no fight, there is no lane check.
+  standby light grey). **There are no fire lanes:** nothing stops him firing through a squadmate, though
+  bullets don't hit enemies on their feet and spot scoring keeps them off each other's lines to her. Fire
+  lanes (holding fire and stepping aside for a squadmate in the way) were built and taken out (user,
+  2026-11-07): stacked on the standby band and firing spots, they drove spots into Ruby's Min Distance and
+  enemies shuffled instead of fighting.
 - **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
   Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
   up within 0.3 m of its body's surface, measured to the nearest point of the gun's colliders
@@ -1212,12 +1196,13 @@ and overloaded classes, and `docs/plans/2026-11-02-enemy-ai-fixes-and-refactor.m
 split the job engine, the knowledge pool, flood reading, sight and reactions out of `Intel` and
 `EnemyController` into the classes under **Enemy AI**. Part 2's tasks and its decisions are built
 and described under **Enemy AI**, including decision 16, searching like people (slow walking, scanning
-as they go, clearing what they can't see). Squads and fire lanes (piece 6) are built. The user
+as they go, clearing what they can't see). Squads and firing spots (piece 6) are built, to
+`docs/plans/2026-11-06-enemy-squads.md`; its fire lanes were built and taken out. The user
 changed decisions 10, 14 and 15 (Task 8b): nobody goes to Aggro unless he sees Ruby, or sees her drag
 or throw an enemy on the chain, and one who sees an enemy killed goes to check where it came from; a grabbed enemy seen standing still is walked over to and searched
 around, and a knockdown or death only searches. Piece 5's part B (patrol together: leaders, groups,
-breaking off) isn't built, and needs a trigger of its own now the level alert is gone. After the
-squads come rooms, hiding spots and breakables.
+breaking off) isn't built, and needs a trigger of its own now the level alert is gone. After squads
+come rooms, hiding spots and breakables.
 
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
 account of what is built, and its section on the Path Grid, colliders and navigation is written for

@@ -53,8 +53,6 @@ public class Gun : MonoBehaviour
     public bool IsHeld { get; private set; }
     public float Range => _range;
     public float MinDistance => _minDistance;
-    /// <summary>Where bullets leave. Null only on a gun that already logged its missing Muzzle and can't fire.</summary>
-    public Transform Muzzle => _muzzle;
     public bool IsResting => !IsHeld && _body.linearVelocity.sqrMagnitude < RestSpeed * RestSpeed;
 
     /// <summary>
