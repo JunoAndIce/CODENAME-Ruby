@@ -6,26 +6,44 @@ using UnityEngine.Serialization;
 [RequireComponent(typeof(Health))]
 public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown, IBulletTarget, IAnimatedCharacter
 {
-    [Header("Movement")]
+    [Header("Moving")]
     [SerializeField] private float _chaseSpeed = 2f;
     [SerializeField] private float _patrolSpeed = 1f;
+    [Tooltip("Patrol speed once he's aggressive, as a multiple of Patrol Speed: above 1 hurries him, below 1 slows him to a wary creep (0.5 is half speed). Applies to whichever route he walks, and to an idle enemy walking back to his post.")]
+    [SerializeField, Range(0.1f, 3f)] private float _aggressiveSpeedFactor = 1.25f;
     [SerializeField] private float _searchSpeed = 1.5f;
-    [Tooltip("How fast the body turns while walking a path, in degrees a second: lower makes wider arcs round bends. The legs' own turn on the model (CharacterAnimator's Turn Speed) is separate.")]
-    [SerializeField, Min(1f)] private float _turnSpeed = 720f;
     [Tooltip("His speed while he clears a Search's area, as a multiple of Search Speed: below 1, so he creeps and looks. Walking in to the area stays at full Search Speed.")]
     [SerializeField, Range(0.1f, 1f)] private float _clearingSpeedFactor = 0.6f;
-    [Tooltip("How far, in degrees, his body sweeps to each side of his way while he clears a Search's area. He keeps walking his way, and his view goes with his body.")]
-    [SerializeField, Range(0f, 90f)] private float _walkSweepAngle = 45f;
+    [Tooltip("A follower's walking speed behind the checker, as a multiple of Search Speed: below 1 so the team trails slowly behind him.")]
+    [SerializeField, Range(0.2f, 1f)] private float _followSpeedFactor = 0.8f;
+    [Tooltip("How fast the body turns while walking a path, in degrees a second: lower makes wider arcs round bends. The legs' own turn on the model (CharacterAnimator's Turn Speed) is separate.")]
+    [SerializeField, Min(1f)] private float _turnSpeed = 720f;
     [Tooltip("The room he keeps round other enemies, in metres from centre to centre. Walking any path he curves away from anyone inside this, harder the closer they are, and he doesn't choose a roaming or wandering spot inside it. Capsules touch at about 0.7 m, so below that it does nothing. 0 turns it off.")]
     [SerializeField, Min(0f)] private float _personalSpace = 1.5f;
+    [Tooltip("Seconds without getting closer before a patrol move counts as blocked (another enemy on the spot, a prop, a jammed doorway).")]
+    [SerializeField, Min(0.1f)] private float _stuckTime = 1.5f;
 
-    [Header("Awareness")]
+    [Header("Sight")]
     [Tooltip("How far he sees in front of him, within View Angle, if in sight.")]
     [FormerlySerializedAs("_alertRadius")] [SerializeField, Min(0f)] private float _viewRange = 12f;
     [Tooltip("How wide the view in front of him is, in degrees, centred on his facing.")]
     [SerializeField, Range(1f, 360f)] private float _viewAngle = 100f;
     [Tooltip("Whichever way he faces, he notices Ruby this close, if in sight, so she can't stand right behind him.")]
     [SerializeField, Min(0f)] private float _closeRadius = 2f;
+    [Tooltip("Height above the enemy's centre that sight is cast from.")]
+    [SerializeField] private float _eyeHeight = 0.5f;
+
+    [Header("Senses")]
+    [Tooltip("Seconds between his sweeps for moving bodies, corpses and loose guns. Each enemy starts at a random offset so a squad doesn't sweep on the same step.")]
+    [SerializeField, Min(0.05f)] private float _scanInterval = 0.2f;
+    [Tooltip("How far he notices a loose body (thrown, tumbling or held) moving at Notice Speed or faster, with a clear line to it. Corpses and dropped guns aren't limited by this: see Body Notice Range and View Range.")]
+    [SerializeField, Min(0f)] private float _motionRadius = 15f;
+    [Tooltip("How close a corpse must be for him to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
+    [SerializeField, Min(0f)] private float _bodyNoticeRange = 6f;
+    [Tooltip("How far a body on the chain must be moved from where it was grabbed, in metres measured flat, before he takes it as Ruby dragging it and goes for her. Keep it above the charging throw's jiggle (0.1 m).")]
+    [SerializeField, Min(0f)] private float _draggedDistance = 0.5f;
+
+    [Header("Fighting")]
     [Tooltip("Aggro keeps contact inside this radius, if in sight. Sits outside View Range.")]
     [SerializeField] private float _giveUpRadius = 18f;
     [Tooltip("Seconds out of contact (out of sight, or beyond Give Up Radius) before aggro turns to searching.")]
@@ -34,26 +52,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _sightFollowThrough = 1f;
     [Tooltip("How long he holds at the spot he knew if he hasn't seen Ruby at all in this fight, in seconds, before he starts searching. Getting up, or hurt by something thrown, he is hunting nothing he saw. Once he has seen her in the fight he holds for Aggro Time instead.")]
     [SerializeField, Min(0f)] private float _unseenHoldTime = 1f;
-    [Tooltip("Height above the enemy's centre that sight is cast from.")]
-    [SerializeField] private float _eyeHeight = 0.5f;
-    [Tooltip("The longest a search lasts once he has reached the spot, in seconds. The walk there doesn't count, and a team that has looked at the whole area finishes sooner.")]
-    [SerializeField, Min(0f)] private float _searchDuration = 5f;
-    [Tooltip("How close he gets to a search spot, in metres. If something blocks the way once he's this near (another enemy already standing on the spot, say), he looks from where he stands instead of pushing at it.")]
-    [SerializeField, Min(0.5f)] private float _searchReach = 1.5f;
-    [Tooltip("The longest he walks to a search spot before searching wherever he has got to, in seconds. Keeps one he can't reach (blocked, or a crowded doorway) from walking forever.")]
-    [SerializeField, Min(1f)] private float _searchTravelLimit = 20f;
-    [Tooltip("While he sees Ruby, he calls out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
-    [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
-    [Tooltip("How far he notices a loose body (thrown, tumbling or held) moving at Notice Speed or faster, with a clear line to it. Corpses and dropped guns aren't limited by this: see Body Notice Range and View Range.")]
-    [SerializeField, Min(0f)] private float _motionRadius = 15f;
-    [Tooltip("How far a body on the chain must be moved from where it was grabbed, in metres measured flat, before he takes it as Ruby dragging it and goes for her. Keep it above the charging throw's jiggle (0.1 m).")]
-    [SerializeField, Min(0f)] private float _draggedDistance = 0.5f;
     [Tooltip("How close he must get to where he last knew Ruby was, in metres measured flat and with a clear line to it, to count as there and hold. A place and not a point, so several hunters don't push at each other to stand on one spot.")]
     [SerializeField, Min(0f)] private float _knownSpotRadius = 3f;
-    [Tooltip("How close a corpse must be for him to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
-    [SerializeField, Min(0f)] private float _bodyNoticeRange = 6f;
-    [Tooltip("Seconds between his sweeps for moving bodies, corpses and loose guns. Each enemy starts at a random offset so a squad doesn't sweep on the same step.")]
-    [SerializeField, Min(0.05f)] private float _scanInterval = 0.2f;
+    [Tooltip("While he sees Ruby, he calls out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
+    [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
+
+    [Header("Suspicion")]
     [Tooltip("A disturbance within this distance of where Ruby was last reported is searched for as an attack, not a problem, while that report is recent (Attack Near Time). Measured flat, in metres.")]
     [SerializeField, Min(0f)] private float _attackNearRadius = 20f;
     [Tooltip("How old the newest report of Ruby may be, in seconds, for a disturbance near it to count as an attack. Older and it's just a problem again. An enemy who has seen her ignores this and treats everything as an attack.")]
@@ -61,23 +65,31 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("The time he is sent to look at something that raises his job to an attack, so a team goes aggressive together. Counted per enemy for good: each time he is put on a job he wasn't on (started, joined, called in). Distractions and glances don't count.")]
     [SerializeField, Min(1)] private int _sentToLookThreshold = 3;
 
+    [Header("Searching")]
+    [Tooltip("The longest a search lasts once he has reached the spot, in seconds. The walk there doesn't count, and a team that has looked at the whole area finishes sooner.")]
+    [SerializeField, Min(0f)] private float _searchDuration = 5f;
+    [Tooltip("How close he gets to a search spot, in metres. If something blocks the way once he's this near (another enemy already standing on the spot, say), he looks from where he stands instead of pushing at it.")]
+    [SerializeField, Min(0.5f)] private float _searchReach = 1.5f;
+    [Tooltip("The longest he walks to a search spot before searching wherever he has got to, in seconds. Keeps one he can't reach (blocked, or a crowded doorway) from walking forever.")]
+    [SerializeField, Min(1f)] private float _searchTravelLimit = 20f;
+    [Tooltip("How far, in degrees, his body sweeps to each side of his way while he clears a Search's area. He keeps walking his way, and his view goes with his body.")]
+    [SerializeField, Range(0f, 90f)] private float _walkSweepAngle = 45f;
+    [Tooltip("How much each look varies while he waits in a search for somewhere free to go, as a share of Look Time: at 0.5 each lasts from half to one and a half times Look Time.")]
+    [SerializeField, Range(0f, 0.9f)] private float _roamLookVariation = 0.5f;
+    [Tooltip("How close a follower keeps behind the enemy who goes to check, in metres. He stops here and holds, facing the spot, so the team trails the checker and never crowds him.")]
+    [SerializeField, Min(1f)] private float _followDistance = 3f;
+
     [Header("Looking")]
     [Tooltip("How long he looks around a spot he went to check, in seconds, before standing down. A search for an attack looks for Search Duration instead.")]
     [SerializeField, Min(0.1f)] private float _lookTime = 1.5f;
-    [Tooltip("How much each look varies while he waits in a search for somewhere free to go, as a share of Look Time: at 0.5 each lasts from half to one and a half times Look Time.")]
-    [SerializeField, Range(0f, 0.9f)] private float _roamLookVariation = 0.5f;
     [Tooltip("How long he holds still after finding nothing, in seconds: the gesture, until there is an animation for it.")]
     [SerializeField, Min(0f)] private float _standDownTime = 1f;
     [Tooltip("How far, in degrees, his body turns to each side of where he was facing while he looks around.")]
     [SerializeField, Range(0f, 180f)] private float _lookSweepAngle = 70f;
     [Tooltip("Seconds for one full sweep, left to right and back.")]
     [SerializeField, Min(0.2f)] private float _lookSweepPeriod = 2f;
-    [Tooltip("How close a follower keeps behind the enemy who goes to check, in metres. He stops here and holds, facing the spot, so the team trails the checker and never crowds him.")]
-    [SerializeField, Min(1f)] private float _followDistance = 3f;
-    [Tooltip("A follower's walking speed behind the checker, as a multiple of Search Speed: below 1 so the team trails slowly behind him.")]
-    [SerializeField, Range(0.2f, 1f)] private float _followSpeedFactor = 0.8f;
 
-    [Header("Distraction")]
+    [Header("Provoked")]
     [Tooltip("How long he turns to look at a lesser disturbance while searching, in seconds. The search waits meanwhile, so he doesn't lose search time.")]
     [SerializeField, Min(0.1f)] private float _distractionTime = 1f;
     [Tooltip("How many provocations inside Distraction Memory it takes before he has had enough of Ruby and goes after her, knowing where she is at that moment. Only things she is doing count, not a body or gun lying there, and only once he has reached the search.")]
@@ -87,35 +99,27 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("A disturbance within this long of the last counted one is the same disturbance, in seconds: a thrown body thuds about ten times as it tumbles, and a firefight is a run of shots.")]
     [SerializeField, Min(0f)] private float _distractionGap = 2f;
 
-    [Header("Grabbed")]
-    [Tooltip("How fast the gun pops up out of the enemy's hand when the chain grabs him, in m/s: a small hop, to sell the grab.")]
-    [SerializeField, Min(0f)] private float _grabPopUp = 3f;
-    [Tooltip("How fast the popped gun moves away from his body, in m/s, so it clears his hands.")]
-    [SerializeField, Min(0f)] private float _grabPopOut = 2f;
-
-    [Header("Getting up")]
-    [Tooltip("Seconds a surviving enemy stands getting up after a fall, unable to move or shoot, before it hunts again.")]
-    [SerializeField, Min(0f)] private float _getUpTime = 1f;
-
-    [Header("Dead")]
-    [Tooltip("How bright a corpse's colours are, as a share of the living enemy's, so the dead read at a glance.")]
-    [SerializeField, Range(0f, 1f)] private float _corpseBrightness = 0.35f;
-
     [Header("Patrol")]
     [Tooltip("Walked while unaware. Empty = he idles at his post. One point 4 m or more across (a circle's diameter, a rectangle's longer side) is wandered rather than stood on. Edit with the Scene-view handles when this enemy is selected.")]
     [SerializeField] private PatrolRoute _safeRoute = new();
     [Tooltip("Walked instead of the Safe route once he's aggressive: after he has seen Ruby or been sent after her (an attack search, or a glance at a body). Edit it with the same Scene-view handles (the toggle below picks which route they edit). Empty: a patroller keeps walking his Safe route, and an idle enemy stays at his post, alert.")]
     [SerializeField] private PatrolRoute _aggressiveRoute = new();
-    [Tooltip("Patrol speed once he's aggressive, as a multiple of Patrol Speed: above 1 hurries him, below 1 slows him to a wary creep (0.5 is half speed). Applies to whichever route he walks, and to an idle enemy walking back to his post.")]
-    [SerializeField, Range(0.1f, 3f)] private float _aggressiveSpeedFactor = 1.25f;
-    [Tooltip("An idle enemy this close to his post, in metres, counts as at it. Where he starts is his post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave him 'away' from a post he has reached.")]
-    [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
     [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
     [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
-    [Tooltip("Seconds without getting closer before a patrol move counts as blocked (another enemy on the spot, a prop, a jammed doorway).")]
-    [SerializeField, Min(0.1f)] private float _stuckTime = 1.5f;
+    [Tooltip("An idle enemy this close to his post, in metres, counts as at it. Where he starts is his post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave him 'away' from a post he has reached.")]
+    [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
     [Tooltip("When every patrol point fails in a row, wait this long before trying the route again.")]
     [SerializeField, Min(0f)] private float _routeRetryTime = 3f;
+
+    [Header("Body")]
+    [Tooltip("Seconds a surviving enemy stands getting up after a fall, unable to move or shoot, before it hunts again.")]
+    [SerializeField, Min(0f)] private float _getUpTime = 1f;
+    [Tooltip("How bright a corpse's colours are, as a share of the living enemy's, so the dead read at a glance.")]
+    [SerializeField, Range(0f, 1f)] private float _corpseBrightness = 0.35f;
+    [Tooltip("How fast the gun pops up out of the enemy's hand when the chain grabs him, in m/s: a small hop, to sell the grab.")]
+    [SerializeField, Min(0f)] private float _grabPopUp = 3f;
+    [Tooltip("How fast the popped gun moves away from his body, in m/s, so it clears his hands.")]
+    [SerializeField, Min(0f)] private float _grabPopOut = 2f;
 
     [Header("Gun")]
     [Tooltip("Unarmed, an enemy goes for a free dropped gun within this radius. 0 = never re-arms.")]
