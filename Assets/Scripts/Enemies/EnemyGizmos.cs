@@ -57,6 +57,13 @@ internal static class EnemyGizmos
             Gizmos.DrawWireSphere(enemy.transform.position, gun.MinDistance);
         }
 
+        // How far he goes for a free gun once unarmed. Drawn armed or not, because that's when it's set up. 0 means he never re-arms, so nothing.
+        if (enemy.RearmRadius > 0f)
+        {
+            Gizmos.color = new Color(0.25f, 0.6f, 1f);
+            Gizmos.DrawWireSphere(enemy.transform.position, enemy.RearmRadius);
+        }
+
         // Sight line in play: green when the player is in view, red when something static is in the way.
         if (Application.isPlaying && enemy.Player != null)
         {
