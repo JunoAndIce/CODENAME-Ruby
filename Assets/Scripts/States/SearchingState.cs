@@ -72,7 +72,7 @@ public class SearchingState : EnemyStateBase
     // On a Search, he hasn't finished his own walk and look. Past the countdown he stays on the job for
     // them: a Done job takes no new member or sound (Recruiting, JobBoard.Covers), so a
     // new disturbance here starts a new job, as it would once he had gone. One whose roaming failed has no walk to finish.
-    private bool FinishingSearch(GroupJob job) => job.Kind == JobKind.Search && !_roamGaveUp && !_roamFinished;
+    private bool FinishingSearch(GroupJob job) => job.Kind == JobKind.Search && _arrived && !_roamGaveUp && !_roamFinished;
     // A job's reason and priority are the job's own, which can rise after he joined, so they are read through.
     public StimulusResponse Reason => Job != null ? Job.Reason : _reason;
     public int Priority => Job != null ? Job.Priority : _priority;
@@ -560,7 +560,8 @@ public class SearchingState : EnemyStateBase
             case RoamPhase.Look:
                 _roamLookTimer += Time.fixedDeltaTime;
                 Enemy.Movement.LookAround(_roamBaseYaw, _roamLookTimer, _roamLookLength);
-                if (_roamLookTimer >= _roamLookLength) _roamPhase = RoamPhase.Pick;
+                // He is only looking because there was nowhere free to go, so he has nothing to finish once the job is done.
+                if (job.Step == JobStep.Done || _roamLookTimer >= _roamLookLength) _roamPhase = RoamPhase.Pick;
                 return;
         }
     }

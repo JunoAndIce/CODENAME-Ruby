@@ -68,10 +68,10 @@ public class JobBoard
                     continue;
                 }
 
-                // The whole area has been looked at, so there's nothing left to count down to. Not before a
-                // look's length: the first member in can see an open room at a glance, and the team would
-                // arrive and leave in the same moment.
-                if (job.Step == JobStep.Search && job.Coverage != null && job.Coverage.AllSeen && job.StepElapsed >= job.Lead.LookTime)
+                // The whole area has been looked at, so there's nothing left to do. Not waiting for the countdown,
+                // or for a member still walking in: everyone stood sweeping an empty room until the last was
+                // there. It can't be before someone has come in, because only members in the area build this.
+                if (job.Kind == JobKind.Search && job.Step is JobStep.Go or JobStep.Search && job.Coverage != null && job.Coverage.AllSeen)
                 {
                     AdvanceTo(job, JobStep.Done, "has looked everywhere");
                     continue;
