@@ -21,6 +21,9 @@ public class SearchCoverage
     private readonly bool _hasGround;
     private int _nextToTest;
 
+    /// <summary>Time.time when this was built, which is when the first member came into the area, or they began looking again after a gunshot.</summary>
+    public float StartedAt { get; } = Time.time;
+
     /// <summary>Everything under the area. With no ground there it warns, and the team searches on until its countdown ends.</summary>
     public SearchCoverage(Vector3 place, float radius, Object context)
     {

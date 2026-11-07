@@ -115,7 +115,7 @@
     - **Walking:** they walk slowly and scan as they go, instead of stopping to turn.
     - **Choosing where to go:** instead of random spots, they go to places in the search area they can't currently see, such as behind crates and round corners, until they have seen them. The path grid and sight checks should be able to find these without hand-placed spots, but that is untested.
     - **Stays in piece 8:** the pointman going in at a gesture, the others hanging back, room-by-room clearing and designer-edited hiding spots. Those need rooms (piece 7).
-    - **Changed (2026-11-06):** a search ends as soon as everything has been seen, with no minimum time and without waiting for a member still walking in, because they stood sweeping an empty room. One only looking about stops at once. One walking to a place finishes that walk.
+    - **Changed (2026-11-06):** a search ends once everything has been seen and at least a Look Time has passed since the first member came in (user: "dont drop the minimum time"), without waiting for a member still walking in, because they stood sweeping an empty room. One only looking about stops at once. One walking to a place finishes that walk.
     - **Tried and undone (user, 2026-11-06):** clearing by walking within Search Reach of each point, with sight only for what they couldn't reach (885c1ca, reverted). Clearing stays by sight.
     - **Settled (user, 2026-11-06):** one slow speed for every search, Clearing Speed Factor 0.6 of Search Speed, with walking in at full speed. The team shares what it has seen, and two don't head for the same place. Once they've seen it all the search finishes early, so Search Duration is its longest. Only Searches change: a Check stays a quick look, and so does a scout's check.
 
