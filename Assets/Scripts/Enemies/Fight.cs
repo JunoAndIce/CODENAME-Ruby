@@ -32,6 +32,9 @@ public class Fight
 
     public bool IsMain(EnemyController who) => _main.Contains(who);
 
+    /// <summary>Whether he is still a member, main or standby.</summary>
+    public bool Contains(EnemyController who) => _main.Contains(who) || _standby.Contains(who);
+
     // Only the board changes membership, so the invariants (one fight per enemy, a main place under the
     // cap) are kept in one class.
     internal List<EnemyController> MainList => _main;

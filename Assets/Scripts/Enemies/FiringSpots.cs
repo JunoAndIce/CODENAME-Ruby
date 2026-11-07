@@ -72,9 +72,12 @@ public static class FiringSpots
     /// nobody else takes it. False when no candidate is walkable, reachable, unclaimed and in a clear shot;
     /// his claim is then released and the caller says what applies. avoid is a spot he just failed to reach. laneBlocker is the squadmate standing in his lane (see FireLane):
     /// spots whose shot would cross him are weighted down, none is taken, and on finding nothing his claim is
-    /// kept, since he holds fire where he stands and the caller says so.
+    /// kept, since he holds fire where he stands and the caller says so. leaveSpot is for the pick asked for
+    /// because he is blocked at his spot: it is no candidate then, whatever the lane test says of it, since
+    /// his gun sits off his centre line and a spot can pass a test made from the body and fail the one from the
+    /// muzzle; handing back the spot he is blocked at would leave him holding fire there for good.
     /// </summary>
-    public static bool TryPick(EnemyController who, Fight fight, Vector3 ruby, out Vector3 spot, Vector3? avoid = null, EnemyController laneBlocker = null)
+    public static bool TryPick(EnemyController who, Fight fight, Vector3 ruby, out Vector3 spot, Vector3? avoid = null, EnemyController laneBlocker = null, bool leaveSpot = false)
     {
         spot = default;
         if (who.PlayerTransform == null || !TryGetBand(who, fight, ruby, out float bandNear, out float bandFar))
@@ -110,7 +113,7 @@ public static class FiringSpots
         Candidates.Clear();
 
         bool hasCurrent = fight.TryGetClaim(who, out Vector3 current);
-        if (hasCurrent)
+        if (hasCurrent && !leaveSpot)
         {
             // His own spot is a candidate with a bonus, unless it has gone bad: past the band's far side by more
             // than half a spacing (the band moves with main), inside the gun's Min Distance (no slack there: he

@@ -493,13 +493,15 @@ through the player never slows the walk. **Enemies don't shove props that block 
   allocation. Bullets don't hit enemies on their feet, so this is about looking right: nobody fires through
   a squadmate. One in his lane makes him hold fire and nothing else: he keeps aiming at her, so his stance
   stays Aim and the gun isn't lowered and raised each beat (`AggroState.HoldFire`), and the line
-  "X holds: Y is in his lane" is logged once per hold (in his lane again within 1 s of leaving it is the
+  "X holds: Y is in his lane" is logged once per episode (in his lane again, even behind another squadmate, within 1 s of the last block is the
   same hold). If the squadmate is walking out of it (clear of the lane after Lane Beat, 0.5 s, and moving
   faster than 0.5 m/s) he waits that beat; a standing one, or one still there after it, makes him re-pick
   his spot at once, with `FiringSpots.TryPick`'s lane weight (4, against a best ordinary score near 3.3)
-  on spots whose shot would cross that squadmate, and none of them taken. Such a pick is asked for no more
-  often than the normal cadence after it. Finding nothing, he keeps his spot and goes on holding fire,
-  saying so once per hold, and tries again on the next beat of the cadence: never fires through.
+  on spots whose shot would cross that squadmate (lead position included, as in the hold), none of them
+  taken, and the spot he is blocked at not a candidate at all (his gun sits off his centre line, so a test
+  from his body could pass it). Every pick in the episode keeps clear of the last blocker, not only that one.
+  A failed such pick is not repeated sooner than the normal cadence; a successful one doesn't hold the next off. Finding nothing, he keeps his spot and goes on holding fire,
+  saying so once per episode, and tries again on the next beat of the cadence: never fires through.
   Unarmed, or in no fight, there is no lane check.
 - **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
   Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
@@ -1210,12 +1212,12 @@ and overloaded classes, and `docs/plans/2026-11-02-enemy-ai-fixes-and-refactor.m
 split the job engine, the knowledge pool, flood reading, sight and reactions out of `Intel` and
 `EnemyController` into the classes under **Enemy AI**. Part 2's tasks and its decisions are built
 and described under **Enemy AI**, including decision 16, searching like people (slow walking, scanning
-as they go, clearing what they can't see). Squads come next. The user
+as they go, clearing what they can't see). Squads and fire lanes (piece 6) are built. The user
 changed decisions 10, 14 and 15 (Task 8b): nobody goes to Aggro unless he sees Ruby, or sees her drag
 or throw an enemy on the chain, and one who sees an enemy killed goes to check where it came from; a grabbed enemy seen standing still is walked over to and searched
 around, and a knockdown or death only searches. Piece 5's part B (patrol together: leaders, groups,
 breaking off) isn't built, and needs a trigger of its own now the level alert is gone. After the
-searching piece come squads, rooms, hiding spots and breakables.
+squads come rooms, hiding spots and breakables.
 
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
 account of what is built, and its section on the Path Grid, colliders and navigation is written for

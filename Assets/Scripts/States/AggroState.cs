@@ -22,7 +22,7 @@ public class AggroState : EnemyStateBase
     private const float RepickGap = 0.25f;   // no pick sooner than this after the last, whatever asked: a changing band or a blocked shot can't make him pick every step
     private const float LaneBeat = 0.5f;     // a squadmate walking out of his lane is waited for this long before he steps aside
     private const float LaneMoveSpeed = 0.5f; // slower than this a squadmate is standing: there is nothing to wait for
-    private const float LaneEpisodeGap = 1f;  // in his lane again within this long of leaving it is the same hold: one log line, and the beat isn't given twice
+    private const float LaneEpisodeGap = 1f;  // in his lane again within this long of leaving it is the same episode: one log line, and the beat isn't given twice
     private const float AvoidTime = 3f;      // a spot he couldn't reach is left alone this long, or the pick would choose it again
 
     private float _lostTimer;
@@ -47,7 +47,8 @@ public class AggroState : EnemyStateBase
     private float _avoidUntil;
 
     // Holding fire for a squadmate in his lane (see FireLane).
-    private EnemyController _laneBlocker;   // the squadmate the next pick must keep out of his shot
+    private EnemyController _laneBlocker;   // the squadmate the next pick must leave his spot for: asked for by a hold
+    private EnemyController _episodeBlocker;   // the last to block him: every pick in the episode keeps his shot clear of him
     private float _blockedSince;
     private float _lastBlocked = float.NegativeInfinity;
     private float _laneRetryAt;             // after a lane pick that found nothing he waits for the normal cadence, not a pick every quarter second
@@ -103,6 +104,7 @@ public class AggroState : EnemyStateBase
         _lastPick = float.NegativeInfinity;
         _avoidUntil = 0f;
         _laneBlocker = null;
+        _episodeBlocker = null;
         _lastBlocked = float.NegativeInfinity;
         _laneRetryAt = 0f;
         // Rearm hands back through here, so a re-join is a no-op that keeps his place. With no Intel
@@ -391,11 +393,16 @@ public class AggroState : EnemyStateBase
         Vector3? avoid = Time.time < _avoidUntil ? _avoid : (Vector3?)null;
         // A pick asked for by a squadmate in his lane keeps his shot clear of him; its retry waits for the
         // normal cadence, so being blocked with nowhere to go costs one pick a second, not four.
-        EnemyController lane = _laneBlocker;
+        // Every pick in the episode keeps clear of the last blocker, not only the asked-for one: the normal
+        // cadence's pick sees squadmates at their claims, and one standing off his claim would be invisible
+        // to it and could send him back to the spot the lane pick took him off.
+        EnemyController asked = StillInFight(fight, _laneBlocker);
         _laneBlocker = null;
-        if (lane != null) _laneRetryAt = _nextPick;
-        if (FiringSpots.TryPick(Enemy, fight, ruby, out Vector3 spot, avoid, lane))
+        EnemyController lane = asked;
+        if (lane == null && Time.time <= _lastBlocked + LaneEpisodeGap) lane = StillInFight(fight, _episodeBlocker);
+        if (FiringSpots.TryPick(Enemy, fight, ruby, out Vector3 spot, avoid, lane, leaveSpot: asked != null))
         {
+            if (asked != null) _laneRetryAt = 0f;   // it worked: a different squadmate stepping in after he has moved gets a pick at once
             if (!_hasSpot || PathGrid.FlatDistance(spot, _spot) > 0.01f)
             {
                 DebugLog.Info($"{Enemy.name} takes a firing spot {PathGrid.FlatDistance(spot, ruby):0.#} m from Ruby ({(Enemy.IsStandby ? "standby" : "main")}).", Enemy);
@@ -407,7 +414,9 @@ public class AggroState : EnemyStateBase
         }
 
         // Nothing clear of the lane: the pick kept his claim, so he stays where he is, holding fire. A stated
-        // rule, said once per hold, and the normal cadence tries again.
+        // rule, said once per episode, and the normal cadence tries again.
+        // Only a failed asked-for pick holds off the next one to the normal cadence.
+        if (asked != null) _laneRetryAt = _nextPick;
         if (lane != null && fight.TryGetClaim(Enemy, out _))
         {
             if (!_loggedNoLaneSpot)
@@ -433,8 +442,14 @@ public class AggroState : EnemyStateBase
         return !FiringSpots.InKeepBand(Enemy, ring, near, far, Enemy.SquadSpacing * 0.5f);
     }
 
+    // A squadmate still worth keeping out of his shot: in his fight and on his feet. One held on the chain,
+    // dead or gone is nobody's lane.
+    private static EnemyController StillInFight(Fight fight, EnemyController mate)
+        => mate != null && !mate.IsOverridden && fight.Contains(mate) ? mate : null;
+
     private void ReleaseSpot()
     {
+        _laneBlocker = null;   // asked for in a spot he no longer holds: a pick seconds later must not weight against wherever that squadmate is by then
         if (!_hasSpot) return;
         Enemy.Fight?.Release(Enemy);
         _hasSpot = false;
@@ -494,6 +509,7 @@ public class AggroState : EnemyStateBase
         bool leaving = FireLane.LeavesLane(Enemy, blocker, player, LaneBeat, LaneMoveSpeed);
         if (leaving && Time.time < _blockedSince + LaneBeat) return;
         if (Time.time < _laneRetryAt) return;
+        _episodeBlocker = blocker;
         _laneBlocker = blocker;
         _pickNow = true;
     }

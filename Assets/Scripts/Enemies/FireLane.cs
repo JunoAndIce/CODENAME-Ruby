@@ -26,11 +26,12 @@ public static class FireLane
     }
 
     /// <summary>
-    /// Whether a shot from a spot would cross a member, judged where he stands now. The firing-spot pick
-    /// asks this of the one in his way, because his muzzle is not at the spot yet.
+    /// Whether a shot from a spot would cross a member, by the hold's own test (where he stands and where his
+    /// velocity takes him). The firing-spot pick asks this of the one in his way, because his muzzle is not at
+    /// the spot yet; the gun sits off his centre line, so the pick also drops the spot he is blocked at outright.
     /// </summary>
     public static bool Blocks(EnemyController who, EnemyController mate, Vector3 from, Vector3 target)
-        => mate != null && Distance(mate.transform.position, from, target) < Radius(who);
+        => mate != null && InLane(mate, from, target);
 
     /// <summary>
     /// Whether a member now in his lane will be clear of it after a given time, moving along his
@@ -41,10 +42,18 @@ public static class FireLane
         if (mate == null || !TryGetMuzzle(who, out Vector3 muzzle)) return false;
         Vector3 velocity = Flat(mate.Body.linearVelocity);
         if (velocity.magnitude < minSpeed) return false;
-        return Distance(mate.transform.position + velocity * seconds, muzzle, target) >= Radius(who);
+        return Distance(mate.transform.position + velocity * seconds, muzzle, target) >= Radius(mate);
     }
 
-    private static float Radius(EnemyController who) => who.BodyRadius + LaneMargin;
+    // The squadmate's own radius: it is his body the shot would visibly cross, and the lane is a line.
+    private static float Radius(EnemyController mate) => mate.BodyRadius + LaneMargin;
+
+    private static bool InLane(EnemyController mate, Vector3 from, Vector3 target)
+    {
+        float radius = Radius(mate);
+        Vector3 here = mate.transform.position;
+        return Distance(here, from, target) < radius || Distance(here + Flat(mate.Body.linearVelocity) * LeadTime, from, target) < radius;
+    }
 
     private static bool TryGetMuzzle(EnemyController who, out Vector3 muzzle)
     {
@@ -56,15 +65,12 @@ public static class FireLane
 
     private static EnemyController FirstIn(IReadOnlyList<EnemyController> members, EnemyController who, Vector3 muzzle, Vector3 target)
     {
-        float radius = Radius(who);
         for (int i = 0; i < members.Count; i++)
         {
             EnemyController mate = members[i];
             // The board prunes the dead and downed within a frame, so one may still be listed: he blocks nothing.
             if (mate == null || mate == who || mate.IsOverridden) continue;
-            Vector3 here = mate.transform.position;
-            if (Distance(here, muzzle, target) < radius) return mate;
-            if (Distance(here + Flat(mate.Body.linearVelocity) * LeadTime, muzzle, target) < radius) return mate;
+            if (InLane(mate, muzzle, target)) return mate;
         }
         return null;
     }
