@@ -27,14 +27,23 @@ internal static class EnemyGizmos
         Gizmos.color = new Color(1f, 0.4f, 0.8f);
         Gizmos.DrawWireSphere(enemy.transform.position, enemy.BodyNoticeRange);
 
-        // Around where he last heard or saw of Ruby, while that report is recent enough: a
-        // disturbance inside this circle is searched for as an attack. Playing doesn't mean he has woken:
-        // the prefab open in Prefab Mode during Play never runs Awake, so it has no Memory to ask.
-        if (Application.isPlaying && enemy.Memory != null && enemy.Awareness.TryGetNewestRubyFact(out RubyFact news) && Time.time - news.Time <= enemy.AttackNearTime)
+        // Where he counts as having reached the spot he knew, and Attack Near Radius's own ring is DrawRoutes'.
+        // In edit mode there is no news of Ruby, so that ring is drawn round him, to judge its size.
+        if (TryGetRecentNews(enemy, out RubyFact news))
         {
-            Gizmos.color = new Color(1f, 0.55f, 0.1f, 0.6f);
-            DrawFlatCircle(news.Position + Vector3.up * 0.1f, enemy.AttackNearRadius);
+            Gizmos.color = AttackNearColour;
             DrawFlatCircle(news.Position + Vector3.up * 0.1f, enemy.KnownSpotRadius);
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(news.Position + Vector3.up * 0.8f + Vector3.right * enemy.AttackNearRadius, $"Attack Near Radius {enemy.AttackNearRadius:0.#} m, reported {Time.time - news.Time:0.0}s ago");
+#endif
+        }
+        else if (!Application.isPlaying)
+        {
+            Gizmos.color = AttackNearColour;
+            DrawFlatCircle(enemy.transform.position + Vector3.up * 0.1f, enemy.AttackNearRadius);
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(enemy.transform.position + Vector3.up * 0.8f + Vector3.right * enemy.AttackNearRadius, $"Attack Near Radius {enemy.AttackNearRadius:0.#} m");
+#endif
         }
 
         // The gun's engagement band: fires out to Range, closes in only to Min Distance. In edit
@@ -62,6 +71,25 @@ internal static class EnemyGizmos
     {
         DrawRoute(enemy.SafeRoute, new Color(0f, 1f, 1f, 0.35f));
         DrawRoute(enemy.AggressiveRoute, new Color(1f, 0.55f, 0.1f, 0.45f));
+
+        // Without selecting him, because it decides what you see him do: a disturbance inside it is searched
+        // for as an attack. Enemies who share news of her draw the same ring, one on top of the other.
+        if (TryGetRecentNews(enemy, out RubyFact news))
+        {
+            Gizmos.color = AttackNearColour;
+            DrawFlatCircle(news.Position + Vector3.up * 0.1f, enemy.AttackNearRadius);
+        }
+    }
+
+    private static readonly Color AttackNearColour = new(1f, 0.55f, 0.1f, 0.6f);
+
+    // Around where he last heard or saw of Ruby, while that report is recent enough to count. Playing doesn't
+    // mean he has woken: the prefab open in Prefab Mode during Play never runs Awake, so it has no Memory to ask.
+    private static bool TryGetRecentNews(EnemyController enemy, out RubyFact news)
+    {
+        news = default;
+        return Application.isPlaying && enemy.Memory != null && enemy.Awareness.TryGetNewestRubyFact(out news)
+            && Time.time - news.Time <= enemy.AttackNearTime;
     }
 
     private static void DrawRoute(PatrolRoute route, Color colour)
