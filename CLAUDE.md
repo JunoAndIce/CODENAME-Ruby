@@ -490,7 +490,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   bake's own clearance test, and a wandered point is labelled "0 · wander". In the Inspector,
   `PatrolPointDrawer` shows only the size field a point's shape uses. Labels number the Safe
   route 0, 1, 2 and the Aggressive one A0, A1, A2, so a runtime warning maps back to the right
-  route. No route for his mode means he idles at his post (see **Idle**).
+  route. A pause at a point of Long Pause Time (10 s) or more isn't spent standing: every Pause Roam Min to Max seconds (3 to 6) he walks to another spot in the point's area, at patrol speed, and the pause still ends on time. No route for his mode means he idles at his post (see **Idle**).
 - **Idle** (`IdleState`). Where an officer starts is his **post** (`PostPosition`, `PostYaw`,
   recorded in `Start`). After a search, a fall or a shove, farther than Post Tolerance (1 m) from it,
   he walks back at the current patrol speed and turns the way he started, so an idle officer is

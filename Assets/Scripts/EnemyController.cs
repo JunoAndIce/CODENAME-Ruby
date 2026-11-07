@@ -109,6 +109,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private PatrolRoute _aggressiveRoute = new();
     [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
     [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
+    [Tooltip("A pause at a patrol point this long or longer, in seconds, isn't spent standing still: he moves about inside the point's area for the length of it.")]
+    [SerializeField, Min(0f)] private float _longPauseTime = 10f;
+    [Tooltip("In a long pause, the shortest he stays at one spot before moving to another in the point's area, in seconds.")]
+    [SerializeField, Min(0.1f)] private float _pauseRoamMin = 3f;
+    [Tooltip("In a long pause, the longest he stays at one spot before moving to another in the point's area, in seconds. Never below the shortest.")]
+    [SerializeField, Min(0.1f)] private float _pauseRoamMax = 6f;
     [Tooltip("An idle enemy this close to his post, in metres, counts as at it. Where he starts is his post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave him 'away' from a post he has reached.")]
     [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
     [Tooltip("When every patrol point fails in a row, wait this long before trying the route again.")]
@@ -194,6 +200,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float PostYaw { get; private set; }
     public float PostTolerance => _postTolerance;
     public float NodePauseTime => _nodePauseTime;
+    public float LongPauseTime => _longPauseTime;
+    public float PauseRoamMin => _pauseRoamMin;
+    public float PauseRoamMax => _pauseRoamMax;
     public float StuckTime => _stuckTime;
     public float RouteRetryTime => _routeRetryTime;
     public float RearmRadius => _rearmRadius;
@@ -323,6 +332,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         // Give-up must sit outside both view range and the close circle, or the enemy aggros and
         // de-aggros in the same frame.
         _giveUpRadius = Mathf.Max(_giveUpRadius, Mathf.Max(_viewRange, _closeRadius) + 1f);
+        _pauseRoamMax = Mathf.Max(_pauseRoamMax, _pauseRoamMin);
     }
 
     // Play-mode path overlay: visible in the Scene view without selecting the enemy.

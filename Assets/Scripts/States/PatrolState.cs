@@ -28,6 +28,12 @@ public class PatrolState : EnemyStateBase
     private float _lookBaseYaw;   // where he faced on arriving: an aggressive pause sweeps about it
     private float _lookElapsed;
     private float _pauseDuration;   // how long this pause lasts, so the sweep fits it
+    // A long pause, spent moving about inside the point's area (Long Pause Time) rather than standing.
+    private bool _pauseRoams;
+    private bool _pauseWalking;
+    private Vector3 _pauseSpot;
+    private float _pauseRoamTimer;  // until he next moves
+    private bool _pauseRoamWarned;  // the point's area has nowhere to go: said once per pause
     private int _failStreak;
     private float _holdTimer;
     private bool _holdReported;
@@ -94,6 +100,9 @@ public class PatrolState : EnemyStateBase
         }
         if (_paused)
         {
+            // A long pause, walking to his next spot in the area.
+            if (_pauseRoams && _index < Route.Count && PauseRoam(Route[_index])) return;
+
             // Aggressive, he looks about at each point instead of standing.
             if (Enemy.IsAggressive) Enemy.Movement.LookAround(_lookBaseYaw, _lookElapsed, _pauseDuration);
             else Enemy.Stop();
@@ -149,6 +158,38 @@ public class PatrolState : EnemyStateBase
         }
     }
 
+    // A long pause reads as a man waiting about, not a statue: every so often he walks to another spot in
+    // the point's area, for as long as the pause lasts. True while he's walking. A spot he can't get to just
+    // starts the next wait. The pause's own timer runs throughout, so it ends on time even mid-walk.
+    private bool PauseRoam(PatrolPoint point)
+    {
+        if (_pauseWalking)
+        {
+            if (Enemy.Movement.WanderTo(_pauseSpot, Enemy.CurrentPatrolSpeed) == NavResult.Moving) return true;
+
+            _pauseWalking = false;
+            _lookBaseYaw = Enemy.transform.eulerAngles.y;
+            _lookElapsed = 0f;
+            _pauseRoamTimer = Random.Range(Enemy.PauseRoamMin, Enemy.PauseRoamMax);
+            return false;
+        }
+
+        _pauseRoamTimer -= Time.fixedDeltaTime;
+        if (_pauseRoamTimer > 0f) return false;
+
+        _pauseRoamTimer = Random.Range(Enemy.PauseRoamMin, Enemy.PauseRoamMax);
+        if (!Enemy.Movement.TryPickWanderSpot(point, out _pauseSpot))
+        {
+            if (!_pauseRoamWarned)
+                Debug.LogWarning($"{Enemy.name}: {PointName(_index)} has a long pause, but nowhere to move to in its area ({Enemy.Navigator.FailureReason}): he stays where he is. Make the area bigger, or its pause shorter than Long Pause Time.", Enemy);
+            _pauseRoamWarned = true;
+            return false;
+        }
+
+        _pauseWalking = true;
+        return true;
+    }
+
     // A spot another enemy stands on, or a crate just landed on, is normal: pick another. Only a
     // run of failures means the area itself is the problem.
     private void WanderFailed()
@@ -168,6 +209,10 @@ public class PatrolState : EnemyStateBase
         // Aggressive, the pause is spent looking about, for as long as the point says or Look Time.
         _pauseDuration = point.HasPauseOverride ? point.PauseTime : Enemy.IsAggressive ? Enemy.LookTime : Enemy.NodePauseTime;
         _pauseTimer = _pauseDuration;
+        _pauseRoams = _pauseDuration >= Enemy.LongPauseTime;
+        _pauseWalking = false;
+        _pauseRoamWarned = false;
+        _pauseRoamTimer = Random.Range(Enemy.PauseRoamMin, Enemy.PauseRoamMax);
     }
 
     private void Skip()
