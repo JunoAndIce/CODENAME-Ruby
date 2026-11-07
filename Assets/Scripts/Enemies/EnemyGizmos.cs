@@ -27,11 +27,13 @@ internal static class EnemyGizmos
         Gizmos.color = new Color(1f, 0.4f, 0.8f);
         Gizmos.DrawWireSphere(enemy.transform.position, enemy.BodyNoticeRange);
 
-        // Where he counts as having reached the spot he knew, and Attack Near Radius's own ring is DrawRoutes'.
-        // In edit mode there is no news of Ruby, so that ring is drawn round him, to judge its size.
+        // Attack Near Radius round where she was last reported, and inside it where he counts as having reached
+        // the spot he knew. Only on the selected enemy: drawn on every enemy in Play, the rings piled up and hid
+        // the scene. In edit mode there is no news of Ruby, so the ring is drawn round him, to judge its size.
         if (TryGetRecentNews(enemy, out RubyFact news))
         {
             Gizmos.color = AttackNearColour;
+            DrawFlatCircle(news.Position + Vector3.up * 0.1f, enemy.AttackNearRadius);
             DrawFlatCircle(news.Position + Vector3.up * 0.1f, enemy.KnownSpotRadius);
 #if UNITY_EDITOR
             UnityEditor.Handles.Label(news.Position + Vector3.up * 0.8f + Vector3.right * enemy.AttackNearRadius, $"Attack Near Radius {enemy.AttackNearRadius:0.#} m, reported {Time.time - news.Time:0.0}s ago");
@@ -86,14 +88,6 @@ internal static class EnemyGizmos
     {
         DrawRoute(enemy.SafeRoute, new Color(0f, 1f, 1f, 0.35f));
         DrawRoute(enemy.AggressiveRoute, new Color(1f, 0.55f, 0.1f, 0.45f));
-
-        // Without selecting him, because it decides what you see him do: a disturbance inside it is searched
-        // for as an attack. Enemies who share news of her draw the same ring, one on top of the other.
-        if (TryGetRecentNews(enemy, out RubyFact news))
-        {
-            Gizmos.color = AttackNearColour;
-            DrawFlatCircle(news.Position + Vector3.up * 0.1f, enemy.AttackNearRadius);
-        }
     }
 
     private static readonly Color AttackNearColour = new(1f, 0.55f, 0.1f, 0.6f);

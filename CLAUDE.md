@@ -812,7 +812,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   every member and from each member to the spot, the checker ringed, the scout ringed too with a ring where he was sent and a line to it, and a label with the job's id,
   kind, step, members over cap, reason, priority and checker. `Intel` also marks, in Play whenever
   Gizmos are on (no toggle), each open job's Job Match Radius (in edit mode, with `Intel` selected, the same ring round `Intel`, for sizing it), where Ruby was last reported ("reported Xs ago") and the bodies and
-  loose guns the squad has on its books. Every enemy with recent news of Ruby draws Attack Near Radius round where she was last reported, orange, in Play without being selected; selected, the ring gets a label and Known Spot Radius inside it, and in edit mode it draws round him, for sizing it. Every officer's routes show
+  loose guns the squad has on its books. A selected enemy with recent news of Ruby draws Attack Near Radius round where she was last reported, orange, with a label and Known Spot Radius inside it (only when selected: drawn on every enemy, the rings piled up), and in edit mode it draws round him, for sizing it. Every officer's routes show
   faintly, cyan for Safe and orange for Aggressive.
 
 ### Pathing
