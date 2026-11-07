@@ -68,13 +68,13 @@
 - **`Fight`:** claims: `Claim(who, spot)`, `Release(who)`, `IsClaimedNear(spot, spacing, except)`.
 - **`EnemyController`:** new `_squadSpacing` = 2 m under **Fighting**.
 
-- [ ] **Step 1: Candidates.** Open cells on rings around where he knows Ruby is: 16 angles and 3 radii across the band (main: the gun's Min Distance to Range; standby: Task 1's distance onward, within Range). `PathGrid.IsWalkable`, and on ground he can reach.
-- [ ] **Step 2: Score.** A weighted sum, weights as named constants: not within `_squadSpacing` of a claim (a rejection, not a weight), near where he stands, inside the band's middle, spread round her (a different angle from his squadmates'), not on a squadmate's line to her. Then a **clear shot** ray from the spot at eye height, tested only on the best few, up to a budget. Keep his current spot unless a new one beats it by a margin.
-- [ ] **Step 3: Walk and re-pick.** An armed member with her in sight (or following through) walks to his spot and holds, facing her, firing as today. Re-pick about once a second, staggered, or at once when she has moved past half the spacing beyond his band or his shot is blocked. The main squad picks before standby because `Main` is walked first when claims are contested. No spot found: he falls to Task 1's band behaviour, with a log line, once per fight.
-- [ ] **Step 4: Backing away** still applies inside Min Distance, and cornered he stands and fights, as today.
-- [ ] **Step 5: Gizmos and docs.** Selected enemy: his spot, and a line to it. `CLAUDE.md`.
-- [ ] **Step 6: Compile and commit.**
-- [ ] **Step 7: Play-test gate (the user).** They spread round her in a loose crossfire instead of a clump, and never share a spot. Running past them, they shift without shuffling constantly. A wall between a spot and her: nobody picks it.
+- [x] **Step 1: Candidates.** Open cells on rings around where he knows Ruby is: 16 angles and 3 radii across the band (main: the gun's Min Distance to Range; standby: Task 1's distance onward, within Range). `PathGrid.IsWalkable`, and on ground he can reach.
+- [x] **Step 2: Score.** A weighted sum, weights as named constants: not within `_squadSpacing` of a claim (a rejection, not a weight), near where he stands, inside the band's middle, spread round her (a different angle from his squadmates'), not on a squadmate's line to her. Then a **clear shot** ray from the spot at eye height, tested only on the best few, up to a budget. Keep his current spot unless a new one beats it by a margin.
+- [x] **Step 3: Walk and re-pick.** An armed member with her in sight (or following through) walks to his spot and holds, facing her, firing as today. Re-pick about once a second, staggered, or at once when she has moved past half the spacing beyond his band or his shot is blocked. The main squad picks before standby because `Main` is walked first when claims are contested. No spot found: he falls to Task 1's band behaviour, with a log line, once per fight.
+- [x] **Step 4: Backing away** still applies inside Min Distance, and cornered he stands and fights, as today.
+- [x] **Step 5: Gizmos and docs.** Selected enemy: his spot, and a line to it. `CLAUDE.md`.
+- [x] **Step 6: Compile and commit.**
+- [x] **Step 7: Play-test gate (the user).** They spread round her in a loose crossfire instead of a clump, and never share a spot. Running past them, they shift without shuffling constantly. A wall between a spot and her: nobody picks it.
 
 ### Task 3: Fire lanes
 
