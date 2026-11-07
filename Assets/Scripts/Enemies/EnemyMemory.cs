@@ -131,10 +131,7 @@ public class EnemyMemory
     /// Notes that something lesser happened while he was searching, and returns how many he has had
     /// within memory seconds. Two clocks. `isNew`: it is more than gap since the last disturbance of any
     /// kind, so a thrown body's ten thuds and a firefight's run of shots are each one thing to respond to,
-    /// not a dozen. `counted`: it `counts` (walking in, he still turns to look, but nothing adds up until
-    /// he has reached the search) and is more than gap since the last one that was counted. They are
-    /// apart because one clock let an uncounted thud on the way in, or a body noticed, swallow the real
-    /// provocation that followed within the gap: no count, no pause, no scout.
+    /// not a dozen. `counted`: it `counts` (a body or gun lying there doesn't) and is more than gap since the last one that was counted. They are apart because one clock let an uncounted thing, a body noticed, swallow the real provocation that followed within the gap: no count, no pause, no scout.
     /// </summary>
     public int NoteDistraction(float now, float memory, float gap, bool counts, out bool isNew, out bool counted)
     {

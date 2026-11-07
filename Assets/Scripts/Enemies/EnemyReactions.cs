@@ -132,13 +132,11 @@ public class EnemyReactions
     // a moment, but it isn't dropped or retargeted. Enough of them close together and he has had
     // enough of Ruby provoking him: she keeps throwing things and threatening them, so he goes after her.
     // So what counts is whether she is doing something, not how serious it is: a low-priority thud
-    // during a body search is one more thing thrown at them. A body or gun lying there isn't her doing
-    // anything, and nothing counts until he has reached the search, because what he passes on the way is
-    // why he is going. He still turns to look at both.
+    // during a body search is one more thing thrown at them, on the walk there as much as once he's
+    // arrived. A body or gun lying there isn't her doing anything: he turns to look, and it doesn't count.
     private bool Distract(Incident incident)
     {
-        bool arrived = _enemy.Searching.ReachedSearch;
-        bool counts = arrived && !incident.SaysNothingOfRuby;
+        bool counts = !incident.SaysNothingOfRuby;
         int count = _enemy.Memory.NoteDistraction(Time.time, _enemy.DistractionMemory, _enemy.DistractionGap, counts, out bool isNew, out bool counted);
         // The threshold reads the counted clock; the pause, the scout and the log read either, so a thud
         // that only counted still turns him and sends a scout.
@@ -153,7 +151,7 @@ public class EnemyReactions
         _enemy.Searching.Distract(incident.Point, fresh);
         // Turning to look isn't all of it: one of the team goes to see, if the job can spare him.
         if (fresh && _enemy.Intel != null) _enemy.Intel.SendScout(_enemy, incident);
-        string tally = counts ? $"{count} of {_enemy.DistractionThreshold}" : arrived ? "not counted, it isn't Ruby doing anything" : "not counted, he hasn't reached the search";
+        string tally = counts ? $"{count} of {_enemy.DistractionThreshold}" : "not counted, it isn't Ruby doing anything";
         DebugLog.Info($"{_enemy.name} {(fresh ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}): {tally}.", _enemy);
         return true;
     }

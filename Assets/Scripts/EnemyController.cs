@@ -92,7 +92,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Header("Provoked")]
     [Tooltip("How long he turns to look at a lesser disturbance while searching, in seconds. The search waits meanwhile, so he doesn't lose search time.")]
     [SerializeField, Min(0.1f)] private float _distractionTime = 1f;
-    [Tooltip("How many provocations inside Distraction Memory it takes before he has had enough of Ruby and goes after her, knowing where she is at that moment. Only things she is doing count, not a body or gun lying there, and only once he has reached the search.")]
+    [Tooltip("How many provocations inside Distraction Memory it takes before he has had enough of Ruby and goes after her, knowing where she is at that moment. Only things she is doing count, not a body or gun lying there.")]
     [SerializeField, Min(1)] private int _distractionThreshold = 3;
     [Tooltip("How long a distraction counts toward the jig, in seconds.")]
     [SerializeField, Min(1f)] private float _distractionMemory = 12f;
