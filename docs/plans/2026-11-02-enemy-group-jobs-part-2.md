@@ -115,7 +115,7 @@
     - **Walking:** they walk slowly and scan as they go, instead of stopping to turn.
     - **Choosing where to go:** instead of random spots, they go to places in the search area they can't currently see, such as behind crates and round corners, until they have seen them. The path grid and sight checks should be able to find these without hand-placed spots, but that is untested.
     - **Stays in piece 8:** the pointman going in at a gesture, the others hanging back, room-by-room clearing and designer-edited hiding spots. Those need rooms (piece 7).
-    - **Changed (user, 2026-11-06):** clearing is by walking, not sight: "They need to clear the search by physically walking to each spot. If they can't reach that spot, looking at it suffices." Points are a metre apart, so getting within Search Reach of one with a clear line clears it. *The rest of this entry says "seen" where it now means walked.*
+    - **Tried and undone (user, 2026-11-06):** clearing by walking within Search Reach of each point, with sight only for what they couldn't reach (885c1ca, reverted). Clearing stays by sight.
     - **Settled (user, 2026-11-06):** one slow speed for every search, Clearing Speed Factor 0.6 of Search Speed, with walking in at full speed. The team shares what it has seen, and two don't head for the same place. Once they've seen it all the search finishes early, so Search Duration is its longest. Only Searches change: a Check stays a quick look, and so does a scout's check.
 
 17. **A hunt gets as near as it can (added and built 2026-11-06).** *(User: "it happened when I stood RIGHT behind a crate. They \"lost\" aggro of me despite me not moving.")*

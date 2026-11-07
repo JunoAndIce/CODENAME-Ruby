@@ -2,27 +2,24 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// What a Search's team hasn't walked yet: points across its area, about a metre apart, on ground joined to
-/// its place. A point is cleared by a member physically getting to it, within his Search Reach with a clear
-/// line, so seeing a room from its door doesn't clear it: only going in does. One nobody can get to is the
-/// exception, and looking at it does. Each member heads for the nearest point nobody else has claimed, so they
-/// spread out and go round behind things instead of pacing random spots. Held by the job (GroupJob.Coverage),
-/// because the whole team shares it, and built the first time someone asks, since it floods the area.
+/// What a Search's team hasn't looked at yet: points across its area, about a metre apart, on ground
+/// joined to its place. Any member seeing a point clears it for all of them, and each heads for the nearest
+/// point nobody else has claimed, so they spread out and go round behind things instead of pacing random
+/// spots. Held by the job (GroupJob.Coverage), because the whole team shares it, and built the first time
+/// someone asks, since it floods the area. A plain class that reads nothing but what it's given.
 /// </summary>
 public class SearchCoverage
 {
-    private const float PointSpacing = 1f;      // metres between points: finer costs rays and walks no different
-    private const int MaxRaysPerScan = 32;      // sight rays one member may spend per scan, so a crowded area can't spike a frame
+    private const float PointSpacing = 1f;      // metres between points: finer costs rays and looks no different
+    private const int MaxRaysPerLook = 32;      // sight rays one member may spend per scan, so a big open room can't spike a frame
     private const float ClaimSpacing = 2f;      // two members don't head for points this close together
 
     private static readonly List<Vector3> Ground = new();
 
-    private readonly List<Vector3> _unvisited = new();
-    // Points someone tried to get to and couldn't: seeing one is enough.
-    private readonly List<Vector3> _lookOnly = new();
+    private readonly List<Vector3> _unseen = new();
     private readonly Dictionary<EnemyController, Vector3> _claims = new();
     private readonly bool _hasGround;
-    private int _nextLookOnly;
+    private int _nextToTest;
 
     /// <summary>Everything under the area. With no ground there it warns, and the team searches on until its countdown ends.</summary>
     public SearchCoverage(Vector3 place, float radius, Object context)
@@ -35,53 +32,44 @@ public class SearchCoverage
         }
 
         _hasGround = true;
-        _unvisited.AddRange(Ground);
+        _unseen.AddRange(Ground);
     }
 
-    /// <summary>The team has been over all of it. False for an area with no ground, which has nothing to finish.</summary>
-    public bool AllCleared => _hasGround && _unvisited.Count == 0 && _lookOnly.Count == 0;
+    /// <summary>The team has looked at all of it. False for an area with no ground, which has nothing to finish.</summary>
+    public bool AllSeen => _hasGround && _unseen.Count == 0;
 
-    /// <summary>The points still to walk to, for the debug gizmo.</summary>
-    public IReadOnlyList<Vector3> Unvisited => _unvisited;
-    /// <summary>The points nobody could get to, still to be seen, for the debug gizmo.</summary>
-    public IReadOnlyList<Vector3> LookOnly => _lookOnly;
+    /// <summary>The points left, for the debug gizmo.</summary>
+    public IReadOnlyList<Vector3> Unseen => _unseen;
 
-    public bool IsUnvisited(Vector3 point) => _unvisited.Contains(point);
+    public bool IsUnseen(Vector3 point) => _unseen.Contains(point);
 
     /// <summary>
-    /// Clears what he has got to, and any point nobody could reach that he can see. Within his Search Reach,
-    /// with a clear line so he doesn't clear the far side of a crate by walking past the near one.
+    /// Clears what he can see from here. Through his own view and a clear line, the same test as for Ruby,
+    /// so a point cleared is a place she couldn't have stood unseen. It tests on from where the last look
+    /// stopped, so the rays a scan can't afford are spent on the next one.
     /// </summary>
-    public void Scan(EnemyController who)
+    public void Look(EnemyController who)
     {
         int rays = 0;
-        Vector3 from = who.transform.position;
-        for (int i = _unvisited.Count - 1; i >= 0 && rays < MaxRaysPerScan; i--)
+        for (int tested = _unseen.Count; tested > 0 && rays < MaxRaysPerLook; tested--)
         {
-            if (PathGrid.FlatDistance(from, _unvisited[i]) > who.SearchReach) continue;
-            rays++;
-            if (who.CanSeeSpot(_unvisited[i])) _unvisited.RemoveAt(i);
-        }
-
-        for (int tested = _lookOnly.Count; tested > 0 && rays < MaxRaysPerScan; tested--)
-        {
-            if (_nextLookOnly >= _lookOnly.Count) _nextLookOnly = 0;
-            Vector3 point = _lookOnly[_nextLookOnly];
+            if (_nextToTest >= _unseen.Count) _nextToTest = 0;
+            Vector3 point = _unseen[_nextToTest];
             if (!who.Vision.InView(point))
             {
-                _nextLookOnly++;
+                _nextToTest++;
                 continue;
             }
 
             rays++;
-            if (who.CanSeeSpot(point)) _lookOnly.RemoveAt(_nextLookOnly);
-            else _nextLookOnly++;
+            if (who.CanSeeSpot(point)) _unseen.RemoveAt(_nextToTest);
+            else _nextToTest++;
         }
     }
 
     /// <summary>
-    /// Gives him the nearest point to walk to that nobody else is heading for. False when there is none free:
-    /// the rest are claimed, or close to a claim, and he waits for someone else to finish or for more to clear.
+    /// Gives him the nearest unseen point nobody else is heading for. False when there is none free: the rest
+    /// are claimed, or close to a claim, and he waits for someone else to finish or for more to clear.
     /// </summary>
     public bool TryClaimNearest(EnemyController who, out Vector3 point)
     {
@@ -90,7 +78,7 @@ public class SearchCoverage
         point = default;
         float nearest = float.MaxValue;
         Vector3 from = who.transform.position;
-        foreach (Vector3 candidate in _unvisited)
+        foreach (Vector3 candidate in _unseen)
         {
             float distance = PathGrid.FlatDistance(from, candidate);
             if (distance >= nearest || NearAnotherClaim(who, candidate)) continue;
@@ -110,20 +98,9 @@ public class SearchCoverage
         return false;
     }
 
-    /// <summary>He has got to this point: nobody needs to go there.</summary>
-    public void Reached(Vector3 point) => _unvisited.Remove(point);
+    /// <summary>He has reached this point, or can't: either way nobody needs to go there.</summary>
+    public void Clear(Vector3 point) => _unseen.Remove(point);
 
-    /// <summary>
-    /// He tried to get to this point and couldn't, so seeing it is enough: now, if he can from here, or
-    /// later if anyone on the team does. Until then it keeps the job from finishing early, and the
-    /// countdown still ends it.
-    /// </summary>
-    public void CouldNotReach(Vector3 point, EnemyController who)
-    {
-        if (!_unvisited.Remove(point)) return;
-        if (!who.CanSeeSpot(point)) _lookOnly.Add(point);
-    }
-
-    /// <summary>He has left the job: others may head near there.</summary>
+    /// <summary>He has left the job, or the claim is finished with: others may head near there.</summary>
     public void Release(EnemyController who) => _claims.Remove(who);
 }

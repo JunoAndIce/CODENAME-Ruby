@@ -36,7 +36,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _unseenHoldTime = 1f;
     [Tooltip("Height above the enemy's centre that sight is cast from.")]
     [SerializeField] private float _eyeHeight = 0.5f;
-    [Tooltip("The longest a search lasts once he has reached the spot, in seconds. The walk there doesn't count, and a team that has been over the whole area finishes sooner.")]
+    [Tooltip("The longest a search lasts once he has reached the spot, in seconds. The walk there doesn't count, and a team that has looked at the whole area finishes sooner.")]
     [SerializeField, Min(0f)] private float _searchDuration = 5f;
     [Tooltip("How close he gets to a search spot, in metres. If something blocks the way once he's this near (another enemy already standing on the spot, say), he looks from where he stands instead of pushing at it.")]
     [SerializeField, Min(0.5f)] private float _searchReach = 1.5f;

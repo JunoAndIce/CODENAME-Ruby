@@ -142,7 +142,7 @@ public class GroupJob
 
     internal void RestartClock() => StepElapsed = 0f;
 
-    /// <summary>What the team hasn't walked yet, once someone has asked (JobBoard.CoverageOf). Null means not built, or thrown away to go over it again.</summary>
+    /// <summary>What the team hasn't looked at yet, once someone has asked (JobBoard.CoverageOf). Null means not built, or thrown away to look again.</summary>
     public SearchCoverage Coverage { get; private set; }
     internal void SetCoverage(SearchCoverage coverage) => Coverage = coverage;
 
@@ -261,7 +261,7 @@ public class GroupJob
         Checker = null;
         // The job has moved on from what he went to check, and everyone is sent afresh (FollowJob).
         Scout = null;
-        // A new place, or a check that has become a search: nothing here has been walked.
+        // A new place, or a check that has become a search: nothing here has been looked at.
         Coverage = null;
         _arrived.Clear();
         _dropped.Clear();
