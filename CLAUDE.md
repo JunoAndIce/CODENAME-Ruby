@@ -440,6 +440,27 @@ through the player never slows the walk. **Enemies don't shove props that block 
   within 5 m, and warns once; no ground in reach still stops and says so. A lost fight's search
   starts from that ground too (`TryGetNearestReachable`), because a Search member who can't reach
   his spot is taken off the job.
+- **Fights** (`FightBoard` and `Fight`, in `Enemies/`). Everyone in Aggro belongs to one fight per floor,
+  split into a **main squad** of up to Main Squad Cap (4, on `Intel`) and a **standby** squad of the rest.
+  `FightBoard` is a plain class `Intel` owns and ticks beside the job board, forwarding `Join`, `FightOf`
+  and `AnyInContact`; it never moves anyone. `AggroState.Enter` calls `Join`: he takes the fight on his
+  floor (`PathGrid.At`) that has the member nearest him, however far, or starts one, then a main place if
+  one is open, else standby. Rearm hands back through Aggro, so a re-join is a no-op that keeps his place.
+  **Membership is polled, not hooked:** `Advance` drops a member who is destroyed, dead or in neither Aggro
+  nor Rearm (so grabbed, downed and searching all drop him at once, and getting up rejoins him by the
+  normal route, on standby if his place was filled), then moves the standby member nearest Ruby up into
+  each open main place ("moves up"). A fight nobody is in closes. `EnemyController.Fight` is set only by
+  the board, and `IsStandby` reads it. On no grid he fights alone, with one warning. **Contact is shared:**
+  `AggroState.LostPlayer` is false, and both of its timers start over, while a fight mate has Ruby in
+  contact, so a member behind a wall doesn't give up while another has her. **Standby holds back:** an
+  armed standby member's band starts at the farthest main member's flat distance from her plus Standby
+  Distance (3 m, on `EnemyController`), read each step so it follows them, in place of the gun's Min
+  Distance (backing away and standing when cornered work from the same figure). He still fires when she
+  is in range and in sight. Out of sight he measures from where he knows she is, and `ChaseKnown` stops
+  him that far from the spot. With no main member he keeps the gun's band; an unarmed one is as before.
+  With `Intel` selected in Play, a line joins each fight's main members, with a ring per role (main red,
+  standby light grey). Paths don't cost more through a squadmate's lane: the chase field is one shared
+  flood per floor.
 - **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
   Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
   up within 0.3 m of its body's surface, measured to the nearest point of the gun's colliders
@@ -517,8 +538,8 @@ through the player never slows the walk. **Enemies don't shove props that block 
   no grid, or a scene with no `Intel`, gets one warning saying so, never a silent fallback.
   **Speech is also word of mouth:** each officer who hears him is `Alert()`ed into Aggro whatever he
   was doing (not the grabbed, ragdolling or dead, which `Alert` refuses), so everyone in earshot
-  joins the fight; the log says how many heard and how many joined. There is no cap on that yet
-  (the fight's main squad is spec piece 6).
+  joins the fight; the log says how many heard and how many joined. Who then fights up close
+  and who holds back is the fight's squads (see **Fights**).
 - **Stimuli and hearing** (`Core/Stimuli/`). `Stimuli` is a static bus that weapons and the grapple
   emit into without knowing officers exist: a gunshot (`Gun`, `GunController`), the whip landing
   and an impact. A `Stimulus` carries a kind, a position, an **origin** (where the thing came

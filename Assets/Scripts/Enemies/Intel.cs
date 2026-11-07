@@ -27,7 +27,7 @@ public class Intel : MonoBehaviour
     [Tooltip("Which stimuli the squad reacts to and how. Without it enemies react to no stimulus.")]
     [SerializeField] private BehaviourMap _defaultMap;
 
-    [Header("Group jobs")]
+    [Header("Group jobs and squads")]
     [Tooltip("The most enemies on one check or search, the lead included. The spec's number is three.")]
     [SerializeField, Range(1, 6)] private int _jobCap = 3;
     [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another.")]
@@ -42,6 +42,8 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
     [Tooltip("How much a gunshot inside a search's area adds to its countdown, in seconds. Shots within a member's Distraction Gap count as one, and the time left never goes above a full Search Duration, so a firefight can't keep a search going for good.")]
     [SerializeField, Min(0f)] private float _gunshotExtension = 4.5f;
+    [Tooltip("The most enemies on a fight's main squad, which closes in on Ruby. Everyone else in the fight goes on standby, holds back and shoots when he can, and moves up when a main member is grabbed, downed or killed. The spec's number is four.")]
+    [SerializeField, Range(1, 8)] private int _mainSquadCap = 4;
 
     [Header("Debug")]
     [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
@@ -74,6 +76,8 @@ public class Intel : MonoBehaviour
 
     // The group jobs: the board owns the list and the clock, Intel ticks it and forwards to it.
     private JobBoard _board;
+    // The fights: the board owns the squads, Intel ticks it and forwards to it.
+    private FightBoard _fights;
     private readonly List<EnemyController> _listeners = new();
     private bool _telling;   // Hear is walking _listeners: a nested Hear must use a list of its own
     private readonly List<EnemyController> _hearers = new();
@@ -91,6 +95,7 @@ public class Intel : MonoBehaviour
     public float CallTime => _callTime;
     public float SearchAreaRadius => _searchAreaRadius;
     public float GunshotExtension => _gunshotExtension;
+    public int MainSquadCap => _mainSquadCap;
 
     /// <summary>
     /// The behaviour map every enemy reads. Null only when the asset is missing, which OnEnable
@@ -113,7 +118,11 @@ public class Intel : MonoBehaviour
     // Built here and not in a field initialiser, because the board needs this Intel. Awake runs
     // before anything can reach it: the enemies find Intel in Start, Update and the bus's Hear
     // (subscribed in OnEnable) both follow Awake, and Intel's order of -20 puts its Awake first anyway.
-    private void Awake() => _board = new JobBoard(this);
+    private void Awake()
+    {
+        _board = new JobBoard(this);
+        _fights = new FightBoard(this);
+    }
 
     // Enable and disable rather than Awake and destroy, so switching the component off also
     // silences the bus instead of leaving stale rules behind.
@@ -141,6 +150,7 @@ public class Intel : MonoBehaviour
     private void Update()
     {
         _board.Advance(Time.deltaTime);
+        _fights.Advance();
         _pool.Tick(_intelInterval, this);
     }
 
@@ -308,6 +318,15 @@ public class Intel : MonoBehaviour
     /// <summary>Takes an enemy off his job (see JobBoard.Leave).</summary>
     public void Leave(EnemyController who) => _board.Leave(who);
 
+    /// <summary>He has gone to Aggro: he joins the fight on his floor or starts one (see FightBoard.Join).</summary>
+    public Fight Join(EnemyController who) => _fights.Join(who);
+
+    /// <summary>The fight he is in, or null (see FightBoard.FightOf).</summary>
+    public Fight FightOf(EnemyController who) => _fights.FightOf(who);
+
+    /// <summary>Whether anyone in the fight but him has Ruby in contact (see FightBoard.AnyInContact).</summary>
+    public bool AnyInContact(Fight fight, EnemyController except) => _fights.AnyInContact(fight, except);
+
     /// <summary>An enemy who has just lost a fight joins or starts a job at the spot he searches (see JobBoard.JoinFromAggro).</summary>
     public void JoinFromAggro(EnemyController who, Vector3 point) => _board.JoinFromAggro(who, point);
 
@@ -410,6 +429,8 @@ public class Intel : MonoBehaviour
             return;
         }
 
+        DrawFights();
+
         foreach (GroupJob job in _board.Jobs)
         {
             Gizmos.color = JobColor(job);
@@ -435,6 +456,33 @@ public class Intel : MonoBehaviour
             }
 #if UNITY_EDITOR
             UnityEditor.Handles.Label(job.Point + Vector3.up * 1.4f, $"#{job.Id} {job.Kind} · {job.Step} · {job.Count}/{job.Cap}\n{job.Reason}, priority {job.Priority}{(job.Checker != null ? $"\nchecker {job.Checker.name}" : "")}");
+#endif
+        }
+    }
+
+    // Each fight: a line between its main members and a ring per role, main red and standby light grey.
+    private void DrawFights()
+    {
+        foreach (Fight fight in _fights.Fights)
+        {
+            Gizmos.color = Color.red;
+            for (int i = 0; i < fight.Main.Count; i++)
+            {
+                EnemyController a = fight.Main[i];
+                if (a == null) continue;
+                DrawCircle(a.transform.position, 0.8f);
+                for (int j = i + 1; j < fight.Main.Count; j++)
+                {
+                    EnemyController b = fight.Main[j];
+                    if (b != null) Gizmos.DrawLine(a.transform.position + Vector3.up * 0.3f, b.transform.position + Vector3.up * 0.3f);
+                }
+            }
+            Gizmos.color = new Color(0.8f, 0.8f, 0.8f);
+            foreach (EnemyController member in fight.Standby)
+                if (member != null) DrawCircle(member.transform.position, 0.8f);
+#if UNITY_EDITOR
+            if (fight.Main.Count > 0 && fight.Main[0] != null)
+                UnityEditor.Handles.Label(fight.Main[0].transform.position + Vector3.up * 2.2f, $"{fight}: {fight.Main.Count} main, {fight.Standby.Count} standby");
 #endif
         }
     }

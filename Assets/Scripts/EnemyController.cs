@@ -57,6 +57,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("While he sees Ruby, he calls out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
 
+    [Tooltip("How much farther back than the main squad an armed standby enemy holds, in metres: his band starts at the farthest main member's distance from Ruby plus this. With no main member yet he keeps his gun's own band.")]
+    [SerializeField, Min(0f)] private float _standbyDistance = 3f;
+
     [Header("Suspicion")]
     [Tooltip("A disturbance within this distance of where Ruby was last reported is searched for as an attack, not a problem, while that report is recent (Attack Near Time). Measured flat, in metres.")]
     [SerializeField, Min(0f)] private float _attackNearRadius = 20f;
@@ -427,6 +430,17 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// Only the job board sets it, as it adds and removes members, and SearchingState gives him up on exit.
     /// </summary>
     public GroupJob Job { get; internal set; }
+
+    /// <summary>
+    /// The fight he is in, or null: the squads of enemies after Ruby together (Fight). Only the fight
+    /// board sets it, as it joins and drops members by polling their state.
+    /// </summary>
+    public Fight Fight { get; internal set; }
+
+    /// <summary>In a fight and not on its main squad: he holds back. False out of any fight.</summary>
+    public bool IsStandby => Fight != null && !Fight.IsMain(this);
+
+    public float StandbyDistance => _standbyDistance;
 
     public void EnterGrabbed()
     {

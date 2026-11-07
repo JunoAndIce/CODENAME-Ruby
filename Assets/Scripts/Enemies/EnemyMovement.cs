@@ -296,7 +296,7 @@ public class EnemyMovement
     /// Chase the newest thing he knows of Ruby, not Ruby herself, so breaking sight can drop a fight.
     /// Arrived when he is on the spot; Unreachable (and stopped) when he has nothing to go on.
     /// </summary>
-    public NavResult ChaseKnown(float speed)
+    public NavResult ChaseKnown(float speed, float stopDistance = 0f)
     {
         if (!_enemy.Awareness.TryGetNewestRuby(out Vector3 point))
         {
@@ -306,7 +306,8 @@ public class EnemyMovement
         // A place and not a point: enemies of equal weight block each other, so several sent to one
         // point pushed at each other to get onto it. The line stops him counting as there from the far
         // side of a wall.
-        if (PathGrid.FlatDistance(_enemy.transform.position, point) <= _enemy.KnownSpotRadius && _enemy.CanSeeSpot(point))
+        // A standby enemy stops at his own distance when that is farther, so he holds back out of sight too.
+        if (PathGrid.FlatDistance(_enemy.transform.position, point) <= Mathf.Max(_enemy.KnownSpotRadius, stopDistance) && _enemy.CanSeeSpot(point))
         {
             Stop();
             return NavResult.Arrived;
