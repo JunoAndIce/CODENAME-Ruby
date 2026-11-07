@@ -16,6 +16,12 @@ public class EnemyMovement
     private const float SameFloorHeight = 1f;   // farther apart than this in height, they aren't sharing a floor
     private const int FreeSpotTries = 4;
 
+    // He doesn't shove a prop that blocks the grid. A prop only blocks while it rests, and one he is pushing
+    // never rests, so the way through it stayed open and he kept pushing, however good the way round. Stopped,
+    // it settles, blocks the grid, and he paths round it. Anything else, such as a loose gun, stays pushable:
+    // nothing plans round it, so treating it as a wall would leave him stuck on it.
+    private static readonly System.Func<Rigidbody, bool> PropsStopHim = body => body.TryGetComponent(out GridObstacle _);
+
     private readonly EnemyController _enemy;
     private readonly CapsuleCollider _capsule;
 
@@ -81,7 +87,7 @@ public class EnemyMovement
 
         // The fitted speed, so the animation sees him slow in a tight turn.
         IntendedSpeed = fitted;
-        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, heading * fitted));
+        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, heading * fitted, PropsStopHim));
     }
 
     // Bends a walk away from any enemy inside Personal Space, harder the closer he is, so they curve round
@@ -191,7 +197,7 @@ public class EnemyMovement
             Stop();
             return;
         }
-        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, MakeRoom(direction).normalized * speed));
+        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, MakeRoom(direction).normalized * speed, PropsStopHim));
     }
 
     /// <summary>

@@ -6,7 +6,7 @@ using UnityEngine;
 /// clamp01(1 - pushedMass / pusherMass): anything as heavy as the pusher blocks like a wall.
 ///
 /// It casts ahead instead of reading collision callbacks, which arrive a step late: the first
-/// step into a heavy crate would kick it.
+/// step into a heavy crate would kick it. A walker can name bodies it doesn't push at all (treatAsFixed).
 /// </summary>
 public static class PushLimit
 {
@@ -16,7 +16,7 @@ public static class PushLimit
 
     static readonly RaycastHit[] Hits = new RaycastHit[16];
 
-    public static Vector3 Limit(CapsuleCollider capsule, Vector3 move)
+    public static Vector3 Limit(CapsuleCollider capsule, Vector3 move, System.Func<Rigidbody, bool> treatAsFixed = null)
     {
         float speed = move.magnitude;
         if (speed < 0.0001f) return move;
@@ -48,7 +48,7 @@ public static class PushLimit
             float into = -Vector3.Dot(move, normal);
             if (into <= 0f) continue;
 
-            float f = Mathf.Clamp01(1f - other.mass / self.mass);
+            float f = treatAsFixed != null && treatAsFixed(other) ? 0f : Mathf.Clamp01(1f - other.mass / self.mass);
             move += normal * (into * (1f - f));
         }
 

@@ -367,15 +367,17 @@ public class PathGrid : MonoBehaviour
 
     /// <summary>
     /// Adds the cells a collider blocks for an agent: those where an agent-sized capsule would
-    /// touch it, the same clearance the bake gives static geometry. A collider wholly above or
-    /// below the agents' height band blocks nothing.
+    /// touch it, the same clearance the bake gives static geometry. A collider wholly above the agents'
+    /// height or below the floor blocks nothing. Floor Clearance isn't used here: it keeps the floor
+    /// from blocking the bake, and a table flipped onto its 6 cm top was lower than that, so it counted
+    /// as floor and they walked into it.
     /// </summary>
     public void CollectFootprint(Collider collider, List<int> cells)
     {
         Bounds bounds = collider.bounds;
         float bandBottom = _origin.y + _floorClearance;
         float bandTop = _origin.y + _agentHeight;
-        if (bounds.max.y < bandBottom || bounds.min.y > bandTop) return;
+        if (bounds.max.y < _origin.y || bounds.min.y > bandTop) return;
 
         int minX = Mathf.Clamp(Mathf.FloorToInt((bounds.min.x - _agentRadius - _origin.x) / _cellSize), 0, _width - 1);
         int maxX = Mathf.Clamp(Mathf.FloorToInt((bounds.max.x + _agentRadius - _origin.x) / _cellSize), 0, _width - 1);

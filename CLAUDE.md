@@ -367,7 +367,7 @@ as you or heavier blocks, so equal-weight characters block each other. There is 
 separate push-strength dial: it would drift out of step with the weight table. It looks
 ahead instead of reading collision callbacks, which arrive a step late, so the first step into a
 heavy crate would kick it. It skips pairs set to ignore each other, so a parked host spinning
-through the player never slows the walk.
+through the player never slows the walk. **Enemies don't shove props that block the grid** (`GridObstacle`, `EnemyMovement.PropsStopHim`): a prop only blocks while it rests, and one being pushed never rests, so the way through it stayed open and he kept pushing. Stopped, it settles, blocks the grid, and he paths round it. Ruby still shoves them, and loose guns stay pushable because nothing plans round them. A crate can therefore block a doorway to enemies.
 
 ### Enemy AI
 
@@ -768,7 +768,7 @@ A\* for individual ones**:
   (a counter and not a flag, because props overlap and one leaving mustn't unblock a cell another
   still covers). A `GridObstacle` that rests on no grid (outside every grid's area or Height band)
   warns once, and again only if it gets back on a grid and later leaves one: it used to return
-  silently, so a crate placed off the grid never blocked and nothing said why. Every change bumps
+  silently, so a crate placed off the grid never blocked and nothing said why. A prop lying flat still blocks, however thin (`CollectFootprint` tests against the floor, not Floor Clearance): a table flipped onto its 6 cm top used to count as floor. Every change bumps
   `Version`, and fields re-plan.
   **Agent Radius must match the enemy collider's radius**, and doorways need about 1.5 m or more.
   **Corner Margin and the clearance field.** A second field, baked after the cells and redone around

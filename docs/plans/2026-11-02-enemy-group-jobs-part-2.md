@@ -135,6 +135,8 @@
 
 23. **Seeing an enemy die sends him to check its source (added and built 2026-11-06).** *(User: "when 3 died, 4 didn't do anything. Just searched his body" and "Instead of aggroing ruby, if they see their ally die, they always have to check the source of what killed them.")* This changes decisions 14 and 15 again. Any enemy killed in his view with a clear line, on a job together or not, always sends him to where the killing thing came from, as a gunshot takes anyone searching: a Search, with a signal if he's on a team. If nothing shows where it came from, he checks where the enemy died. No Aggro. A knockdown stays the ordinary Search at the throw spot. *(User: "ONLY DEATHS".)*
 
+24. **Enemies respect props on the floor (added and built 2026-11-06).** *(User: "a table flipped over is considered floor and they try to walk over it. If a crate is pushable they continously walk into it sometimes to get to Ruby and won't try to find better paths.")* A flipped tabletop, 6 cm thick, was below Floor Clearance (10 cm) and blocked nothing, so a prop's footprint now tests against the floor. A pushed crate never rested, so it never blocked the grid and the path stayed through it, so enemies no longer shove props with a `GridObstacle`. The cost: a crate can block a doorway to enemies, which falls to the no-path rules.
+
 ## Global Constraints
 
 - **Values that are my calls** (put in tooltips, retuned in play):
