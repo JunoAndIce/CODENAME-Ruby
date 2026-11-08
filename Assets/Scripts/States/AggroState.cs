@@ -2,8 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// Hunting the player. Unarmed, or without sight of her, the enemy chases along the shared flow
-/// field. Armed with her in sight, it keeps its gun's band: it closes in to Min Distance, holds in
-/// the metre above that, and backs away inside it, still facing her. Firing happens alongside all
+/// field. Armed with her in sight, it walks to a firing spot of its own and holds there facing her; with
+/// no spot it keeps its gun's band: it closes in to Min Distance, holds in the metre above that, and
+/// backs away inside it, still facing her. Firing happens alongside all
 /// of these, not as its own state. Out of sight it chases what it knows of her (its memory and the
 /// squad's stale pool), not her true position, once Sight Follow Through has run out. LostPlayer flips, never while in contact (his own, or a fight mate's: see Fights), after
 /// Aggro Time out of contact, after holding Aggro Time at the known spot without sight of her, or at
@@ -179,16 +180,11 @@ public class AggroState : EnemyStateBase
         bool armed = Enemy.IsArmed;
         float minDistance = armed ? Enemy.Arms.HeldGun.MinDistance : 0f;
         bool inSight = Enemy.Vision.CanSeePlayer();
-        bool holdingBack = armed && Enemy.IsStandby;
         // Spots are for an armed fighter who knows where she is: in sight, or just gone from it. Past that he
         // chases what he knows, as ever, and holds none.
         bool knowsHer = inSight || Enemy.Awareness.FollowingThrough;
         if (!armed || !knowsHer || Enemy.Fight == null) ReleaseSpot();
-        // The band only stops a standby member closing in; backing away stays inside the gun's own
-        // Min Distance, as for main. Backing off to the band was radial from her and flip-flopped at the
-        // edge of sight.
-        float band = holdingBack ? StandbyBand(minDistance, inSight) : minDistance;
-        Move move = Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance, band);
+        Move move = Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance);
         // Backing away inside the gun's Min Distance stays as it is; everywhere else a spot of his own decides.
         // Backed away while still walking to a spot: that route cuts inside Min Distance, and walking in again
         // next step would loop. The spot is dropped and left alone for a while, and he picks another.
@@ -211,17 +207,8 @@ public class AggroState : EnemyStateBase
                 // With her in sight, or just gone from it, he knows where she is; otherwise only what he
                 // has learned. The shared field while following through: the known spot moves every step
                 // then, and a field of his own would re-flood each quarter metre she ran.
-                if (inSight || Enemy.Awareness.FollowingThrough)
-                {
-                    // Following through he still holds at his band, or he'd run at her past it each time sight left.
-                    if (holdingBack && !inSight && Enemy.Vision.DistanceToPlayer() <= band + HoldBand)
-                    {
-                        Enemy.Stop();
-                        Enemy.Movement.FaceTarget();
-                    }
-                    else Enemy.Movement.PathToPlayer(Enemy.ChaseSpeed);
-                }
-                else ChaseWhatHeKnows(holdingBack ? band + HoldBand : 0f);
+                if (inSight || Enemy.Awareness.FollowingThrough) Enemy.Movement.PathToPlayer(Enemy.ChaseSpeed);
+                else ChaseWhatHeKnows();
                 break;
 
             case Move.Hold:
@@ -248,9 +235,9 @@ public class AggroState : EnemyStateBase
 
     // Reaching the spot doesn't end the hunt: giving up the instant he got there dropped fights while
     // Ruby was a metre past it. He stands there for Aggro Time first. A look-around animation comes later.
-    private void ChaseWhatHeKnows(float stopDistance)
+    private void ChaseWhatHeKnows()
     {
-        bool arrived = Enemy.Movement.ChaseKnown(Enemy.ChaseSpeed, stopDistance) == NavResult.Arrived;
+        bool arrived = Enemy.Movement.ChaseKnown(Enemy.ChaseSpeed) == NavResult.Arrived;
         if (!arrived && StalledBehindSomeone())
         {
             Enemy.Stop();
@@ -303,21 +290,6 @@ public class AggroState : EnemyStateBase
         return _stallTimer >= Enemy.StuckTime && distance <= Enemy.KnownSpotRadius * 2f;
     }
 
-    // An armed standby member's band starts behind the main squad: the farthest main member in contact
-    // with her, plus Standby Distance, read every step so it follows them in and out. A main member out
-    // of sight, walking in or rearming says nothing of where the fight is, so only those in contact
-    // count. It never passes the gun's Range (less the hold band), or he'd retreat out of range of a Ruby
-    // he could shoot, and never falls below the gun's own Min Distance. Out of sight it is measured from
-    // where he knows she is, never her true position. With nobody in contact to measure from, or nothing
-    // known, it is the gun's own band: there is nobody to hold back behind.
-    private float StandbyBand(float gunMin, bool inSight)
-    {
-        Vector3 point;
-        if (inSight) point = Enemy.PlayerTransform.position;
-        else if (!Enemy.Awareness.TryGetNewestRuby(out point)) return gunMin;
-        return FiringSpots.StandbyStart(Enemy, Enemy.Fight, point, gunMin);
-    }
-
     // Walks to his firing spot and holds there facing her, picking a new one when it is due. False when he has
     // none (the pick found nothing, or the walk could not get there), and the band behaviour applies this step.
     private bool MoveToSpot(bool inSight)
@@ -325,20 +297,11 @@ public class AggroState : EnemyStateBase
         Fight fight = Enemy.Fight;
         Vector3 ruby = Enemy.PlayerTransform.position;   // he knows where she is: in sight, or following through
 
-        bool displaced = _hasSpot && !fight.TryGetClaim(Enemy, out _);   // a main member took it
-        if (displaced)
-        {
-            DebugLog.Info($"{Enemy.name}'s firing spot was taken by a main squad member: he picks another.", Enemy);
-            _hasSpot = false;
-            _atSpot = false;
-            _pickNow = true;   // remembered across the gap: a pick a moment ago must not leave him with no spot until the next interval
-        }
-
         if (Time.time >= _lastPick + RepickGap)
         {
-            // At once: asked for, displaced, the band has moved on past half a spacing, or his shot is blocked
-            // (holding at the spot and no longer seeing her). Otherwise about once a second.
-            bool due = _pickNow || displaced || Time.time >= _nextPick || (_hasSpot && (OutsideBand(fight, ruby) || (_atSpot && !inSight)));
+            // At once: asked for, Ruby has moved so his spot is past half a spacing outside his band, or his shot
+            // is blocked (holding at the spot and no longer seeing her). Otherwise about once a second.
+            bool due = _pickNow || Time.time >= _nextPick || (_hasSpot && (OutsideBand(ruby) || (_atSpot && !inSight)));
             if (due) PickSpot(fight, ruby);
         }
         if (!_hasSpot) return false;
@@ -377,7 +340,7 @@ public class AggroState : EnemyStateBase
         {
             if (!_hasSpot || PathGrid.FlatDistance(spot, _spot) > 0.01f)
             {
-                DebugLog.Info($"{Enemy.name} takes a firing spot {PathGrid.FlatDistance(spot, ruby):0.#} m from Ruby ({(Enemy.IsStandby ? "standby" : "main")}).", Enemy);
+                DebugLog.Info($"{Enemy.name} takes a firing spot {PathGrid.FlatDistance(spot, ruby):0.#} m from Ruby.", Enemy);
                 _atSpot = false;
             }
             _spot = spot;
@@ -393,11 +356,11 @@ public class AggroState : EnemyStateBase
             DebugLog.Info($"{Enemy.name} found no firing spot (none walkable, reachable, unclaimed and in a clear shot, or he is cut off from her) in {fight}: he keeps his band.", Enemy);
     }
 
-    // The band has moved on past his spot by more than half the spacing: standby's starts behind the main
-    // squad and follows it, and Ruby moves. Half a spacing of slack so he doesn't shuffle each time main shifts.
-    private bool OutsideBand(Fight fight, Vector3 ruby)
+    // Ruby has moved so his spot is more than half a spacing outside his band. Half a spacing of slack so he
+    // doesn't shuffle each time she steps.
+    private bool OutsideBand(Vector3 ruby)
     {
-        if (!FiringSpots.TryGetBand(Enemy, fight, ruby, out float near, out float far)) return false;
+        if (!FiringSpots.TryGetBand(Enemy, out float near, out float far)) return false;
         float ring = PathGrid.FlatDistance(_spot, ruby);
         return !FiringSpots.InKeepBand(Enemy, ring, near, far, Enemy.SquadSpacing * 0.5f);
     }
@@ -413,9 +376,9 @@ public class AggroState : EnemyStateBase
     private enum Move { None, Chase, Hold, BackAway }
 
     // Unarmed, or blind to her, the hunt has to find her. Armed with her in sight, the gun's band decides.
-    private static Move Engage(bool armed, bool inSight, float distance, float minDistance, float band)
+    private static Move Engage(bool armed, bool inSight, float distance, float minDistance)
     {
-        if (!armed || !inSight || distance > band + HoldBand) return Move.Chase;
+        if (!armed || !inSight || distance > minDistance + HoldBand) return Move.Chase;
         return distance < minDistance ? Move.BackAway : Move.Hold;
     }
 

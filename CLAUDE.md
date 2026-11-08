@@ -441,52 +441,44 @@ through the player never slows the walk. **Enemies don't shove props that block 
   starts from that ground too (`TryGetNearestReachable`), because a Search member who can't reach
   his spot is taken off the job.
 - **Fights** (`FightBoard` and `Fight`, in `Enemies/`). Everyone in Aggro belongs to one fight per floor,
-  split into a **main squad** of up to Main Squad Cap (4, on `Intel`) and a **standby** squad of the rest.
-  `FightBoard` is a plain class `Intel` owns and ticks beside the job board, forwarding `Join`, `FightOf`
-  and `AnyInContact`; it never moves anyone. `AggroState.Enter` calls `Join`: he takes the fight on his
-  floor (`PathGrid.At`) that has the member nearest him, however far, or starts one, then a main place if
-  one is open, else standby. Rearm hands back through Aggro, so a re-join is a no-op that keeps his place.
-  **Membership is polled, not hooked:** `Advance` drops a member who is destroyed, dead or in neither Aggro
-  nor Rearm (so grabbed, downed and searching all drop him at once, and getting up rejoins him by the
-  normal route, on standby if his place was filled), then moves the standby member nearest Ruby up into
-  each open main place ("moves up"). A fight nobody is in closes. `EnemyController.Fight` is set only by
-  the board, and `IsStandby` reads it. On no grid he fights alone, with one warning. **Contact is shared:**
-  `AggroState.LostPlayer` is false, and both of its timers start over, while a fight mate has Ruby in
-  contact, so a member behind a wall doesn't give up while another has her. **Standby holds back:** an
-  armed standby member's band is the farthest main member **in contact with her** (flat distance) plus
-  Standby Distance (3 m, on `EnemyController`), read each step so it follows them, held below the gun's
-  Range less the hold band and above its Min Distance. The band only stops him closing in: he backs away
-  only inside the gun's own Min Distance, as main does, and holds anywhere between, following through
-  included. He still fires when she is in range and in sight. Out of sight he measures from where he
-  knows she is, and `ChaseKnown` stops him that far from the spot. With no main member in contact he
-  keeps the gun's band; an unarmed one is as before.
+  all equal. `FightBoard` is a plain class `Intel` owns and ticks beside the job board, forwarding `Join`,
+  `FightOf` and `AnyInContact`; it never moves anyone. `AggroState.Enter` calls `Join`: he takes the fight
+  on his floor (`PathGrid.At`) that has the member nearest him, however far, or starts one. Rearm hands
+  back through Aggro, so a re-join is a no-op. **Membership is polled, not hooked:** `Advance` drops a
+  member who is destroyed, dead or in neither Aggro nor Rearm (so grabbed, downed and searching all drop
+  him at once, and getting up rejoins him by the normal route). A fight nobody is in closes.
+  `EnemyController.Fight` is set only by the board. On no grid he fights alone, with one warning.
+  **Contact is shared:** `AggroState.LostPlayer` is false, and both of its timers start over, while a
+  fight mate has Ruby in contact, so a member behind a wall doesn't give up while another has her.
+  **No squads:** a main squad of up to four that closed in, and a standby squad that held back behind it
+  and moved up when a main member fell, were built and taken out (user, 2026-11-07). Firing spots spread
+  everyone round her, standby on a slightly wider ring, so the squads never showed on screen, and a
+  standby member moving up had nowhere new to walk.
   **Firing spots** (`FiringSpots`, a static picker, with claims kept in the `Fight`). An armed member
   with Ruby in sight, or following through, walks to a spot of his own and holds there facing her, firing
   as before, so a fight spreads into a loose crossfire instead of closing along one line. The pick is
   round where he knows she is (her true position only in sight or following through; past that he chases
-  what he knows and holds no spot): 16 angles on 3 rings across his band (main: the gun's Min Distance out
-  to Range less the hold band; standby: the band above, from its start). A candidate must be walkable and
-  on the floor's shared chase field (`FieldToward`, read with `TryGetDistance`: "ground he can reach",
-  out to the field's own bound; it refreshes only when read as a route, so the pick asks it to with
-  `FlowField.Refresh`), and not within Squad Spacing (2 m, on `EnemyController`) of a claim. Of those the
-  score favours near where he stands, the middle of the band, a different angle from his squadmates', and
-  not on a squadmate's line to her; the best few (a budget of 4) then get an eye-height ray, anything solid
-  but characters blocking it, as sight does. His current spot is kept unless a new one beats it by a margin.
-  He re-picks about once a second (staggered), and at once when his spot falls more than half a spacing
-  outside his band (standby's band follows main), his shot is blocked, a main member takes his spot, or a
-  walk to it is refused (that spot is left alone for 3 s); never sooner than 0.25 s after the last pick.
-  Main picks before standby by rank: a standby claim never blocks a main pick, and a main claim near a
-  standby's takes it (`Fight.DropStandbyClaimsNear`, and he finds the claim gone and picks again);
-  standby never takes a main member's spot. Backing away inside Min Distance is as before, and cornered he
-  stands and fights. With no spot he keeps the band behaviour, with a log line once per fight. Claims go
-  when he leaves Aggro (`AggroState.Exit`), loses his gun or knows nothing of her, and the board's prune is
-  the guarantee that a claim never outlives its member. Selected, he draws his spot and a line to it.
-  With `Intel` selected in Play, a line joins each fight's main members, with a ring per role (main red,
-  standby light grey). **There are no fire lanes:** nothing stops him firing through a squadmate, though
-  bullets don't hit enemies on their feet and spot scoring keeps them off each other's lines to her. Fire
-  lanes (holding fire and stepping aside for a squadmate in the way) were built and taken out (user,
-  2026-11-07): stacked on the standby band and firing spots, they drove spots into Ruby's Min Distance and
-  enemies shuffled instead of fighting.
+  what he knows and holds no spot): 16 angles on 3 rings across the gun's band (its Min Distance out to
+  Range less the hold band). A candidate must be walkable and on the floor's shared chase field
+  (`FieldToward`, read with `TryGetDistance`: "ground he can reach", out to the field's own bound; it
+  refreshes only when read as a route, so the pick asks it to with `FlowField.Refresh`), with him on that
+  field too, not within Squad Spacing (2 m, on `EnemyController`) of another member's claim, and not
+  reached by a straight line that cuts the gun's Min Distance circle round her. Of those the score
+  favours a different angle from his fight mates' (the heaviest weight, which is what spreads them round
+  her), near where he stands, the middle of the band, and not on a mate's line to her; the best few (a
+  budget of 4) then get an eye-height ray, anything solid but characters blocking it, as sight does. His
+  current spot is kept unless a new one beats it by a margin. He re-picks about once a second
+  (staggered), and at once when his spot falls more than half a spacing outside his band, his shot is
+  blocked, a walk to it is refused, or he is backed away from her on the way there (either spot is left
+  alone for 3 s); never sooner than 0.25 s after the last pick. Backing away inside Min Distance is as
+  before, and cornered he stands and fights. With no spot he keeps the band behaviour, with a log line
+  once per fight. Claims go when he leaves Aggro (`AggroState.Exit`), loses his gun or knows nothing of
+  her, and the board's prune is the guarantee that a claim never outlives its member. Selected, he draws
+  his spot and a line to it. With `Intel` selected in Play, each fight rings its members in red with a
+  line joining them. **There are no fire lanes:** nothing stops him firing through a fight mate, though
+  bullets don't hit enemies on their feet and spot scoring keeps them off each other's lines to her.
+  Fire lanes (holding fire and stepping aside for a mate in the way) were built and taken out too: they
+  drove spots into Ruby's Min Distance and enemies shuffled instead of fighting.
 - **Rearm** (`RearmState`): an unarmed enemy goes for the nearest free gun within Rearm Radius.
   Free means loose, resting, not on the chain and not claimed by another enemy. It picks the gun
   up within 0.3 m of its body's surface, measured to the nearest point of the gun's colliders
@@ -564,8 +556,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   no grid, or a scene with no `Intel`, gets one warning saying so, never a silent fallback.
   **Speech is also word of mouth:** each officer who hears him is `Alert()`ed into Aggro whatever he
   was doing (not the grabbed, ragdolling or dead, which `Alert` refuses), so everyone in earshot
-  joins the fight; the log says how many heard and how many joined. Who then fights up close
-  and who holds back is the fight's squads (see **Fights**).
+  joins the fight; the log says how many heard and how many joined (see **Fights**).
 - **Stimuli and hearing** (`Core/Stimuli/`). `Stimuli` is a static bus that weapons and the grapple
   emit into without knowing officers exist: a gunshot (`Gun`, `GunController`), the whip landing
   and an impact. A `Stimulus` carries a kind, a position, an **origin** (where the thing came
@@ -1196,12 +1187,13 @@ and overloaded classes, and `docs/plans/2026-11-02-enemy-ai-fixes-and-refactor.m
 split the job engine, the knowledge pool, flood reading, sight and reactions out of `Intel` and
 `EnemyController` into the classes under **Enemy AI**. Part 2's tasks and its decisions are built
 and described under **Enemy AI**, including decision 16, searching like people (slow walking, scanning
-as they go, clearing what they can't see). Squads and firing spots (piece 6) are built, to
-`docs/plans/2026-11-06-enemy-squads.md`; its fire lanes were built and taken out. The user
+as they go, clearing what they can't see). Piece 6 is built as fights and firing spots, to
+`docs/plans/2026-11-06-enemy-squads.md`; its main and standby squads and its fire lanes were built and
+taken out. The user
 changed decisions 10, 14 and 15 (Task 8b): nobody goes to Aggro unless he sees Ruby, or sees her drag
 or throw an enemy on the chain, and one who sees an enemy killed goes to check where it came from; a grabbed enemy seen standing still is walked over to and searched
 around, and a knockdown or death only searches. Piece 5's part B (patrol together: leaders, groups,
-breaking off) isn't built, and needs a trigger of its own now the level alert is gone. After squads
+breaking off) isn't built, and needs a trigger of its own now the level alert is gone. After fights
 come rooms, hiding spots and breakables.
 
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing

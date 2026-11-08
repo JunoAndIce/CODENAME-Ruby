@@ -42,6 +42,8 @@
 
 ### Task 1: Squads
 
+> **Main and standby taken out (user, 2026-11-07: "just remove squads altogether", keeping firing spots).** Fights stay as one equal group per floor, with shared contact (step 2) and the gizmo's line between members; the cap of four, standby's band (step 3), moving up and Standby Distance and Main Squad Cap are gone. Firing spots spread everyone round Ruby, standby on a slightly wider ring, so the squads never showed on screen, and a standby member moving up had nowhere new to walk.
+
 **Files:** create `Assets/Scripts/Enemies/Fight.cs`, `Assets/Scripts/Enemies/FightBoard.cs`. Modify `Enemies/Intel.cs`, `States/AggroState.cs`, `EnemyController.cs`, `Enemies/EnemyGizmos.cs`, `CLAUDE.md`.
 
 **Interfaces**

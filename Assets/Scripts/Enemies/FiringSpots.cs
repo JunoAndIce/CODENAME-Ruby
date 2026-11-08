@@ -37,32 +37,17 @@ public static class FiringSpots
     private static readonly RaycastHit[] ShotHits = new RaycastHit[16];
 
     /// <summary>
-    /// The gun's band for his role, as a distance from Ruby: main from the gun's Min Distance, standby from
-    /// the farthest main member in contact plus Standby Distance, both out to Range less the hold band.
-    /// False with no gun, so the caller says what applies instead of this inventing one.
+    /// The gun's band, as a distance from Ruby: from its Min Distance out to Range less the hold band. False
+    /// with no gun, so the caller says what applies instead of this inventing one.
     /// </summary>
-    public static bool TryGetBand(EnemyController who, Fight fight, Vector3 ruby, out float near, out float far)
+    public static bool TryGetBand(EnemyController who, out float near, out float far)
     {
         near = far = 0f;
         if (who.Arms == null || who.Arms.HeldGun == null) return false;
         Gun gun = who.Arms.HeldGun;
         near = gun.MinDistance;
-        if (!fight.IsMain(who)) near = StandbyStart(who, fight, ruby, near);
         far = Mathf.Max(near, gun.Range - HoldBand);
         return true;
-    }
-
-    /// <summary>
-    /// Where an armed standby member's band starts: behind the main squad, the farthest main member in
-    /// contact with her plus Standby Distance. A main member out of sight, walking in or rearming says nothing
-    /// of where the fight is, so only those in contact count. It never passes the gun's Range (less the hold
-    /// band), or he'd retreat out of range of a Ruby he could shoot, and never falls below the gun's own Min
-    /// Distance. With nobody in contact to measure from it is the gun's own band: there is nobody to hold back behind.
-    /// </summary>
-    public static float StandbyStart(EnemyController who, Fight fight, Vector3 ruby, float gunMin)
-    {
-        if (!fight.TryGetMainReach(ruby, out float farthest)) return gunMin;
-        return Mathf.Max(gunMin, Mathf.Min(farthest + who.StandbyDistance, who.Arms.HeldGun.Range - HoldBand));
     }
 
     /// <summary>
@@ -74,7 +59,7 @@ public static class FiringSpots
     public static bool TryPick(EnemyController who, Fight fight, Vector3 ruby, out Vector3 spot, Vector3? avoid = null)
     {
         spot = default;
-        if (who.PlayerTransform == null || !TryGetBand(who, fight, ruby, out float bandNear, out float bandFar))
+        if (who.PlayerTransform == null || !TryGetBand(who, out float bandNear, out float bandFar))
         {
             fight.Release(who);
             return false;
@@ -110,7 +95,7 @@ public static class FiringSpots
         if (hasCurrent)
         {
             // His own spot is a candidate with a bonus, unless it has gone bad: past the band's far side by more
-            // than half a spacing (the band moves with main), inside the gun's Min Distance (no slack there: he
+            // than half a spacing (Ruby has moved), inside the gun's Min Distance (no slack there: he
             // would walk in, be backed away, and walk in again), or no longer reachable. Within the slack its band
             // term is full, so a collapsed band cannot make a spot a centimetre off the ring lose to a fresh one.
             float ring = PathGrid.FlatDistance(current, ruby);
@@ -148,8 +133,6 @@ public static class FiringSpots
             {
                 spot = pick.Spot;
                 fight.Claim(who, spot);
-                // A main member takes a standby member's claim near it; he finds his next spot at once.
-                if (fight.IsMain(who)) fight.DropStandbyClaimsNear(spot, spacing);
                 return true;
             }
             pick.Score = float.NegativeInfinity;
@@ -209,8 +192,8 @@ public static class FiringSpots
         float near = 1f - Mathf.Clamp01(PathGrid.FlatDistance(here, spot) / range);
 
         float mid = (bandNear + bandFar) * 0.5f;
-        // Floored at half a spacing: a collapsed band (standby's, against Range) would score every spot off the
-        // ring by a centimetre as zero.
+        // Floored at half a spacing: a gun whose Min Distance nears its Range has a collapsed band, which would
+        // score every spot off the ring by a centimetre as zero.
         float half = Mathf.Max(spacing * 0.5f, (bandFar - bandNear) * 0.5f);
         float band = keeping ? 1f : 1f - Mathf.Clamp01(Mathf.Abs(PathGrid.FlatDistance(spot, ruby) - mid) / half);
 
@@ -235,8 +218,7 @@ public static class FiringSpots
     {
         MateRefs.Clear();
         MateAngles.Clear();
-        AddMates(fight.Main, who, fight, ruby);
-        AddMates(fight.Standby, who, fight, ruby);
+        AddMates(fight.Members, who, fight, ruby);
     }
 
     private static void AddMates(IReadOnlyList<EnemyController> members, EnemyController who, Fight fight, Vector3 ruby)

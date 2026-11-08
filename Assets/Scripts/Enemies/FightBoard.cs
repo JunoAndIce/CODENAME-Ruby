@@ -2,9 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// The squads of every open fight: who is in one, who is main and who is on standby. A plain class that
-/// Intel owns and ticks, like JobBoard; Intel forwards what the enemies call. It never moves anyone:
-/// each enemy's AggroState reads his role and plays it. Membership is polled in Advance rather than
+/// Every open fight and who is in it. A plain class that Intel owns and ticks, like JobBoard; Intel
+/// forwards what the enemies call. It never moves anyone: each enemy's AggroState reads his fight. Membership is polled in Advance rather than
 /// hooked into state exits, because an exit can't tell where he is going and Rearm, which hands back
 /// to Aggro, must keep his place.
 /// </summary>
@@ -15,7 +14,6 @@ public class FightBoard
     private int _nextId;
     // One warning per enemy about standing on no grid, not one per join.
     private readonly HashSet<EnemyController> _warnedNoGrid = new();
-    private bool _warnedNoPlayer;
 
     public FightBoard(Intel intel) => _intel = intel;
 
@@ -51,10 +49,9 @@ public class FightBoard
             _fights.Add(fight);
         }
 
-        bool main = fight.Main.Count < _intel.MainSquadCap;
-        (main ? fight.MainList : fight.StandbyList).Add(who);
+        fight.MemberList.Add(who);
         who.Fight = fight;
-        DebugLog.Info($"{who.name} joins {fight} on {(main ? "the main squad" : "standby")} ({fight.Main.Count} main, {fight.Standby.Count} standby).", _intel);
+        DebugLog.Info($"{who.name} joins {fight} ({fight.Count} in it).", _intel);
         return fight;
     }
 
@@ -65,8 +62,7 @@ public class FightBoard
         foreach (Fight fight in _fights)
         {
             if (fight.Floor != floor) continue;
-            float distance = NearestMember(fight.MainList, from, bestDistance);
-            distance = NearestMember(fight.StandbyList, from, distance);
+            float distance = NearestMember(fight.MemberList, from, bestDistance);
             if (distance < bestDistance)
             {
                 bestDistance = distance;
@@ -94,19 +90,14 @@ public class FightBoard
 
     /// <summary>
     /// Once a frame: drops whoever is destroyed, dead or no longer in Aggro or Rearm (grabbed, down,
-    /// searching), moves the standby member nearest Ruby up into each open main place, and closes a
-    /// fight nobody is in.
+    /// searching), and closes a fight nobody is in.
     /// </summary>
     public void Advance()
     {
         for (int f = _fights.Count - 1; f >= 0; f--)
         {
             Fight fight = _fights[f];
-            Prune(fight, fight.MainList);
-            Prune(fight, fight.StandbyList);
-
-            while (fight.Main.Count < _intel.MainSquadCap && fight.Standby.Count > 0)
-                MoveUp(fight);
+            Prune(fight, fight.MemberList);
 
             if (fight.Count == 0)
             {
@@ -132,48 +123,10 @@ public class FightBoard
         }
     }
 
-    private void MoveUp(Fight fight)
-    {
-        List<EnemyController> standby = fight.StandbyList;
-        int pick = 0;
-        Transform ruby = standby[0].PlayerTransform;
-        if (ruby == null)
-        {
-            if (!_warnedNoPlayer)
-            {
-                _warnedNoPlayer = true;
-                Debug.LogWarning($"{fight}: Ruby isn't in the scene, so the standby member to move up can't be picked by distance; the longest on standby goes.", _intel);
-            }
-        }
-        else
-        {
-            float best = float.PositiveInfinity;
-            for (int i = 0; i < standby.Count; i++)
-            {
-                float distance = PathGrid.FlatDistance(standby[i].transform.position, ruby.position);
-                if (distance < best)
-                {
-                    best = distance;
-                    pick = i;
-                }
-            }
-        }
-
-        EnemyController mover = standby[pick];
-        standby.RemoveAt(pick);
-        fight.MainList.Add(mover);
-        DebugLog.Info($"{mover.name} moves up to the main squad of {fight}.", _intel);
-    }
-
     /// <summary>Whether anyone in the fight other than him has Ruby in contact (in sight within Give Up Radius). Contact is cached per frame, so this is cheap to ask.</summary>
     public bool AnyInContact(Fight fight, EnemyController except)
     {
-        return AnyInContact(fight.MainList, except) || AnyInContact(fight.StandbyList, except);
-    }
-
-    private static bool AnyInContact(List<EnemyController> members, EnemyController except)
-    {
-        foreach (EnemyController member in members)
+        foreach (EnemyController member in fight.MemberList)
         {
             // Grabbed, down or dead but not yet pruned: he has nothing to tell the rest.
             if (member == except || !Fighting(member)) continue;

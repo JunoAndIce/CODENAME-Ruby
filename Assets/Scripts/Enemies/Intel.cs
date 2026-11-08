@@ -27,7 +27,7 @@ public class Intel : MonoBehaviour
     [Tooltip("Which stimuli the squad reacts to and how. Without it enemies react to no stimulus.")]
     [SerializeField] private BehaviourMap _defaultMap;
 
-    [Header("Group jobs and squads")]
+    [Header("Group jobs")]
     [Tooltip("The most enemies on one check or search, the lead included. The spec's number is three.")]
     [SerializeField, Range(1, 6)] private int _jobCap = 3;
     [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another.")]
@@ -42,8 +42,6 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
     [Tooltip("How much a gunshot inside a search's area adds to its countdown, in seconds. Shots within a member's Distraction Gap count as one, and the time left never goes above a full Search Duration, so a firefight can't keep a search going for good.")]
     [SerializeField, Min(0f)] private float _gunshotExtension = 4.5f;
-    [Tooltip("The most enemies on a fight's main squad, which closes in on Ruby. Everyone else in the fight goes on standby, holds back and shoots when he can, and moves up when a main member is grabbed, downed or killed. The spec's number is four.")]
-    [SerializeField, Range(1, 8)] private int _mainSquadCap = 4;
 
     [Header("Debug")]
     [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
@@ -76,7 +74,7 @@ public class Intel : MonoBehaviour
 
     // The group jobs: the board owns the list and the clock, Intel ticks it and forwards to it.
     private JobBoard _board;
-    // The fights: the board owns the squads, Intel ticks it and forwards to it.
+    // The fights: the board owns them, Intel ticks it and forwards to it.
     private FightBoard _fights;
     private readonly List<EnemyController> _listeners = new();
     private bool _telling;   // Hear is walking _listeners: a nested Hear must use a list of its own
@@ -95,7 +93,6 @@ public class Intel : MonoBehaviour
     public float CallTime => _callTime;
     public float SearchAreaRadius => _searchAreaRadius;
     public float GunshotExtension => _gunshotExtension;
-    public int MainSquadCap => _mainSquadCap;
 
     /// <summary>
     /// The behaviour map every enemy reads. Null only when the asset is missing, which OnEnable
@@ -460,29 +457,27 @@ public class Intel : MonoBehaviour
         }
     }
 
-    // Each fight: a line between its main members and a ring per role, main red and standby light grey.
+    // Each fight: a red ring round every member and a line joining them, so who fights together shows.
     private void DrawFights()
     {
         foreach (Fight fight in _fights.Fights)
         {
             Gizmos.color = Color.red;
-            for (int i = 0; i < fight.Main.Count; i++)
+            IReadOnlyList<EnemyController> members = fight.Members;
+            for (int i = 0; i < members.Count; i++)
             {
-                EnemyController a = fight.Main[i];
+                EnemyController a = members[i];
                 if (a == null) continue;
                 DrawCircle(a.transform.position, 0.8f);
-                for (int j = i + 1; j < fight.Main.Count; j++)
+                for (int j = i + 1; j < members.Count; j++)
                 {
-                    EnemyController b = fight.Main[j];
+                    EnemyController b = members[j];
                     if (b != null) Gizmos.DrawLine(a.transform.position + Vector3.up * 0.3f, b.transform.position + Vector3.up * 0.3f);
                 }
             }
-            Gizmos.color = new Color(0.8f, 0.8f, 0.8f);
-            foreach (EnemyController member in fight.Standby)
-                if (member != null) DrawCircle(member.transform.position, 0.8f);
 #if UNITY_EDITOR
-            if (fight.Main.Count > 0 && fight.Main[0] != null)
-                UnityEditor.Handles.Label(fight.Main[0].transform.position + Vector3.up * 2.2f, $"{fight}: {fight.Main.Count} main, {fight.Standby.Count} standby");
+            if (members.Count > 0 && members[0] != null)
+                UnityEditor.Handles.Label(members[0].transform.position + Vector3.up * 2.2f, $"{fight}: {members.Count} in it");
 #endif
         }
     }

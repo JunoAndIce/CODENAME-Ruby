@@ -57,8 +57,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("While he sees Ruby, he calls out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
 
-    [Tooltip("How much farther back than the main squad an armed standby enemy holds, in metres: his band starts at the farthest main member's distance from Ruby plus this. With no main member yet he keeps his gun's own band.")]
-    [SerializeField, Min(0f)] private float _standbyDistance = 3f;
     [Tooltip("The least distance between two fighters' firing spots, in metres, measured flat. Each armed enemy in a fight claims a spot of his own round Ruby and nobody else takes one this close to it. Also how far past his band Ruby moves before he picks again (half of it).")]
     [SerializeField, Min(0.5f)] private float _squadSpacing = 2f;
 
@@ -444,15 +442,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public GroupJob Job { get; internal set; }
 
     /// <summary>
-    /// The fight he is in, or null: the squads of enemies after Ruby together (Fight). Only the fight
+    /// The fight he is in, or null: the enemies after Ruby together on his floor (Fight). Only the fight
     /// board sets it, as it joins and drops members by polling their state.
     /// </summary>
     public Fight Fight { get; internal set; }
 
     /// <summary>In a fight and not on its main squad: he holds back. False out of any fight.</summary>
-    public bool IsStandby => Fight != null && !Fight.IsMain(this);
 
-    public float StandbyDistance => _standbyDistance;
     public float SquadSpacing => _squadSpacing;
 
     /// <summary>The firing spot he has claimed in his fight, for the gizmo and the state. False with none.</summary>
