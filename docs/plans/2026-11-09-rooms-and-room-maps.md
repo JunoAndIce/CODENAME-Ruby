@@ -62,11 +62,11 @@
   - `Room LeafAt(Vector3 point)`: the smallest room there if it holds no rooms, else null.
 - **`Intel`** builds it in `Awake` beside the boards, and forwards `RoomAt(point)` (`SmallestAt`), `LeafRoomAt(point)` and `Rooms`.
 
-- [ ] **Step 1: `Room` and `RoomIndex`** per the interfaces and decisions 1 to 3. The index sorts each floor's rooms smallest area first, so `SmallestAt` returns the first that contains the point. Overlap and no-grid warnings name the rooms and say what to do.
-- [ ] **Step 2: Gizmos.** `Room.OnDrawGizmos` draws each rectangle's outline, faintly when not selected. A label carries the name and the map's name, or "(map from the room around it)". With the map's Mask Radius above 0 (Task 2 adds it; draw it once that exists), a dashed outline that far out.
-- [ ] **Step 3: `RoomEditor`.** Scene-view handles as `EnemyControllerEditor` gives patrol rectangles: move a rectangle by its centre, size it by its edges, with Undo. Inspector buttons add and remove a rectangle. Reuse the patrol editor's drawing code by moving what both need into a small static helper in `Editor/` rather than copying it.
-- [ ] **Step 4: Docs.** `CLAUDE.md`: a **Rooms** bullet under Enemy AI (what a room is, nesting, the overlap warning, decisions 1 to 3), and `Room`/`RoomIndex` in the Assemblies table's `Ruby.Game` row.
-- [ ] **Step 5: Compile and commit.**
+- [x] **Step 1: `Room` and `RoomIndex`** per the interfaces and decisions 1 to 3. The index sorts each floor's rooms smallest area first, so `SmallestAt` returns the first that contains the point. Overlap and no-grid warnings name the rooms and say what to do.
+- [x] **Step 2: Gizmos.** `Room.OnDrawGizmos` draws each rectangle's outline, faintly when not selected. A label carries the name and the map's name, or "(map from the room around it)". With the map's Mask Radius above 0 (Task 2 adds it; draw it once that exists), a dashed outline that far out.
+- [x] **Step 3: `RoomEditor`.** Scene-view handles as `EnemyControllerEditor` gives patrol rectangles: move a rectangle by its centre, size it by its edges, with Undo. Inspector buttons add and remove a rectangle. Reuse the patrol editor's drawing code by moving what both need into a small static helper in `Editor/` rather than copying it.
+- [x] **Step 4: Docs.** `CLAUDE.md`: a **Rooms** bullet under Enemy AI (what a room is, nesting, the overlap warning, decisions 1 to 3), and `Room`/`RoomIndex` in the Assemblies table's `Ruby.Game` row.
+- [x] **Step 5: Compile and commit.**
 - [ ] **Step 6: Play-test gate (the user).** Place a floor-sized room and two offices inside it, and one more room overlapping an office's edge. The outlines and labels draw, the handles size them, and entering Play warns once about the overlapping pair and nothing else.
 
 ### Task 2: Behaviour maps per room, and speech across a room
