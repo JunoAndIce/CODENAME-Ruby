@@ -613,79 +613,170 @@ shouldn't trigger officers. If an alarm goes off, officers should be able to tur
 after multiple times, they get suspicious.")* This is Hitman's behaviour maps, which tune
 reactions area by area. A bar crowd shrugs off a fight that would panic a fashion show.
 
+> **Scope, settled 2026-11-09 (user).** Piece 7 is built before piece 5 part B, which needs it: a
+> follower who breaks off "searches a room". Built now: **rooms**, **searching by room**, **behaviour
+> maps per room** (with armories), **speech across a room**, and the **firing range** with the one
+> activity it needs, Shoot At Range. **Later, once there are assets:** the other activity spots
+> (desk, TV, cleaning guns) and alarms *(user: "wait for assets for these, but firing range we can
+> test"; "alarms is later. We don't have any models or prefabs that can work as alarms")*. Their
+> text below is kept for then.
+
+#### Rooms
+
 **Rooms** are placed in the scene: one or more rectangles (`GridArea`) with a name and a behaviour
-map.
+map, edited with Scene-view handles the way patrol areas are.
 
 - A room can be as big as a floor, so a map "per floor" is a room covering the floor.
 - Rooms can sit inside bigger rooms, and the smallest room holding a point is the one that counts
   there. A point in no room uses the level's default map.
-- Rooms also tell searches "the area Ruby moved to" (piece 8), and widen speech to the whole room
-  (piece 2).
 - Two rooms that overlap without one holding the other make a point's map ambiguous. That's
   warned about when the scene loads, never silently resolved.
+- Rooms are per floor, as everything else is: a room belongs to the PathGrid its rectangles stand
+  on.
+- **Editor:** each room is drawn as an outline labelled with its name and map, with its Mask
+  Radius.
 
-**Behaviour maps** are assets (ScriptableObjects). For each kind of stimulus, a map says what it
-means here: its priority, its response (ignore, Searching for Problem, Searching for Attack, switch
-off), and when that applies (always, or only while the room is in use).
+#### Searching by room
 
-- The level's default map is piece 3's table. A room's map overrides only the rows it sets, and
-  the rest come from the default.
+*(User: "Enemies search rooms if the search started in a room, if it started outside a room,
+officers should still check the nearest room(s). Essentially the circle that designates the search
+area radius marks rooms and areas to be searched.")*
+
+- A group Search's **Search Area Radius circle marks what is searched**, instead of being the area
+  itself. Every room the circle touches is searched **whole**, out to its walls, and that includes
+  the room the search started in. Ground inside the circle that lies in no such room is searched as
+  today. A search starting in a corridor between two offices sends the team through both.
+- **Touching means reached by open ground** *(user, 2026-11-09)*. A room counts only when the circle
+  reaches it over ground joined to the search's place inside the circle: through a doorway within
+  the circle, never through a wall. Rooms share walls, and a circle poking through one into an
+  office whose only door is 30 m round would otherwise send the team the long way to search it.
+  There is no cap on how many rooms or how long a search takes beyond that *(user)*.
+- **Smallest rooms only** *(user)*. A room that holds other rooms is never searched whole: it adds
+  only its open ground inside the circle. Otherwise a floor-sized room, placed for its map, would
+  send every search over the whole floor.
+- What is searched is still one shared list of points about a metre apart (`SearchCoverage`),
+  cleared by sight, claimed nearest first and swept on the walk, as decision 16 of the group jobs
+  part 2 plan built it. Only how the points are collected changes. Where "in the search area" is
+  tested today by distance to the place (a member counting as arrived, a gunshot inside the area),
+  it means the marked area from now on.
+- **No time cap cuts a search short** *(user: "the max time must not break the search before it
+  completes")*. A search ends when everything is cleared. Search Duration stops being the longest a
+  search lasts.
+- **A minimum keeps them busy** *(user: "the lowest search should still have enemies occupied
+  (searching an open room, or a hallway they can see, still has them walk and sweep anyway, even
+  though things are cleared to emulate confusion or double checking)")*. A search ends only once
+  everything is cleared **and** a minimum time has passed since the first member came in. Until
+  then, a member with nothing left to clear walks to spots spread over the marked area, sweeping as
+  he goes, re-checking what was seen. The minimum is a tuning value, about 5 s *(my call)*.
+- **The guard:** a point nobody can see or reach would hold a search open for good, so one that
+  can't be cleared is dropped **with a warning** saying where and why, never skipped quietly. How it
+  is judged unclearable (no path, or claimed and walked to without being seen) is the builder's.
+  A search with no ground at all, which today looks about until its countdown ends, needs the same
+  kind of stated rule now there is no countdown.
+- Piece 5 part B's break-off uses the same rule: "search a room" is the search a lone follower
+  makes from where he stands.
+
+#### Behaviour maps per room
+
+**Behaviour maps** are assets (ScriptableObjects), the `BehaviourMap` type piece 3 built. For each
+kind of stimulus, a map says what it means here: its priority, its response (Ignore, Searching for
+Problem, Searching for Attack), and when that applies (always, or only while the room is in use).
+
+- The level's default map is piece 3's table, `Intel`'s Default Map. A room's map overrides only
+  the rows it sets. A row it leaves unset comes from the room around it, and so on outwards, and
+  only then from the default, so a floor-sized room's map still holds inside the offices within it.
+  A row that applies only while the room is in use falls through the same way while it isn't
+  *(my call)*.
+- **Which room's map:** the one where the stimulus happened (the smallest room holding its
+  position), not where the listener stands.
 - A map can set a **Mask Radius**: what it ignores is also ignored when it comes from within that
-  distance outside the room.
-- **Sight is never masked.** An officer who sees Ruby, or a body, reacts wherever he is.
+  distance outside the room. Measured in a straight line, on the room's own floor. Within it the
+  mask wins over the map of wherever the stimulus happened: a busy range declares its surroundings
+  quiet *(my call)*. The mask covers sounds only.
+- **Sight is never masked.** An officer who sees Ruby, or a body, reacts wherever he is. No room's
+  map can make a body ignored, and that covers everything judged on the Body row (an enemy seen
+  flying, killed or on the chain): a Body row set to Ignore in a room's map warns once and is not
+  used *(my call)*. Anything else he sees, loose guns and moving or fast objects, follows the
+  room's rows.
+- **Armories:** a map that ignores loose guns *(user)*.
+- **Speech** carries to everyone in the speaker's room, as well as along the floor out to Speech
+  Range (piece 2), but only a room with no rooms inside it, the same rule as searching: a
+  floor-sized room would otherwise carry one shout, and its Alert, to the whole floor. Calling
+  enemies onto a job (`FindCallees`, Fill) keeps Speech Range along the floor *(my call)*.
+- **Matching and merging jobs** count a job's marked rooms as well as Job Match Radius round its
+  place: something sensed in a room a job is searching goes to that job, and two jobs whose marked
+  areas share a room merge *(my call)*. Otherwise two teams could search one room apart.
 
-**Armories:** a map that ignores loose guns *(user)*.
+#### Firing ranges
 
-**Activity spots** *(user: idle officers are "cleaning guns, watching TV, sitting at desks")*:
+*(User: "firing range we can test.")* It needs no new clips: an officer shooting at a target is the
+Aim stance and the pistol he already has.
+
+- A range is a room with **Shoot At Range** spots. A spot is a placed object: where to stand, which
+  way to face, and a **target**, any object placed in the scene.
+- An idle officer's **post** can be a Shoot At Range spot, set in the Inspector. At his post he aims
+  at the target and fires at it, with a pause between shots. Patrol points on spots, and every
+  other activity, wait for assets.
+- **Practice shots are real** *(user)*: real bullets from his `Gun`, which can kill Ruby if she
+  crosses the lane, and real Gunshot stimuli, which the range's map masks while it's in use. A busy
+  range is a hazard as well as cover.
+- **Wary isn't aggressive here** *(user: "if there was an attack he should have an aggro patrol
+  walk, if wary doesn't automatically mean aggro, officers can still do activities while wary")*.
+  An officer who has an Aggressive route walks it once he's aggressive, as the table already sends
+  an idle officer to Patrol when he has an active route, so he leaves the range. One with no
+  Aggressive route goes back to his post and practises again, wary or not *(my reading)*.
+- An officer posted at a range spot with no gun stands at the post and doesn't practise, with one
+  log line saying why *(my call)*.
+- He faces the target, so his cone looks down the range: that is what makes sneaking past a busy
+  shooter possible. Otherwise his senses are unchanged *(my call)*. He aggros, joins jobs and reacts
+  as usual, and a stimulus ends the shooting at once.
+- The range is **in use** while anyone is shooting there, and for In Use Time (default 10 s, *my
+  call*) after the last shot.
+- While it's in use, its map ignores gunshots from inside it and from within its Mask Radius
+  (default 8 m, *my call*). So Ruby can fire near a busy range without alerting anyone who doesn't
+  see her. When nobody is practising, a shot there is a shot.
+- **Editor:** a Shoot At Range spot is drawn with its facing and a line to its target, and each idle
+  officer has a line to his post.
+
+#### Later: activity spots
+
+*(User: idle officers are "cleaning guns, watching TV, sitting at desks". Waits for assets.)*
 
 - An activity spot is a placed object: where to stand or sit, which way to face, and an activity
-  (Clean Gun, Watch TV, Sit At Desk, Shoot At Range, and more later). Shoot At Range also has a
-  target.
-- An idle officer's **post** can be an activity spot, set in the Inspector. He does its activity
-  while he's there. A patrol point can sit on one too, and an officer pausing there does it for
-  the pause.
-- He faces the spot's way, so his cone looks where the activity does: at the TV, at the desk. That
-  is what makes sneaking past a busy officer possible. The activity doesn't change his senses
-  otherwise *(my call)*.
-- He aggros, joins jobs and reacts as usual. A stimulus ends the activity at once.
+  (Clean Gun, Watch TV, Sit At Desk, Shoot At Range, and more later).
+- An idle officer's post can be an activity spot. He does its activity while he's there. A patrol
+  point can sit on one too, and an officer pausing there does it for the pause.
+- He faces the spot's way, so his cone looks where the activity does: at the TV, at the desk.
 - Each activity is a slot in the officer's `CharacterAnimationSet`, so a clip is an edit to the set
   and a rebuild, never code. Until a slot has a clip, he plays the Rest idle there, and a warning
   names the empty slot once when play starts. That's a visible stand-in, not a silent one.
 - How a patrol point or a post is tied to a spot is the builder's call, with one constraint:
   `PatrolRoute` lives in `Ruby.Pathing`, which mustn't learn about activities.
 
-**Firing ranges** *(user)*:
+#### Later: alarms
 
-- A range is a room with Shoot At Range spots. An officer at one fires at its target.
-- The range is **in use** while anyone is shooting there, and for In Use Time (default 10 s, *my
-  call*) after the last shot.
-- While it's in use, its map ignores gunshots from inside it and from within its Mask Radius
-  (default 8 m, *my call*). So Ruby can fire near a busy range without alerting anyone who doesn't
-  see her. When nobody is practising, a shot there is a shot.
-
-**Alarms** *(user)*:
+*(User: waits for alarm models or prefabs. And, 2026-11-09: enemies who see Ruby can also run to an
+alarm and raise it themselves.)*
 
 - An alarm is a placed object. Set off, it rings (a loud sound of its own kind) until someone
   switches it off.
 - Ruby sets it off by hitting it: a bullet, something thrown at Notice Speed or faster, or the
-  whip yanking it *(my call)*. That makes it a lure.
-- **Switch off** is its default response. The nearest free officer goes to it, switches it off (a
-  stand-in pause of Switch Off Time beside it), and goes back to what he was doing. Others who hear
-  it leave it to him, because it's a job with one member.
+  whip yanking it *(my call)*. That makes it a lure. Enemies who see her can raise it too *(user)*.
+- **Switch off** is its default response, a fourth response on the map. The nearest free officer
+  goes to it, switches it off (a stand-in pause of Switch Off Time beside it), and goes back to what
+  he was doing. Others who hear it leave it to him, because it's a job with one member.
 - **Suspicion:** each alarm counts how often it has gone off. From the Suspicious After count
   (default 3) on, the officer who switches it off is suspicious. He calls in whoever is near, and
   they search around it, Searching for Problem with company *(user: "after multiple times, they get
   suspicious"; the count and the response are my calls)*. The count never resets.
-
-**Editor:** each room is drawn as an outline labelled with its name and map, with its Mask Radius.
-Activity spots are drawn with their facing and activity name (and a line to a range target), each
-idle officer has a line to his post, and in play each alarm shows its count.
+- **Editor:** in play each alarm shows its count.
 
 ### 8. Clearing hiding spots
 
 - **The area Ruby moved to** is the room (piece 7) holding the spot the search starts from *(user:
   "if Ruby ended in a room, officers will check the whole room")*. With no room there, the team
-  searches the open ground around it.
+  searches the open ground around it. *(Built in piece 7 as searching by room, and widened: every
+  smallest room the Search Area Radius circle touches is searched whole.)*
 - **Hiding spots** are a list on each room: places where Ruby could be out of sight from the
   room's open floor, behind sofas, desks, tables and crates *(user)*. A **Find Hiding Spots** button in the room's
   Inspector fills the list from the PathGrid: open cells beside something that blocks sight that
