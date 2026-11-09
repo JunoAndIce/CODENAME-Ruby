@@ -97,21 +97,59 @@ public class Intel : MonoBehaviour
     public float GunshotExtension => _gunshotExtension;
 
     /// <summary>
-    /// The behaviour map every enemy reads. Null only when the asset is missing, which OnEnable
-    /// reports once; callers treat null as "no row", so nothing reacts and nothing throws.
+    /// The row for a kind at a point. False when no map has one (the default map warns once about a
+    /// missing row; a missing default map was reported at enable). In order:
+    /// 1. A mask, only for a heard stimulus: a room on the point's floor whose map has a Mask Radius,
+    ///    with the point outside it but within that radius (a straight line, through walls, never to
+    ///    another floor), wins when its own row for the kind applies and is Ignore. Sight is never
+    ///    masked, because only hearing passes heard.
+    /// 2. The rooms: from the smallest holding the point out through Parent, the first map whose own
+    ///    row applies. A room with no map, or no row for the kind, leaves it to the room around it.
+    /// 3. The default map. Lookups scan short lists and allocate nothing.
     /// </summary>
-    public BehaviourMap MapAt(Vector3 point) => _defaultMap;
-
-    /// <summary>The row for a kind at a point. False when there's no map (reported once, at enable) or no row for the kind.</summary>
-    public bool TryGetRow(Vector3 point, StimulusKind kind, out BehaviourMap.Row row)
+    public bool TryGetRow(Vector3 point, StimulusKind kind, bool heard, out BehaviourMap.Row row)
     {
-        BehaviourMap map = MapAt(point);
-        if (map == null)
+        if (_roomIndex != null)
+        {
+            if (heard)
+            {
+                PathGrid floor = PathGrid.At(point);
+                if (floor != null)
+                {
+                    IReadOnlyList<Room> rooms = _roomIndex.Rooms;
+                    for (int i = 0; i < rooms.Count; i++)
+                    {
+                        Room room = rooms[i];
+                        if (room.Floor != floor || room.Map == null || room.Map.MaskRadius <= 0f) continue;
+                        float outside = room.DistanceOutside(point);
+                        if (outside <= 0f || outside > room.Map.MaskRadius) continue;
+                        if (Applies(room, kind, out BehaviourMap.Row masked) && masked.Response == StimulusResponse.Ignore)
+                        {
+                            row = masked;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            for (Room room = _roomIndex.SmallestAt(point); room != null; room = room.Parent)
+                if (Applies(room, kind, out row)) return true;
+        }
+
+        if (_defaultMap == null)
         {
             row = default;
             return false;
         }
-        return map.TryGetRow(kind, out row);
+        return _defaultMap.TryGetRow(kind, out row);
+    }
+
+    // A room's own row for the kind, when it has a map, a row, and the row isn't held back for use.
+    private static bool Applies(Room room, StimulusKind kind, out BehaviourMap.Row row)
+    {
+        row = default;
+        if (room.Map == null || !room.Map.TryGetOwnRow(kind, out row)) return false;
+        return !row.OnlyWhileInUse || room.InUse;
     }
 
     // Built here and not in a field initialiser, because the board needs this Intel. Awake runs
@@ -241,6 +279,22 @@ public class Intel : MonoBehaviour
         }
         _speech.End("speech", speaker);
 
+        // A shout also fills the speaker's own room, past the path range, when that room holds no rooms
+        // (a floor-sized room would carry it everywhere). Same floor, living, not already counted.
+        int inRange = hearers.Count;
+        Room leaf = _roomIndex.LeafAt(speaker.transform.position);
+        if (leaf != null)
+        {
+            PathGrid floor = PathGrid.At(speaker.transform.position);
+            foreach (EnemyController listener in _enemies)
+            {
+                if (listener == speaker || listener.Health.IsDead || hearers.Contains(listener)) continue;
+                Vector3 at = listener.transform.position;
+                if (PathGrid.At(at) != floor || !leaf.Contains(at)) continue;
+                hearers.Add(listener);
+            }
+        }
+
         int heard = hearers.Count;
         int joined = 0;
         if (!nested) _saying = true;
@@ -256,7 +310,7 @@ public class Intel : MonoBehaviour
         {
             if (!nested) _saying = false;
         }
-        DebugLog.Info($"{speaker.name} calls out Ruby's position: {heard} heard, {joined} joined the fight.", speaker);
+        DebugLog.Info($"{speaker.name} calls out Ruby's position: {heard} heard ({heard - inRange} of them only because they share his room), {joined} joined the fight.", speaker);
     }
 
     /// <summary>

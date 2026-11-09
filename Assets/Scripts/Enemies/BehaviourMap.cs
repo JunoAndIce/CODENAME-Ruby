@@ -30,6 +30,8 @@ public class BehaviourMap : ScriptableObject
         [Tooltip("1 to 5. Higher outranks lower. A search only gives way to a higher number; an equal or lower one only distracts him.")]
         [Range(MinPriority, MaxPriority)] public int Priority;
         public StimulusResponse Response;
+        [Tooltip("Applies only while the room is in use; otherwise the room around it decides. Only meaningful on a room's map.")]
+        public bool OnlyWhileInUse;
     }
 
     /// <summary>
@@ -53,10 +55,15 @@ public class BehaviourMap : ScriptableObject
     }
 
     [SerializeField] private List<Row> _rows = new();
+    [Tooltip("On a room's map: sounds made within this many metres outside the room, in a straight line and on its floor, are judged by this map when its row for them is Ignore. 0 is off. Sight is never masked.")]
+    [SerializeField, Min(0f)] private float _maskRadius;
+
+    public float MaskRadius => _maskRadius;
 
     // Not serialized: one warning per kind per session, not one per frame.
     private readonly HashSet<StimulusKind> _warnedMissing = new();
     private readonly HashSet<StimulusKind> _warnedRange = new();
+    private bool _warnedBody;
 
     /// <summary>
     /// Looks up the row for a kind. A kind with no row is ignored, and warned about once. A priority
@@ -66,10 +73,38 @@ public class BehaviourMap : ScriptableObject
     /// </summary>
     public bool TryGetRow(StimulusKind kind, out Row row)
     {
+        if (Find(kind, false, out row)) return true;
+
+        row = default;
+        if (_warnedMissing.Add(kind))
+            Debug.LogWarning($"Behaviour Map '{name}' has no row for {kind}, so officers ignore it. Add a row to react to it.", this);
+        return false;
+    }
+
+    /// <summary>
+    /// The same lookup as TryGetRow, clamp included, without the missing-row warning: a room's map
+    /// leaves rows unset on purpose, and the room around it then decides. A Body row set to Ignore is
+    /// refused (warned once per map, never used): an enemy must never walk past a corpse unseen.
+    /// </summary>
+    public bool TryGetOwnRow(StimulusKind kind, out Row row) => Find(kind, true, out row);
+
+    // The default map keeps its Body rows as authored; only a room's map refuses Body Ignore.
+    private bool Find(StimulusKind kind, bool refuseBodyIgnore, out Row row)
+    {
         foreach (Row candidate in _rows)
         {
             if (candidate.Kind != kind) continue;
             row = candidate;
+            if (refuseBodyIgnore && kind == StimulusKind.Body && row.Response == StimulusResponse.Ignore)
+            {
+                if (!_warnedBody)
+                {
+                    _warnedBody = true;
+                    Debug.LogWarning($"Behaviour Map '{name}' has Body set to Ignore, which a room can't do (an enemy must never walk past a corpse unseen). The row is skipped and the room around it decides; remove it or give it a response.", this);
+                }
+                row = default;
+                return false;
+            }
             if (row.Priority < MinPriority || row.Priority > MaxPriority)
             {
                 if (_warnedRange.Add(kind))
@@ -80,8 +115,6 @@ public class BehaviourMap : ScriptableObject
         }
 
         row = default;
-        if (_warnedMissing.Add(kind))
-            Debug.LogWarning($"Behaviour Map '{name}' has no row for {kind}, so officers ignore it. Add a row to react to it.", this);
         return false;
     }
 
@@ -91,7 +124,7 @@ public class BehaviourMap : ScriptableObject
         {
             new() { Kind = StimulusKind.Body, Priority = 5, Response = StimulusResponse.SearchForAttack },
             new() { Kind = StimulusKind.FastObject, Priority = 5, Response = StimulusResponse.SearchForAttack },
-            new() { Kind = StimulusKind.Gunshot, Priority = 4, Response = StimulusResponse.SearchForAttack },
+            new() { Kind = StimulusKind.Gunshot, Priority = 5, Response = StimulusResponse.SearchForAttack },
             new() { Kind = StimulusKind.Impact, Priority = 3, Response = StimulusResponse.SearchForProblem },
             new() { Kind = StimulusKind.WhipLanding, Priority = 3, Response = StimulusResponse.SearchForProblem },
             new() { Kind = StimulusKind.MovingObject, Priority = 2, Response = StimulusResponse.SearchForProblem },

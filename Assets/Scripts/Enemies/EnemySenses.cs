@@ -43,7 +43,7 @@ public class EnemySenses
         if (ruby != null)
             _enemy.Memory.Learn(new RubyFact(ruby.transform.position, stimulus.Time, Knowledge.Heard));
 
-        if (!_enemy.Intel.TryGetRow(stimulus.Position, stimulus.Kind, out BehaviourMap.Row row)) return;
+        if (!_enemy.Intel.TryGetRow(stimulus.Position, stimulus.Kind, true, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} hears {stimulus.Kind} from {stimulus.Position}: {row.Response} at priority {row.Priority}.", _enemy);
         _enemy.Reactions.Investigate(new Incident(stimulus.Position, row.Response, row.Priority, mobilises: stimulus.Kind == StimulusKind.Gunshot));
@@ -96,7 +96,7 @@ public class EnemySenses
             _sawDie.Add(other);
             bool hasOrigin = Disturbance.TryGetOrigin(other.Body, out Vector3 source);
             Vector3 point = hasOrigin ? source : where;
-            if (!_enemy.Intel.TryGetRow(point, StimulusKind.Body, out BehaviourMap.Row row)) continue;
+            if (!_enemy.Intel.TryGetRow(point, StimulusKind.Body, false, out BehaviourMap.Row row)) continue;
 
             DebugLog.Info($"{_enemy.name} sees {other.name} killed: he goes to check {(hasOrigin ? "where it came from" : "where he died, since nothing shows where it came from")}, {point}.", _enemy);
             _enemy.Reactions.Investigate(new Incident(point, row.Response, row.Priority, makesSearch: true, saysNothingOfRuby: !hasOrigin, mobilises: true));
@@ -235,8 +235,8 @@ public class EnemySenses
     // kind's own priority, so it can't pull him off anything that outranks it.
     private void Glance(Vector3 at, StimulusKind kind, string what)
     {
-        if (!_enemy.Intel.TryGetRow(at, kind, out BehaviourMap.Row row)) return;
-        // A map that says to ignore this kind (an armory, a morgue) means no glance either.
+        if (!_enemy.Intel.TryGetRow(at, kind, false, out BehaviourMap.Row row)) return;
+        // A map that says to ignore this kind (an armory's loose guns) means no glance either.
         if (row.Response == StimulusResponse.Ignore) return;
 
         // On a job at its place, the job goes wary for everyone, not just the one who looked.
@@ -248,7 +248,7 @@ public class EnemySenses
     // True when he took it.
     private bool Notice(Vector3 origin, StimulusKind kind, string what)
     {
-        if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return false;
+        if (!_enemy.Intel.TryGetRow(origin, kind, false, out BehaviourMap.Row row)) return false;
 
         DebugLog.Info($"{_enemy.name} notices {what}: {row.Response} at priority {row.Priority}.", _enemy);
         // A body or a gun is found, not heard: there is nothing to check, so it is a Search, and it says
@@ -293,8 +293,8 @@ public class EnemySenses
         if (isEnemy || body.TryGetComponent(out Gun _))
         {
             StimulusKind whatKind = isEnemy ? StimulusKind.Body : StimulusKind.LooseGun;
-            bool haveSpeed = _enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row speedRow);
-            bool haveWhat = _enemy.Intel.TryGetRow(origin, whatKind, out BehaviourMap.Row whatRow);
+            bool haveSpeed = _enemy.Intel.TryGetRow(origin, kind, false, out BehaviourMap.Row speedRow);
+            bool haveWhat = _enemy.Intel.TryGetRow(origin, whatKind, false, out BehaviourMap.Row whatRow);
             // A missing row was warned about once by the map. One missing: the other stands alone.
             // Both missing: nothing to react to, as a single missing row is today.
             if (!haveSpeed && !haveWhat) return;
@@ -316,7 +316,7 @@ public class EnemySenses
             return;
         }
 
-        if (!_enemy.Intel.TryGetRow(origin, kind, out BehaviourMap.Row row)) return;
+        if (!_enemy.Intel.TryGetRow(origin, kind, false, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: {row.Response} at priority {row.Priority}.", _enemy);
         // Something this fast could kill, and no ordinary person throws it, so it is worth more than one

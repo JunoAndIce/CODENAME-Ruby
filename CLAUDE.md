@@ -525,7 +525,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   no grid warns and is left out. Lookups scan the short list, sorted smallest first, with no allocation.
   **Rooms are read once, at load:** a room that is disabled then, or enabled after `Intel` wakes, is not
   indexed, and each case warns by name. A later rectangle of a room that lies off the first rectangle's
-  floor warns too. Gizmos draw each outline (faint unselected) with the name and map; `RoomEditor` gives move and edge
+  floor warns too. Gizmos draw each outline (faint unselected) with the name and map, and an orange outline at the map's Mask Radius; `RoomEditor` gives move and edge
   handles with Undo.
 - **Idle** (`IdleState`). Where an officer starts is his **post** (`PostPosition`, `PostYaw`,
   recorded in `Start`). After a search, a fall or a shove, farther than Post Tolerance (1 m) from it,
@@ -571,7 +571,9 @@ through the player never slows the walk. **Enemies don't shove props that block 
   and loose guns the squad has reported (only ever added to within a level). **Speech** is the
   opposite: while an officer sees her he calls her position out at once on first sight and then
   every Speak Interval, and every other living officer within Speech Range (15 m) learns it
-  immediately as Told. Range is **path metres along the floor** (`FloorReach`, over
+  immediately as Told. **It also fills the speaker's room** (`Intel.Say`): every living officer on his floor standing in
+  his `LeafRoomAt`, past Speech Range or not, hears too, but only when that room holds no rooms, so a floor-sized room carries nothing. The log says how many heard only
+  because of the room. Range is **path metres along the floor** (`FloorReach`, over
   `PathGrid.FloodFrom`), so a shout doesn't carry through a wall or to another floor. An enemy on
   no grid, or a scene with no `Intel`, gets one warning saying so, never a silent fallback.
   **Speech is also word of mouth:** each officer who hears him is `Alert()`ed into Aggro whatever he
@@ -608,7 +610,13 @@ through the player never slows the walk. **Enemies don't shove props that block 
   moving object and loose gun 2 (problem). A priority outside 1 to 5 (an asset saved on the old
   10s-and-up scale) warns once and is held to the range; the component's Reset refills the
   defaults. A kind with no row, or a missing map, logs one warning and
-  is treated as no reaction. Problem and Attack differ in how he searches (see **Searching**), and
+  is treated as no reaction. **Rooms override rows** (`Intel.TryGetRow(point, kind, heard, out row)`): a `Room`'s map
+  is read from the smallest room holding the point out through `Parent`, the first whose own row for the kind
+  applies (`BehaviourMap.TryGetOwnRow`, which never warns of a missing row, since a room leaves rows unset on purpose), and
+  then the default map. A row marked **Only While In Use** applies only while `Room.InUse` (false until the room-use step), else the room around it decides. **Mask Radius** (on a map, 0 is off) is for sounds
+  only (`heard`, so sight is never masked): within it of a room on the same floor, measured in a straight line through walls, that room's map wins
+  when its own applicable row for the kind is Ignore. An armory is a map that ignores Loose Gun. **The Body rule:** a room map's Body row set to
+  Ignore is refused with one warning per map and never used, so an enemy can't be made to walk past a corpse. Problem and Attack differ in how he searches (see **Searching**), and
   Investigate can upgrade a Problem to an Attack. **`BehaviourMap.Severity`** ranks a response for
   every "is this more serious" test: Ignore 0, problem 1, attack 2, written out, because the enum's
   numbers are saved by assets and a value added later takes the next number whatever its place in the

@@ -44,6 +44,8 @@ public class Room : MonoBehaviour
     public string Name => name;
     public int RectCount => _rects.Count;
     public float InUseTime => _inUseTime;
+    /// <summary>Whether the room counts as in use. Always false until the room-use step gives it a meaning, so a row marked Only While In Use falls through to the room around it.</summary>
+    public bool InUse => false;
 
     // Set by RoomIndex when it is built, never saved.
     /// <summary>The floor this room stands on, or null before the index is built.</summary>
@@ -144,7 +146,16 @@ public class Room : MonoBehaviour
         string mapName = _map != null ? _map.name : "(map from the room around it)";
         UnityEditor.Handles.Label(AreaOf(0).Centre + Vector3.up * 0.3f, $"{name}\n{mapName}", UnityEditor.EditorStyles.boldLabel);
 #endif
-        // Task 2 adds the behaviour map's Mask Radius; its dashed outline is drawn here once it exists.
+        // The map's Mask Radius: sounds this far outside the room are judged by this room's map when it ignores them.
+        if (_map != null && _map.MaskRadius > 0f)
+        {
+            Gizmos.color = selected ? new Color(1f, 0.6f, 0.2f, 1f) : new Color(1f, 0.6f, 0.2f, 0.3f);
+            for (int i = 0; i < _rects.Count; i++)
+            {
+                GridArea area = AreaOf(i);
+                DrawRectangle(area.Centre, area.HalfSize + Vector2.one * _map.MaskRadius);
+            }
+        }
     }
 
     private static void DrawRectangle(Vector3 centre, Vector2 half)
