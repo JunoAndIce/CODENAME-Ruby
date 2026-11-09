@@ -3,6 +3,9 @@ using UnityEngine;
 
 public enum NavResult { Moving, Arrived, Blocked, Unreachable }
 
+/// <summary>How GridNavigator.FindGroundNear found its spot, so the caller knows how far to trust it.</summary>
+public enum GroundFound { None, Point, Preferred, Nearest }
+
 /// <summary>
 /// Moves an IPathAgent over its floor's PathGrid: flow fields for chases and walks to a point, cached
 /// A* for areas (patrols and searches), and a straight line when one is clear. It only plans; the agent steers. No silent
@@ -123,6 +126,44 @@ public class GridNavigator
         FindApproach(grid, point, force: true);
         spot = _approachSpot;
         return _approachFound;
+    }
+
+    /// <summary>
+    /// Ground he can reach for a point, from one flood from where he stands, best first: the point itself;
+    /// else, of `preferred` (ground the caller trusts to be on the point's side, such as cells a flood from
+    /// the point reached), the one nearest the point that he can reach; else the reached ground nearest it
+    /// within Approach Radius, as the crow flies, which can lie on the far side of a wall from the point:
+    /// the caller should check that one. None on no grid or with nothing in reach. The flood reads cells
+    /// by X and Z only, so the caller must have him on the point's floor. A decision, not a step.
+    /// </summary>
+    public GroundFound FindGroundNear(Vector3 point, IReadOnlyList<Vector3> preferred, out Vector3 spot)
+    {
+        spot = point;
+        PathGrid grid = PathGrid.At(_agent.Body.position);
+        if (grid == null) return GroundFound.None;
+
+        FindApproach(grid, point, force: true);
+        if (_approachField.TryGetDistance(point, out _)) return GroundFound.Point;
+
+        bool found = false;
+        float best = float.MaxValue;
+        if (preferred != null)
+        {
+            for (int i = 0; i < preferred.Count; i++)
+            {
+                Vector3 candidate = preferred[i];
+                float distance = FlatDistance(candidate, point);
+                if (distance >= best || !_approachField.TryGetDistance(candidate, out _)) continue;
+                best = distance;
+                spot = candidate;
+                found = true;
+            }
+        }
+        if (found) return GroundFound.Preferred;
+
+        if (!_approachFound) return GroundFound.None;
+        spot = _approachSpot;
+        return GroundFound.Nearest;
     }
 
     /// <summary>

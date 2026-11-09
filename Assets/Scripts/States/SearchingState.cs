@@ -687,19 +687,29 @@ public class SearchingState : EnemyStateBase
     // progress), and Search Travel Limit (TickJob) bounds it.
     private bool WalkToSource(GroupJob job)
     {
-        if (!Enemy.Intel.TryGetSearchStart(job, Enemy, out Vector3 source))
+        // Floors are independent, and the cells a flood reads are found by X and Z only, so a member on
+        // another floor could read the place as reachable (or, once a start is stored, walk at it) from his
+        // own floor. He can't reach it: checked first, on every walk-in step, not only for the first asker.
+        PathGrid ownFloor = PathGrid.At(Enemy.transform.position);
+        if (ownFloor == null || ownFloor != job.Area.Floor)
         {
-            // TryGetNearestReachable sets no FailureReason, so the reason is said here rather than read off a stale one.
-            string reason = $"no ground he can reach from where he stands lies within a few metres of the place {job.Point}, or he is on no grid or on another floor from it";
-            Debug.LogWarning($"{Enemy.name} can't reach the source of {job}: {reason}; he is taken off it.", Enemy);
-            Enemy.Intel.DropFromSearch(Enemy, $"he can't reach the source ({reason})");
+            string where = ownFloor == null ? "he is on no PathGrid" : $"he is on {ownFloor.name}";
+            string floor = job.Area.Floor != null ? job.Area.Floor.name : "no PathGrid";
+            Debug.LogWarning($"{Enemy.name} can't reach the source of {job}: {where} and its place is on {floor}; he is taken off it.", Enemy);
+            Enemy.Intel.DropFromSearch(Enemy, $"he can't reach the source ({where}, and its place is on {floor})");
+            return false;
+        }
+
+        if (!Enemy.Intel.TryGetSearchStart(job, Enemy, out Vector3 source, out string why))
+        {
+            Debug.LogWarning($"{Enemy.name} can't reach the source of {job}: {why}; he is taken off it.", Enemy);
+            Enemy.Intel.DropFromSearch(Enemy, $"he can't reach the source ({why})");
             return false;
         }
 
         float radius = Enemy.Intel.SearchStartRadius;
         Vector3 position = Enemy.transform.position;
-        if (PathGrid.FlatDistance(position, source) <= radius && PathGrid.At(position) == PathGrid.At(source)
-            && Enemy.CanSeeSpot(source))
+        if (PathGrid.FlatDistance(position, source) <= radius && Enemy.CanSeeSpot(source))
         {
             Arrive($"{Enemy.name} reaches the source of {job}");
             return true;

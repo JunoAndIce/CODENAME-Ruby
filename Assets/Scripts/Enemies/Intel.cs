@@ -154,6 +154,15 @@ public class Intel : MonoBehaviour
         return !row.OnlyWhileInUse || room.InUse;
     }
 
+    // A start circle as big as the area would count a member as arrived wherever he stands in it, which
+    // defeats walking to the source and spreading out from there. A warning and not a clamp: the values are
+    // the designer's, and a quiet change would hide which one he got wrong.
+    private void OnValidate()
+    {
+        if (_searchStartRadius >= _searchAreaRadius)
+            Debug.LogWarning($"{name}: Search Start Radius ({_searchStartRadius:0.#} m) is at least Search Area Radius ({_searchAreaRadius:0.#} m), so members would count as arrived anywhere in the area instead of walking to the source and spreading out from there. Keep it well under the area's radius (about 2 m).", this);
+    }
+
     // Built here and not in a field initialiser, because the board needs this Intel. Awake runs
     // before anything can reach it: the enemies find Intel in Start, Update and the bus's Hear
     // (subscribed in OnEnable) both follow Awake, and Intel's order of -20 puts its Awake first anyway.
@@ -410,7 +419,7 @@ public class Intel : MonoBehaviour
     public bool Covers(GroupJob job, Vector3 point) => _board.Covers(job, point);
 
     /// <summary>Where a Search's members walk to before they spread out: its place, or the ground nearest it they can reach (see JobBoard.TryGetSearchStart).</summary>
-    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start) => _board.TryGetSearchStart(job, who, out start);
+    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start, out string why) => _board.TryGetSearchStart(job, who, out start, out why);
 
     /// <summary>Whether a point is in a job's search area: the circle round its place, or a room it marks (see JobBoard.InSearchArea).</summary>
     public bool InSearchArea(GroupJob job, Vector3 point) => _board.InSearchArea(job, point);

@@ -602,26 +602,50 @@ public class JobBoard
 
     /// <summary>
     /// Where a Search's members walk before they spread out to search (user: "walk to the source of the
-    /// problem/attack THEN start searching"): the job's place when it can be reached, else the ground
-    /// nearest it that can (GridNavigator.TryGetNearestReachable, within its Approach Radius), for a source
-    /// in a blocked cell or behind a prop. Found once per place, from the first member who asks, and kept
-    /// on the job, so it floods once and not per step or per member. False when that member can reach no
-    /// ground near it, which nothing is stored for: he can't reach the source, and the caller takes him off
-    /// the job as for no path; the next member asks again from where he stands.
+    /// problem/attack THEN start searching"). One flood from the first member who asks (he must be on the
+    /// job's floor: the caller checks), best first:
+    /// 1. The job's place, when he can reach it.
+    /// 2. Else the ground of the job's own area nearest the place that he can reach. That ground was
+    ///    flooded from the place, so it is on the place's side of every wall: a source in a nook between a
+    ///    crate and a thin wall starts the team in the nook's room, never in the corridor behind the wall.
+    /// 3. Else the ground he can reach nearest it as the crow flies (within the navigator's Approach
+    ///    Radius), but only with a clear eye-height line from it to the place, the test CanSeeSpot makes,
+    ///    because that ground can lie behind a wall.
+    /// Found once per place and kept on the job (keyed on its Point), so it floods once and not per step or
+    /// per member. False, with `why` saying so, when none of those holds: nothing is stored, the caller
+    /// takes him off the job as for no path, and the next member asks again from where he stands.
     /// </summary>
-    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start)
+    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start, out string why)
     {
+        why = null;
         if (job.TryGetStart(out start)) return true;
-        if (!who.Navigator.TryGetNearestReachable(job.Point, out start)) return false;
-        // Floods his own floor: asked by a member standing on another floor, the nearest ground "in the plan"
-        // would be on his floor, and stored it would send the whole team there. Floors are independent, so he
-        // simply can't reach it; nothing is stored, and the caller takes him off as for no path.
-        if (PathGrid.At(start) != job.Area.Floor) return false;
+
+        GroundFound found = who.Navigator.FindGroundNear(job.Point, job.Area.Ground, out start);
+        if (found == GroundFound.None)
+        {
+            why = $"no ground he can reach lies near the place {job.Point}, on its side or otherwise";
+            return false;
+        }
+        if (found == GroundFound.Nearest && !ClearLineAtEye(who, start, job.Point))
+        {
+            why = $"the source at {job.Point} has no ground he can reach on its side: the nearest he can reach, {start}, is cut off from it (behind a wall)";
+            return false;
+        }
 
         job.SetStart(start);
-        if (start != job.Point)
-            DebugLog.Info($"{job}'s place {job.Point} has no way in, so its members walk to the nearest ground they can reach, {start} ({PathGrid.FlatDistance(job.Point, start):0.#} m off), and spread out from there.", who);
+        if (found != GroundFound.Point)
+            DebugLog.Info($"{job}'s place {job.Point} has no way in, so its members walk to {(found == GroundFound.Preferred ? "the nearest of its area's ground" : "the nearest ground in sight of it")} they can reach, {start} ({PathGrid.FlatDistance(job.Point, start):0.#} m off), and spread out from there.", who);
         return true;
+    }
+
+    // A clear line at the asker's eye height from `from` to `to`: the test CanSeeSpot makes from where he
+    // stands, made from somewhere else. Raised to the eyes, so a place at floor level isn't hidden by the floor.
+    private static bool ClearLineAtEye(EnemyController who, Vector3 from, Vector3 to)
+    {
+        float eyeHeight = who.EyePosition.y - who.transform.position.y;
+        Vector3 eye = from + Vector3.up * eyeHeight;
+        to.y = eye.y;
+        return who.Vision.HasClearSightFrom(eye, to, null);
     }
 
     // A thing at a job's place changes the job when it is more serious, or when it makes a search and the
