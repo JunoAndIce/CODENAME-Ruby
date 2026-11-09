@@ -863,7 +863,11 @@ A\* for individual ones**:
   below a tenth of the speed, which keeps the floor's turning circle inside `CornerReach`, and a
   point right behind from freezing him). `EnemyMovement.MoveToward` turns its walking heading at
   Turn Speed (720 degrees a second, separate from `CharacterAnimator`'s 360 degree leg turn), so
-  bends are arcs. **It slows to fit only for points he must reach** (a goal on a clear line, a route
+  bends are arcs. **Setting off, he turns on the spot**: a walk that didn't run the step before, or
+  that `Stop` or `StepAway` ended, starts along its way, not from his facing. Holding or backing away
+  he faces Ruby, and an arc from there walked an enemy at the gun's Min Distance into her on his way
+  to a firing spot behind him: backed away, he dropped the spot and picked another, again and again
+  with her standing still. The sweeping walk keeps its own way. **It slows to fit only for points he must reach** (a goal on a clear line, a route
   corner, a field's last step: `IPathAgent.MoveToward`'s `mustReach`, which `GridNavigator.Steer`
   takes explicitly, and `FlowField.TryGetStep` reports as `atGoal`). A field step rolls ahead and
   can't be orbited, except its last one, the goal cell, which he must reach: the descent ends

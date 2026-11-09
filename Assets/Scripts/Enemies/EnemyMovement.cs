@@ -33,6 +33,10 @@ public class EnemyMovement
     private Vector3 _sweepWay;
     private float _lastSweepStep = float.NegativeInfinity;
 
+    // The last physics step a walk went through MoveToward. A walk that didn't run the step before, or that
+    // stopped or backed away since, is setting off, not bending (see MoveToward).
+    private float _lastWalkStep = float.NegativeInfinity;
+
     public EnemyMovement(EnemyController enemy, CapsuleCollider capsule)
     {
         _enemy = enemy;
@@ -45,6 +49,10 @@ public class EnemyMovement
     /// <summary>
     /// Curved Movement for realism.
     /// He turns his walking heading at Turn Speed, and slows to fit the turn only for a point he must reach.
+    /// Setting off, he turns on the spot instead: the arc is for bends in a walk, and the facing he had
+    /// standing isn't a walking heading. Holding or backing away he faces Ruby, so an arc from there walked
+    /// an enemy at the gun's Min Distance into her on his way to a spot behind him, got him backed away,
+    /// and he dropped the spot and picked another, over and over with her standing still.
     /// Every path the navigator follows comes through here, so all of them keep Personal Space (MakeRoom).
     /// </summary>
     public void MoveToward(Vector3 target, float speed, bool mustReach)
@@ -52,6 +60,9 @@ public class EnemyMovement
         Transform transform = _enemy.transform;
         Vector3 direction = target - transform.position;
         direction.y = 0f;
+
+        bool settingOff = Time.fixedTime - _lastWalkStep > Time.fixedDeltaTime * 1.5f;
+        _lastWalkStep = Time.fixedTime;
 
         // Picked up from his facing when a sweeping walk begins, then kept: he strays from it to look.
         bool sweeping = _sweepNextMove;
@@ -66,6 +77,8 @@ public class EnemyMovement
         {
             float distance = direction.magnitude;
             direction = MakeRoom(direction);
+            // The sweeping walk keeps its own way, picked up as it begins.
+            if (settingOff && !sweeping) heading = direction.normalized;
             // Fit the speed only to a point he must reach. A flow-field step rolls ahead every
             // step, so there is nothing to orbit and the cap would only slow a chase on ordinary
             // bends; its last step, the goal cell, stops rolling and is a point he must reach.
@@ -178,6 +191,7 @@ public class EnemyMovement
 
     public void Stop()
     {
+        _lastWalkStep = float.NegativeInfinity;
         IntendedSpeed = 0f;
         VelocityUtil.SetFlatVelocity(_enemy.Body, Vector3.zero);
     }
@@ -188,6 +202,8 @@ public class EnemyMovement
     /// </summary>
     public void StepAway(Vector3 spot, float speed)
     {
+        // Backing away isn't walking a heading: the walk after it sets off afresh.
+        _lastWalkStep = float.NegativeInfinity;
         IntendedSpeed = speed;
         FaceTarget();
         Vector3 direction = spot - _enemy.transform.position;
