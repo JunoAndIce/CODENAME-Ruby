@@ -149,13 +149,35 @@ public class Room : MonoBehaviour
         // The map's Mask Radius: sounds this far outside the room are judged by this room's map when it ignores them.
         if (_map != null && _map.MaskRadius > 0f)
         {
-            Gizmos.color = selected ? new Color(1f, 0.6f, 0.2f, 1f) : new Color(1f, 0.6f, 0.2f, 0.3f);
-            for (int i = 0; i < _rects.Count; i++)
-            {
-                GridArea area = AreaOf(i);
-                DrawRectangle(area.Centre, area.HalfSize + Vector2.one * _map.MaskRadius);
-            }
+            DrawMaskOutline(selected);
         }
+    }
+
+    // The mask is a straight-line distance, so each rectangle's outline is its edges pushed out by the
+    // radius with quarter arcs at the corners. An L-shaped room may draw overlapping lines.
+    private void DrawMaskOutline(bool selected)
+    {
+#if UNITY_EDITOR
+        float r = _map.MaskRadius;
+        Color old = UnityEditor.Handles.color;
+        UnityEditor.Handles.color = selected ? new Color(1f, 0.6f, 0.2f, 1f) : new Color(1f, 0.6f, 0.2f, 0.3f);
+        for (int i = 0; i < _rects.Count; i++)
+        {
+            GridArea area = AreaOf(i);
+            Vector3 c = area.Centre;
+            float hx = area.HalfSize.x, hz = area.HalfSize.y;
+            UnityEditor.Handles.DrawDottedLine(c + new Vector3(-hx, 0f, hz + r), c + new Vector3(hx, 0f, hz + r), 4f);
+            UnityEditor.Handles.DrawDottedLine(c + new Vector3(-hx, 0f, -hz - r), c + new Vector3(hx, 0f, -hz - r), 4f);
+            UnityEditor.Handles.DrawDottedLine(c + new Vector3(-hx - r, 0f, -hz), c + new Vector3(-hx - r, 0f, hz), 4f);
+            UnityEditor.Handles.DrawDottedLine(c + new Vector3(hx + r, 0f, -hz), c + new Vector3(hx + r, 0f, hz), 4f);
+            // Positive angles turn clockwise seen from above (Unity is left-handed), so each arc starts on the side facing the corner's Z edge and sweeps to its X edge.
+            UnityEditor.Handles.DrawWireArc(c + new Vector3(hx, 0f, hz), Vector3.up, Vector3.forward, 90f, r);
+            UnityEditor.Handles.DrawWireArc(c + new Vector3(-hx, 0f, hz), Vector3.up, Vector3.left, 90f, r);
+            UnityEditor.Handles.DrawWireArc(c + new Vector3(-hx, 0f, -hz), Vector3.up, Vector3.back, 90f, r);
+            UnityEditor.Handles.DrawWireArc(c + new Vector3(hx, 0f, -hz), Vector3.up, Vector3.right, 90f, r);
+        }
+        UnityEditor.Handles.color = old;
+#endif
     }
 
     private static void DrawRectangle(Vector3 centre, Vector2 half)

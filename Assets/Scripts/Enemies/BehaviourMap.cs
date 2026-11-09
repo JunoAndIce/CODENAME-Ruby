@@ -60,6 +60,16 @@ public class BehaviourMap : ScriptableObject
 
     public float MaskRadius => _maskRadius;
 
+    /// <summary>Whether any row is marked Only While In Use (meaningful only on a room's map).</summary>
+    public bool HasInUseRows
+    {
+        get
+        {
+            foreach (Row row in _rows) if (row.OnlyWhileInUse) return true;
+            return false;
+        }
+    }
+
     // Not serialized: one warning per kind per session, not one per frame.
     private readonly HashSet<StimulusKind> _warnedMissing = new();
     private readonly HashSet<StimulusKind> _warnedRange = new();

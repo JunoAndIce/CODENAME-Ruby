@@ -606,7 +606,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   **What he sees moving leads back to its origin; what he hears doesn't.** A body in motion shows him which way it came from, so he goes to where it was thrown from. A sound can't, so he goes to where it happened: an impact is checked where it landed, never at the thrower (`EnemySenses.Hear`). The origin still travels with the sound, so a knock-on he then sees moving leads back to the throw.
 - **The behaviour map** (`BehaviourMap`, an asset assigned to `Intel`'s Default Map). One row per
   `StimulusKind`: a **priority**, 1 to 5, and a **response**: Ignore, SearchForProblem or
-  SearchForAttack. Defaults: body and fast object 5, gunshot 4 (attack); impact and whip landing 3,
+  SearchForAttack. Defaults: body, fast object and gunshot 5 (attack); impact and whip landing 3,
   moving object and loose gun 2 (problem). A priority outside 1 to 5 (an asset saved on the old
   10s-and-up scale) warns once and is held to the range; the component's Reset refills the
   defaults. A kind with no row, or a missing map, logs one warning and

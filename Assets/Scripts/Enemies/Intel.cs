@@ -109,7 +109,6 @@ public class Intel : MonoBehaviour
     /// </summary>
     public bool TryGetRow(Vector3 point, StimulusKind kind, bool heard, out BehaviourMap.Row row)
     {
-        if (_roomIndex != null)
         {
             if (heard)
             {
@@ -180,6 +179,8 @@ public class Intel : MonoBehaviour
     {
         if (_defaultMap == null)
             Debug.LogError($"{name}: Intel has no Default Map — officers react to no sound, moving body, corpse or loose gun. Assign a Behaviour Map asset.", this);
+        else if (_defaultMap.HasInUseRows || _defaultMap.MaskRadius > 0f)
+            Debug.LogWarning($"{name}: the Default Map '{_defaultMap.name}' has Only While In Use rows or a Mask Radius above 0. They only take effect on a room's map: the default map has no room to be in use or to mask around.", _defaultMap);
 
         Stimuli.Emitted += Hear;
 
@@ -251,11 +252,13 @@ public class Intel : MonoBehaviour
                 Debug.LogWarning($"{speaker.name} is on no PathGrid, so nobody hears him: speech travels along the floor, which needs a grid.", speaker);
             return;
         }
-        if (status == FloorReach.Status.NoReach)
+        // Against a blocked cell the path range reaches no one, but his room still hears him, so this
+        // warns and goes on to the room fill instead of returning.
+        bool noReach = status == FloorReach.Status.NoReach;
+        if (noReach)
         {
             if (_speech.FirstNoReach(speaker))
-                Debug.LogWarning($"{speaker.name}'s speech reaches no one: no walkable ground is within reach of where he stands (against a blocked cell?).", speaker);
-            return;
+                Debug.LogWarning($"{speaker.name}'s speech reaches no one along the floor: no walkable ground is within reach of where he stands (against a blocked cell?). Only his room hears him.", speaker);
         }
         RubyFact told = fact.WithSource(Knowledge.Told);
         // Collected first, while the scratch field is intact, and told afterwards, as Hear does:
@@ -264,6 +267,8 @@ public class Intel : MonoBehaviour
         bool nested = _saying;
         List<EnemyController> hearers = nested ? new List<EnemyController>() : _hearers;
         hearers.Clear();
+        if (!noReach)
+        {
         foreach (EnemyController listener in _enemies)
         {
             if (listener == speaker || listener.Health.IsDead) continue;
@@ -278,6 +283,7 @@ public class Intel : MonoBehaviour
             if (standing == FloorReach.Standing.InRange) hearers.Add(listener);
         }
         _speech.End("speech", speaker);
+        }
 
         // A shout also fills the speaker's own room, past the path range, when that room holds no rooms
         // (a floor-sized room would carry it everywhere). Same floor, living, not already counted.

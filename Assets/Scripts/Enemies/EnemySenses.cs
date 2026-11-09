@@ -216,6 +216,10 @@ public class EnemySenses
             if (gun == null || !gun.IsResting || _enemy.Memory.KnowsGun(gun)) continue;
 
             Vector3 at = gun.transform.position;
+            // Judged first, by the room the gun lies in: a gun the map ignores (an armory's rack) must not
+            // be booked, or it would count as known once Ruby whips it out into a corridor and nobody
+            // would react. It also saves the view and sight checks for it.
+            if (_enemy.Intel.TryGetRow(at, StimulusKind.LooseGun, false, out BehaviourMap.Row gunRow) && gunRow.Response == StimulusResponse.Ignore) continue;
             if (!_enemy.Vision.InView(at, _enemy.ViewRange) || !_enemy.Vision.HasClearSight(at, gun.transform)) continue;
 
             bool squadKnows = _enemy.Intel.Published.KnowsGun(gun);
@@ -286,6 +290,10 @@ public class EnemySenses
         bool hasOrigin = Disturbance.TryGetOrigin(body, out Vector3 thrownFrom);
         Vector3 origin = hasOrigin ? thrownFrom : body.position;
 
+        // The map is that of where he sees it, so the rows are read at the body's own position: judged at
+        // the origin, a crate thrown out of a room that ignores moving objects would be ignored in the
+        // corridor too. The origin stays the point he investigates and what it teaches of Ruby.
+        Vector3 judgedAt = body.position;
         // A flying pistol or enemy is judged by what it is as well as how fast it moves: speed alone
         // would call a flung pistol a mere moving object, and a thrown enemy (a body) one too. Anything
         // else (a crate) has no second row and keeps the speed row alone.
@@ -293,8 +301,8 @@ public class EnemySenses
         if (isEnemy || body.TryGetComponent(out Gun _))
         {
             StimulusKind whatKind = isEnemy ? StimulusKind.Body : StimulusKind.LooseGun;
-            bool haveSpeed = _enemy.Intel.TryGetRow(origin, kind, false, out BehaviourMap.Row speedRow);
-            bool haveWhat = _enemy.Intel.TryGetRow(origin, whatKind, false, out BehaviourMap.Row whatRow);
+            bool haveSpeed = _enemy.Intel.TryGetRow(judgedAt, kind, false, out BehaviourMap.Row speedRow);
+            bool haveWhat = _enemy.Intel.TryGetRow(judgedAt, whatKind, false, out BehaviourMap.Row whatRow);
             // A missing row was warned about once by the map. One missing: the other stands alone.
             // Both missing: nothing to react to, as a single missing row is today.
             if (!haveSpeed && !haveWhat) return;
@@ -316,7 +324,7 @@ public class EnemySenses
             return;
         }
 
-        if (!_enemy.Intel.TryGetRow(origin, kind, false, out BehaviourMap.Row row)) return;
+        if (!_enemy.Intel.TryGetRow(judgedAt, kind, false, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: {row.Response} at priority {row.Priority}.", _enemy);
         // Something this fast could kill, and no ordinary person throws it, so it is worth more than one
