@@ -25,7 +25,6 @@ public class EnemyControllerEditor : Editor
     private const int LatticeSamples = 5;   // per side, for the clearance colour
 
     private static readonly Vector2 DefaultSize = new(2f, 2f);
-    private static readonly Vector3[] RectangleOutline = new Vector3[5];
 
     private static readonly Color OpenColour = new(0.25f, 0.9f, 0.35f);
     private static readonly Color PartialColour = new(1f, 0.7f, 0.1f);
@@ -49,15 +48,8 @@ public class EnemyControllerEditor : Editor
 
     private void OnEnable()
     {
-        // Edges only: an area has no height. Its outline is drawn in the clearance colour, so the
-        // handle draws no wireframe of its own. One handle serves every rectangle: it takes fresh
-        // control IDs on each draw.
-        _box = new BoxBoundsHandle
-        {
-            axes = PrimitiveBoundsHandle.Axes.X | PrimitiveBoundsHandle.Axes.Z,
-            handleColor = Color.white,
-            wireframeColor = Color.clear,
-        };
+        // Its outline is drawn in the clearance colour, so the handle draws no wireframe of its own.
+        _box = AreaHandles.NewEdgeHandle();
     }
 
     public override void OnInspectorGUI()
@@ -137,7 +129,7 @@ public class EnemyControllerEditor : Editor
             if (Event.current.type == EventType.Repaint)
             {
                 Handles.color = AreaColour(GridUnder(centre), area);
-                DrawOutline(area);
+                AreaHandles.DrawOutline(area);
                 // The index is how runtime warnings ("point 3 skipped") map back to the scene.
                 // Read from the route itself, so the label can't disagree with what runs.
                 var enemy = (EnemyController)target;
@@ -173,15 +165,10 @@ public class EnemyControllerEditor : Editor
     // rectangle can be fitted to a room wall by wall.
     private void EdgeHandles(SerializedProperty point, GridArea area)
     {
-        _box.center = area.Centre;
-        _box.size = new Vector3(area.HalfSize.x * 2f, 0f, area.HalfSize.y * 2f);
-        EditorGUI.BeginChangeCheck();
-        _box.DrawHandle();
-        if (!EditorGUI.EndChangeCheck()) return;
+        if (!AreaHandles.EdgeHandles(_box, area, out Vector3 centre, out Vector2 size)) return;
 
-        point.FindPropertyRelative("_position").vector3Value = OnFloor(_box.center, area.Centre.y);
-        point.FindPropertyRelative("_size").vector2Value =
-            new Vector2(Mathf.Max(MinSize, _box.size.x), Mathf.Max(MinSize, _box.size.z));
+        point.FindPropertyRelative("_position").vector3Value = OnFloor(centre, area.Centre.y);
+        point.FindPropertyRelative("_size").vector2Value = new Vector2(Mathf.Max(MinSize, size.x), Mathf.Max(MinSize, size.y));
     }
 
     // The area as the runtime will build it (PatrolPoint.Area), from the fields being edited.
@@ -191,23 +178,6 @@ public class EnemyControllerEditor : Editor
         if (point.FindPropertyRelative("_shape").intValue == (int)AreaShape.Rectangle)
             return GridArea.Rectangle(centre, point.FindPropertyRelative("_size").vector2Value);
         return GridArea.Circle(centre, Mathf.Max(MinRadius, point.FindPropertyRelative("_radius").floatValue));
-    }
-
-    private static void DrawOutline(GridArea area)
-    {
-        if (area.Shape == AreaShape.Circle)
-        {
-            Handles.DrawWireDisc(area.Centre, Vector3.up, area.HalfSize.x, 2f);
-            return;
-        }
-
-        float x = area.HalfSize.x, z = area.HalfSize.y;
-        RectangleOutline[0] = area.Centre + new Vector3(-x, 0f, -z);
-        RectangleOutline[1] = area.Centre + new Vector3(-x, 0f, z);
-        RectangleOutline[2] = area.Centre + new Vector3(x, 0f, z);
-        RectangleOutline[3] = area.Centre + new Vector3(x, 0f, -z);
-        RectangleOutline[4] = RectangleOutline[0];
-        Handles.DrawAAPolyLine(2f, RectangleOutline);
     }
 
     private Color AreaColour(PathGrid grid, GridArea area)

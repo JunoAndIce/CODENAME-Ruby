@@ -76,6 +76,8 @@ public class Intel : MonoBehaviour
     private JobBoard _board;
     // The fights: the board owns them, Intel ticks it and forwards to it.
     private FightBoard _fights;
+    // The placed rooms, found once in Awake: they don't move at runtime.
+    private RoomIndex _roomIndex;
     private readonly List<EnemyController> _listeners = new();
     private bool _telling;   // Hear is walking _listeners: a nested Hear must use a list of its own
     private readonly List<EnemyController> _hearers = new();
@@ -119,7 +121,17 @@ public class Intel : MonoBehaviour
     {
         _board = new JobBoard(this);
         _fights = new FightBoard(this);
+        _roomIndex = new RoomIndex(this);
     }
+
+    /// <summary>The placed rooms that stand on a floor, smallest first (see RoomIndex).</summary>
+    public IReadOnlyList<Room> Rooms => _roomIndex.Rooms;
+
+    /// <summary>The smallest room holding the point, or null (see RoomIndex.SmallestAt).</summary>
+    public Room RoomAt(Vector3 point) => _roomIndex.SmallestAt(point);
+
+    /// <summary>The room at the point if it holds no rooms, else null (see RoomIndex.LeafAt).</summary>
+    public Room LeafRoomAt(Vector3 point) => _roomIndex.LeafAt(point);
 
     // Enable and disable rather than Awake and destroy, so switching the component off also
     // silences the bus instead of leaving stale rules behind.

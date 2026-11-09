@@ -77,8 +77,8 @@ The scripts are split into assembly definitions so the systems can be lifted int
 | `Ruby.Weapons` | `Weapons/` | Core | guns, bullets, gun hands |
 | `Ruby.Animation` | `Animation/` | none | `IAnimatedCharacter`, `CharacterAnimator`, `CharacterAnimationSet`, the stance and weapon enums |
 | `Ruby.Animation.Editor` | `Animation/Editor/` | Animation | `CharacterControllerBuilder` and the set's Build Controller button |
-| `Ruby.Game` | the root, `States/` and `Enemies/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state, and in `Enemies/` the squad's brain and the enemy's parts: `Intel` (the scene's one hub), the plain classes it owns (`KnowledgePool`, `JobBoard` with `GroupJob`, `FloorReach`), each enemy's own parts (`EnemyMemory`, `EnemySenses`, `EnemyVision`, `EnemyReactions`, `EnemyMovement`, `EnemyAwareness`, `EnemyBodyState`, `EnemyGizmos`), the value types they pass (`Incident`, `SearchRequest`) and the behaviour map with its `Severity` |
-| `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor` |
+| `Ruby.Game` | the root, `States/` and `Enemies/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state, and in `Enemies/` the squad's brain and the enemy's parts: `Intel` (the scene's one hub), the plain classes it owns (`KnowledgePool`, `JobBoard` with `GroupJob`, `FloorReach`, `RoomIndex` with `Room`), each enemy's own parts (`EnemyMemory`, `EnemySenses`, `EnemyVision`, `EnemyReactions`, `EnemyMovement`, `EnemyAwareness`, `EnemyBodyState`, `EnemyGizmos`), the value types they pass (`Incident`, `SearchRequest`) and the behaviour map with its `Severity` |
+| `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor`, `RoomEditor`, `AreaHandles` (the outline and edge dragging both share) |
 
 The systems reach the game only through interfaces declared in their own assembly, which the
 game implements:
@@ -509,6 +509,22 @@ through the player never slows the walk. **Enemies don't shove props that block 
   `PatrolPointDrawer` shows only the size field a point's shape uses. Labels number the Safe
   route 0, 1, 2 and the Aggressive one A0, A1, A2, so a runtime warning maps back to the right
   route. A pause at a point of Long Pause Time (10 s) or more isn't spent standing: every Pause Roam Min to Max seconds (3 to 6) he walks to another spot in the point's area, at patrol speed, and the pause still ends on time. No route for his mode means he idles at his post (see **Idle**).
+- **Rooms** (`Room`, `RoomIndex`, in `Enemies/`). A room is a placed MonoBehaviour: one or more rectangles
+  (an offset and a size on X and Z, relative to its transform, never rotated: `OnValidate` warns if the
+  transform is rotated, and the rotation is ignored), an optional `BehaviourMap` and an In Use Time. Its
+  name is its GameObject's name, so the Hierarchy and the warnings can't disagree. `GridArea` can't be
+  serialized, so `Room.Rect` is the saved form and `AreaOf(i)` builds the world area. `Intel` builds the
+  `RoomIndex` in `Awake` (the grids aren't enabled yet, so it finds them in the scene and uses `Covers`)
+  and forwards `RoomAt` (the smallest room holding a point, on the point's floor), `LeafRoomAt` (that room
+  only if it holds no rooms) and `Rooms`. Rooms nest: **the smallest holds**, so a floor-sized room can
+  give a floor its map while an office inside it overrides a row. **"Holds" is tested on the ground:** A
+  holds B when A is strictly bigger and every sample of B's rectangles, at the floor's cell size, lies
+  inside A (so an L of two rectangles and a room fitted to its parent's wall work). Two rooms on a floor
+  whose rectangles overlap while neither holds the other warn once, naming both, and rooms touching edge
+  to edge are not an overlap. A room's floor is `PathGrid.At` of its first rectangle's centre, and one on
+  no grid warns and is left out. Lookups scan the short list, sorted smallest first, with no allocation.
+  Gizmos draw each outline (faint unselected) with the name and map; `RoomEditor` gives move and edge
+  handles with Undo.
 - **Idle** (`IdleState`). Where an officer starts is his **post** (`PostPosition`, `PostYaw`,
   recorded in `Start`). After a search, a fall or a shove, farther than Post Tolerance (1 m) from it,
   he walks back at the current patrol speed and turns the way he started, so an idle officer is
