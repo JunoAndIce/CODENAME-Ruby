@@ -10,6 +10,8 @@
 
 **Spec:** `docs/specs/2026-10-28-enemy-states-0.2.md`, piece 6. Read it first.
 
+> **Closed (user, 2026-11-09).** Built as fights and firing spots: Task 1's shared contact and Task 2. The main and standby squads (`d28988a`) and Task 3's fire lanes (`3dbfeef`) were built and taken out; see the notes on Tasks 1 and 3. The spec's Progress ticks piece 6.
+
 ## Decisions the spec leaves, made here
 
 1. **Paths don't cost more through a squadmate's lane.** The spec suggests it, but the chase field is one shared flood per floor and can't hold a detour per enemy, and it would need re-flooding as lanes move. Spot scoring keeps them out of each other's lanes, Personal Space keeps them apart while walking, and the hold-and-step-aside rule covers the rest. Noted in the spec as deferred.

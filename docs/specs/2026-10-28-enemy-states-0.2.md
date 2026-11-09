@@ -804,14 +804,18 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
     searching like people (slow walking, scanning as they go, going to places in the search area
     he can't see), is built ahead of 6, because it doesn't need rooms. Its
     room-by-room clearing and hiding spots stay in pieces 7 and 8.
-- [ ] 6. Fighting together: squads and fire lanes
+- [x] 6. Fighting together: squads and fire lanes
   - Fights (one equal group per floor, with shared contact) and firing spots are built, to
     `docs/plans/2026-11-06-enemy-squads.md` Tasks 1 and 2. **The main and standby squads were built and
     taken out** *(user, 2026-11-07: "just remove squads altogether", keeping firing spots)*: firing spots
     spread everyone round Ruby, standby on a slightly wider ring, so the squads never showed, and a
     standby member moving up had nowhere new to walk. **Fire lanes were built and taken out**
     *(user, 2026-11-07: "We're getting too deep.")*: on top of the standby band and firing spots they
-    drove spots inside Ruby's Min Distance, and enemies kept dropping spots and shuffling. Left open.
+    drove spots inside Ruby's Min Distance, and enemies kept dropping spots and shuffling. **Closed as
+    built** *(user, 2026-11-09)*: fights and firing spots are the piece. The shuffling that was left (an
+    enemy at Min Distance arcing back into it on his way to a spot behind him) was a steering fault,
+    fixed in `c62d00c`: a walk that sets off turns on the spot. Paths costing more through a mate's
+    lane went with the lanes.
 - [ ] 7. Rooms and behaviour maps: activities, firing ranges, armories and alarms
 - [ ] 8. Clearing hiding spots
 - [ ] 9. Breakables: light fixtures and props (much later)
