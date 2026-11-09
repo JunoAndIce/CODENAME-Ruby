@@ -101,7 +101,7 @@ public class Room : MonoBehaviour
     private void OnEnable()
     {
         if (!Application.isPlaying || Seen) return;
-        Intel intel = FindFirstObjectByType<Intel>();
+        Intel intel = FindAnyObjectByType<Intel>();
         if (intel != null && intel.HasRoomIndex)
             Debug.LogWarning($"Room '{name}' was enabled after the level loaded, so the room index never saw it and it holds nothing. Rooms must exist and be enabled at load.", this);
     }
