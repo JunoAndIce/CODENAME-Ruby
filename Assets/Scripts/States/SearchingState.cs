@@ -705,7 +705,7 @@ public class SearchingState : EnemyStateBase
     // walls, so being in it is being there, however far from the place or round a corner from it. The
     // circle's open ground still needs the line: the radius alone would count him as there from the far
     // side of a wall, starting the search proper with him still a long walk away. The line is to the place
-    // the area was drawn round, not job.Point, which can be up to a metre off it. It is raised to his eyes
+    // the area was drawn round (job.Point and it move together). It is raised to his eyes
     // because a place can lie at or under floor level, where the floor itself would block it. A crate in
     // the way only keeps him walking until he clears it.
     private bool InSearchArea(GroupJob job)

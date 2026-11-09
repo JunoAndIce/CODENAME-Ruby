@@ -368,7 +368,8 @@ public class JobBoard
     /// it's left alone. An enemy already on a job is dealt with at its own place first
     /// (HandleAtOwnJob); this is for a thing **elsewhere**. In order:
     /// 1. **An open job is handling this** (Covers: its place is within Job Match Radius, or the thing is
-    ///    in a room its search area marks). A more serious
+    ///    in a room its search area marks, which wins over a nearer place matched by radius alone). A
+    ///    thing in a marked room raises the job where it is and never moves it (GroupJob.Upgrade). A more serious
     ///    thing upgrades it, a find or a flying enemy turns a check into a search, and a stronger reason (an attack,
     ///    where the job is a problem) raises it for every member even at the same priority. If it is
     ///    still recruiting and has room he joins, taking himself off any job he was on. Otherwise
@@ -561,14 +562,17 @@ public class JobBoard
     /// Whether a point is at a job's place, as a new disturbance is judged against it: the job is
     /// open and the point is within Job Match Radius of its place on its floor, **or** inside one of the
     /// rooms its search area marks (SearchArea.InRoom), however far from the place. The one test for
-    /// FindMatch and for an enemy's own job, so they can't disagree.
+    /// FindMatch and for an enemy's own job, so they can't disagree. A thing in a marked room raises the
+    /// job where it is and never moves it (GroupJob.Upgrade).
     /// </summary>
-    public bool Covers(GroupJob job, Vector3 point) => Covers(job, point, out _);
+    public bool Covers(GroupJob job, Vector3 point) => Covers(job, point, out _, out _);
 
-    // The distance is to the place either way, so FindMatch still prefers the nearest job when two cover a point.
-    private bool Covers(GroupJob job, Vector3 point, out float distance)
+    // `distance` is to the place either way; `inRoom` says the point is in a room the job marks, which
+    // FindMatch ranks ahead of a match by Job Match Radius alone.
+    private bool Covers(GroupJob job, Vector3 point, out float distance, out bool inRoom)
     {
         distance = PathGrid.FlatDistance(job.Point, point);
+        inRoom = false;
         // One emptied mid-walk is only waiting to be removed.
         if (job.Step == JobStep.Done || job.Count == 0) return false;
 
@@ -576,7 +580,8 @@ public class JobBoard
         // (spec, piece 7: "something sensed in a room a job is searching goes to that job"). A Check's
         // area counts too, since a Check becomes a Search of that same area, and two thuds in one big
         // office are one thing to check. InRoom tests the room's own floor.
-        if (job.Area != null && job.Area.InRoom(point)) return true;
+        inRoom = job.Area != null && job.Area.InRoom(point);
+        if (inRoom) return true;
         if (distance > _intel.JobMatchRadius) return false;
 
         // Floors are independent, so a sound upstairs is never the place of a job downstairs, however
@@ -589,8 +594,8 @@ public class JobBoard
     /// <summary>
     /// Whether a point is in the job's search area: within Search Area Radius of the area's place on its
     /// floor, or inside one of the rooms the area marks (SearchArea.Contains). Read through the area and
-    /// never as a distance to job.Point, which can drift up to a metre from the place the area was built
-    /// round (GroupJob.Upgrade keeps the area on a small move). False with no area.
+    /// never as a distance to job.Point: the radius alone misses the marked rooms, which reach as far as
+    /// their walls. False with no area.
     /// </summary>
     public bool InSearchArea(GroupJob job, Vector3 point) => job != null && job.Area != null && job.Area.Contains(point);
 
@@ -656,8 +661,9 @@ public class JobBoard
         // A signalling team keeps its beat. A second shot inside the area would turn the Check into a Search
         // that restarts at the old place and never visits the signalled shot, so only a shot outside the
         // area moves the signal, and within 1 m of the job UpdateSignal would make Upgrade return false and
-        // leave it in Signal for good. Outside the area is outside the circle round its place, so normally
-        // well over a metre from the job's place; GoToSignalledShot guards the rest.
+        // leave it in Signal for good. Outside the area on its floor is outside the circle round its place,
+        // which is at least a metre (Search Area Radius's minimum) from the job's place; a shot on another
+        // floor is outside the area too, and GoToSignalledShot refuses it.
         if (job.Step == JobStep.Signal)
         {
             if (!InSearchArea(job, shot.Point))
@@ -761,25 +767,39 @@ public class JobBoard
         DebugLog.Info($"{who.name} has something serious in the search area: {job} throws away what it had seen and looks again.", who);
     }
 
-    // The beat is over: everyone goes. It was outside the search area when signalled, which is normally
-    // more than the 1 m that counts as the same place, so the job moves and starts over from Go. It can
-    // be within that metre: the area is drawn round where the job was before a small move (up to a metre
-    // off its place, GroupJob.Upgrade), so with a Search Area Radius near its 1 m minimum a shot just
-    // outside the circle can land on the job's place; and a shot on another floor is outside the area
-    // however near in the plan. Upgrade then doesn't start over, and the job would sit in Signal for good,
-    // so it starts over here, with a warning, at the place it already has.
+    // The beat is over: everyone goes. A shot on the area's floor was outside the area when signalled, so
+    // outside the circle round the job's place (which is the area's place: they move together), more than
+    // Search Area Radius and so more than the 1 m that counts as the same place away: the job moves and
+    // starts over from Go. A shot on another floor is outside the area however near in the plan, and a
+    // job never moves to another floor (floors are independent), so it is refused before Upgrade, with a
+    // warning; Upgrade refusing to move is the same dead end. Either way the job would sit in Signal for
+    // good, so it starts its search over where it is.
     private void GoToSignalledShot(GroupJob job)
     {
-        DebugLog.Info($"{job} goes to {job.SignalledShot.Point}.", _intel);
-        bool restarted = Upgrade(job, job.SignalledShot, JobKind.Search);
-        if (!restarted)
+        Vector3 shot = job.SignalledShot.Point;
+        if (PathGrid.At(shot) != job.Area.Floor)
         {
-            Debug.LogWarning($"{job} signalled a shot at {job.SignalledShot.Point}, outside its search area but within a metre of its place in the plan (a Search Area Radius near its minimum, or a shot on another floor): it starts its search over where it is rather than wait in Signal for good.", _intel);
-            job.Restart(_intel.GatherTime);
-            foreach (EnemyController member in job.Members) member.FollowJob(job);
-            restarted = true;
+            Debug.LogWarning($"{job} signalled a shot at {shot}, which is on another floor from its search area (or on no grid): a job doesn't move between floors, so it starts its search over where it is instead.", _intel);
+            RestartWhereItIs(job);
+            return;
         }
-        ChooseAfterRestart(job, restarted);
+
+        DebugLog.Info($"{job} goes to {shot}.", _intel);
+        if (Upgrade(job, job.SignalledShot, JobKind.Search))
+        {
+            ChooseAfterRestart(job, true);
+            return;
+        }
+        Debug.LogError($"{job} signalled a shot at {shot}, outside its search area on its own floor, yet the move to it didn't start the job over: it starts its search over where it is rather than wait in Signal for good.", _intel);
+        RestartWhereItIs(job);
+    }
+
+    // Out of Signal at the place the job already has, with nothing seen kept: the team re-plans from Go.
+    private void RestartWhereItIs(GroupJob job)
+    {
+        job.Restart(_intel.GatherTime);
+        foreach (EnemyController member in job.Members) member.FollowJob(job);
+        ChooseAfterRestart(job, true);
     }
 
     /// <summary>
@@ -796,15 +816,21 @@ public class JobBoard
         return true;
     }
 
-    // The nearest open job that covers the point (within Job Match Radius of its place, or in a room it marks).
+    // The open job that covers the point. A job whose marked room holds it comes first, however far its
+    // place, because something sensed in a room a job is searching goes to that job (spec, piece 7): by
+    // distance alone a job with a nearer place took a thud in another team's office. Between jobs that
+    // both mark the room, or both match only by Job Match Radius, the nearer place wins.
     private GroupJob FindMatch(Vector3 point)
     {
         GroupJob best = null;
+        bool bestInRoom = false;
         float bestDistance = float.MaxValue;
         foreach (GroupJob job in _jobs)
         {
-            if (!Covers(job, point, out float distance) || distance >= bestDistance) continue;
+            if (!Covers(job, point, out float distance, out bool inRoom)) continue;
+            if (best != null && ((bestInRoom && !inRoom) || (bestInRoom == inRoom && distance >= bestDistance))) continue;
             best = job;
+            bestInRoom = inRoom;
             bestDistance = distance;
         }
         return best;
@@ -936,9 +962,10 @@ public class JobBoard
     // the higher priority (a tie stays where the older was, so a merge doesn't move a team for nothing),
     // and a Search if either is. Its own members keep their order, then the younger's follow up to the
     // cap, joined at once with no call: they are already at this place on this business. The younger
-    // closes when its last member leaves. The ones who don't fit are extras (MergeExtras). A merge that
-    // moves the place more than a metre starts the older over there, and Upgrade rebuilds its area round
-    // the new place (GroupJob.Upgrade), so its marked rooms follow. `shared` is the room they have in
+    // closes when its last member leaves. The ones who don't fit are extras (MergeExtras). A merge onto
+    // the younger's place moves the older only when that place is more than a metre off and outside every
+    // room the older marks (GroupJob.Upgrade): then it starts over there with its area rebuilt round the
+    // new place, so its marked rooms follow; inside a marked room it stays and only rises. `shared` is the room they have in
     // common when that, and not the place, is why they merge, for the log.
     private void Merge(GroupJob older, GroupJob younger, Room shared)
     {

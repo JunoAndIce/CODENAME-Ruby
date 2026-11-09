@@ -116,6 +116,8 @@ public class SearchArea
     public Vector3 Place { get; }
     /// <summary>The circle's radius, Search Area Radius when it was built.</summary>
     public float Radius { get; }
+    /// <summary>The place's floor, or null when the place is on no grid.</summary>
+    public PathGrid Floor => _floor;
 
     /// <summary>The rooms holding no rooms that the circle reached over open ground: each is searched whole.</summary>
     public IReadOnlyList<Room> Rooms => _rooms;
