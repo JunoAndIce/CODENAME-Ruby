@@ -117,25 +117,25 @@
   - `GroupJob.Area` (the job's `SearchArea`, built when the job is made and again when its place moves).
   - `Intel.SearchMinimumTime` (5 s, `_searchMinimumTime`, under Group jobs).
 
-- [ ] **Step 1: `CollectGround`** per the interface.
-- [ ] **Step 2: `SearchArea`.**
+- [x] **Step 1: `CollectGround`** per the interface.
+- [x] **Step 2: `SearchArea`.**
   1. Flood from the place inside the circle, at cell spacing, with `CollectGround`.
   2. Each reached cell in a `LeafRoomAt` room marks that room. Each reached cell in no leaf room is circle ground: keep it at about 1 m spacing (every n-th cell, as `CollectAreaGround` strides).
   3. Each marked room adds its ground with `CollectGround`, from a reached cell inside it, with `inside` = that room's `Contains`.
   4. Points are kept once each.
 
   Reaching a room only through a doorway inside the circle falls out of step 1, since the flood never crosses a wall (spec: "touching means reached by open ground").
-- [ ] **Step 3: Coverage on the area.** `JobBoard.CoverageOf` builds coverage from `job.Area`. The no-ground warning says the team looks about for Search Minimum Time and then stands down.
-- [ ] **Step 4: No cap.**
+- [x] **Step 3: Coverage on the area.** `JobBoard.CoverageOf` builds coverage from `job.Area`. The no-ground warning says the team looks about for Search Minimum Time and then stands down.
+- [x] **Step 4: No cap.**
   - The Search step has no length: `JobBoard`'s step lengths give Search none, and it waits explicitly, as Go does.
   - The job is Done when coverage is `AllSeen` (or has no ground) **and** `Time.time - coverage.StartedAt >= _intel.SearchMinimumTime`. This replaces the Look Time minimum.
   - A gunshot in the area throws coverage away as today. `ExtendStep`, its call and `Intel._gunshotExtension` go.
   - The Search Duration tooltip says it is the length of a search of his own (a glance, or no Intel), not a group Search's.
-- [ ] **Step 5: Re-checking.** In `SearchingState.Roam`, when `TryClaimNearest` finds nothing free and the job isn't Done, `TryClaimRecheck` gives a spot to walk to and sweep, at clearing speed. It picks a random point of the area's ground at least a quarter of the area's span from him (the farthest of a few tries), and not within claim spacing of another member's claim. Only when that fails too does he look about where he stands, as today.
-- [ ] **Step 6: Dropping.** Roam's failures (Blocked or Unreachable, Search Travel Limit, and arriving at a claimed point that is still unseen) call `Drop`, which warns with the point, the member and the reason. `Drop` replaces the quiet `Clear` on those paths. The give-up after several failed spots stays.
-- [ ] **Step 7: Gizmos.** With `Intel` selected in Play, each Search job's marked rooms are outlined in its colour, and its unseen points are dots.
-- [ ] **Step 8: Docs.** `CLAUDE.md`'s **A Search clears its area** bullet is rewritten: what the circle marks, no cap, the minimum and re-checking, dropped points, no ground. The Group jobs gunshot bullet loses the extension.
-- [ ] **Step 9: Compile and commit.**
+- [x] **Step 5: Re-checking.** In `SearchingState.Roam`, when `TryClaimNearest` finds nothing free and the job isn't Done, `TryClaimRecheck` gives a spot to walk to and sweep, at clearing speed. It picks a random point of the area's ground at least a quarter of the area's span from him (the farthest of a few tries), and not within claim spacing of another member's claim. Only when that fails too does he look about where he stands, as today.
+- [x] **Step 6: Dropping.** Roam's failures (Blocked or Unreachable, Search Travel Limit, and arriving at a claimed point that is still unseen) call `Drop`, which warns with the point, the member and the reason. `Drop` replaces the quiet `Clear` on those paths. The give-up after several failed spots stays.
+- [x] **Step 7: Gizmos.** With `Intel` selected in Play, each Search job's marked rooms are outlined in its colour, and its unseen points are dots.
+- [x] **Step 8: Docs.** `CLAUDE.md`'s **A Search clears its area** bullet is rewritten: what the circle marks, no cap, the minimum and re-checking, dropped points, no ground. The Group jobs gunshot bullet loses the extension.
+- [x] **Step 9: Compile and commit.**
 - [ ] **Step 10: Play-test gate (the user).**
   - A gunshot in a corridor between two offices with doors inside the circle: the team clears the corridor and both offices.
   - An office behind a wall within the circle, with its door outside the circle, isn't searched.
