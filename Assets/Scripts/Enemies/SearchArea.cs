@@ -137,8 +137,31 @@ public class SearchArea
         PathGrid floor = PathGrid.At(point);
         if (floor == null) return false;
         if (floor == _floor && PathGrid.FlatDistance(point, Place) <= Radius) return true;
+        return InRoom(point, floor);
+    }
+
+    /// <summary>
+    /// Inside one of the marked rooms, on that room's own floor. A room is searched whole, so being in it
+    /// is being in the area, however far from the place; the circle's open ground beyond the rooms is not
+    /// (Contains covers both). False on no grid.
+    /// </summary>
+    public bool InRoom(Vector3 point) => _floor != null && InRoom(point, PathGrid.At(point));
+
+    private bool InRoom(Vector3 point, PathGrid floor)
+    {
+        if (floor == null) return false;
         for (int i = 0; i < _rooms.Count; i++)
             if (_rooms[i].Floor == floor && _rooms[i].Contains(point)) return true;
         return false;
+    }
+
+    /// <summary>A room both areas mark, or null. Rooms are per floor, so sharing one means sharing its floor. Short lists, no allocation.</summary>
+    public Room SharedRoom(SearchArea other)
+    {
+        if (other == null) return null;
+        for (int i = 0; i < _rooms.Count; i++)
+            for (int j = 0; j < other._rooms.Count; j++)
+                if (_rooms[i] == other._rooms[j]) return _rooms[i];
+        return null;
     }
 }

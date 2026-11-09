@@ -30,7 +30,7 @@ public class Intel : MonoBehaviour
     [Header("Group jobs")]
     [Tooltip("The most enemies on one check or search, the lead included. The spec's number is three.")]
     [SerializeField, Range(1, 6)] private int _jobCap = 3;
-    [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another.")]
+    [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another, and two jobs this close merge. So is one inside a room the job's search area marks, however far, and two jobs whose areas mark a room in common merge too.")]
     [SerializeField, Min(0f)] private float _jobMatchRadius = 10f;
     [Tooltip("How long a team of two or three turns toward the spot before anyone goes, in seconds. A check of one skips it.")]
     [SerializeField, Min(0f)] private float _gatherTime = 0.75f;
@@ -38,7 +38,7 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0f)] private float _reactTime = 0.5f;
     [Tooltip("How long each call takes, in seconds: he turns to the nearest enemy and calls him, and that enemy turns to face him. Then the next nearest, and so on.")]
     [SerializeField, Min(0f)] private float _callTime = 0.6f;
-    [Tooltip("The circle that marks what a search covers, in metres round its place: the open ground it reaches, and every room holding no rooms that it reaches over open ground, searched whole. A member starts as soon as he is this near with a clear line to the place, and the search proper starts when the last member has.")]
+    [Tooltip("The circle that marks what a search covers, in metres round its place: the open ground it reaches, and every room holding no rooms that it reaches over open ground, searched whole. A member starts as soon as he is inside a marked room, or this near with a clear line to the place, and the search proper starts when the last member has.")]
     [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
     [Tooltip("The least time a search lasts, in seconds, from when the first member came into its area. It ends once everything is cleared and this has passed; until then a member with nothing left to clear walks to spots across the area and sweeps them again. No time cap cuts a search short. A gunshot in the area starts it over.")]
     [SerializeField, Min(0f)] private float _searchMinimumTime = 5f;
@@ -405,6 +405,9 @@ public class Intel : MonoBehaviour
 
     /// <summary>Whether a point is at a job's place (see JobBoard.Covers).</summary>
     public bool Covers(GroupJob job, Vector3 point) => _board.Covers(job, point);
+
+    /// <summary>Whether a point is in a job's search area: the circle round its place, or a room it marks (see JobBoard.InSearchArea).</summary>
+    public bool InSearchArea(GroupJob job, Vector3 point) => _board.InSearchArea(job, point);
 
     /// <summary>A searcher hears a gunshot (see JobBoard.Mobilise).</summary>
     public bool Mobilise(EnemyController who, Incident shot) => _board.Mobilise(who, shot);

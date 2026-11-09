@@ -27,7 +27,9 @@ public class GroupJob
     private readonly List<EnemyController> _members = new();
     private readonly Intel _intel;
 
-    public GroupJob(JobKind kind, Incident incident, int cap, Intel intel)
+    // `area`, when given, was already built round the incident's point (JobBoard tests an extra's spot by
+    // building its area), so the place floods once; null builds it here, as for every other job.
+    public GroupJob(JobKind kind, Incident incident, int cap, Intel intel, SearchArea area = null)
     {
         Id = ++s_nextId;
         _intel = intel;
@@ -35,7 +37,12 @@ public class GroupJob
         Reason = incident.Reason;
         Priority = incident.Priority;
         Point = incident.Point;
-        Area = new SearchArea(Point, intel.SearchAreaRadius, intel);
+        if (area != null && area.Place != Point)
+        {
+            Debug.LogError($"job #{Id} was handed a search area built round {area.Place}, not its place {Point}: the caller passed the wrong area. It builds its own.", intel);
+            area = null;
+        }
+        Area = area ?? new SearchArea(Point, intel.SearchAreaRadius, intel);
         Cap = Mathf.Max(1, cap);
         // Go is the step a job that calls nobody keeps; JobBoard moves one with callees to Call at once.
         // Neither has a length, so StepLength starts at zero.

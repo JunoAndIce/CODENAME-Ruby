@@ -14,7 +14,8 @@ public enum SearchStep { Walk, Look, StandDown, Done }
 /// an attack looks for Search Duration, a check on a problem looks for Look Time and then stands down
 /// with a gesture. Which patrol he goes back to is the table's business (EnemyController.IsAggressive).
 /// **A Search's team clears its area** (SearchArea: the circle's ground and the rooms it reaches): each
-/// member starts as soon as he is inside Search Area Radius of the place with a clear line to it, creeping
+/// member starts as soon as he is in the search area: inside a room it marks, or inside Search Area Radius
+/// of the place with a clear line to it (Intel.InSearchArea and the line, WalkToSpot), creeping
 /// toward what nobody has looked at yet with his view sweeping as he goes (SearchCoverage). The search
 /// proper starts once every member has come in (a member who can't reach the area is taken off the job),
 /// and it ends when everything is cleared and Search Minimum Time has passed, with no cap. Until then one
@@ -654,10 +655,11 @@ public class SearchingState : EnemyStateBase
     // taken off the job (his Job is null): the caller returns at once.
     //
     // A Check keeps its rules: a stall or no path means he looks from where he stands. A Search doesn't
-    // need him at the spot itself: he has arrived on entering its area (InSearchArea). Short of that, by
-    // the user's rule, it loses a member that can't reach it: no path at all removes him (after the warning),
-    // and a stall isn't "can't reach", so he has arrived only when the stall is inside Search Area Radius
-    // of the spot. Farther out he keeps trying (MoveToArea steers on every call and keeps returning
+    // need him at the spot itself: he has arrived on entering its area (InSearchArea: in a marked room, or
+    // in the circle with a clear line to its place). Short of that, by the user's rule, it loses a member
+    // that can't reach it: no path at all removes him (after the warning), and a stall isn't "can't reach",
+    // so he has arrived only when the stall is in the search area (the circle or a marked room, no line
+    // needed: he has stopped). Outside it he keeps trying (MoveToArea steers on every call and keeps returning
     // Blocked until he makes progress), and Search Travel Limit (TickJob) bounds it.
     private bool WalkToSpot(GroupJob job)
     {
@@ -682,8 +684,7 @@ public class SearchingState : EnemyStateBase
             }
             Debug.LogWarning($"{Enemy.name} can't reach the spot ({Enemy.Navigator.FailureReason}); he looks from where he stands.", Enemy);
         }
-        if (result == NavResult.Blocked && search
-            && PathGrid.FlatDistance(Enemy.transform.position, job.Point) > Enemy.Intel.SearchAreaRadius)
+        if (result == NavResult.Blocked && search && !Enemy.Intel.InSearchArea(job, Enemy.transform.position))
         {
             if (!_loggedBlocked)
                 DebugLog.Info($"{Enemy.name} is blocked {PathGrid.FlatDistance(Enemy.transform.position, job.Point):0.#} m from the spot, outside the search area; he keeps trying.", Enemy);
@@ -699,19 +700,20 @@ public class SearchingState : EnemyStateBase
         return true;
     }
 
-    // Inside the radius on the job's floor, with a clear line at eye height to the spot. The radius alone
-    // would count him as there from the far side of a wall, starting the search proper with him still a
-    // long walk away. The line is raised to his eyes because a spot can lie at or under floor level, where
-    // the floor itself would block it. A crate in the way only keeps him walking until he clears it.
+    // In the job's search area (Intel.InSearchArea), and then either inside one of the rooms it marks or
+    // with a clear line at eye height to the area's place. A marked room is searched whole, out to its
+    // walls, so being in it is being there, however far from the place or round a corner from it. The
+    // circle's open ground still needs the line: the radius alone would count him as there from the far
+    // side of a wall, starting the search proper with him still a long walk away. The line is to the place
+    // the area was drawn round, not job.Point, which can be up to a metre off it. It is raised to his eyes
+    // because a place can lie at or under floor level, where the floor itself would block it. A crate in
+    // the way only keeps him walking until he clears it.
     private bool InSearchArea(GroupJob job)
     {
         Vector3 position = Enemy.transform.position;
-        if (PathGrid.FlatDistance(position, job.Point) > Enemy.Intel.SearchAreaRadius) return false;
-
-        PathGrid grid = PathGrid.At(position);
-        if (grid == null || grid != PathGrid.At(job.Point)) return false;
-
-        return Enemy.CanSeeSpot(job.Point);
+        if (!Enemy.Intel.InSearchArea(job, position)) return false;
+        if (job.Area.InRoom(position)) return true;
+        return Enemy.CanSeeSpot(job.Area.Place);
     }
 
     // He is as close as he will get. He faces the spot, so the sweep he joins is about it and ends

@@ -367,7 +367,8 @@ public class JobBoard
     /// (Idle, Patrol, or searching at a lower priority). Returns the job he is now in, or null when
     /// it's left alone. An enemy already on a job is dealt with at its own place first
     /// (HandleAtOwnJob); this is for a thing **elsewhere**. In order:
-    /// 1. **An open job is handling this** (its place is within Job Match Radius). A more serious
+    /// 1. **An open job is handling this** (Covers: its place is within Job Match Radius, or the thing is
+    ///    in a room its search area marks). A more serious
     ///    thing upgrades it, a find or a flying enemy turns a check into a search, and a stronger reason (an attack,
     ///    where the job is a problem) raises it for every member even at the same priority. If it is
     ///    still recruiting and has room he joins, taking himself off any job he was on. Otherwise
@@ -479,14 +480,16 @@ public class JobBoard
     // A job always starts this one way: a sound's first listener (Handle), an extra a merge sent
     // elsewhere (MergeExtras) and an enemy who has lost a fight with no job at his spot (JoinFromAggro)
     // all lead a new job and call in the free enemies near them. He must be
-    // off any job already. Returns the job, or the one he is on when it refused him.
-    private GroupJob StartJob(EnemyController who, Incident incident, JobKind kind)
+    // off any job already. Returns the job, or the one he is on when it refused him. `area` is a search
+    // area already built round the incident's point (an extra's spot was tested by building it), so the
+    // job doesn't flood the same place twice; null builds it, as for every other job.
+    private GroupJob StartJob(EnemyController who, Incident incident, JobKind kind, SearchArea area = null)
     {
         // Nothing can match a job on no grid (Covers needs a floor), so say so now rather than let
         // every later sound there start a job of its own without a word.
         if (PathGrid.At(incident.Point) == null)
             Debug.LogWarning($"{who.name} starts a job at {incident.Point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
-        var job = new GroupJob(kind, incident, _intel.JobCap, _intel);
+        var job = new GroupJob(kind, incident, _intel.JobCap, _intel, area);
         _jobs.Add(job);
         if (!JoinMember(job, who))
         {
@@ -556,16 +559,25 @@ public class JobBoard
 
     /// <summary>
     /// Whether a point is at a job's place, as a new disturbance is judged against it: the job is
-    /// open and the point is within Job Match Radius. The one test for FindMatch and for an enemy's
-    /// own job, so they can't disagree.
+    /// open and the point is within Job Match Radius of its place on its floor, **or** inside one of the
+    /// rooms its search area marks (SearchArea.InRoom), however far from the place. The one test for
+    /// FindMatch and for an enemy's own job, so they can't disagree.
     /// </summary>
     public bool Covers(GroupJob job, Vector3 point) => Covers(job, point, out _);
 
+    // The distance is to the place either way, so FindMatch still prefers the nearest job when two cover a point.
     private bool Covers(GroupJob job, Vector3 point, out float distance)
     {
         distance = PathGrid.FlatDistance(job.Point, point);
         // One emptied mid-walk is only waiting to be removed.
-        if (job.Step == JobStep.Done || job.Count == 0 || distance > _intel.JobMatchRadius) return false;
+        if (job.Step == JobStep.Done || job.Count == 0) return false;
+
+        // Something in a room the job marks is the job's: two teams must not search one office apart
+        // (spec, piece 7: "something sensed in a room a job is searching goes to that job"). A Check's
+        // area counts too, since a Check becomes a Search of that same area, and two thuds in one big
+        // office are one thing to check. InRoom tests the room's own floor.
+        if (job.Area != null && job.Area.InRoom(point)) return true;
+        if (distance > _intel.JobMatchRadius) return false;
 
         // Floors are independent, so a sound upstairs is never the place of a job downstairs, however
         // near they are in the plan. A point on no grid is nobody's place: Hear warns about a sound
@@ -573,6 +585,14 @@ public class JobBoard
         PathGrid floor = PathGrid.At(job.Point);
         return floor != null && floor == PathGrid.At(point);
     }
+
+    /// <summary>
+    /// Whether a point is in the job's search area: within Search Area Radius of the area's place on its
+    /// floor, or inside one of the rooms the area marks (SearchArea.Contains). Read through the area and
+    /// never as a distance to job.Point, which can drift up to a metre from the place the area was built
+    /// round (GroupJob.Upgrade keeps the area on a small move). False with no area.
+    /// </summary>
+    public bool InSearchArea(GroupJob job, Vector3 point) => job != null && job.Area != null && job.Area.Contains(point);
 
     // A thing at a job's place changes the job when it is more serious, or when it makes a search and the
     // job is only a check: a body or a gun is found, and an enemy has been thrown, whatever its priority,
@@ -607,7 +627,8 @@ public class JobBoard
     /// or one right after the last. In order:
     /// 1. **He has no running job** (a search of his own, or finishing his last walk after a search ended):
     ///    the squad decides as for any new thing, and he joins or leads a Search at the shot.
-    /// 2. **It's inside the job's search area:** a Check becomes a Search on the spot, and a Search's
+    /// 2. **It's inside the job's search area** (InSearchArea: within the circle round its place, or in a
+    ///    room the area marks, however far from the place): a Check becomes a Search on the spot, and a Search's
     ///    team throws away what it had seen and looks again, which starts Search Minimum Time over.
     ///    There is nowhere new to go.
     /// 3. **Still calling or gathering:** the team is standing and facing already, so the job just moves.
@@ -635,10 +656,11 @@ public class JobBoard
         // A signalling team keeps its beat. A second shot inside the area would turn the Check into a Search
         // that restarts at the old place and never visits the signalled shot, so only a shot outside the
         // area moves the signal, and within 1 m of the job UpdateSignal would make Upgrade return false and
-        // leave it in Signal for good.
+        // leave it in Signal for good. Outside the area is outside the circle round its place, so normally
+        // well over a metre from the job's place; GoToSignalledShot guards the rest.
         if (job.Step == JobStep.Signal)
         {
-            if (PathGrid.FlatDistance(job.Point, shot.Point) > _intel.SearchAreaRadius)
+            if (!InSearchArea(job, shot.Point))
             {
                 job.UpdateSignal(search);
                 job.NoteShotTaken();
@@ -646,7 +668,8 @@ public class JobBoard
             return true;
         }
 
-        if (PathGrid.FlatDistance(job.Point, shot.Point) <= _intel.SearchAreaRadius)
+        // In the search area: the circle round its place, or any room it marks, however far from the place.
+        if (InSearchArea(job, shot.Point))
         {
             if (job.Kind == JobKind.Check)
             {
@@ -683,7 +706,7 @@ public class JobBoard
     /// carry on. Nothing happens unless all of this holds, because each is a reason not to:
     /// - It isn't a body or gun lying there, which is only for the books, or a gunshot, which moves everyone.
     /// - The team has two or more, and nobody is out already.
-    /// - It's away from the area they are already searching.
+    /// - It's away from the area they are already searching (InSearchArea: outside the circle and every room it marks).
     /// - A Search has started searching, or a Check is going or looking. Before a Search searches, a member sent
     ///   off would hold up a start that waits for everyone. After a Check's look there is nothing to come back to.
     /// The nearest goes, never a Check's checker, who has the job's own spot to reach.
@@ -693,7 +716,7 @@ public class JobBoard
         GroupJob job = who.Job;
         if (job == null || thing.SaysNothingOfRuby || thing.Mobilises || job.Count < 2 || job.Scout != null) return;
         if (!(job.Kind == JobKind.Search ? job.Step == JobStep.Search : job.Step is JobStep.Go or JobStep.Look)) return;
-        if (PathGrid.FlatDistance(job.Point, thing.Point) <= _intel.SearchAreaRadius) return;
+        if (InSearchArea(job, thing.Point)) return;
 
         EnemyController nearest = null;
         float nearestDistance = float.MaxValue;
@@ -738,12 +761,25 @@ public class JobBoard
         DebugLog.Info($"{who.name} has something serious in the search area: {job} throws away what it had seen and looks again.", who);
     }
 
-    // The beat is over: everyone goes. It was outside the search area when signalled, which is more than
-    // the 1 m that counts as the same place, so the job always moves and starts over from Go.
+    // The beat is over: everyone goes. It was outside the search area when signalled, which is normally
+    // more than the 1 m that counts as the same place, so the job moves and starts over from Go. It can
+    // be within that metre: the area is drawn round where the job was before a small move (up to a metre
+    // off its place, GroupJob.Upgrade), so with a Search Area Radius near its 1 m minimum a shot just
+    // outside the circle can land on the job's place; and a shot on another floor is outside the area
+    // however near in the plan. Upgrade then doesn't start over, and the job would sit in Signal for good,
+    // so it starts over here, with a warning, at the place it already has.
     private void GoToSignalledShot(GroupJob job)
     {
         DebugLog.Info($"{job} goes to {job.SignalledShot.Point}.", _intel);
-        ChooseAfterRestart(job, Upgrade(job, job.SignalledShot, JobKind.Search));
+        bool restarted = Upgrade(job, job.SignalledShot, JobKind.Search);
+        if (!restarted)
+        {
+            Debug.LogWarning($"{job} signalled a shot at {job.SignalledShot.Point}, outside its search area but within a metre of its place in the plan (a Search Area Radius near its minimum, or a shot on another floor): it starts its search over where it is rather than wait in Signal for good.", _intel);
+            job.Restart(_intel.GatherTime);
+            foreach (EnemyController member in job.Members) member.FollowJob(job);
+            restarted = true;
+        }
+        ChooseAfterRestart(job, restarted);
     }
 
     /// <summary>
@@ -760,7 +796,7 @@ public class JobBoard
         return true;
     }
 
-    // The nearest open job whose place is within Job Match Radius.
+    // The nearest open job that covers the point (within Job Match Radius of its place, or in a room it marks).
     private GroupJob FindMatch(Vector3 point)
     {
         GroupJob best = null;
@@ -869,9 +905,12 @@ public class JobBoard
     private static bool Working(GroupJob job) =>
         job.Lead != null && job.Step != JobStep.StandDown && job.Step != JobStep.Done && job.Step != JobStep.Signal;
 
-    // Two open jobs about one place are one job. Only the first pair found (the list is oldest first)
-    // merges in a firing and the next waits for the next interval: that keeps this walk simple while
-    // jobs close under it, and a squad has few jobs.
+    // Two open jobs about one place are one job: the younger's place is covered by the older (within Job
+    // Match Radius, or in a room the older marks), or their search areas mark a room in common, since
+    // otherwise two teams could search one office apart (spec, piece 7). Only the first pair found (the
+    // list is oldest first) merges in a firing and the next waits for the next interval: that keeps this
+    // walk simple while jobs close under it, and a squad has few jobs. The room test is two short lists
+    // compared in place (SearchArea.SharedRoom), with nothing allocated.
     private void MergeOne()
     {
         for (int i = 0; i < _jobs.Count; i++)
@@ -881,21 +920,30 @@ public class JobBoard
             for (int j = i + 1; j < _jobs.Count; j++)
             {
                 GroupJob younger = _jobs[j];
-                if (!Working(younger) || !Covers(older, younger.Point)) continue;
-                Merge(older, younger);
+                if (!Working(younger)) continue;
+                Room shared = null;
+                if (!Covers(older, younger.Point) && (shared = SharedRoom(older, younger)) == null) continue;
+                Merge(older, younger, shared);
                 return;
             }
         }
     }
 
+    // A room both jobs' search areas mark, or null.
+    private static Room SharedRoom(GroupJob a, GroupJob b) => a.Area != null ? a.Area.SharedRoom(b.Area) : null;
+
     // The older job stays and takes the combined incident: the higher reason and priority, the place of
     // the higher priority (a tie stays where the older was, so a merge doesn't move a team for nothing),
     // and a Search if either is. Its own members keep their order, then the younger's follow up to the
     // cap, joined at once with no call: they are already at this place on this business. The younger
-    // closes when its last member leaves. The ones who don't fit are extras (MergeExtras).
-    private void Merge(GroupJob older, GroupJob younger)
+    // closes when its last member leaves. The ones who don't fit are extras (MergeExtras). A merge that
+    // moves the place more than a metre starts the older over there, and Upgrade rebuilds its area round
+    // the new place (GroupJob.Upgrade), so its marked rooms follow. `shared` is the room they have in
+    // common when that, and not the place, is why they merge, for the log.
+    private void Merge(GroupJob older, GroupJob younger, Room shared)
     {
-        DebugLog.Info($"{younger} is about the same place as {older} ({PathGrid.FlatDistance(older.Point, younger.Point):0.#} m apart): they merge into {older}.", _intel);
+        // Built inside the call, so it compiles away with the rest of the line when logging is off.
+        DebugLog.Info($"{younger} is about the same place as {older} ({(shared != null ? $"both search {shared.name}" : $"{PathGrid.FlatDistance(older.Point, younger.Point):0.#} m apart")}): they merge into {older}.", _intel);
 
         // Taken before anything changes: Leave empties the younger as it goes.
         _moving.Clear();
@@ -939,24 +987,29 @@ public class JobBoard
                 continue;
             }
 
-            if (!TryFindExtraSpot(older, out Vector3 spot))
+            if (!TryFindExtraSpot(older, out Vector3 spot, out SearchArea searchArea))
             {
-                who.Searching.Dismiss($"{older} has no room for him and no open spot {_intel.JobMatchRadius + 2f:0.#} to {2.5f * _intel.JobMatchRadius:0.#} m from {older.Point} was found in {ExtraSpotTries} tries that no other job covers (or the place is on no grid), so he goes back to patrol");
+                who.Searching.Dismiss($"{older} has no room for him and no open spot {_intel.JobMatchRadius + 2f:0.#} to {2.5f * _intel.JobMatchRadius:0.#} m from {older.Point} was found in {ExtraSpotTries} tries that no other job covers or shares a room with (or the place is on no grid), so he goes back to patrol");
                 continue;
             }
             DebugLog.Info($"{who.name} has no room on {older}: he searches {spot} ({PathGrid.FlatDistance(older.Point, spot):0.#} m from it) instead.", who);
-            StartJob(who, new Incident(spot, older.Reason, older.Priority), JobKind.Search);
+            StartJob(who, new Incident(spot, older.Reason, older.Priority), JobKind.Search, searchArea);
         }
         _extras.Clear();
     }
 
     // Elsewhere Distance: an open spot between Job Match Radius + 2 m and 2.5 times it from the merged
-    // job's place, and not at any open job's place, so what an extra starts can't merge straight back on
-    // the next interval (never churn). RandomSpotInArea measures its distance from `from`, which is the
-    // merged place here; a failed try counts, and no spot after the tries is the caller's to report.
-    private bool TryFindExtraSpot(GroupJob older, out Vector3 spot)
+    // job's place, not covered by any open job (its place or a room it marks), and whose own search area
+    // shares no room with any open job's, so what an extra starts can't merge straight back on the next
+    // interval (never churn): a spot in a corridor whose circle reached through a door into the merged
+    // job's office would. Testing that floods the spot's area, so the area is handed back for the new job
+    // to keep, and the job floods once, as every job does. RandomSpotInArea measures its distance from
+    // `from`, which is the merged place here; a failed try counts, and no spot after the tries is the
+    // caller's to report.
+    private bool TryFindExtraSpot(GroupJob older, out Vector3 spot, out SearchArea searchArea)
     {
         spot = older.Point;
+        searchArea = null;
         PathGrid grid = PathGrid.At(older.Point);
         if (grid == null) return false;
 
@@ -964,15 +1017,27 @@ public class JobBoard
         for (int attempt = 0; attempt < ExtraSpotTries; attempt++)
         {
             if (!grid.RandomSpotInArea(area, older.Point, _intel.JobMatchRadius + 2f, out spot)) continue;
-            bool covered = false;
-            foreach (GroupJob job in _jobs)
-            {
-                if (!Covers(job, spot)) continue;
-                covered = true;
-                break;
-            }
-            if (!covered) return true;
+            if (AnyJobCovers(spot)) continue;
+            var candidate = new SearchArea(spot, _intel.SearchAreaRadius, _intel);
+            if (AnyJobSharesRoom(candidate)) continue;
+            searchArea = candidate;
+            return true;
         }
+        return false;
+    }
+
+    private bool AnyJobCovers(Vector3 point)
+    {
+        foreach (GroupJob job in _jobs)
+            if (Covers(job, point)) return true;
+        return false;
+    }
+
+    // Any job still open (one emptied mid-walk or Done is only waiting to be removed) whose area marks a room the given area marks.
+    private bool AnyJobSharesRoom(SearchArea area)
+    {
+        foreach (GroupJob job in _jobs)
+            if (job.Step != JobStep.Done && job.Count > 0 && job.Area != null && job.Area.SharedRoom(area) != null) return true;
         return false;
     }
 
