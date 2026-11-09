@@ -234,14 +234,29 @@ public class PathGrid : MonoBehaviour
     public bool CollectAreaGround(GridArea area, Vector3 from, float spacing, List<Vector3> into)
     {
         into.Clear();
-        if (!ResolveArea(area, from, out Vector2Int start, out _)) return false;
+        if (!ResolveArea(area, from, out _, out Vector3 start)) return false;
+        return CollectGround(start, spacing, area.Contains, into);
+    }
+
+    /// <summary>
+    /// Points about spacing metres apart on open ground joined to `from` without leaving where `inside`
+    /// holds, into a list it clears first. The flood never crosses a blocked cell, so nothing comes from
+    /// through a wall. A spacing at or under the cell size keeps every cell. Points sit on a lattice of
+    /// whole cells (every n-th along X and Z), so two collections at one spacing share their points
+    /// exactly. `from` must stand on an open cell, which is kept whatever `inside` says of it: false when
+    /// it doesn't, or is off the grid. The test is the caller's, so this knows nothing of what it means.
+    /// </summary>
+    public bool CollectGround(Vector3 from, float spacing, System.Func<Vector3, bool> inside, List<Vector3> into)
+    {
+        into.Clear();
+        if (!WorldToCell(from, out Vector2Int start) || !IsWalkable(start)) return false;
 
         if (_areaMark == null || _areaMark.Length != CellCount) _areaMark = new int[CellCount];
         _areaGeneration++;
         _areaCells.Clear();
         MarkAreaCell(Index(start));
 
-        int stride = Mathf.Max(1, Mathf.RoundToInt(spacing / _cellSize));
+        int stride = StrideFor(spacing);
         for (int head = 0; head < _areaCells.Count; head++)
         {
             Vector2Int cell = CellOf(_areaCells[head]);
@@ -251,12 +266,15 @@ public class PathGrid : MonoBehaviour
             {
                 Vector2Int next = cell + step;
                 if (!CanStep(cell, step) || _areaMark[Index(next)] == _areaGeneration) continue;
-                if (!area.Contains(CellToWorld(next))) continue;
+                if (!inside(CellToWorld(next))) continue;
                 MarkAreaCell(Index(next));
             }
         }
         return true;
     }
+
+    /// <summary>The stride CollectGround keeps points at for a spacing: every n-th cell along X and Z.</summary>
+    public int StrideFor(float spacing) => Mathf.Max(1, Mathf.RoundToInt(spacing / _cellSize));
 
     private void MarkAreaCell(int index)
     {
