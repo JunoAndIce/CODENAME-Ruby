@@ -94,7 +94,7 @@
 - [x] **Step 4: Gizmo.** `Room` draws its map's Mask Radius (Task 1, Step 2).
 - [x] **Step 5: Docs.** `CLAUDE.md`: the behaviour map bullet says rooms override rows, falling through to the room around them and then the default, plus `OnlyWhileInUse`, Mask Radius (sounds only, straight line, own floor, wins within it), and the Body rule. The Speech bullet says it fills the speaker's room when that room holds no rooms. Armories are a map that ignores Loose Gun.
 - [x] **Step 6: Compile and commit.**
-- [ ] **Step 7: Play-test gate (the user).** An armory room with a map ignoring Loose Gun: an armed enemy walks past a gun lying in it without reacting, and reacts to one just outside. An office map ignoring Impact: a crate thrown into the office brings no one, while one thrown into the corridor does. A shout from inside a small room brings everyone in that room, even those past Speech Range along the floor. A Body row set to Ignore in a room warns and is not used.
+- [x] **Step 7: Play-test gate (the user).** An armory room with a map ignoring Loose Gun: an armed enemy walks past a gun lying in it without reacting, and reacts to one just outside. An office map ignoring Impact: a crate thrown into the office brings no one, while one thrown into the corridor does. A shout from inside a small room brings everyone in that room, even those past Speech Range along the floor. A Body row set to Ignore in a room warns and is not used.
 
 ### Task 3: Searching by room
 
