@@ -83,17 +83,17 @@
   - `Room.InUse` (false until Task 5 gives it a meaning; Task 2 reads it).
   - **`Intel.TryGetRow(Vector3 point, StimulusKind kind, bool heard, out BehaviourMap.Row row)`** replaces the old signature. `MapAt` goes.
 
-- [ ] **Step 1: The lookup.** In this order:
+- [x] **Step 1: The lookup.** In this order:
   1. **Mask,** only when `heard`: for each room on the point's floor whose map has `MaskRadius > 0`, with the point outside it but within `MaskRadius` of it (`DistanceOutside`), if that map's own row for the kind applies (not `OnlyWhileInUse`, or the room is in use) and is Ignore, return that row.
   2. **Rooms:** from `SmallestAt(point)` out through `Parent`, the first map whose own row for the kind applies.
   3. **The default map's** `TryGetRow`, which warns about a missing row as today.
 
   A room row for `StimulusKind.Body` set to Ignore is skipped, with one warning per map naming it. Sight is never masked, because only heard stimuli pass `heard`.
-- [ ] **Step 2: Callers.** `EnemySenses.Hear` passes `heard: true`. Every other `TryGetRow` call in `EnemySenses` passes `false`. Fix the comment at the glance ("an armory, a morgue"): a room can't make a body ignored, so the morgue example goes.
-- [ ] **Step 3: Speech across a room.** In `Intel.Say`, while collecting hearers, also take every living listener on the speaker's floor who stands in the speaker's `LeafRoomAt`, and isn't already in range. Leaf only, so a floor-sized room carries nothing. `FindCallees` and Fill are untouched. The log line says how many heard in the room as well as in range.
-- [ ] **Step 4: Gizmo.** `Room` draws its map's Mask Radius (Task 1, Step 2).
-- [ ] **Step 5: Docs.** `CLAUDE.md`: the behaviour map bullet says rooms override rows, falling through to the room around them and then the default, plus `OnlyWhileInUse`, Mask Radius (sounds only, straight line, own floor, wins within it), and the Body rule. The Speech bullet says it fills the speaker's room when that room holds no rooms. Armories are a map that ignores Loose Gun.
-- [ ] **Step 6: Compile and commit.**
+- [x] **Step 2: Callers.** `EnemySenses.Hear` passes `heard: true`. Every other `TryGetRow` call in `EnemySenses` passes `false`. Fix the comment at the glance ("an armory, a morgue"): a room can't make a body ignored, so the morgue example goes.
+- [x] **Step 3: Speech across a room.** In `Intel.Say`, while collecting hearers, also take every living listener on the speaker's floor who stands in the speaker's `LeafRoomAt`, and isn't already in range. Leaf only, so a floor-sized room carries nothing. `FindCallees` and Fill are untouched. The log line says how many heard in the room as well as in range.
+- [x] **Step 4: Gizmo.** `Room` draws its map's Mask Radius (Task 1, Step 2).
+- [x] **Step 5: Docs.** `CLAUDE.md`: the behaviour map bullet says rooms override rows, falling through to the room around them and then the default, plus `OnlyWhileInUse`, Mask Radius (sounds only, straight line, own floor, wins within it), and the Body rule. The Speech bullet says it fills the speaker's room when that room holds no rooms. Armories are a map that ignores Loose Gun.
+- [x] **Step 6: Compile and commit.**
 - [ ] **Step 7: Play-test gate (the user).** An armory room with a map ignoring Loose Gun: an armed enemy walks past a gun lying in it without reacting, and reacts to one just outside. An office map ignoring Impact: a crate thrown into the office brings no one, while one thrown into the corridor does. A shout from inside a small room brings everyone in that room, even those past Speech Range along the floor. A Body row set to Ignore in a room warns and is not used.
 
 ### Task 3: Searching by room
