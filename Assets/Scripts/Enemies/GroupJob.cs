@@ -289,21 +289,25 @@ public class GroupJob
     /// and it can make a Check into a Search. When the place moves, or it becomes a Search, the job
     /// starts over from its first step and returns true so its members re-plan their walk; otherwise it
     /// returns false and the job carries on as it was, Point untouched.
-    /// The place moves only to an incident more than a metre away **and outside every room the area
-    /// marks**. One inside a marked room raises the job where it is: that room is searched whole either
-    /// way, and moving the job there threw away what the team had seen and dropped the corridor ground
-    /// the first thing came from. Every route that upgrades (a match, a member's own stimulus, a merge, a
+    /// The place moves to an incident more than a metre away, **except that a Search stays put for one
+    /// inside a room its area marks**. A Search clears its marked rooms whole, so that spot is searched
+    /// either way, and moving there threw away what the team had seen and dropped the corridor ground
+    /// the first thing came from: it only rises. A Check is one look at one spot and searches no room, so
+    /// a louder thing anywhere else, its marked rooms included, moves it there and starts it over, or the
+    /// louder spot would never be visited and the team would say all clear. That covers a Check this
+    /// upgrade turns into a Search too (the merge rule: the higher priority's place wins unless the older
+    /// is already searching). Every route that upgrades (a match, a member's own stimulus, a merge, a
     /// gunshot) comes through here, so they all agree.
     /// </summary>
     internal bool Upgrade(Incident incident, JobKind kind, float gatherLength)
     {
-        bool inMarkedRoom = Area != null && Area.InRoom(incident.Point);
-        bool moved = !inMarkedRoom && PathGrid.FlatDistance(Point, incident.Point) > SamePlace;
+        bool searchStays = Kind == JobKind.Search && Area != null && Area.InRoom(incident.Point);
+        bool moved = !searchStays && PathGrid.FlatDistance(Point, incident.Point) > SamePlace;
         bool becomesSearch = kind == JobKind.Search && Kind == JobKind.Check;
 
         // Point and the area move together, and only on a move, which starts the job over and throws its
         // coverage away too (Restart), so the area and what the team has left to clear always agree. A
-        // Check becoming a Search where it is keeps its area: it was built round this same place. A louder
+        // Check becoming a Search within a metre of its place keeps its area: it was built round that place. A louder
         // sound a step from the place keeps both, so a running search isn't thrown away, and Point never
         // drifts off the place the area was drawn round.
         if (moved)

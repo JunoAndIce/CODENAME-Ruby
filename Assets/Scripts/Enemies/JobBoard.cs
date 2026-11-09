@@ -369,7 +369,8 @@ public class JobBoard
     /// (HandleAtOwnJob); this is for a thing **elsewhere**. In order:
     /// 1. **An open job is handling this** (Covers: its place is within Job Match Radius, or the thing is
     ///    in a room its search area marks, which wins over a nearer place matched by radius alone). A
-    ///    thing in a marked room raises the job where it is and never moves it (GroupJob.Upgrade). A more serious
+    ///    thing in a room a Search marks raises it where it is and never moves it; a Check is moved to a
+    ///    more serious thing anywhere over a metre off (GroupJob.Upgrade). A more serious
     ///    thing upgrades it, a find or a flying enemy turns a check into a search, and a stronger reason (an attack,
     ///    where the job is a problem) raises it for every member even at the same priority. If it is
     ///    still recruiting and has room he joins, taking himself off any job he was on. Otherwise
@@ -562,8 +563,8 @@ public class JobBoard
     /// Whether a point is at a job's place, as a new disturbance is judged against it: the job is
     /// open and the point is within Job Match Radius of its place on its floor, **or** inside one of the
     /// rooms its search area marks (SearchArea.InRoom), however far from the place. The one test for
-    /// FindMatch and for an enemy's own job, so they can't disagree. A thing in a marked room raises the
-    /// job where it is and never moves it (GroupJob.Upgrade).
+    /// FindMatch and for an enemy's own job, so they can't disagree. A more serious thing in a room a
+    /// Search marks raises it where it is and never moves it; a Check is moved to it (GroupJob.Upgrade).
     /// </summary>
     public bool Covers(GroupJob job, Vector3 point) => Covers(job, point, out _, out _);
 
@@ -962,10 +963,11 @@ public class JobBoard
     // the higher priority (a tie stays where the older was, so a merge doesn't move a team for nothing),
     // and a Search if either is. Its own members keep their order, then the younger's follow up to the
     // cap, joined at once with no call: they are already at this place on this business. The younger
-    // closes when its last member leaves. The ones who don't fit are extras (MergeExtras). A merge onto
-    // the younger's place moves the older only when that place is more than a metre off and outside every
-    // room the older marks (GroupJob.Upgrade): then it starts over there with its area rebuilt round the
-    // new place, so its marked rooms follow; inside a marked room it stays and only rises. `shared` is the room they have in
+    // closes when its last member leaves. The ones who don't fit are extras (MergeExtras). When the
+    // younger has the higher priority the merged job moves to its place, more than a metre off, and starts
+    // over there with its area rebuilt round it (GroupJob.Upgrade), so its marked rooms follow; the one
+    // exception is an older Search with that place inside a room it marks, which stays and only rises,
+    // since it clears that room whole. An older Check always moves. `shared` is the room they have in
     // common when that, and not the place, is why they merge, for the log.
     private void Merge(GroupJob older, GroupJob younger, Room shared)
     {

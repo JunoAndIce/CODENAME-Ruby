@@ -713,12 +713,14 @@ through the player never slows the walk. **Enemies don't shove props that block 
     team is searching is that team's, not a second job's. A Check's area counts too, since it becomes a
     Search of that same area. A covering job already has it: one whose marked room holds the thing comes
     before one matched by Job Match Radius alone, however much nearer that one's place, and otherwise
-    the nearest place wins. **A thing inside a room the job already marks never moves it**
-    (`GroupJob.Upgrade`): it raises the reason and priority, and converts a Check to a Search, where the
-    job is, without restarting a running search, because the room is searched whole either way and
-    moving there threw away what was seen and dropped the ground the first thing came from. Matched by
-    Job Match Radius alone, more than a metre off and outside the marked rooms, a more serious thing
-    moves the job there and starts it over, as before; `Point` and the area always move together. A more serious thing upgrades that job; **a find (a body
+    the nearest place wins. **A Search stays put for a thing inside a room it marks**
+    (`GroupJob.Upgrade`): it raises the reason and priority where it is, without restarting, because it
+    clears that room whole either way and moving there threw away what was seen and dropped the ground
+    the first thing came from. **A Check doesn't:** it is one look at one spot and searches no room, so
+    a more serious thing more than a metre off, in its marked rooms or not, moves it there and starts it
+    over (as a Search, if the thing makes one), or the louder spot would never be visited and the team
+    would say all clear. A Search matched by Job Match Radius alone, outside its rooms, moves too.
+    `Point` and the area always move together. A more serious thing upgrades that job; **a find (a body
     or a loose gun) or anything at Alarm Speed, or an enemy seen flying or on the chain, turns a Check into a Search whatever its
     priority** (`Incident.MakesSearch`), because the check is over: a flying enemy's Search is at the
     throw's origin, a find's where it lies, and a slower flying gun or crate stays a Check. A stronger reason (an attack, on a problem job) raises it at the same
@@ -767,12 +769,13 @@ through the player never slows the walk. **Enemies don't shove props that block 
     and checked cheaply first so a level with nobody free costs no flood. **Merge:** two open jobs become one
     when the older covers the younger's place (within Job Match Radius, or in a room the older marks)
     **or** their search areas mark a room in common (`SearchArea.SharedRoom`, two short lists compared
-    in place), so two teams never search one office apart. A merge onto the younger's place moves the
-    older only by the same rule (more than a metre off and outside the older's marked rooms), starting it
-    over there with `GroupJob.Upgrade` rebuilding its area round the new place. **The older stays**: its members first, then the
+    in place), so two teams never search one office apart. A merge that moves the place starts the
+    older over there, with `GroupJob.Upgrade` rebuilding its area round the new place; an older Check
+    always moves to a higher-priority younger's place. **The older stays**: its members first, then the
     younger's up to the cap, joined at once with no call, with the higher reason and priority, a
     Search if either is, and the place of the higher priority (a tie stays put, so a merge doesn't move a
-    team for nothing). One pair merges per interval. **Extras** who don't fit: on a problem they are
+    team for nothing; and an older Search keeps its place when the younger's lies in a room it marks,
+    as for any upgrade). One pair merges per interval. **Extras** who don't fit: on a problem they are
     dismissed to patrol (`SearchingState.Dismiss`); on an attack each starts a Search of his own at a
     spot Job Match Radius + 2 m to 2.5 times it from the merged place (three tries, never a spot another
     open job covers, nor one whose own search area shares a room with an open job's, so it can't merge
