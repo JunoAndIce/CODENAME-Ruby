@@ -69,7 +69,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(1)] private int _sentToLookThreshold = 3;
 
     [Header("Searching")]
-    [Tooltip("The longest a search lasts once he has reached the spot, in seconds. The walk there doesn't count, and a team that has looked at the whole area finishes sooner.")]
+    [Tooltip("How long a search of his own for an attack lasts once he has reached the spot, in seconds: a glance at something already known, or any search in a scene with no Intel. The walk there doesn't count. A group Search has no time cap: it ends once its area is cleared and Intel's Search Minimum Time has passed.")]
     [SerializeField, Min(0f)] private float _searchDuration = 5f;
     [Tooltip("How close he gets to a search spot, in metres. If something blocks the way once he's this near (another enemy already standing on the spot, say), he looks from where he stands instead of pushing at it.")]
     [SerializeField, Min(0.5f)] private float _searchReach = 1.5f;

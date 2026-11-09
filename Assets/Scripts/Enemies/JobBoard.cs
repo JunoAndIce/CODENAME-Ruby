@@ -47,9 +47,11 @@ public class JobBoard
     // The jobs' one clock. A job, not its members, decides when each step ends, so a team looks
     // together, gestures together and a Check finishes on the same frame: members each timing their own
     // look is how one said all clear while another walked off aggressive. A Search's Done only ends its
-    // countdown: each member finishes his own walk and look, then leaves. Go has no duration, because it
-    // waits for people to reach the spot: the first arrival of a Check, every member of a Search (NoteArrived). Every other timed step ends once
-    // its recorded length has passed, so a length of 0 ends it at once, as it does without a job.
+    // search: each member finishes his own walk, then leaves. Go has no duration, because it waits for
+    // people to reach the spot: the first arrival of a Check, every member of a Search (NoteArrived). A
+    // Search's search has none either: it waits for its area to be cleared and Search Minimum Time to
+    // pass (SearchIsOver), and no time cap cuts it short. Every other timed step ends once its recorded
+    // length has passed, so a length of 0 ends it at once, as it does without a job.
     public void Advance(float dt)
     {
         _advancing = true;
@@ -68,20 +70,19 @@ public class JobBoard
                     continue;
                 }
 
-                // The whole area has been looked at, so there's nothing left to do. Not waiting for the countdown,
-                // or for a member still walking in: everyone stood sweeping an empty room until the last was
-                // there. But not before a look's length from when someone first came in (only members in the
-                // area build this), or a team could glance at an open room and leave in the same moment.
-                if (job.Kind == JobKind.Search && job.Step is JobStep.Go or JobStep.Search && job.Coverage != null && job.Coverage.AllSeen
-                    && Time.time - job.Coverage.StartedAt >= job.Lead.LookTime)
+                // The whole area has been cleared and the minimum has passed, so there's nothing left to do.
+                // Not waiting for a member still walking in: everyone stood sweeping an empty room until the
+                // last was there.
+                if (job.Kind == JobKind.Search && job.Step is JobStep.Go or JobStep.Search && SearchIsOver(job, out string how))
                 {
-                    AdvanceTo(job, JobStep.Done, "has looked everywhere");
+                    AdvanceTo(job, JobStep.Done, how);
                     continue;
                 }
 
                 // Before the Go and length checks, so a job still walking gets its fill's calls too.
                 AdvanceFill(job);
-                if (job.Step == JobStep.Go) continue;
+                // Both wait on something, not the clock: Go for arrivals, a Search for its area (above).
+                if (job.Step is JobStep.Go or JobStep.Search) continue;
                 if (job.StepElapsed < job.StepLength) continue;
 
                 switch (job.Step)
@@ -94,9 +95,6 @@ public class JobBoard
                         break;
                     case JobStep.StandDown:
                         AdvanceTo(job, JobStep.Done, "stands down");
-                        break;
-                    case JobStep.Search:
-                        AdvanceTo(job, JobStep.Done, "finishes searching");
                         break;
                     case JobStep.Signal:
                         GoToSignalledShot(job);
@@ -117,6 +115,32 @@ public class JobBoard
         _sinceMatch = 0f;
         MergeOne();
         FillOpenJobs();
+    }
+
+    // A Search is over once everything in its area is cleared (seen, or dropped as unclearable) and Search
+    // Minimum Time has passed since its coverage was built, which is when the first member came in or the
+    // team began looking again after a gunshot. The minimum keeps a team busy in a room it saw at a glance
+    // (spec: "emulate confusion or double checking"). An area with no ground has nothing to clear, so it
+    // ends on the minimum alone, as its warning said. In Go nothing is built until someone comes in; in
+    // the search itself it is built here if nobody has asked yet, so a search can never wait on a coverage
+    // that doesn't exist. The guard against a search that never ends: every point a member walks to is
+    // cleared or dropped (SearchingState.Roam), and when every member has given up roaming, what's left
+    // is dropped here, since nobody will walk to it.
+    private bool SearchIsOver(GroupJob job, out string how)
+    {
+        how = null;
+        SearchCoverage coverage = job.Step == JobStep.Search ? CoverageOf(job) : job.Coverage;
+        if (coverage == null) return false;
+
+        if (coverage.HasGround && !coverage.AllSeen && coverage.EveryoneGaveUp(job.Members))
+            coverage.DropRemaining($"every member of {job} has given up roaming it, so nobody will walk to them", _intel);
+
+        if (coverage.HasGround && !coverage.AllSeen) return false;
+        if (Time.time - coverage.StartedAt < _intel.SearchMinimumTime) return false;
+        how = coverage.HasGround
+            ? "has looked everywhere"
+            : $"had no ground to clear and has looked about for Search Minimum Time ({_intel.SearchMinimumTime:0.#}s)";
+        return true;
     }
 
     private void AdvanceTo(GroupJob job, JobStep step, string what)
@@ -226,19 +250,20 @@ public class JobBoard
 
     // What a step lasts, read from the lead's tuning at the moment it begins and then kept on the job
     // (StepLength): reading the current lead each tick changed a step's length when he left mid-step.
+    // A Search's search has no length: it ends when its area is cleared and the minimum has passed
+    // (SearchIsOver), never on a cap, so Search Duration has no say in it.
     private float LengthOf(JobStep step, EnemyController lead) => step switch
     {
         JobStep.Gather => _intel.GatherTime,
         JobStep.Look => lead.LookTime,
         JobStep.StandDown => lead.StandDownTime,
-        JobStep.Search => lead.SearchDuration,
         _ => 0f,
     };
 
     /// <summary>
     /// A member has reached the spot, or stopped short of it. A Check moves on at the first arrival (the
     /// checker's). A Search counts a member as arrived once he is in its area, and moves on when the last
-    /// one is, so its countdown starts with the whole team there; the line names that last one.
+    /// one is, so its search starts with the whole team there; the line names that last one.
     /// </summary>
     public void NoteArrived(GroupJob job, EnemyController who)
     {
@@ -463,7 +488,7 @@ public class JobBoard
         // every later sound there start a job of its own without a word.
         if (PathGrid.At(incident.Point) == null)
             Debug.LogWarning($"{who.name} starts a job at {incident.Point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
-        var job = new GroupJob(kind, incident, _intel.JobCap);
+        var job = new GroupJob(kind, incident, _intel.JobCap, _intel);
         _jobs.Add(job);
         if (!JoinMember(job, who))
         {
@@ -582,10 +607,11 @@ public class JobBoard
     /// distraction had a team about to finish walk off as if nothing had happened. True when it was taken;
     /// false leaves it to the caller as a distraction, for a shot in the area they are already searching
     /// or one right after the last. In order:
-    /// 1. **He has no running job** (a search of his own, or finishing his last look after a countdown):
+    /// 1. **He has no running job** (a search of his own, or finishing his last walk after a search ended):
     ///    the squad decides as for any new thing, and he joins or leads a Search at the shot.
     /// 2. **It's inside the job's search area:** a Check becomes a Search on the spot, and a Search's
-    ///    countdown gets Gunshot Extension. There is nowhere new to go.
+    ///    team throws away what it had seen and looks again, which starts Search Minimum Time over.
+    ///    There is nowhere new to go.
     /// 3. **Still calling or gathering:** the team is standing and facing already, so the job just moves.
     /// 4. **Otherwise** he signals: the team stops and faces it for React Time, then all go, as a Search.
     /// Every member hears the same shot, so the first one does this and the rest find it done.
@@ -633,7 +659,7 @@ public class JobBoard
             }
 
             Elevate(job, shot.Reason, $"{who.name} has something serious in the search area");
-            ExtendForGunshot(job, who);
+            LookAgainForGunshot(job, who);
             return false;
         }
 
@@ -660,8 +686,8 @@ public class JobBoard
     /// - It isn't a body or gun lying there, which is only for the books, or a gunshot, which moves everyone.
     /// - The team has two or more, and nobody is out already.
     /// - It's away from the area they are already searching.
-    /// - A Search has started counting, or a Check is going or looking. Before a Search counts, a member sent
-    ///   off would hold up a countdown that waits for everyone. After a Check's look there is nothing to come back to.
+    /// - A Search has started searching, or a Check is going or looking. Before a Search searches, a member sent
+    ///   off would hold up a start that waits for everyone. After a Check's look there is nothing to come back to.
     /// The nearest goes, never a Check's checker, who has the job's own spot to reach.
     /// </summary>
     public void SendScout(EnemyController who, Incident thing)
@@ -687,10 +713,10 @@ public class JobBoard
         DebugLog.Info($"{job} sends {nearest.name} to check {thing} ({nearestDistance:0.#} m away); the rest carry on.", nearest);
     }
 
-    /// <summary>What the job's team hasn't looked at yet, built the first time it's asked for.</summary>
+    /// <summary>What the job's team hasn't looked at yet, built the first time it's asked for, from the job's area (which has already flooded).</summary>
     public SearchCoverage CoverageOf(GroupJob job)
     {
-        if (job.Coverage == null) job.SetCoverage(new SearchCoverage(job.Point, _intel.SearchAreaRadius, _intel));
+        if (job.Coverage == null) job.SetCoverage(new SearchCoverage(job.Area, _intel));
         return job.Coverage;
     }
 
@@ -700,16 +726,18 @@ public class JobBoard
         if (job.Scout == who) job.ScoutBack();
     }
 
-    // Only a Search that has started counting has a countdown to add to: one still in Go hasn't begun.
-    private void ExtendForGunshot(GroupJob job, EnemyController who)
+    // Whatever they had cleared may not be clear now: they look again, or a team that had seen it all would
+    // finish straight through the shot. A new coverage's clock starts as it's built, so Search Minimum Time
+    // starts over too. It is built at once from the job's area, which doesn't flood again. Nothing to throw
+    // away before anyone has come in. Shots within a member's Distraction Gap count as one, so one shot heard
+    // by the whole team, or a burst, starts them over once.
+    private void LookAgainForGunshot(GroupJob job, EnemyController who)
     {
-        if (job.Step != JobStep.Search || Time.time - job.LastExtendedAt < who.DistractionGap) return;
+        if (job.Coverage == null || Time.time - job.LastLookedAgainAt < who.DistractionGap) return;
 
-        job.ExtendStep(_intel.GunshotExtension, LengthOf(JobStep.Search, job.Lead));
-        // Whatever they had cleared may not be clear now: they look again, or a team that had seen it all
-        // would finish straight through the shot.
-        job.SetCoverage(null);
-        DebugLog.Info($"{who.name} has something serious in the search area: {job} now has {job.StepLength - job.StepElapsed:0.#}s left.", who);
+        job.NoteLookedAgain();
+        job.SetCoverage(new SearchCoverage(job.Area, _intel));
+        DebugLog.Info($"{who.name} has something serious in the search area: {job} throws away what it had seen and looks again.", who);
     }
 
     // The beat is over: everyone goes. It was outside the search area when signalled, which is more than

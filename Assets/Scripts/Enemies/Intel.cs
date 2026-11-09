@@ -38,10 +38,10 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0f)] private float _reactTime = 0.5f;
     [Tooltip("How long each call takes, in seconds: he turns to the nearest enemy and calls him, and that enemy turns to face him. Then the next nearest, and so on.")]
     [SerializeField, Min(0f)] private float _callTime = 0.6f;
-    [Tooltip("How far from a search's place, in metres, its members roam while they search. A member starts as soon as he is this near with a clear line to the place, and the search's countdown starts when the last member has.")]
+    [Tooltip("The circle that marks what a search covers, in metres round its place: the open ground it reaches, and every room holding no rooms that it reaches over open ground, searched whole. A member starts as soon as he is this near with a clear line to the place, and the search proper starts when the last member has.")]
     [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
-    [Tooltip("How much a gunshot inside a search's area adds to its countdown, in seconds. Shots within a member's Distraction Gap count as one, and the time left never goes above a full Search Duration, so a firefight can't keep a search going for good.")]
-    [SerializeField, Min(0f)] private float _gunshotExtension = 4.5f;
+    [Tooltip("The least time a search lasts, in seconds, from when the first member came into its area. It ends once everything is cleared and this has passed; until then a member with nothing left to clear walks to spots across the area and sweeps them again. No time cap cuts a search short. A gunshot in the area starts it over.")]
+    [SerializeField, Min(0f)] private float _searchMinimumTime = 5f;
 
     [Header("Debug")]
     [Tooltip("Draw how far each sound carried: the cells it reached, shaded by distance, against the plain circle its loudness would cover with no walls. Gizmos must be on.")]
@@ -94,7 +94,7 @@ public class Intel : MonoBehaviour
     public float ReactTime => _reactTime;
     public float CallTime => _callTime;
     public float SearchAreaRadius => _searchAreaRadius;
-    public float GunshotExtension => _gunshotExtension;
+    public float SearchMinimumTime => _searchMinimumTime;
 
     /// <summary>
     /// The row for a kind at a point. False when no map has one (the default map warns once about a
@@ -514,9 +514,11 @@ public class Intel : MonoBehaviour
             }
             // The checker is ringed: he's the one who goes, and the rest trail him.
             if (job.Checker != null) DrawCircle(job.Checker.transform.position, 0.9f);
-            // What the team hasn't looked at yet.
+            // A Search's marked rooms, outlined in its colour, each searched whole.
+            if (job.Kind == JobKind.Search && job.Area != null) DrawSearchRooms(job.Area);
+            // What the team hasn't looked at yet, as dots.
             if (job.Coverage != null)
-                foreach (Vector3 point in job.Coverage.Unseen) Gizmos.DrawWireCube(point + Vector3.up * 0.1f, Vector3.one * 0.15f);
+                foreach (Vector3 point in job.Coverage.Unseen) Gizmos.DrawSphere(point + Vector3.up * 0.1f, 0.08f);
             // The scout too, with where he has gone.
             if (job.Scout != null)
             {
@@ -527,6 +529,28 @@ public class Intel : MonoBehaviour
 #if UNITY_EDITOR
             UnityEditor.Handles.Label(job.Point + Vector3.up * 1.4f, $"#{job.Id} {job.Kind} · {job.Step} · {job.Count}/{job.Cap}\n{job.Reason}, priority {job.Priority}{(job.Checker != null ? $"\nchecker {job.Checker.name}" : "")}");
 #endif
+        }
+    }
+
+    // Raised a little and drawn inside the room's own outline, so it reads as the job's mark and not the room's gizmo.
+    private static void DrawSearchRooms(SearchArea area)
+    {
+        const float inset = 0.15f;
+        foreach (Room room in area.Rooms)
+        {
+            if (room == null) continue;
+            for (int i = 0; i < room.RectCount; i++)
+            {
+                GridArea rect = room.AreaOf(i);
+                Vector3 c = rect.Centre + Vector3.up * 0.15f;
+                float hx = Mathf.Max(0f, rect.HalfSize.x - inset), hz = Mathf.Max(0f, rect.HalfSize.y - inset);
+                Vector3 a = c + new Vector3(-hx, 0f, -hz), b = c + new Vector3(-hx, 0f, hz);
+                Vector3 d = c + new Vector3(hx, 0f, hz), e = c + new Vector3(hx, 0f, -hz);
+                Gizmos.DrawLine(a, b);
+                Gizmos.DrawLine(b, d);
+                Gizmos.DrawLine(d, e);
+                Gizmos.DrawLine(e, a);
+            }
         }
     }
 

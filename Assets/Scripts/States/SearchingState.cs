@@ -13,11 +13,14 @@ public enum SearchStep { Walk, Look, StandDown, Done }
 /// already known, or a scene with no Intel) he runs his own steps: a search for
 /// an attack looks for Search Duration, a check on a problem looks for Look Time and then stands down
 /// with a gesture. Which patrol he goes back to is the table's business (EnemyController.IsAggressive).
-/// **A Search's team clears its area:** each member starts as soon as he is inside Search Area Radius of
-/// the place with a clear line to it, creeping toward what nobody has looked at yet with his view sweeping
-/// as he goes (SearchCoverage). Its countdown starts once every member has come in (a member who can't
-/// reach the area is taken off the job), and it ends sooner if they have seen it all. Then each still
-/// finishes the walk he is on before he leaves, so the team drifts off one by one. One who enters it after losing a fight joins or starts a job at the spot he knew (AfterLostFight,
+/// **A Search's team clears its area** (SearchArea: the circle's ground and the rooms it reaches): each
+/// member starts as soon as he is inside Search Area Radius of the place with a clear line to it, creeping
+/// toward what nobody has looked at yet with his view sweeping as he goes (SearchCoverage). The search
+/// proper starts once every member has come in (a member who can't reach the area is taken off the job),
+/// and it ends when everything is cleared and Search Minimum Time has passed, with no cap. Until then one
+/// with nothing left to clear walks to spots across the area and sweeps them again. A spot he can't clear
+/// is dropped with a warning. Then each still finishes the walk he is on before he leaves, so the team
+/// drifts off one by one. One who enters it after losing a fight joins or starts a job at the spot he knew (AfterLostFight,
 /// Intel.JoinFromAggro), or goes back to patrol if the team there is full.
 /// </summary>
 public class SearchingState : EnemyStateBase
@@ -46,10 +49,13 @@ public class SearchingState : EnemyStateBase
     private float _roamLookLength; // rolled for each look: a shared length had a team setting off on the same frame
     private float _roamBaseYaw;
     private float _coverageTimer;  // until his next look at what the team hasn't seen: each scan, not each step
-    private float _roamWalkTimer;  // the walk to this spot. The countdown ending doesn't end a walk, so this has to.
+    private float _roamWalkTimer;  // the walk to this spot. The search ending doesn't end a walk, so this has to.
+    private bool _rechecking;      // the walk is a re-check of seen ground while the minimum runs, not a claim on an unseen point
     private int _failedSpots;      // spots in a row he could not pick or reach
-    private bool _roamGaveUp;      // too many failed in a row: he sweeps on the spot for the rest of the job
-    private bool _roamFinished;    // the countdown has run out and he has finished his last walk and look
+    // The coverage he roams. A new one (a gunshot had the team look again) starts him over, failures and all.
+    // Whether he has given up on it is the coverage's to say (HasGivenUp), so the board can see when nobody is left roaming.
+    private SearchCoverage _roamCoverage;
+    private bool _roamFinished;    // the search has ended and he has finished his last walk
     // A run of this many failed spots ends his roaming. One can be bad luck (a crate parked on the way, a
     // spot another enemy stands on), so a single failure only picks again; a run says the area gives him
     // nowhere to go, and trying on would be walking into the same wall every second.
@@ -69,10 +75,13 @@ public class SearchingState : EnemyStateBase
 
     public bool Finished => Job != null ? Job.Step == JobStep.Done && !FinishingSearch(Job) : _step == SearchStep.Done;
 
-    // On a Search, he hasn't finished his own walk and look. Past the countdown he stays on the job for
-    // them: a Done job takes no new member or sound (Recruiting, JobBoard.Covers), so a
+    // On a Search, he hasn't finished his own walk. Past the search's end he stays on the job for
+    // it: a Done job takes no new member or sound (Recruiting, JobBoard.Covers), so a
     // new disturbance here starts a new job, as it would once he had gone. One whose roaming failed has no walk to finish.
-    private bool FinishingSearch(GroupJob job) => job.Kind == JobKind.Search && _arrived && !_roamGaveUp && !_roamFinished;
+    private bool FinishingSearch(GroupJob job) => job.Kind == JobKind.Search && _arrived && !GaveUpRoaming(job) && !_roamFinished;
+
+    // Too many spots in a row failed on the job's current coverage: he sweeps where he stands for the rest of it.
+    private bool GaveUpRoaming(GroupJob job) => job.Coverage != null && job.Coverage.HasGivenUp(Enemy);
     // A job's reason and priority are the job's own, which can rise after he joined, so they are read through.
     public StimulusResponse Reason => Job != null ? Job.Reason : _reason;
     public int Priority => Job != null ? Job.Priority : _priority;
@@ -166,7 +175,8 @@ public class SearchingState : EnemyStateBase
         _loggedBlocked = false;
         _roamPhase = RoamPhase.Pick;
         _failedSpots = 0;
-        _roamGaveUp = false;
+        _rechecking = false;
+        _roamCoverage = null;
         _roamFinished = false;
         _walkTimer = 0f;
         _scouting = false;
@@ -263,7 +273,7 @@ public class SearchingState : EnemyStateBase
     // follower isn't walking to the spot, so his time isn't limited here. In a Search everyone walks, so
     // it limits everyone until he arrives, and running out of time means he can't reach the spot: he
     // is taken off the job (decision 12) instead of stopping where he is, which a Check still does. One
-    // still walking in when a Search's countdown ends keeps walking, so his limit keeps running.
+    // still walking in when a Search ends keeps walking, so his limit keeps running.
     private void TickJob()
     {
         if (_arrived || Job.Step is JobStep.Call or JobStep.Gather or JobStep.StandDown or JobStep.Signal) return;
@@ -346,7 +356,7 @@ public class SearchingState : EnemyStateBase
 
     // His part of the job's step. The team gathers facing the spot. Then one member, the checker (a
     // check) or everyone (a search), walks there. The checker's arrival moves a check on; a search's
-    // members each start roaming as they come into its area, and its countdown waits for the last. The
+    // members each start roaming as they come into its area, and the search proper waits for the last. The
     // others of a check follow the checker. Then the one who's there looks for the job's time, and
     // everyone holds for the gesture.
     private void FixedTickJob(GroupJob job)
@@ -398,7 +408,7 @@ public class SearchingState : EnemyStateBase
             case JobStep.Search:
                 break;
 
-            // The countdown is over but he has a walk and a look to finish.
+            // The search is over but he has a walk to finish.
             case JobStep.Done when FinishingSearch(job):
                 break;
 
@@ -420,9 +430,9 @@ public class SearchingState : EnemyStateBase
         if (!_arrived && !WalkToSpot(job)) return;
 
         // A Search's members roam its area from the moment they're in it, so the first there doesn't stand
-        // waiting at the edge for the rest (Go is only the countdown waiting for them). A Check's look, and
+        // waiting at the edge for the rest (Go is only the search waiting for them). A Check's look, and
         // a member whose roaming failed, stay on the spot instead.
-        if (job.Kind == JobKind.Search && !_roamGaveUp && job.Step is JobStep.Go or JobStep.Search or JobStep.Done)
+        if (job.Kind == JobKind.Search && !GaveUpRoaming(job) && job.Step is JobStep.Go or JobStep.Search or JobStep.Done)
         {
             Roam(job);
             return;
@@ -433,6 +443,15 @@ public class SearchingState : EnemyStateBase
             // He is there and the job hasn't moved on yet: hold, facing the spot.
             Enemy.Stop();
             Enemy.Movement.FaceToward(job.Point);
+            return;
+        }
+
+        // A Search has no length to sweep over, so one whose roaming failed sweeps on, one sweep period at a time,
+        // until the job ends.
+        if (job.Kind == JobKind.Search)
+        {
+            float period = Mathf.Max(Enemy.LookSweepPeriod, 0.1f);
+            Enemy.Movement.LookAround(_lookBaseYaw, Mathf.Repeat(job.StepElapsed, period), period);
             return;
         }
 
@@ -475,7 +494,7 @@ public class SearchingState : EnemyStateBase
         if (_scoutTimer < Enemy.LookTime) return;
 
         _scouting = false;
-        // A fresh roam brings him back into the search's area, or ends him at once if the countdown is over.
+        // A fresh roam brings him back into the search's area, or ends him at once if the search is over.
         _roamPhase = RoamPhase.Pick;
         DebugLog.Info($"{Enemy.name} has checked {job.ScoutPoint}: he comes back to {job}.", Enemy);
         Enemy.Intel.ScoutBack(job, Enemy);
@@ -483,12 +502,25 @@ public class SearchingState : EnemyStateBase
 
     // Clears the area: he heads for the nearest place nobody on the team has looked at, creeping with his view
     // sweeping across his way, and moves on as soon as anyone has seen it, so he only walks as far as he needs
-    // to see round the crate. With nothing free to head for he looks about where he stands until there is,
-    // or the job ends. Once the job's countdown is over he picks nothing new: he finishes the walk or look
-    // he is on, then he's done, so each leaves in his own time.
+    // to see round the crate. With nothing free to head for while the search goes on, he re-checks: walks to a
+    // spot across the area and sweeps it, which is what keeps a team busy through Search Minimum Time in a room
+    // it saw at a glance. Only when there is no spot for that either does he look about where he stands. Every
+    // walk to a claimed point ends with the point gone: seen, or dropped with a warning (blocked, unreachable,
+    // Search Travel Limit, or reached and still not seen), so no point can hold the search open for good. Once
+    // the search is over he picks nothing new: he finishes a walk to an unseen point, then he's done, so each
+    // leaves in his own time. A re-check or a look has nothing to finish and stops at once.
     private void Roam(GroupJob job)
     {
         SearchCoverage coverage = Enemy.Intel.CoverageOf(job);
+        if (coverage != _roamCoverage)
+        {
+            // A new coverage (the first, or a gunshot's): what he was walking to belongs to the old one.
+            _roamCoverage = coverage;
+            _failedSpots = 0;
+            _rechecking = false;
+            _roamPhase = RoamPhase.Pick;
+        }
+
         _coverageTimer -= Time.fixedDeltaTime;
         if (_coverageTimer <= 0f)
         {
@@ -503,19 +535,29 @@ public class SearchingState : EnemyStateBase
                 {
                     _roamFinished = true;
                     Enemy.Stop();
-                    DebugLog.Info($"{Enemy.name} has finished his last look on {job}.", Enemy);
+                    DebugLog.Info($"{Enemy.name} has finished his last walk on {job}.", Enemy);
                     return;
                 }
+                _rechecking = false;
                 if (!coverage.TryClaimNearest(Enemy, out _roamSpot))
                 {
-                    BeginRoamLook();
-                    return;
+                    if (!coverage.TryClaimRecheck(Enemy, out _roamSpot))
+                    {
+                        BeginRoamLook();
+                        return;
+                    }
+                    _rechecking = true;
                 }
                 _roamPhase = RoamPhase.Walk;
                 _roamWalkTimer = 0f;
                 goto case RoamPhase.Walk;
 
             case RoamPhase.Walk:
+                if (_rechecking)
+                {
+                    RecheckWalk(job);
+                    return;
+                }
                 // Someone has seen it, him included, which is the usual way a walk ends.
                 if (!coverage.IsUnseen(_roamSpot))
                 {
@@ -527,21 +569,25 @@ public class SearchingState : EnemyStateBase
                 _roamWalkTimer += Time.fixedDeltaTime;
                 if (_roamWalkTimer >= Enemy.SearchTravelLimit)
                 {
-                    coverage.Clear(_roamSpot);
-                    FailSpot($"didn't reach the spot at {_roamSpot} in {Enemy.SearchTravelLimit:0.#}s", job);
+                    string limit = $"{Enemy.name} didn't reach it in Search Travel Limit ({Enemy.SearchTravelLimit:0.#}s)";
+                    coverage.Drop(_roamSpot, limit, Enemy);
+                    FailSpot(limit, job, coverage);
                     return;
                 }
                 NavResult result = Enemy.Movement.SweepTo(_roamSpot, Enemy.ClearingSpeed);
                 if (result == NavResult.Moving) return;
-                // There, or unable to get there: either way nobody needs to try it again.
-                coverage.Clear(_roamSpot);
                 if (result == NavResult.Arrived)
                 {
+                    // Standing there, he gets one direct look before giving up on it: a scan's round may not have reached it yet.
+                    if (coverage.IsUnseen(_roamSpot) && !coverage.TrySee(Enemy, _roamSpot))
+                        coverage.Drop(_roamSpot, $"{Enemy.name} reached it and still couldn't see it", Enemy);
                     _failedSpots = 0;
                     _roamPhase = RoamPhase.Pick;
                     return;
                 }
-                FailSpot($"couldn't {(result == NavResult.Blocked ? "get to" : "reach")} the spot at {_roamSpot} ({Enemy.Navigator.FailureReason})", job);
+                string why = $"{Enemy.name} couldn't {(result == NavResult.Blocked ? "get to" : "reach")} it ({Enemy.Navigator.FailureReason})";
+                coverage.Drop(_roamSpot, why, Enemy);
+                FailSpot(why, job, coverage);
                 return;
 
             case RoamPhase.Look:
@@ -551,6 +597,36 @@ public class SearchingState : EnemyStateBase
                 if (job.Step == JobStep.Done || _roamLookTimer >= _roamLookLength) _roamPhase = RoamPhase.Pick;
                 return;
         }
+    }
+
+    // A re-check: walk to a spot of seen ground and sweep on the way. Nothing to clear, so nothing is dropped:
+    // it ends on arrival, when the search ends (busywork has nothing to finish), or as a failed spot when he
+    // can't get there or runs out Search Travel Limit, which counts toward giving up so an area that offers him
+    // nowhere to go can't have him re-planning every step.
+    private void RecheckWalk(GroupJob job)
+    {
+        if (job.Step == JobStep.Done)
+        {
+            _rechecking = false;
+            _roamPhase = RoamPhase.Pick;
+            return;
+        }
+        _roamWalkTimer += Time.fixedDeltaTime;
+        if (_roamWalkTimer >= Enemy.SearchTravelLimit)
+        {
+            FailSpot($"{Enemy.name} didn't reach his re-check spot in Search Travel Limit ({Enemy.SearchTravelLimit:0.#}s)", job, _roamCoverage);
+            return;
+        }
+        NavResult result = Enemy.Movement.SweepTo(_roamSpot, Enemy.ClearingSpeed);
+        if (result == NavResult.Moving) return;
+        _rechecking = false;
+        if (result == NavResult.Arrived)
+        {
+            _failedSpots = 0;
+            _roamPhase = RoamPhase.Pick;
+            return;
+        }
+        FailSpot($"{Enemy.name} couldn't {(result == NavResult.Blocked ? "get to" : "reach")} his re-check spot ({Enemy.Navigator.FailureReason})", job, _roamCoverage);
     }
 
     private void BeginRoamLook()
@@ -563,16 +639,19 @@ public class SearchingState : EnemyStateBase
     }
 
     // A spot that failed: pick another next step, unless it is the run's last, which ends his roaming. He
-    // is still on the job and finishes with it; he only stops wandering and sweeps where he stands.
-    private void FailSpot(string why, GroupJob job)
+    // is still on the job and finishes with it; he only stops wandering and sweeps where he stands. The
+    // coverage records it, so the board can drop what's left once every member has given up (no one would
+    // walk to it), and a new coverage after a gunshot has him roaming again.
+    private void FailSpot(string why, GroupJob job, SearchCoverage coverage)
     {
+        _rechecking = false;
         _roamPhase = RoamPhase.Pick;
         if (++_failedSpots < MaxFailedSpots) return;
 
-        _roamGaveUp = true;
+        coverage.NoteGaveUp(Enemy);
         // The sweep turns about a base facing, and he is nowhere near where he arrived.
         _lookBaseYaw = Enemy.transform.eulerAngles.y;
-        DebugLog.Info($"{Enemy.name} gives up roaming {job}: {MaxFailedSpots} spots in a row failed, the last {why}; he searches where he stands for the rest of it.", Enemy);
+        DebugLog.Info($"{Enemy.name} gives up roaming {job}: {MaxFailedSpots} spots in a row failed, the last at {_roamSpot} because {why}; he searches where he stands for the rest of it.", Enemy);
     }
 
     // A follower trails the checker slowly and never closer than Follow Distance: he stops there and

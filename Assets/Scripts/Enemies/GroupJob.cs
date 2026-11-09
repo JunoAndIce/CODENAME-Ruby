@@ -25,14 +25,17 @@ public class GroupJob
     private static int s_nextId;
 
     private readonly List<EnemyController> _members = new();
+    private readonly Intel _intel;
 
-    public GroupJob(JobKind kind, Incident incident, int cap)
+    public GroupJob(JobKind kind, Incident incident, int cap, Intel intel)
     {
         Id = ++s_nextId;
+        _intel = intel;
         Kind = kind;
         Reason = incident.Reason;
         Priority = incident.Priority;
         Point = incident.Point;
+        Area = new SearchArea(Point, intel.SearchAreaRadius, intel);
         Cap = Mathf.Max(1, cap);
         // Go is the step a job that calls nobody keeps; JobBoard moves one with callees to Call at once.
         // Neither has a length, so StepLength starts at zero.
@@ -46,6 +49,12 @@ public class GroupJob
     public int Priority { get; private set; }
     /// <summary>The spot the job is about: where a sound came from, or where a body lies.</summary>
     public Vector3 Point { get; private set; }
+    /// <summary>
+    /// What a Search covers round Point: the circle's ground and the rooms it reaches (SearchArea). Built
+    /// when the job is made and again whenever Point moves, so it floods once per place and never per step.
+    /// Built for a Check too, because a Check can become a Search at the same place.
+    /// </summary>
+    public SearchArea Area { get; private set; }
     public JobStep Step { get; private set; }
     /// <summary>Seconds in the current step.</summary>
     public float StepElapsed { get; private set; }
@@ -165,10 +174,11 @@ public class GroupJob
     public float LastSignalAt { get; private set; } = float.NegativeInfinity;
     /// <summary>When a gunshot last moved, converted or signalled the job, so the rest who heard the same shot find it done.</summary>
     public float LastShotTakenAt { get; private set; } = float.NegativeInfinity;
-    /// <summary>When a gunshot last added to the countdown, so one shot heard by the whole team adds once.</summary>
-    public float LastExtendedAt { get; private set; } = float.NegativeInfinity;
+    /// <summary>When a gunshot in the area last had the team look again, so one shot heard by the whole team throws away what they'd seen once.</summary>
+    public float LastLookedAgainAt { get; private set; } = float.NegativeInfinity;
 
     internal void NoteShotTaken() => LastShotTakenAt = Time.time;
+    internal void NoteLookedAgain() => LastLookedAgainAt = Time.time;
 
     internal void BeginSignal(Incident shot, float length)
     {
@@ -179,14 +189,6 @@ public class GroupJob
 
     // Another shot during the signal: they go to the newest. The beat isn't started over.
     internal void UpdateSignal(Incident shot) => SignalledShot = shot;
-
-    /// <summary>Adds to the time this step has left, without taking the time left past cap. Time already above the cap is left alone.</summary>
-    internal void ExtendStep(float extra, float cap)
-    {
-        float left = StepLength - StepElapsed;
-        StepLength = StepElapsed + Mathf.Max(left, Mathf.Min(left + extra, cap));
-        LastExtendedAt = Time.time;
-    }
 
     // Every step change records its length too, so none can begin without one.
     internal void SetStep(JobStep step, float length)
@@ -285,6 +287,10 @@ public class GroupJob
         bool moved = PathGrid.FlatDistance(Point, incident.Point) > SamePlace;
         bool becomesSearch = kind == JobKind.Search && Kind == JobKind.Check;
 
+        // Any change of place, even one too small to restart the walk, rebuilds the area, so it is always
+        // drawn round the place the job reports. The same place (most upgrades pass the job's own Point)
+        // doesn't flood again.
+        if (incident.Point != Point) Area = new SearchArea(incident.Point, _intel.SearchAreaRadius, _intel);
         Point = incident.Point;
         Elevate(incident.Reason);
         if (incident.Priority > Priority) Priority = incident.Priority;
