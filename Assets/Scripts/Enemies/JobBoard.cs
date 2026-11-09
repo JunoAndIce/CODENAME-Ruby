@@ -123,17 +123,15 @@ public class JobBoard
     // (spec: "emulate confusion or double checking"). An area with no ground has nothing to clear, so it
     // ends on the minimum alone, as its warning said. In Go nothing is built until someone comes in; in
     // the search itself it is built here if nobody has asked yet, so a search can never wait on a coverage
-    // that doesn't exist. The guard against a search that never ends: every point a member walks to is
-    // cleared or dropped (SearchingState.Roam), and when every member has given up roaming, what's left
-    // is dropped here, since nobody will walk to it.
+    // that doesn't exist. Why a search always ends: every member in the area keeps claiming unseen points
+    // (nobody gives up), and every walk to one clears it, defers it or drops it (SearchingState.Roam). Seen,
+    // or no path, Search Travel Limit, or reached unseen, and it is gone; blocked, and it waits, but a point
+    // is blocked at most MaxBlocks times before it is dropped too. So the unseen points only run out.
     private bool SearchIsOver(GroupJob job, out string how)
     {
         how = null;
         SearchCoverage coverage = job.Step == JobStep.Search ? CoverageOf(job) : job.Coverage;
         if (coverage == null) return false;
-
-        if (coverage.HasGround && !coverage.AllSeen && coverage.EveryoneGaveUp(job.Members))
-            coverage.DropRemaining($"every member of {job} has given up roaming it, so nobody will walk to them", _intel);
 
         if (coverage.HasGround && !coverage.AllSeen) return false;
         if (Time.time - coverage.StartedAt < _intel.SearchMinimumTime) return false;

@@ -5,8 +5,9 @@ using UnityEngine;
 /// What a Search's team hasn't looked at yet: the points of its area (SearchArea), about a metre apart.
 /// Any member seeing a point clears it for all of them, and each heads for the nearest point nobody else
 /// has claimed, so they spread out and go round behind things instead of pacing random spots. A point
-/// nobody can clear (no way there, or reached without being seen) is dropped with a warning, because the
-/// search only ends once every point is gone and one held for good would keep the team there for good.
+/// nobody can clear (no path there, or reached without being seen) is dropped with a warning, because the
+/// search only ends once every point is gone and one held for good would keep the team there for good. A
+/// blocked walk only defers its point, until it has been blocked MaxBlocks times.
 /// Held by the job (GroupJob.Coverage), because the whole team shares it, and built the first time
 /// someone asks. The area has already flooded, so building this only copies its points. A plain class
 /// that reads nothing but what it's given.
@@ -17,14 +18,13 @@ public class SearchCoverage
     private const float ClaimSpacing = 2f;      // two members don't head for points this close together
     private const int RecheckTries = 6;         // random points a re-check draws, keeping the farthest that qualifies
     private const float MinRecheckDistance = 1f; // a re-check never picks a spot this near him, so a tiny area can't have him re-picking where he stands every step
+    private const int MaxBlocks = 3;            // walks to one point blocked this many times in all, by anyone, and it is dropped
 
     private readonly SearchArea _area;
     private readonly List<Vector3> _unseen = new();
     private readonly Dictionary<EnemyController, Vector3> _claims = new();
-    // Members who have given up roaming this coverage (too many spots in a row failed). Kept here and not
-    // on each member, so a coverage built afresh after a gunshot has them roaming again, and the board can
-    // see when nobody is left to clear what remains.
-    private readonly HashSet<EnemyController> _gaveUp = new();
+    // Times a walk to each unseen point has been blocked. Points come from one list and are compared exactly.
+    private readonly Dictionary<Vector3, int> _blocks = new();
     private readonly float _span;
     private int _nextToTest;
 
@@ -88,7 +88,11 @@ public class SearchCoverage
             }
 
             rays++;
-            if (who.CanSeeSpot(point)) _unseen.RemoveAt(_nextToTest);
+            if (who.CanSeeSpot(point))
+            {
+                _unseen.RemoveAt(_nextToTest);
+                _blocks.Remove(point);
+            }
             else _nextToTest++;
         }
     }
@@ -98,12 +102,15 @@ public class SearchCoverage
     {
         if (!_unseen.Contains(point) || !who.Vision.InView(point) || !who.CanSeeSpot(point)) return false;
         _unseen.Remove(point);
+        _blocks.Remove(point);
         return true;
     }
 
     /// <summary>
-    /// Gives him the nearest unseen point nobody else is heading for. False when there is none free: the rest
-    /// are claimed, or close to a claim, and he re-checks (TryClaimRecheck) or waits for someone else to finish.
+    /// Gives him the nearest unseen point nobody else is heading for, among those blocked the fewest times, so
+    /// after a blocked walk he moves on to others and comes back to it only when nothing less blocked is free.
+    /// False when there is none free: the rest are claimed, or close to a claim, and he re-checks
+    /// (TryClaimRecheck) or waits for someone else to finish.
     /// </summary>
     public bool TryClaimNearest(EnemyController who, out Vector3 point)
     {
@@ -111,11 +118,15 @@ public class SearchCoverage
         _claims.Remove(who);
         point = default;
         float nearest = float.MaxValue;
+        int fewestBlocks = int.MaxValue;
         Vector3 from = who.transform.position;
         foreach (Vector3 candidate in _unseen)
         {
+            _blocks.TryGetValue(candidate, out int blocks);
+            if (blocks > fewestBlocks) continue;
             float distance = PathGrid.FlatDistance(from, candidate);
-            if (distance >= nearest || NearAnotherClaim(who, candidate)) continue;
+            if ((blocks == fewestBlocks && distance >= nearest) || NearAnotherClaim(who, candidate)) continue;
+            fewestBlocks = blocks;
             nearest = distance;
             point = candidate;
         }
@@ -156,66 +167,47 @@ public class SearchCoverage
         return true;
     }
 
-    // A claim held by someone who has given up is skipped as well as removed (NoteGaveUp): he never picks
-    // again, so a claim of his left standing would keep every point near it from anyone else for good.
     private bool NearAnotherClaim(EnemyController who, Vector3 candidate)
     {
         foreach (KeyValuePair<EnemyController, Vector3> claim in _claims)
-            if (claim.Key != who && !_gaveUp.Contains(claim.Key) && PathGrid.FlatDistance(claim.Value, candidate) < ClaimSpacing) return true;
+            if (claim.Key != who && PathGrid.FlatDistance(claim.Value, candidate) < ClaimSpacing) return true;
         return false;
     }
 
     /// <summary>
-    /// A point nobody can clear: a member couldn't get there, ran out of time walking there, or got there and
-    /// still couldn't see it. It goes, with a warning naming the point and why, and nobody tries it again.
-    /// Nothing is said for a point someone has seen meanwhile, which is cleared and not dropped.
+    /// A point nobody can clear: a member had no path there, ran out of time walking there, got there and
+    /// still couldn't see it, or was blocked on the way MaxBlocks times. It goes, with a warning naming the
+    /// point and why, and nobody tries it again. Nothing is said for a point someone has seen meanwhile,
+    /// which is cleared and not dropped.
     /// </summary>
     public void Drop(Vector3 point, string why, Object context)
     {
         if (!_unseen.Remove(point)) return;
+        _blocks.Remove(point);
         Debug.LogWarning($"Search point {point} is dropped as unclearable: {why}. The search goes on without it.", context);
     }
 
     /// <summary>
-    /// He has given up roaming this coverage: too many spots in a row failed. He still finishes with the job.
-    /// His claim goes with it: he won't pick again, so nothing else would ever release it, and the points
-    /// near it would be closed to the rest of the team for good.
+    /// His walk to a point was blocked: something stood in the way (a crate being pushed, a teammate), which
+    /// says nothing about whether the point can be cleared, so it isn't dropped. His claim goes and the point
+    /// waits behind the unblocked ones (TryClaimNearest), so he moves on to others and someone tries it later.
+    /// Blocked MaxBlocks times in all, by anyone, it is dropped with a warning saying so, because a block that
+    /// keeps happening is no longer bad luck. True when that dropped it.
     /// </summary>
-    public void NoteGaveUp(EnemyController who)
+    public bool Defer(EnemyController who, Vector3 point, string why, Object context)
     {
-        _gaveUp.Add(who);
-        _claims.Remove(who);
-    }
-
-    public bool HasGivenUp(EnemyController who) => _gaveUp.Contains(who);
-
-    /// <summary>Every member still on the job has given up roaming, so nobody will walk to what is left. False for a job with nobody on it.</summary>
-    public bool EveryoneGaveUp(IReadOnlyList<EnemyController> members)
-    {
-        // Indexed, not foreach: a foreach over the interface allocates an enumerator, and the board asks every frame.
-        bool anyone = false;
-        for (int i = 0; i < members.Count; i++)
+        if (_claims.TryGetValue(who, out Vector3 claimed) && claimed == point) _claims.Remove(who);
+        if (!_unseen.Contains(point)) return false;
+        _blocks.TryGetValue(point, out int blocks);
+        if (++blocks < MaxBlocks)
         {
-            EnemyController member = members[i];
-            if (member == null) continue;
-            if (!_gaveUp.Contains(member)) return false;
-            anyone = true;
+            _blocks[point] = blocks;
+            return false;
         }
-        return anyone;
+        Drop(point, $"{why}, and its walks have now been blocked {MaxBlocks} times", context);
+        return true;
     }
 
-    /// <summary>Drops every point left, in one warning that lists them, for when nobody is left who will clear them.</summary>
-    public void DropRemaining(string why, Object context)
-    {
-        if (_unseen.Count == 0) return;
-        Debug.LogWarning($"{_unseen.Count} search point(s) are dropped as unclearable: {why}. The search ends without them: {string.Join(", ", _unseen)}.", context);
-        _unseen.Clear();
-    }
-
-    /// <summary>He has left the job: others may head near where he was going, and he roams afresh if he comes back.</summary>
-    public void Release(EnemyController who)
-    {
-        _claims.Remove(who);
-        _gaveUp.Remove(who);
-    }
+    /// <summary>He has left the job: others may head near where he was going.</summary>
+    public void Release(EnemyController who) => _claims.Remove(who);
 }
