@@ -136,7 +136,7 @@
 - [x] **Step 7: Gizmos.** With `Intel` selected in Play, each Search job's marked rooms are outlined in its colour, and its unseen points are dots.
 - [x] **Step 8: Docs.** `CLAUDE.md`'s **A Search clears its area** bullet is rewritten: what the circle marks, no cap, the minimum and re-checking, dropped points, no ground. The Group jobs gunshot bullet loses the extension.
 - [x] **Step 9: Compile and commit.**
-- [ ] **Step 10: Play-test gate (the user).**
+- [x] **Step 10: Play-test gate (the user).**
   - A gunshot in a corridor between two offices with doors inside the circle: the team clears the corridor and both offices.
   - An office behind a wall within the circle, with its door outside the circle, isn't searched.
   - A search in an open room the team sees at a glance still has them walking and sweeping for about 5 s.
