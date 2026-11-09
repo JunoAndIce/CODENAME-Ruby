@@ -600,7 +600,8 @@ through the player never slows the walk. **Enemies don't shove props that block 
   release. The stamp sits on the body's root and on every Rigidbody under it, so a thrown officer's
   limbs carry it once they go live. A carrier that hits something at Notice Speed or more makes an Impact sound (one per
   Impact Cooldown per stamped body, so a tumble is a few thuds and not dozens) and passes the
-  origin on, with the original time, to what it hit, so a knock-on leads back to the throw. A
+  origin on, with the original time, to what it hit, so a knock-on leads back to the throw. The
+  Impact is placed half a metre off the surface hit, flat, on the carrier's side (`Disturbance.OffTheSurface`): a contact point on a wall's face is a blocked cell belonging to neither side, and everything that needs open ground there took the asker's side, so an enemy inside a room checked a crate striking its outside wall from within. A
   record lasts Origin Lifetime (5 s), and a character that stands up is cleared, because one on
   his feet is sensed by sight and a stale record would make him thud at every wall he bumps.
   **What he sees moving leads back to its origin; what he hears doesn't.** A body in motion shows him which way it came from, so he goes to where it was thrown from. A sound can't, so he goes to where it happened: an impact is checked where it landed, never at the thrower (`EnemySenses.Hear`). The origin still travels with the sound, so a knock-on he then sees moving leads back to the throw.

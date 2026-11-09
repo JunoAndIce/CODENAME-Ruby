@@ -133,7 +133,33 @@ public class Disturbance : MonoBehaviour
 
         if (Time.time < _root._nextImpact) return;
         _root._nextImpact = Time.time + rules.ImpactCooldown;
-        Vector3 at = collision.contactCount > 0 ? collision.GetContact(0).point : transform.position;
+        Vector3 at = collision.contactCount > 0 ? OffTheSurface(collision.GetContact(0)) : transform.position;
         Stimuli.Emit(new Stimulus(StimulusKind.Impact, at, _root._origin, rules.ImpactLoudness(speed), _root.transform));
+    }
+
+    // How far an impact's point is moved off the surface it hit, toward the carrier's side.
+    private const float ImpactSurfaceOffset = 0.5f;
+
+    // A contact point lies on the surface hit, a wall's face, which belongs to neither side of it: on the
+    // grid it is a blocked cell, and everything that needs open ground there (the sound's flood, a check's
+    // walk, a search's area) took the open cell nearest the one asking. A crate striking an armory's outside
+    // wall was checked from inside the armory by an enemy in it. Moved off the face toward the carrier, the
+    // sound sits where the hit happened. The normal is turned to face the carrier whichever way Unity reports
+    // it, and kept flat, so the point can't leave the floor's height band.
+    private Vector3 OffTheSurface(ContactPoint contact)
+    {
+        Vector3 point = contact.point;
+        Vector3 toCarrier = transform.position - point;
+        toCarrier.y = 0f;
+        Vector3 normal = contact.normal;
+        normal.y = 0f;
+
+        float side = Vector3.Dot(normal, toCarrier);
+        Vector3 away;
+        if (normal.sqrMagnitude > 1e-6f && Mathf.Abs(side) > 1e-6f) away = normal.normalized * Mathf.Sign(side);
+        else if (toCarrier.sqrMagnitude > 1e-6f) away = toCarrier.normalized;   // a floor contact, or a carrier level with the face: back toward the carrier
+        else return point;                                                       // nothing says which side: the point as it is
+
+        return point + away * ImpactSurfaceOffset;
     }
 }
