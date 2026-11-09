@@ -152,13 +152,13 @@
 - Consumes: Task 3's `GroupJob.Area` and `SearchArea.Contains`, and `SearchArea.Rooms`.
 - Produces: `bool JobBoard.InSearchArea(GroupJob job, Vector3 point)` (`job.Area.Contains(point)`, false with no area), forwarded on `Intel`.
 
-- [ ] **Step 1: In the area.** Every distance-to-place test against Search Area Radius uses `InSearchArea` instead. Those are:
+- [x] **Step 1: In the area.** Every distance-to-place test against Search Area Radius uses `InSearchArea` instead. Those are:
   - `JobBoard` around the gunshot handling and the scout, at the lines comparing `FlatDistance(job.Point, …)` with `SearchAreaRadius`.
   - `SearchingState` where a member counts as in the area. There, a member inside a marked room counts as arrived without the clear line to the place, which only the circle's open ground still needs.
-- [ ] **Step 2: Matching.** `JobBoard.Covers` also covers a point inside one of the job's marked rooms, on its floor.
-- [ ] **Step 3: Merging.** Two open jobs merge when their places are within Job Match Radius, as today, **or** their marked rooms share a room. Everything else about a merge is unchanged. After a merge that moves the place, the area is rebuilt (Task 3's interface).
-- [ ] **Step 4: Docs.** `CLAUDE.md`'s matching, merging and gunshot wording says "in the search area" and what it means.
-- [ ] **Step 5: Compile and commit.**
+- [x] **Step 2: Matching.** `JobBoard.Covers` also covers a point inside one of the job's marked rooms, on its floor.
+- [x] **Step 3: Merging.** Two open jobs merge when their places are within Job Match Radius, as today, **or** their marked rooms share a room. Everything else about a merge is unchanged. After a merge that moves the place, the area is rebuilt (Task 3's interface).
+- [x] **Step 4: Docs.** `CLAUDE.md`'s matching, merging and gunshot wording says "in the search area" and what it means.
+- [x] **Step 5: Compile and commit.**
 - [ ] **Step 6: Play-test gate (the user).**
   - A thud in the far corner of an office already being searched, beyond 10 m from the job's spot, goes to that job and starts no second one.
   - Two sounds in one big office 12 m apart end as one team.
