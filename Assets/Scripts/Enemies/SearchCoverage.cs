@@ -31,7 +31,7 @@ public class SearchCoverage
     private readonly float _span;
     private int _nextToTest;
 
-    /// <summary>Time.time when this was built: when the first member came into the area, or they began looking again after a gunshot. Search Minimum Time counts from here.</summary>
+    /// <summary>Time.time when this was built: when the first member reached the search's source, or they began looking again after a gunshot. Search Minimum Time counts from here.</summary>
     public float StartedAt { get; } = Time.time;
 
     /// <summary>Everything in the area. With no ground there it warns, and the team looks about for Search Minimum Time and then stands down.</summary>

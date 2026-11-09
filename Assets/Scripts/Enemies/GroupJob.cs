@@ -63,6 +63,28 @@ public class GroupJob
     /// Check too, because a Check can become a Search at the same place.
     /// </summary>
     public SearchArea Area { get; private set; }
+
+    // Where a Search's members walk to before spreading out: the place, or the ground nearest it someone
+    // could reach, worked out once for the place it was found for (JobBoard.TryGetSearchStart). Keyed on
+    // the place rather than cleared by Upgrade, so a moved job can never read the old one.
+    private bool _hasStart;
+    private Vector3 _start;
+    private Vector3 _startFor;
+
+    /// <summary>The walk-in point found for the current place, if one has been found yet.</summary>
+    public bool TryGetStart(out Vector3 start)
+    {
+        start = _start;
+        return _hasStart && _startFor == Point;
+    }
+
+    internal void SetStart(Vector3 start)
+    {
+        _start = start;
+        _startFor = Point;
+        _hasStart = true;
+    }
+
     public JobStep Step { get; private set; }
     /// <summary>Seconds in the current step.</summary>
     public float StepElapsed { get; private set; }

@@ -673,6 +673,16 @@ area radius marks rooms and areas to be searched.")*
   is judged unclearable (no path, or claimed and walked to without being seen) is the builder's.
   A search with no ground at all, which today looks about until its countdown ends, needs the same
   kind of stated rule now there is no countdown.
+- **Walk to the source, then spread out** *(user, 2026-11-09: "Let enemies walk to the center of
+  the search area (as close as they can reach (Make some buffer space with radius)) then spread out
+  from there to search rooms. So it looks like enemies walk to the source of the problem/attack THEN
+  start searching. Right now, they start searching from the room they're in, so a gunshot outside the
+  room, that overlaps with the room they're already in, has them start the search from where they
+  stand. Rather if they are gonna search those spots anyway, let them start from the source of the
+  issue and work outwards.")*. A member starts searching only once within Search Start Radius (about
+  2 m) of the search's place, or of the nearest ground he can reach when the place has no way in, and
+  claims the nearest unseen point from there. Coverage and the minimum start when the first member
+  arrives there.
 - Piece 5 part B's break-off uses the same rule: "search a room" is the search a lone follower
   makes from where he stands.
 

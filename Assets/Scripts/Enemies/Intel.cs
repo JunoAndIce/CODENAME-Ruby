@@ -38,9 +38,11 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0f)] private float _reactTime = 0.5f;
     [Tooltip("How long each call takes, in seconds: he turns to the nearest enemy and calls him, and that enemy turns to face him. Then the next nearest, and so on.")]
     [SerializeField, Min(0f)] private float _callTime = 0.6f;
-    [Tooltip("The circle that marks what a search covers, in metres round its place: the open ground it reaches, and every room holding no rooms that it reaches over open ground, searched whole. A member starts as soon as he is inside a marked room, or this near with a clear line to the place, and the search proper starts when the last member has.")]
+    [Tooltip("The circle that marks what a search covers, in metres round its place: the open ground it reaches, and every room holding no rooms that it reaches over open ground, searched whole. Members first walk to the place (Search Start Radius) and spread out from there.")]
     [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
-    [Tooltip("The least time a search lasts, in seconds, from when the first member came into its area. It ends once everything is cleared and this has passed; until then a member with nothing left to clear walks to spots across the area and sweeps them again. No time cap cuts a search short. A gunshot in the area starts it over.")]
+    [Tooltip("How near, in metres, a Search's member must come to its place (or, when the place has no way in, to the ground he can reach nearest it) before he starts searching. Everyone walks to the source and spreads out from there, so a search reads as going to the problem and then working outward. The search proper starts when the last member has arrived. Several members arriving together count once they stall inside it, so they don't push at each other.")]
+    [SerializeField, Min(0.5f)] private float _searchStartRadius = 2f;
+    [Tooltip("The least time a search lasts, in seconds, from when the first member reached its place. It ends once everything is cleared and this has passed; until then a member with nothing left to clear walks to spots across the area and sweeps them again. No time cap cuts a search short. A gunshot in the area starts it over.")]
     [SerializeField, Min(0f)] private float _searchMinimumTime = 5f;
 
     [Header("Debug")]
@@ -94,6 +96,7 @@ public class Intel : MonoBehaviour
     public float ReactTime => _reactTime;
     public float CallTime => _callTime;
     public float SearchAreaRadius => _searchAreaRadius;
+    public float SearchStartRadius => _searchStartRadius;
     public float SearchMinimumTime => _searchMinimumTime;
 
     /// <summary>
@@ -405,6 +408,9 @@ public class Intel : MonoBehaviour
 
     /// <summary>Whether a point is at a job's place (see JobBoard.Covers).</summary>
     public bool Covers(GroupJob job, Vector3 point) => _board.Covers(job, point);
+
+    /// <summary>Where a Search's members walk to before they spread out: its place, or the ground nearest it they can reach (see JobBoard.TryGetSearchStart).</summary>
+    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start) => _board.TryGetSearchStart(job, who, out start);
 
     /// <summary>Whether a point is in a job's search area: the circle round its place, or a room it marks (see JobBoard.InSearchArea).</summary>
     public bool InSearchArea(GroupJob job, Vector3 point) => _board.InSearchArea(job, point);

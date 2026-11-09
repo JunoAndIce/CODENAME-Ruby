@@ -118,10 +118,10 @@ public class JobBoard
     }
 
     // A Search is over once everything in its area is cleared (seen, or dropped as unclearable) and Search
-    // Minimum Time has passed since its coverage was built, which is when the first member came in or the
+    // Minimum Time has passed since its coverage was built, which is when the first member reached its source or the
     // team began looking again after a gunshot. The minimum keeps a team busy in a room it saw at a glance
     // (spec: "emulate confusion or double checking"). An area with no ground has nothing to clear, so it
-    // ends on the minimum alone, as its warning said. In Go nothing is built until someone comes in; in
+    // ends on the minimum alone, as its warning said. In Go nothing is built until someone reaches the source; in
     // the search itself it is built here if nobody has asked yet, so a search can never wait on a coverage
     // that doesn't exist. Why a search always ends: every member in the area keeps claiming unseen points
     // (nobody gives up), and every walk to one clears it, defers it or drops it (SearchingState.Roam). Seen,
@@ -260,15 +260,15 @@ public class JobBoard
 
     /// <summary>
     /// A member has reached the spot, or stopped short of it. A Check moves on at the first arrival (the
-    /// checker's). A Search counts a member as arrived once he is in its area, and moves on when the last
-    /// one is, so its search starts with the whole team there; the line names that last one.
+    /// checker's). A Search counts a member as arrived once he reaches its source (within Search Start
+    /// Radius of it), and moves on when the last one has, so its search starts with the whole team there; the line names that last one.
     /// </summary>
     public void NoteArrived(GroupJob job, EnemyController who)
     {
         if (!job.NoteArrived(who, LengthOf(job.Kind == JobKind.Check ? JobStep.Look : JobStep.Search, job.Lead))) return;
         DebugLog.Info(job.Kind == JobKind.Check
             ? $"{who.name} reaches the spot: {job} looks."
-            : $"{who.name} is the last into the search area: {job} searches.", who);
+            : $"{who.name} is the last to reach the source: {job} searches.", who);
     }
 
     /// <summary>
@@ -600,6 +600,30 @@ public class JobBoard
     /// </summary>
     public bool InSearchArea(GroupJob job, Vector3 point) => job != null && job.Area != null && job.Area.Contains(point);
 
+    /// <summary>
+    /// Where a Search's members walk before they spread out to search (user: "walk to the source of the
+    /// problem/attack THEN start searching"): the job's place when it can be reached, else the ground
+    /// nearest it that can (GridNavigator.TryGetNearestReachable, within its Approach Radius), for a source
+    /// in a blocked cell or behind a prop. Found once per place, from the first member who asks, and kept
+    /// on the job, so it floods once and not per step or per member. False when that member can reach no
+    /// ground near it, which nothing is stored for: he can't reach the source, and the caller takes him off
+    /// the job as for no path; the next member asks again from where he stands.
+    /// </summary>
+    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start)
+    {
+        if (job.TryGetStart(out start)) return true;
+        if (!who.Navigator.TryGetNearestReachable(job.Point, out start)) return false;
+        // Floods his own floor: asked by a member standing on another floor, the nearest ground "in the plan"
+        // would be on his floor, and stored it would send the whole team there. Floors are independent, so he
+        // simply can't reach it; nothing is stored, and the caller takes him off as for no path.
+        if (PathGrid.At(start) != job.Area.Floor) return false;
+
+        job.SetStart(start);
+        if (start != job.Point)
+            DebugLog.Info($"{job}'s place {job.Point} has no way in, so its members walk to the nearest ground they can reach, {start} ({PathGrid.FlatDistance(job.Point, start):0.#} m off), and spread out from there.", who);
+        return true;
+    }
+
     // A thing at a job's place changes the job when it is more serious, or when it makes a search and the
     // job is only a check: a body or a gun is found, and an enemy has been thrown, whatever its priority,
     // so the check is over.
@@ -757,7 +781,7 @@ public class JobBoard
     // Whatever they had cleared may not be clear now: they look again, or a team that had seen it all would
     // finish straight through the shot. A new coverage's clock starts as it's built, so Search Minimum Time
     // starts over too. It is built at once from the job's area, which doesn't flood again. Nothing to throw
-    // away before anyone has come in. Shots within a member's Distraction Gap count as one, so one shot heard
+    // away before anyone has reached the source. Shots within a member's Distraction Gap count as one, so one shot heard
     // by the whole team, or a burst, starts them over once.
     private void LookAgainForGunshot(GroupJob job, EnemyController who)
     {

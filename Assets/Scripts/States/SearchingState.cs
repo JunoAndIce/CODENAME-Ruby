@@ -14,10 +14,10 @@ public enum SearchStep { Walk, Look, StandDown, Done }
 /// an attack looks for Search Duration, a check on a problem looks for Look Time and then stands down
 /// with a gesture. Which patrol he goes back to is the table's business (EnemyController.IsAggressive).
 /// **A Search's team clears its area** (SearchArea: the circle's ground and the rooms it reaches): each
-/// member starts as soon as he is in the search area: inside a room it marks, or inside Search Area Radius
-/// of the place with a clear line to it (Intel.InSearchArea and the line, WalkToSpot), creeping
+/// member first walks to the source, within Search Start Radius of the place or of the nearest ground he
+/// can reach (WalkToSource), and spreads out from there, creeping
 /// toward what nobody has looked at yet with his view sweeping as he goes (SearchCoverage). The search
-/// proper starts once every member has come in (a member who can't reach the area is taken off the job),
+/// proper starts once every member has reached the source (a member who can't reach it is taken off the job),
 /// and it ends when everything is cleared and Search Minimum Time has passed, with no cap. Until then one
 /// with nothing left to clear walks to spots across the area and sweeps them again. A spot he can't clear
 /// is dropped with a warning. Then each still finishes the walk he is on before he leaves, so the team
@@ -38,10 +38,10 @@ public class SearchingState : EnemyStateBase
     // On a job: he has reached the spot, been blocked short of it, or run out of time walking there.
     private bool _arrived;
     private float _walkTimer;
-    // The line about a stall outside the search area is said once per walk, not every step.
+    // The line about a stall short of the source (or a Search's start circle) is said once per walk, not every step.
     private bool _loggedBlocked;
 
-    // Clearing, from the moment he enters a Search's area: he creeps toward what nobody has looked at yet,
+    // Clearing, from the moment he reaches a Search's source: he creeps toward what nobody has looked at yet,
     // or looks about if nothing is free. Reset by Begin, so an upgrade or a new place starts him over.
     private enum RoamPhase { Pick, Walk, Look }
     private RoamPhase _roamPhase;
@@ -347,7 +347,7 @@ public class SearchingState : EnemyStateBase
 
     // His part of the job's step. The team gathers facing the spot. Then one member, the checker (a
     // check) or everyone (a search), walks there. The checker's arrival moves a check on; a search's
-    // members each start roaming as they come into its area, and the search proper waits for the last. The
+    // members each start roaming as they reach its source, and the search proper waits for the last. The
     // others of a check follow the checker. Then the one who's there looks for the job's time, and
     // everyone holds for the gesture.
     private void FixedTickJob(GroupJob job)
@@ -420,8 +420,9 @@ public class SearchingState : EnemyStateBase
         // False too when he was taken off the job (WalkToSpot): his Job is null and there is nothing to read.
         if (!_arrived && !WalkToSpot(job)) return;
 
-        // A Search's members roam its area from the moment they're in it, so the first there doesn't stand
-        // waiting at the edge for the rest (Go is only the search waiting for them). A Check's look stays on
+        // A Search's members roam its area from the moment they reach its source, so the first there doesn't
+        // stand waiting for the rest (Go is only the search waiting for them). Roaming claims the unseen point
+        // nearest him, so from the source the search spreads outward. A Check's look stays on
         // the spot instead.
         if (job.Kind == JobKind.Search && job.Step is JobStep.Go or JobStep.Search or JobStep.Done)
         {
@@ -654,43 +655,15 @@ public class SearchingState : EnemyStateBase
     // True once he has arrived this step, false while he is still walking, and false when he has been
     // taken off the job (his Job is null): the caller returns at once.
     //
-    // A Check keeps its rules: a stall or no path means he looks from where he stands. A Search doesn't
-    // need him at the spot itself: he has arrived on entering its area (InSearchArea: in a marked room, or
-    // in the circle with a clear line to its place). Short of that, by the user's rule, it loses a member
-    // that can't reach it: no path at all removes him (after the warning), and a stall isn't "can't reach",
-    // so he has arrived only when the stall is in the search area (the circle or a marked room, no line
-    // needed: he has stopped). Outside it he keeps trying (MoveToArea steers on every call and keeps returning
-    // Blocked until he makes progress), and Search Travel Limit (TickJob) bounds it.
+    // A Check keeps its rules: a stall or no path means he looks from where he stands.
     private bool WalkToSpot(GroupJob job)
     {
-        bool search = job.Kind == JobKind.Search;
-        if (search && InSearchArea(job))
-        {
-            Arrive($"{Enemy.name} enters the search area");
-            return true;
-        }
+        if (job.Kind == JobKind.Search) return WalkToSource(job);
 
         NavResult result = Enemy.Movement.WalkTo(job.Point, Enemy.SearchReach, Enemy.SearchSpeed);
         if (result == NavResult.Moving) return false;
-
         if (result == NavResult.Unreachable)
-        {
-            if (search)
-            {
-                string reason = Enemy.Navigator.FailureReason;
-                Debug.LogWarning($"{Enemy.name} can't reach the spot ({reason}); he is taken off {job}.", Enemy);
-                Enemy.Intel.DropFromSearch(Enemy, $"he can't reach the spot ({reason})");
-                return false;
-            }
             Debug.LogWarning($"{Enemy.name} can't reach the spot ({Enemy.Navigator.FailureReason}); he looks from where he stands.", Enemy);
-        }
-        if (result == NavResult.Blocked && search && !Enemy.Intel.InSearchArea(job, Enemy.transform.position))
-        {
-            if (!_loggedBlocked)
-                DebugLog.Info($"{Enemy.name} is blocked {PathGrid.FlatDistance(Enemy.transform.position, job.Point):0.#} m from the spot, outside the search area; he keeps trying.", Enemy);
-            _loggedBlocked = true;
-            return false;
-        }
         Arrive(result switch
         {
             NavResult.Arrived => $"{Enemy.name} reaches the spot",
@@ -700,20 +673,57 @@ public class SearchingState : EnemyStateBase
         return true;
     }
 
-    // In the job's search area (Intel.InSearchArea), and then either inside one of the rooms it marks or
-    // with a clear line at eye height to the area's place. A marked room is searched whole, out to its
-    // walls, so being in it is being there, however far from the place or round a corner from it. The
-    // circle's open ground still needs the line: the radius alone would count him as there from the far
-    // side of a wall, starting the search proper with him still a long walk away. The line is to the place
-    // the area was drawn round (job.Point and it move together). It is raised to his eyes
-    // because a place can lie at or under floor level, where the floor itself would block it. A crate in
-    // the way only keeps him walking until he clears it.
-    private bool InSearchArea(GroupJob job)
+    // A Search's member walks to the source and only then starts searching, so the team reads as going to the
+    // problem and working outward from it (user: "walk to the source of the problem/attack THEN start
+    // searching"). Starting from wherever he first stood in the area had a gunshot just outside his office
+    // searched from his own desk. The source is the job's place, or the ground nearest it anyone can reach
+    // (Intel.TryGetSearchStart, found once per place), and he has arrived within Search Start Radius of it:
+    // at once with a clear line to it (eye height, so a source at floor level isn't hidden by the floor, and
+    // never through a wall), or when the walk says so, which includes stalling anywhere inside that circle,
+    // so several sent to one source stop where the first ones stand instead of pushing at them for good.
+    // By the user's rule a member who can't reach it is taken off the job: no ground near the source he can
+    // reach, or no path into the circle (after the warning). A stall short of the circle isn't "can't
+    // reach", so he keeps trying (MoveToArea steers on every call and keeps returning Blocked until he makes
+    // progress), and Search Travel Limit (TickJob) bounds it.
+    private bool WalkToSource(GroupJob job)
     {
+        if (!Enemy.Intel.TryGetSearchStart(job, Enemy, out Vector3 source))
+        {
+            // TryGetNearestReachable sets no FailureReason, so the reason is said here rather than read off a stale one.
+            string reason = $"no ground he can reach from where he stands lies within a few metres of the place {job.Point}, or he is on no grid or on another floor from it";
+            Debug.LogWarning($"{Enemy.name} can't reach the source of {job}: {reason}; he is taken off it.", Enemy);
+            Enemy.Intel.DropFromSearch(Enemy, $"he can't reach the source ({reason})");
+            return false;
+        }
+
+        float radius = Enemy.Intel.SearchStartRadius;
         Vector3 position = Enemy.transform.position;
-        if (!Enemy.Intel.InSearchArea(job, position)) return false;
-        if (job.Area.InRoom(position)) return true;
-        return Enemy.CanSeeSpot(job.Area.Place);
+        if (PathGrid.FlatDistance(position, source) <= radius && PathGrid.At(position) == PathGrid.At(source)
+            && Enemy.CanSeeSpot(source))
+        {
+            Arrive($"{Enemy.name} reaches the source of {job}");
+            return true;
+        }
+
+        NavResult result = Enemy.Movement.WalkTo(source, radius, Enemy.SearchSpeed);
+        switch (result)
+        {
+            case NavResult.Moving:
+                return false;
+            case NavResult.Arrived:
+                Arrive($"{Enemy.name} reaches the source of {job}");
+                return true;
+            case NavResult.Unreachable:
+                string reason = Enemy.Navigator.FailureReason;
+                Debug.LogWarning($"{Enemy.name} can't reach the source of {job} ({reason}); he is taken off it.", Enemy);
+                Enemy.Intel.DropFromSearch(Enemy, $"he can't reach the source ({reason})");
+                return false;
+            default:
+                if (!_loggedBlocked)
+                    DebugLog.Info($"{Enemy.name} is blocked {PathGrid.FlatDistance(position, source):0.#} m from the source of {job}, outside Search Start Radius; he keeps trying.", Enemy);
+                _loggedBlocked = true;
+                return false;
+        }
     }
 
     // He is as close as he will get. He faces the spot, so the sweep he joins is about it and ends
