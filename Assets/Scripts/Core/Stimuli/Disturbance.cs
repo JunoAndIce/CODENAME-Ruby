@@ -137,8 +137,13 @@ public class Disturbance : MonoBehaviour
         Stimuli.Emit(new Stimulus(StimulusKind.Impact, at, _root._origin, rules.ImpactLoudness(speed), _root.transform));
     }
 
-    // How far an impact's point is moved off the surface it hit, toward the carrier's side.
+    // How far an impact's point is moved off the surface it hit, toward the carrier's side. Half a metre clears
+    // the wall's clearance-blocked cells for an Agent Radius up to about 0.5 m on 0.5 m cells; a much larger
+    // radius would leave the point still on blocked cells, and this would need raising with it.
     private const float ImpactSurfaceOffset = 0.5f;
+    // A contact normal counts as a wall's when its horizontal part is at least this share of its length. A floor
+    // normal flattened to numerical noise would otherwise count, and push the point along whatever the noise said.
+    private const float WallNormalShare = 0.5f;
 
     // A contact point lies on the surface hit, a wall's face, which belongs to neither side of it: on the
     // grid it is a blocked cell, and everything that needs open ground there (the sound's flood, a check's
@@ -152,14 +157,18 @@ public class Disturbance : MonoBehaviour
         Vector3 toCarrier = transform.position - point;
         toCarrier.y = 0f;
         Vector3 normal = contact.normal;
+        float length = normal.magnitude;
         normal.y = 0f;
 
         float side = Vector3.Dot(normal, toCarrier);
-        Vector3 away;
-        if (normal.sqrMagnitude > 1e-6f && Mathf.Abs(side) > 1e-6f) away = normal.normalized * Mathf.Sign(side);
-        else if (toCarrier.sqrMagnitude > 1e-6f) away = toCarrier.normalized;   // a floor contact, or a carrier level with the face: back toward the carrier
-        else return point;                                                       // nothing says which side: the point as it is
+        if (length > 0f && normal.magnitude >= WallNormalShare * length && Mathf.Abs(side) > 1e-6f)
+            return point + normal.normalized * (Mathf.Sign(side) * ImpactSurfaceOffset);
 
-        return point + away * ImpactSurfaceOffset;
+        // A floor contact, or a carrier level with the face: back toward the carrier, but no farther than he is,
+        // or the point overshot him and could land in a blocked cell beside a thin wall on his other side.
+        float toCarrierLength = toCarrier.magnitude;
+        if (toCarrierLength > 1e-6f)
+            return point + toCarrier / toCarrierLength * Mathf.Min(ImpactSurfaceOffset, toCarrierLength);
+        return point;   // nothing says which side: the point as it is
     }
 }

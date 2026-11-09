@@ -25,6 +25,9 @@ public class SearchCoverage
     private readonly Dictionary<EnemyController, Vector3> _claims = new();
     // Times a walk to each unseen point has been blocked. Points come from one list and are compared exactly.
     private readonly Dictionary<Vector3, int> _blocks = new();
+    // The point each member was last blocked on, kept for his next pick only: handed straight back to him, the
+    // obstacle that blocked him is still there, and a run of instant blocks would drop it after one real one.
+    private readonly Dictionary<EnemyController, Vector3> _lastBlocked = new();
     private readonly float _span;
     private int _nextToTest;
 
@@ -120,8 +123,17 @@ public class SearchCoverage
         float nearest = float.MaxValue;
         int fewestBlocks = int.MaxValue;
         Vector3 from = who.transform.position;
+        bool avoid = _lastBlocked.TryGetValue(who, out Vector3 justBlocked);
+        _lastBlocked.Remove(who);
+        bool justBlockedFree = false;
         foreach (Vector3 candidate in _unseen)
         {
+            // The point he was just blocked on waits for this pick, unless nothing else is free.
+            if (avoid && candidate == justBlocked)
+            {
+                justBlockedFree = !NearAnotherClaim(who, candidate);
+                continue;
+            }
             _blocks.TryGetValue(candidate, out int blocks);
             if (blocks > fewestBlocks) continue;
             float distance = PathGrid.FlatDistance(from, candidate);
@@ -130,7 +142,12 @@ public class SearchCoverage
             nearest = distance;
             point = candidate;
         }
-        if (nearest == float.MaxValue) return false;
+        if (nearest == float.MaxValue)
+        {
+            if (!justBlockedFree) return false;
+            point = justBlocked;
+            nearest = PathGrid.FlatDistance(from, point);
+        }
 
         _claims[who] = point;
         return true;
@@ -202,6 +219,7 @@ public class SearchCoverage
         if (++blocks < MaxBlocks)
         {
             _blocks[point] = blocks;
+            _lastBlocked[who] = point;
             return false;
         }
         Drop(point, $"{why}, and its walks have now been blocked {MaxBlocks} times", context);
@@ -209,5 +227,9 @@ public class SearchCoverage
     }
 
     /// <summary>He has left the job: others may head near where he was going.</summary>
-    public void Release(EnemyController who) => _claims.Remove(who);
+    public void Release(EnemyController who)
+    {
+        _claims.Remove(who);
+        _lastBlocked.Remove(who);
+    }
 }

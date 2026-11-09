@@ -574,6 +574,11 @@ public class SearchingState : EnemyStateBase
                     // itself. Dropping it counted a moving crate as a wall: three blocks once dropped a whole search.
                     if (!coverage.Defer(Enemy, _roamSpot, $"{Enemy.name} couldn't get to it ({Enemy.Navigator.FailureReason})", Enemy))
                         DebugLog.Info($"{Enemy.name} was blocked on his way to {_roamSpot} ({Enemy.Navigator.FailureReason}); he leaves it for later.", Enemy);
+                    // A look about before he picks again, not a pick in the same step. It gives whatever blocked him
+                    // time to move, and the gap makes his next walk a resumed one, which resets the navigator's stuck
+                    // watchdog: picked again at once, a walk to the same point came back Blocked in the very next step,
+                    // and three such blocks dropped the point after one real one.
+                    BeginRoamLook();
                     return;
                 }
                 coverage.Drop(_roamSpot, $"{Enemy.name} has no way there ({Enemy.Navigator.FailureReason})", Enemy);
