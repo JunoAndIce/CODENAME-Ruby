@@ -72,10 +72,18 @@ public class SearchArea
         {
             Room room = _rooms[r];
             Flooded.Clear();
+            int before = _ground.Count;
+            Vector3 firstSeed = default;
+            bool hasSeed = false;
             for (int s = 0; s < Seeds.Count; s++)
             {
                 if (SeedRoom[s] != r) continue;
                 Vector3 seed = Reached[Seeds[s]];
+                if (!hasSeed)
+                {
+                    firstSeed = seed;
+                    hasSeed = true;
+                }
                 if (!_floor.WorldToCell(seed, out Vector2Int seedCell) || Flooded.Contains(seedCell)) continue;
                 if (!_floor.CollectGround(seed, _floor.CellSize, room.Contains, RoomCells)) continue;
                 foreach (Vector3 cellPoint in RoomCells)
@@ -84,6 +92,12 @@ public class SearchArea
                     Keep(cellPoint, stride);
                 }
             }
+
+            // A small room whose open ground misses the points' lattice (a strip one cell wide) would be
+            // outlined as searched with nothing in it to clear. Its first seed, a cell the circle reached
+            // inside it, stands in, so someone has to see into it.
+            if (_ground.Count == before && hasSeed && _floor.WorldToCell(firstSeed, out Vector2Int keep) && Kept.Add(keep))
+                _ground.Add(firstSeed);
         }
 
         Reached.Clear();

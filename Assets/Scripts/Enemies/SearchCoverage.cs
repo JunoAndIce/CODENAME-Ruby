@@ -156,10 +156,12 @@ public class SearchCoverage
         return true;
     }
 
+    // A claim held by someone who has given up is skipped as well as removed (NoteGaveUp): he never picks
+    // again, so a claim of his left standing would keep every point near it from anyone else for good.
     private bool NearAnotherClaim(EnemyController who, Vector3 candidate)
     {
         foreach (KeyValuePair<EnemyController, Vector3> claim in _claims)
-            if (claim.Key != who && PathGrid.FlatDistance(claim.Value, candidate) < ClaimSpacing) return true;
+            if (claim.Key != who && !_gaveUp.Contains(claim.Key) && PathGrid.FlatDistance(claim.Value, candidate) < ClaimSpacing) return true;
         return false;
     }
 
@@ -174,8 +176,16 @@ public class SearchCoverage
         Debug.LogWarning($"Search point {point} is dropped as unclearable: {why}. The search goes on without it.", context);
     }
 
-    /// <summary>He has given up roaming this coverage: too many spots in a row failed. He still finishes with the job.</summary>
-    public void NoteGaveUp(EnemyController who) => _gaveUp.Add(who);
+    /// <summary>
+    /// He has given up roaming this coverage: too many spots in a row failed. He still finishes with the job.
+    /// His claim goes with it: he won't pick again, so nothing else would ever release it, and the points
+    /// near it would be closed to the rest of the team for good.
+    /// </summary>
+    public void NoteGaveUp(EnemyController who)
+    {
+        _gaveUp.Add(who);
+        _claims.Remove(who);
+    }
 
     public bool HasGivenUp(EnemyController who) => _gaveUp.Contains(who);
 

@@ -51,7 +51,8 @@ public class GroupJob
     public Vector3 Point { get; private set; }
     /// <summary>
     /// What a Search covers round Point: the circle's ground and the rooms it reaches (SearchArea). Built
-    /// when the job is made and again whenever Point moves, so it floods once per place and never per step.
+    /// when the job is made and again when the job starts over at a new place (Upgrade), so it floods once
+    /// per place and never per step. A move within a metre keeps it, and the coverage built on it.
     /// Built for a Check too, because a Check can become a Search at the same place.
     /// </summary>
     public SearchArea Area { get; private set; }
@@ -287,10 +288,12 @@ public class GroupJob
         bool moved = PathGrid.FlatDistance(Point, incident.Point) > SamePlace;
         bool becomesSearch = kind == JobKind.Search && Kind == JobKind.Check;
 
-        // Any change of place, even one too small to restart the walk, rebuilds the area, so it is always
-        // drawn round the place the job reports. The same place (most upgrades pass the job's own Point)
-        // doesn't flood again.
-        if (incident.Point != Point) Area = new SearchArea(incident.Point, _intel.SearchAreaRadius, _intel);
+        // The area is rebuilt only when the job starts over, which throws its coverage away too (Restart), so
+        // the area and what the team has left to clear always agree. A move within SamePlace keeps both: a
+        // running search isn't thrown away for a louder sound a step from its place, and its area stays drawn
+        // round where it was, at most a metre off Point. The same place (most upgrades pass the job's own
+        // Point) never floods again.
+        if ((moved || becomesSearch) && incident.Point != Point) Area = new SearchArea(incident.Point, _intel.SearchAreaRadius, _intel);
         Point = incident.Point;
         Elevate(incident.Reason);
         if (incident.Priority > Priority) Priority = incident.Priority;

@@ -570,7 +570,8 @@ public class SearchingState : EnemyStateBase
                 if (_roamWalkTimer >= Enemy.SearchTravelLimit)
                 {
                     string limit = $"{Enemy.name} didn't reach it in Search Travel Limit ({Enemy.SearchTravelLimit:0.#}s)";
-                    coverage.Drop(_roamSpot, limit, Enemy);
+                    // Stalled where he can see it (a teammate in a doorway, say): it's cleared, not dropped.
+                    if (!coverage.TrySee(Enemy, _roamSpot)) coverage.Drop(_roamSpot, limit, Enemy);
                     FailSpot(limit, job, coverage);
                     return;
                 }
@@ -586,7 +587,8 @@ public class SearchingState : EnemyStateBase
                     return;
                 }
                 string why = $"{Enemy.name} couldn't {(result == NavResult.Blocked ? "get to" : "reach")} it ({Enemy.Navigator.FailureReason})";
-                coverage.Drop(_roamSpot, why, Enemy);
+                // Stopped where he can see it (often a teammate in a doorway): it's cleared, not dropped with a misleading warning.
+                if (!coverage.TrySee(Enemy, _roamSpot)) coverage.Drop(_roamSpot, why, Enemy);
                 FailSpot(why, job, coverage);
                 return;
 
@@ -727,7 +729,7 @@ public class SearchingState : EnemyStateBase
     }
 
     // Inside the radius on the job's floor, with a clear line at eye height to the spot. The radius alone
-    // would count him as there from the far side of a wall, starting the countdown with him still a
+    // would count him as there from the far side of a wall, starting the search proper with him still a
     // long walk away. The line is raised to his eyes because a spot can lie at or under floor level, where
     // the floor itself would block it. A crate in the way only keeps him walking until he clears it.
     private bool InSearchArea(GroupJob job)
