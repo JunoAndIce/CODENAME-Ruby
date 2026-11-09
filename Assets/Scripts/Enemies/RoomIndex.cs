@@ -23,7 +23,12 @@ public class RoomIndex
 
         foreach (Room room in Object.FindObjectsByType<Room>())
         {
-            if (!room.enabled) continue;
+            room.Seen = true;
+            if (!room.enabled)
+            {
+                Debug.LogWarning($"Room '{room.Name}' is disabled, so it is left out of the index and holds nothing. Enable it before the scene loads: rooms are read once, at load.", room);
+                continue;
+            }
             room.Parent = null;
             room.HoldsRooms = false;
             room.Floor = null;
@@ -40,6 +45,15 @@ public class RoomIndex
             {
                 Debug.LogWarning($"Room '{room.Name}' stands on no PathGrid (its first rectangle's centre is off every grid's area or height band), so it is left out. Move it over a floor's grid.", room);
                 continue;
+            }
+
+            // The first rectangle decides the floor; a later one off it would silently belong to no room's floor.
+            for (int r = 1; r < room.RectCount; r++)
+            {
+                Vector3 centre = room.AreaOf(r).Centre;
+                bool onFloor = room.Floor.Covers(centre);
+                if (!onFloor)
+                    Debug.LogWarning($"Room '{room.Name}' rectangle {r} lies off its floor's grid (its centre is outside the area or height band of the grid the first rectangle stands on, perhaps on another floor), so it is never found by a lookup there. Move it onto that floor or put it in a room of its own.", room);
             }
             _rooms.Add(room);
         }

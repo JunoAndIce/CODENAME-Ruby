@@ -124,6 +124,9 @@ public class Intel : MonoBehaviour
         _roomIndex = new RoomIndex(this);
     }
 
+    /// <summary>Whether Awake has built the room index, so a Room enabled later can tell it was missed.</summary>
+    public bool HasRoomIndex => _roomIndex != null;
+
     /// <summary>The placed rooms that stand on a floor, smallest first (see RoomIndex).</summary>
     public IReadOnlyList<Room> Rooms => _roomIndex.Rooms;
 

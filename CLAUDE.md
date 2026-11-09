@@ -523,7 +523,9 @@ through the player never slows the walk. **Enemies don't shove props that block 
   whose rectangles overlap while neither holds the other warn once, naming both, and rooms touching edge
   to edge are not an overlap. A room's floor is `PathGrid.At` of its first rectangle's centre, and one on
   no grid warns and is left out. Lookups scan the short list, sorted smallest first, with no allocation.
-  Gizmos draw each outline (faint unselected) with the name and map; `RoomEditor` gives move and edge
+  **Rooms are read once, at load:** a room that is disabled then, or enabled after `Intel` wakes, is not
+  indexed, and each case warns by name. A later rectangle of a room that lies off the first rectangle's
+  floor warns too. Gizmos draw each outline (faint unselected) with the name and map; `RoomEditor` gives move and edge
   handles with Undo.
 - **Idle** (`IdleState`). Where an officer starts is his **post** (`PostPosition`, `PostYaw`,
   recorded in `Start`). After a search, a fall or a shove, farther than Post Tolerance (1 m) from it,

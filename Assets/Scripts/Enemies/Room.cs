@@ -93,6 +93,19 @@ public class Room : MonoBehaviour
         }
     }
 
+    // Set by RoomIndex for every room it found, so a room that appears later can tell it was missed.
+    internal bool Seen { get; set; }
+
+    // Rooms are read once, when Intel wakes. One enabled afterwards was never indexed, and would
+    // otherwise sit in the scene doing nothing without a word.
+    private void OnEnable()
+    {
+        if (!Application.isPlaying || Seen) return;
+        Intel intel = FindFirstObjectByType<Intel>();
+        if (intel != null && intel.HasRoomIndex)
+            Debug.LogWarning($"Room '{name}' was enabled after the level loaded, so the room index never saw it and it holds nothing. Rooms must exist and be enabled at load.", this);
+    }
+
     private void OnValidate()
     {
         for (int i = 0; i < _rects.Count; i++)
@@ -107,7 +120,14 @@ public class Room : MonoBehaviour
             Debug.LogWarning($"Room '{name}': this object is rotated, but a room's rectangles are never rotated, so the rotation is ignored. Set the rotation to zero and size the rectangles instead.", this);
     }
 
-    private void OnDrawGizmos() => DrawGizmos(false);
+    private void OnDrawGizmos()
+    {
+#if UNITY_EDITOR
+        // A selected room also runs OnDrawGizmosSelected, which draws the outline and label; twice would thicken both.
+        if (UnityEditor.Selection.Contains(gameObject)) return;
+#endif
+        DrawGizmos(false);
+    }
     private void OnDrawGizmosSelected() => DrawGizmos(true);
 
     private void DrawGizmos(bool selected)
