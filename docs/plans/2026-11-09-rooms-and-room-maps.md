@@ -67,7 +67,7 @@
 - [x] **Step 3: `RoomEditor`.** Scene-view handles as `EnemyControllerEditor` gives patrol rectangles: move a rectangle by its centre, size it by its edges, with Undo. Inspector buttons add and remove a rectangle. Reuse the patrol editor's drawing code by moving what both need into a small static helper in `Editor/` rather than copying it.
 - [x] **Step 4: Docs.** `CLAUDE.md`: a **Rooms** bullet under Enemy AI (what a room is, nesting, the overlap warning, decisions 1 to 3), and `Room`/`RoomIndex` in the Assemblies table's `Ruby.Game` row.
 - [x] **Step 5: Compile and commit.**
-- [ ] **Step 6: Play-test gate (the user).** Place a floor-sized room and two offices inside it, and one more room overlapping an office's edge. The outlines and labels draw, the handles size them, and entering Play warns once about the overlapping pair and nothing else.
+- [x] **Step 6: Play-test gate (the user).** Place a floor-sized room and two offices inside it, and one more room overlapping an office's edge. The outlines and labels draw, the handles size them, and entering Play warns once about the overlapping pair and nothing else.
 
 ### Task 2: Behaviour maps per room, and speech across a room
 
