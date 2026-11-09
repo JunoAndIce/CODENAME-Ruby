@@ -20,7 +20,6 @@ public class FightBoard
     /// <summary>The open fights, for the debug gizmo.</summary>
     public IReadOnlyList<Fight> Fights => _fights;
 
-    public Fight FightOf(EnemyController who) => who == null ? null : who.Fight;
 
     /// <summary>
     /// He has gone to Aggro: he joins the fight on his floor that has the member nearest him, however far

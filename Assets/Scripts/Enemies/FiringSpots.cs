@@ -157,7 +157,7 @@ public static class FiringSpots
     }
 
     // What the spot scores, or false when it is rejected outright: not walkable, off the chase field, within
-    // the spacing of a claim that outranks his, or the spot he just failed to reach.
+    // the spacing of another member's claim, or the spot he just failed to reach.
     private static bool TryScore(EnemyController who, Fight fight, PathGrid grid, FlowField reach, Vector3 spot, Vector3 ruby,
         Vector3 here, float bandNear, float bandFar, float spacing, Vector3? avoid, out float score, bool keeping = false)
     {

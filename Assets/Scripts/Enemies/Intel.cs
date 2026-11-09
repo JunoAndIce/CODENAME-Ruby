@@ -318,8 +318,6 @@ public class Intel : MonoBehaviour
     /// <summary>He has gone to Aggro: he joins the fight on his floor or starts one (see FightBoard.Join).</summary>
     public Fight Join(EnemyController who) => _fights.Join(who);
 
-    /// <summary>The fight he is in, or null (see FightBoard.FightOf).</summary>
-    public Fight FightOf(EnemyController who) => _fights.FightOf(who);
 
     /// <summary>Whether anyone in the fight but him has Ruby in contact (see FightBoard.AnyInContact).</summary>
     public bool AnyInContact(Fight fight, EnemyController except) => _fights.AnyInContact(fight, except);

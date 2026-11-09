@@ -441,18 +441,19 @@ through the player never slows the walk. **Enemies don't shove props that block 
   starts from that ground too (`TryGetNearestReachable`), because a Search member who can't reach
   his spot is taken off the job.
 - **Fights** (`FightBoard` and `Fight`, in `Enemies/`). Everyone in Aggro belongs to one fight per floor,
-  all equal. `FightBoard` is a plain class `Intel` owns and ticks beside the job board, forwarding `Join`,
-  `FightOf` and `AnyInContact`; it never moves anyone. `AggroState.Enter` calls `Join`: he takes the fight
+  all equal. `FightBoard` is a plain class `Intel` owns and ticks beside the job board, forwarding `Join`
+  and `AnyInContact`; it never moves anyone. `AggroState.Enter` calls `Join`: he takes the fight
   on his floor (`PathGrid.At`) that has the member nearest him, however far, or starts one. Rearm hands
   back through Aggro, so a re-join is a no-op. **Membership is polled, not hooked:** `Advance` drops a
   member who is destroyed, dead or in neither Aggro nor Rearm (so grabbed, downed and searching all drop
   him at once, and getting up rejoins him by the normal route). A fight nobody is in closes.
   `EnemyController.Fight` is set only by the board. On no grid he fights alone, with one warning.
   **Contact is shared:** `AggroState.LostPlayer` is false, and both of its timers start over, while a
-  fight mate has Ruby in contact, so a member behind a wall doesn't give up while another has her.
+  fight mate has Ruby in contact, so a member behind a wall doesn't give up while another has her. Held at the spot he knew
+  meanwhile, he faces that spot, never her true position, which from behind a wall read as seeing through it.
   **No squads:** a main squad of up to four that closed in, and a standby squad that held back behind it
   and moved up when a main member fell, were built and taken out (user, 2026-11-07). Firing spots spread
-  everyone round her, standby on a slightly wider ring, so the squads never showed on screen, and a
+  everyone round her (standby, then, on a slightly wider ring), so the squads never showed on screen, and a
   standby member moving up had nowhere new to walk.
   **Firing spots** (`FiringSpots`, a static picker, with claims kept in the `Fight`). An armed member
   with Ruby in sight, or following through, walks to a spot of his own and holds there facing her, firing
@@ -470,7 +471,8 @@ through the player never slows the walk. **Enemies don't shove props that block 
   current spot is kept unless a new one beats it by a margin. He re-picks about once a second
   (staggered), and at once when his spot falls inside the gun's Min Distance or more than half a spacing past the band's far side, his shot is
   blocked, a walk to it is refused, or he is backed away from her on the way there (either spot is left
-  alone for 3 s); never sooner than 0.25 s after the last pick. Backing away inside Min Distance is as
+  alone for 3 s); never sooner than 0.25 s after the last pick. While Ruby runs, her spot leaves his band often, so
+  re-picks then come about every 0.25 s rather than every second: bounded, and each costs an A\* re-plan. Backing away inside Min Distance is as
   before, and cornered he stands and fights. With no spot he keeps the band behaviour, with a log line
   once per fight. Claims go when he leaves Aggro (`AggroState.Exit`), loses his gun or knows nothing of
   her, and the board's prune is the guarantee that a claim never outlives its member. Selected, he draws

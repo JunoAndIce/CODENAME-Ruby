@@ -116,7 +116,8 @@ public class EnemyVision
     {
         Rigidbody body = collider.attachedRigidbody;
         if (body == null) return false;
-        return body.GetComponentInParent<PlayerController>() == _enemy.Player || body.GetComponentInParent<EnemyController>() != null;
+        // Player null would match every body with no PlayerController above it (null == null) and see through every prop.
+        return (_enemy.Player != null && body.GetComponentInParent<PlayerController>() == _enemy.Player) || body.GetComponentInParent<EnemyController>() != null;
     }
 
     public float DistanceToPlayer()

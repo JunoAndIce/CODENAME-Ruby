@@ -52,8 +52,8 @@ public class AggroState : EnemyStateBase
         {
             if (Enemy.Vision.InContactWithPlayer()) return false;
             // A fight mate with her in contact keeps the whole fight going: he stays in, chasing what
-            // he is told, instead of a squad member behind a wall giving up while another has her.
-            if (SquadInContact()) return false;
+            // he is told, instead of a member behind a wall giving up while another has her.
+            if (MateInContact()) return false;
             if (_lostTimer >= Enemy.AggroTime) return true;
             if (Enemy.Vision.CanSeePlayer()) return false;
             return NothingToGoOn || (_holdingAtKnown && _dwellTimer >= HoldTime);
@@ -66,7 +66,7 @@ public class AggroState : EnemyStateBase
     private float HoldTime => _sawHer ? Enemy.AggroTime : Enemy.UnseenHoldTime;
 
     // A fight mate with her in contact: the fight goes on for him too.
-    private bool SquadInContact() => Enemy.Fight != null && Enemy.Intel.AnyInContact(Enemy.Fight, Enemy);
+    private bool MateInContact() => Enemy.Fight != null && Enemy.Intel.AnyInContact(Enemy.Fight, Enemy);
 
     // Out of sight and he knows nothing of her: no rule but "search where he stands".
     private bool NothingToGoOn => !Enemy.Vision.CanSeePlayer() && !Enemy.Awareness.TryGetNewestRuby(out _);
@@ -138,15 +138,18 @@ public class AggroState : EnemyStateBase
         if (hasSight) _sawHer = true;
 
         bool nothing = NothingToGoOn;
+        // With a mate in contact he doesn't search yet: he stays in, and the pool tells him where she is within an Intel Interval.
         if (nothing && !_loggedNothing)
-            DebugLog.Info($"{Enemy.name} has nothing to go on: he can't see Ruby and knows nothing of where she is, so he searches where he stands.", Enemy);
+            DebugLog.Info(MateInContact()
+                ? $"{Enemy.name} knows nothing of where Ruby is, but a fight mate has her: he waits to be told."
+                : $"{Enemy.name} has nothing to go on: he can't see Ruby and knows nothing of where she is, so he searches where he stands.", Enemy);
         _loggedNothing = nothing;
 
         // Sight coming back means the fight carries on: the dwell starts over. So does following her
         // through: where she is keeps changing, so he isn't holding anywhere.
         // A mate's contact counts like his own: the fight ends when every member has been out of
         // contact for Aggro Time, so both timers start over while someone has her.
-        bool squadContact = SquadInContact();
+        bool mateContact = MateInContact();
         if (hasSight || Enemy.Awareness.FollowingThrough)
         {
             _holdingAtKnown = false;
@@ -154,7 +157,7 @@ public class AggroState : EnemyStateBase
         }
         // Only the dwell: clearing the hold flag here and setting it again in FixedTick logged "reached
         // the spot" every frame.
-        else if (squadContact)
+        else if (mateContact)
         {
             _dwellTimer = 0f;
         }
@@ -165,7 +168,7 @@ public class AggroState : EnemyStateBase
 
         // Suspended while he holds at the known spot: this timer only ends a hunt on its way there, and
         // counting the walk toward the hold cut it short. A newer point resumes it where it was.
-        if (Enemy.Vision.InContactWithPlayer() || squadContact) _lostTimer = 0f;
+        if (Enemy.Vision.InContactWithPlayer() || mateContact) _lostTimer = 0f;
         else if (!_holdingAtKnown) _lostTimer += Time.deltaTime;
     }
 
@@ -197,8 +200,9 @@ public class AggroState : EnemyStateBase
             _hasSpot = false;
             _pickNow = true;
         }
-        bool atSpot = move != Move.BackAway && armed && knowsHer && Enemy.Fight != null && MoveToSpot(inSight);
-        switch (atSpot ? Move.None : move)
+        // True while he has a spot, walking to it or standing on it: the spot decides his move, not the band.
+        bool spotDecides = move != Move.BackAway && armed && knowsHer && Enemy.Fight != null && MoveToSpot(inSight);
+        switch (spotDecides ? Move.None : move)
         {
             case Move.None:
                 break;
@@ -243,8 +247,10 @@ public class AggroState : EnemyStateBase
             Enemy.Stop();
             arrived = true;
         }
-        // Held with a mate in contact nothing else ends the hold, so he faces her rather than nothing.
-        if (arrived && SquadInContact()) Enemy.Movement.FaceTarget();
+        // Held with a mate in contact nothing else ends the hold, so he faces where he knows she is rather than
+        // nothing. Never her true position: from behind a wall that turned him to track her every step, and with
+        // the camera looking straight down, it read as seeing through walls.
+        if (arrived && MateInContact() && Enemy.Awareness.TryGetNewestRuby(out Vector3 known)) Enemy.Movement.FaceToward(known);
         if (arrived && !_holdingAtKnown)
         {
             _dwellTimer = 0f;

@@ -15,10 +15,10 @@
 ## Decisions the spec leaves, made here
 
 1. **Paths don't cost more through a squadmate's lane.** The spec suggests it, but the chase field is one shared flood per floor and can't hold a detour per enemy, and it would need re-flooding as lanes move. Spot scoring keeps them out of each other's lanes, Personal Space keeps them apart while walking, and the hold-and-step-aside rule covers the rest. Noted in the spec as deferred.
-2. **Membership is polled.** `FightBoard` drops anyone no longer in Aggro or Rearm each tick, and moves up a replacement. Hooks in `AggroState.Exit` can't tell where he's going, and Rearm must keep his place: an unarmed member is still in the fight.
+2. **Membership is polled.** `FightBoard` drops anyone no longer in Aggro or Rearm each tick, and moves up a replacement *(moving up went with the squads, `d28988a`)*. Hooks in `AggroState.Exit` can't tell where he's going, and Rearm must keep his place: an unarmed member is still in the fight.
 3. **Joining has no distance limit (user, 2026-11-06).** Anyone who goes to Aggro joins the fight on his floor with the member nearest him, however far away, or starts one if his floor has none. A fight only takes those already in Aggro, so it doesn't call the level by itself. *(User: "if the fight pulls in the whole level, I think its fine.")* For example, patrollers wandering into Ruby's lying body join the officers aimed at it, until there are animations for after she's killed. Fights are per floor, because floors are independent.
 4. **A fight's contact is shared.** The spec's "when every member has been out of contact": a member's Aggro Time doesn't run out while a fight mate is in contact. He stays in, chasing what he's told.
-5. **Who's on his feet.** A member grabbed, ragdolled or dead is dropped at once, by rule 2. Getting up enters Aggro, so he rejoins through the normal route: main if there's room, standby if not, as the spec's "rejoins on standby if his place has been filled".
+5. **Who's on his feet.** A member grabbed, ragdolled or dead is dropped at once, by rule 2. Getting up enters Aggro, so he rejoins through the normal route: main if there's room, standby if not, as the spec's "rejoins on standby if his place has been filled". *(Superseded with the squads, `d28988a`: he simply rejoins the fight.)*
 
 ## Global Constraints
 

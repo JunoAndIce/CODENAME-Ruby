@@ -499,6 +499,14 @@ of a job dies, the others go to Aggro on Ruby at once. Decision 14 of the same p
 **Patrol together** (Patrol Aggressive, the user's "Patrol Plus") *(user: "officers on patrol
 walking with each other and breaking off")*:
 
+> **The trigger and the cycle (user, 2026-11-09)**, replacing the alert below and the once-a-minute
+> break-off: *"The patrolling only happens on aggressive routes: Every 40 seconds, an officer will
+> stop to call over other allies in the vicinity. Officers will join them, and will walk their route
+> with them. After 10 seconds, the lead will tell one member to break off and search a room. After
+> 10 more seconds, the lead will release the second officer. and the timer begins again."* Built
+> after rooms (piece 7), which the break-off search needs. How this squares with the bullets below
+> (Inspector leaders, two groups at most, rejoining) is settled when part B is brainstormed.
+
 - **Leaders** are set in the Inspector, with a Leader tick on the officer, so the same officers
   lead every time the map is played *(user)*. A leader walks his own route and leads a group along
   it. He never breaks off *(user)*.

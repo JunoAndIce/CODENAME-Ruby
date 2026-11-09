@@ -33,7 +33,7 @@ public class PatrolState : EnemyStateBase
     private bool _pauseWalking;
     private Vector3 _pauseSpot;
     private float _pauseRoamTimer;  // until he next moves
-    private bool _pauseRoamWarned;  // the point's area has nowhere to go: said once per pause
+    private bool _pauseRoamWarned;  // the point's area has nowhere to go, or a spot in it no way to: said once per pause
     private int _failStreak;
     private float _holdTimer;
     private bool _holdReported;
@@ -165,8 +165,16 @@ public class PatrolState : EnemyStateBase
     {
         if (_pauseWalking)
         {
-            if (Enemy.Movement.WanderTo(_pauseSpot, Enemy.CurrentPatrolSpeed) == NavResult.Moving) return true;
+            NavResult walk = Enemy.Movement.WanderTo(_pauseSpot, Enemy.CurrentPatrolSpeed);
+            if (walk == NavResult.Moving) return true;
 
+            // Blocked is someone in the way, which happens. Unreachable is a spot the area said was joined to its
+            // centre and the walk found no way to, which shouldn't: said once per pause.
+            if (walk == NavResult.Unreachable && !_pauseRoamWarned)
+            {
+                Debug.LogWarning($"{Enemy.name}: {PointName(_index)}'s pause picked a spot he has no way to ({Enemy.Navigator.FailureReason}): he waits where he is instead.", Enemy);
+                _pauseRoamWarned = true;
+            }
             _pauseWalking = false;
             _lookBaseYaw = Enemy.transform.eulerAngles.y;
             _lookElapsed = 0f;

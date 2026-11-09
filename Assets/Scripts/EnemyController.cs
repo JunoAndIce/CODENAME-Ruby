@@ -447,8 +447,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public Fight Fight { get; internal set; }
 
-    /// <summary>In a fight and not on its main squad: he holds back. False out of any fight.</summary>
-
     public float SquadSpacing => _squadSpacing;
 
     /// <summary>The firing spot he has claimed in his fight, for the gizmo and the state. False with none.</summary>
