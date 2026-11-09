@@ -356,13 +356,13 @@ public class AggroState : EnemyStateBase
             DebugLog.Info($"{Enemy.name} found no firing spot (none walkable, reachable, unclaimed and in a clear shot, or he is cut off from her) in {fight}: he keeps his band.", Enemy);
     }
 
-    // Ruby has moved so his spot is more than half a spacing outside his band. Half a spacing of slack so he
-    // doesn't shuffle each time she steps.
+    // Ruby has moved so his spot is inside the gun's Min Distance, or more than half a spacing past his band's
+    // far side. Half a spacing of slack so he doesn't shuffle each time she steps away.
     private bool OutsideBand(Vector3 ruby)
     {
         if (!FiringSpots.TryGetBand(Enemy, out float near, out float far)) return false;
         float ring = PathGrid.FlatDistance(_spot, ruby);
-        return !FiringSpots.InKeepBand(Enemy, ring, near, far, Enemy.SquadSpacing * 0.5f);
+        return !FiringSpots.InKeepBand(ring, near, far, Enemy.SquadSpacing * 0.5f);
     }
 
     private void ReleaseSpot()

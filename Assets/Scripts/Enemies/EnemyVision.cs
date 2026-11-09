@@ -79,7 +79,7 @@ public class EnemyVision
         if (_sightFrame == Time.frameCount) return _canSeePlayer;
         _sightFrame = Time.frameCount;
 
-        _sightBlocker = FindSightBlocker(player.transform.position, player.transform);
+        _sightBlocker = FindSightBlocker(_enemy.EyePosition, player.transform.position, player.transform);
         _canSeePlayer = _sightBlocker == null;
         return _canSeePlayer;
     }
@@ -88,11 +88,15 @@ public class EnemyVision
     /// Whether the line from his eyes to a point is clear. The target's own colliders don't block
     /// it, so a body can be checked from its centre without its skin getting in the way.
     /// </summary>
-    public bool HasClearSight(Vector3 point, Transform target) => FindSightBlocker(point, target) == null;
+    public bool HasClearSight(Vector3 point, Transform target) => FindSightBlocker(_enemy.EyePosition, point, target) == null;
 
-    private Collider FindSightBlocker(Vector3 point, Transform target)
+    /// <summary>
+    /// The same test from an eye somewhere else, such as a firing spot he is thinking of walking to.
+    /// </summary>
+    public bool HasClearSightFrom(Vector3 eye, Vector3 point, Transform target) => FindSightBlocker(eye, point, target) == null;
+
+    private Collider FindSightBlocker(Vector3 eye, Vector3 point, Transform target)
     {
-        Vector3 eye = _enemy.EyePosition;
         Vector3 toPoint = point - eye;
         float distance = toPoint.magnitude;
         if (distance < 0.01f) return null;
@@ -125,3 +129,4 @@ public class EnemyVision
         return delta.magnitude;
     }
 }
+ 

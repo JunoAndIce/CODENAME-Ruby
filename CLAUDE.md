@@ -468,7 +468,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   her), near where he stands, the middle of the band, and not on a mate's line to her; the best few (a
   budget of 4) then get an eye-height ray, anything solid but characters blocking it, as sight does. His
   current spot is kept unless a new one beats it by a margin. He re-picks about once a second
-  (staggered), and at once when his spot falls more than half a spacing outside his band, his shot is
+  (staggered), and at once when his spot falls inside the gun's Min Distance or more than half a spacing past the band's far side, his shot is
   blocked, a walk to it is refused, or he is backed away from her on the way there (either spot is left
   alone for 3 s); never sooner than 0.25 s after the last pick. Backing away inside Min Distance is as
   before, and cornered he stands and fights. With no spot he keeps the band behaviour, with a log line

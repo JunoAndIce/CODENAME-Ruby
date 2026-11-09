@@ -3,24 +3,24 @@ using UnityEngine;
 
 /// <summary>
 /// Where an armed fighter stands to shoot Ruby: a spot of his own on rings round where he knows she is, so a
-/// fight spreads into a loose crossfire instead of everyone closing along one line. A static class of
-/// pure picking, with reused buffers: it runs for every armed fighter about once a second, so it
-/// allocates nothing. It never walks anyone; AggroState does that and asks again when the spot stops
-/// making sense. Weights are constants here so the next scorer (fire lanes) adds one beside them.
+/// fight spreads into a loose crossfire instead of everyone closing along one line. A static class with
+/// reused buffers: it runs for every armed fighter about once a second, so it allocates nothing. It
+/// claims spots in the fight but never walks anyone; AggroState does that and asks again when the spot
+/// stops making sense.
 /// </summary>
 public static class FiringSpots
 {
     private const int Angles = 16;
     private const int Rings = 3;
-    private const float HoldBand = 1f;            // metres under the gun's Range he keeps, as AggroState's hold band does
+    private const float HoldBand = 1f;            // metres inside the gun's Range for the outer ring, so a spot there is in range
 
     // Score terms, each 0 to 1, times its weight. Spreading round her counts most: it is what stops a clump.
     private const float NearWeight = 1f;          // near where he stands: no running round her for a spot
     private const float BandWeight = 0.8f;        // in the middle of his band
-    private const float SpreadWeight = 1.5f;      // a different angle from his squadmates'
-    private const float LineWeight = 1f;          // subtracted: not on a squadmate's line to her
-    private const float SpreadFullAngle = 60f;    // degrees from the nearest squadmate that count as fully spread
-    private const float LineWidth = 1.5f;         // metres either side of a squadmate's line that count as on it
+    private const float SpreadWeight = 1.5f;      // a different angle from his fight mates'
+    private const float LineWeight = 1f;          // subtracted: not on a fight mate's line to her
+    private const float SpreadFullAngle = 60f;    // degrees from the nearest fight mate that count as fully spread
+    private const float LineWidth = 1.5f;         // metres either side of a fight mate's line that count as on it
     private const float KeepMargin = 0.4f;        // a new spot must beat his current one by this, or he stays: near-equal spots flickered
 
     private const int ShotBudget = 4;             // clear-shot rays per pick: the best few, never every candidate
@@ -32,9 +32,8 @@ public static class FiringSpots
     }
 
     private static readonly List<Candidate> Candidates = new();
-    private static readonly List<Vector3> MateRefs = new();   // where each squadmate stands, or the spot he claimed
+    private static readonly List<Vector3> MateRefs = new();   // where each fight mate stands, or the spot he claimed
     private static readonly List<float> MateAngles = new();
-    private static readonly RaycastHit[] ShotHits = new RaycastHit[16];
 
     /// <summary>
     /// The gun's band, as a distance from Ruby: from its Min Distance out to Range less the hold band. False
@@ -51,8 +50,8 @@ public static class FiringSpots
     }
 
     /// <summary>
-    /// Picks his spot round ruby, which the caller passes only when he knows where she is (in sight, or just
-    /// gone from it): nothing here reads her true position otherwise. The pick is claimed in the fight, so
+    /// Picks his spot round Ruby. The caller passes her position only when he knows where she is (in sight, or
+    /// just gone from it): nothing here reads her true position otherwise. The pick is claimed in the fight, so
     /// nobody else takes it. False when no candidate is walkable, reachable, unclaimed and in a clear shot;
     /// his claim is then released and the caller says what applies. avoid is a spot he just failed to reach.
     /// </summary>
@@ -86,7 +85,6 @@ public static class FiringSpots
         }
 
         float spacing = who.SquadSpacing;
-        float y = who.transform.position.y;
         Vector3 here = who.transform.position;
         CollectMates(who, fight, ruby);
         Candidates.Clear();
@@ -99,7 +97,7 @@ public static class FiringSpots
             // would walk in, be backed away, and walk in again), or no longer reachable. Within the slack its band
             // term is full, so a collapsed band cannot make a spot a centimetre off the ring lose to a fresh one.
             float ring = PathGrid.FlatDistance(current, ruby);
-            if (InKeepBand(who, ring, bandNear, bandFar, spacing * 0.5f)
+            if (InKeepBand(ring, bandNear, bandFar, spacing * 0.5f)
                 && TryScore(who, fight, grid, reach, current, ruby, here, bandNear, bandFar, spacing, avoid, out float score, keeping: true))
                 Candidates.Add(new Candidate { Spot = current, Score = score + KeepMargin });
         }
@@ -112,8 +110,8 @@ public static class FiringSpots
             for (int a = 0; a < Angles; a++)
             {
                 float angle = a * (360f / Angles) * Mathf.Deg2Rad;
-                Vector3 candidate = new(ruby.x + Mathf.Cos(angle) * radius, y, ruby.z + Mathf.Sin(angle) * radius);
-                // The ring step is wider than the spacing, so a candidate at the current spot's cell is the same spot.
+                Vector3 candidate = new(ruby.x + Mathf.Cos(angle) * radius, here.y, ruby.z + Mathf.Sin(angle) * radius);
+                // While Ruby stands still his current spot is one of these points, and it is already in with its bonus.
                 if (hasCurrent && PathGrid.FlatDistance(candidate, current) < 0.01f) continue;
                 if (TryScore(who, fight, grid, reach, candidate, ruby, here, bandNear, bandFar, spacing, avoid, out float score))
                     Candidates.Add(new Candidate { Spot = candidate, Score = score });
@@ -144,32 +142,18 @@ public static class FiringSpots
     }
 
     /// <summary>
-    /// Whether a spot he holds, at this distance from Ruby, still counts as in his band: half a spacing of slack
-    /// either side, except that the gun's Min Distance is strict for everyone (inside it he is backed away, so a
-    /// spot there would loop). One test for the pick's keep and AggroState's re-pick, so the two cannot disagree.
+    /// Whether a spot he holds, at this distance from Ruby, still counts as in his band: up to half a spacing
+    /// past the far side, but never inside the near side, the gun's Min Distance (inside it he is backed away,
+    /// so a spot there would loop). One test for the pick's keep and AggroState's re-pick, so the two cannot
+    /// disagree.
     /// </summary>
-    public static bool InKeepBand(EnemyController who, float ring, float near, float far, float slack)
-        => ring >= Mathf.Max(who.Arms.HeldGun.MinDistance, near - slack) && ring <= far + slack;
+    public static bool InKeepBand(float ring, float near, float far, float slack) => ring >= near && ring <= far + slack;
 
     /// <summary>Whether a straight line at eye height from a spot to Ruby crosses nothing solid but characters: the rule sight uses.</summary>
     public static bool HasClearShot(EnemyController who, Vector3 spot, Vector3 ruby)
     {
         Vector3 eye = new(spot.x, who.EyePosition.y, spot.z);
-        Vector3 toRuby = ruby - eye;
-        float distance = toRuby.magnitude;
-        if (distance < 0.01f) return true;
-
-        int count = Physics.RaycastNonAlloc(eye, toRuby / distance, ShotHits, distance, ~0, QueryTriggerInteraction.Ignore);
-        for (int i = 0; i < count; i++)
-        {
-            Collider hit = ShotHits[i].collider;
-            Rigidbody body = hit.attachedRigidbody;
-            // Characters see past each other, ragdoll bones included: Ruby's own never hide her.
-            if (body != null && (body.GetComponentInParent<PlayerController>() == who.Player || body.GetComponentInParent<EnemyController>() != null)) continue;
-            if (who.Player != null && hit.transform.IsChildOf(who.Player.transform)) continue;
-            return false;
-        }
-        return true;
+        return who.Vision.HasClearSightFrom(eye, ruby, who.Player != null ? who.Player.transform : null);
     }
 
     // What the spot scores, or false when it is rejected outright: not walkable, off the chase field, within
@@ -212,17 +196,13 @@ public static class FiringSpots
         return true;
     }
 
-    // Each squadmate's reference point: the spot he claimed, else where he stands. Those still in the fight
+    // Each fight mate's reference point: the spot he claimed, else where he stands. Those still in the fight
     // only: a destroyed member is skipped, and the board prunes the dead and downed within a frame.
     private static void CollectMates(EnemyController who, Fight fight, Vector3 ruby)
     {
         MateRefs.Clear();
         MateAngles.Clear();
-        AddMates(fight.Members, who, fight, ruby);
-    }
-
-    private static void AddMates(IReadOnlyList<EnemyController> members, EnemyController who, Fight fight, Vector3 ruby)
-    {
+        IReadOnlyList<EnemyController> members = fight.Members;
         for (int i = 0; i < members.Count; i++)
         {
             EnemyController mate = members[i];
