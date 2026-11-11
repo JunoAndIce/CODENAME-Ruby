@@ -55,6 +55,7 @@
 - [ ] **Step 1:** `Absorb` and `Places`, per decision 1. `Contains` and `InRoom` read every patch. The constructor is the first patch.
 - [ ] **Step 2:** `AddGround` and the minimum restart.
 - [ ] **Step 3:** `GroupJob.GrowAt`. When Coverage is null (not yet built), building it later must include the absorbed ground.
+- [ ] **Step 3b: Merges keep both areas** (from the rooms plan's final review, Important 2). A merge on a shared room absorbs the younger job's area into the merged job's, so the second place and its rooms are still searched. The floods already ran, so it copies their rooms and ground; it doesn't flood again.
 - [ ] **Step 4:** Gizmo. Each patch's circle is drawn faintly, and the marked rooms as now.
 - [ ] **Step 5:** Docs. In `CLAUDE.md`'s "A Search clears its area", the area can grow.
 - [ ] **Step 6:** Compile and commit. Nothing calls `GrowAt` yet; Task 2 does.
