@@ -867,6 +867,10 @@ alarm and raise it themselves.)*
 
 ### 8. Clearing hiding spots
 
+> **Removed (user, 2026-11-11: "remove piece 8").** Not to be built. Searching a whole room, which
+> was this piece's first bullet, is built in piece 7 as searching by room; the hiding-spot list, the
+> Find Hiding Spots button and the pointman are dropped. The text below is kept for the record.
+
 - **The area Ruby moved to** is the room (piece 7) holding the spot the search starts from *(user:
   "if Ruby ended in a room, officers will check the whole room")*. With no room there, the team
   searches the open ground around it. *(Built in piece 7 as searching by room, and widened: every
@@ -1015,7 +1019,7 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
     first, blocked walks deferring), the search area in arriving, matching and merging, and the firing
     range. **Later, once there are assets:** the other activity spots and alarms. **Next:** distractions
     on a search (`docs/plans/2026-11-11-distractions-on-a-search.md`), then piece 5 part B.
-- [ ] 8. Clearing hiding spots
+- ~~8. Clearing hiding spots~~ **Removed** *(user, 2026-11-11)*: searching a whole room is built in piece 7.
 - [ ] 9. Breakables: light fixtures and props (much later)
 - [x] 10. Pathing: corners and curves
 

@@ -1275,7 +1275,7 @@ around, and a knockdown or death only searches. Piece 5's part B (patrol togethe
 breaking off) isn't built, and needs a trigger of its own now the level alert is gone. Piece 7 is
 built to `docs/plans/2026-11-09-rooms-and-room-maps.md`: rooms, room maps, searching by room and the
 firing range. Its other activity spots and alarms wait for assets. Distractions on a search come next
-(`docs/plans/2026-11-11-distractions-on-a-search.md`), then hiding spots and breakables.
+(`docs/plans/2026-11-11-distractions-on-a-search.md`), then patrolling together (piece 5 part B), and much later breakables. Piece 8, clearing hiding spots, was removed (user, 2026-11-11).
 
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
 account of what is built, and its section on the Path Grid, colliders and navigation is written for
