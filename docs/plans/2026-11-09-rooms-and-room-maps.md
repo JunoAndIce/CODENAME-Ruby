@@ -189,7 +189,7 @@
 - [x] **Step 5: Docs.** `CLAUDE.md`: a **Firing range** bullet. It covers the post spot, practising, real shots, the in-use rule and its masking (the range's map: Gunshot set to Ignore, Only While In Use, Mask Radius 8). It also covers what an aggressive officer does: walks his Aggressive route if he has one, as the table already sends him, or practises on, wary or not.
 - [x] **Step 6: Compile and commit.**
 - [x] **Step 7: Close the piece.** The spec's Progress ticks piece 7, noting that the other activity spots and alarms wait for assets and piece 5 part B is next. Then run the end-of-plan review, in the background, on the most capable model.
-- [ ] **Step 8: Play-test gate (the user).**
+- [x] **Step 8: Play-test gate (the user).**
   - Make a range room whose map has Gunshot: Ignore, Only While In Use, Mask Radius 8, and post an enemy at a spot with a target.
   - He walks there and fires at the target in the Aim pose.
   - Ruby fires inside the range or within 8 m of it: nobody who doesn't see her comes. She fires 15 m away: they come.
