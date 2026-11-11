@@ -81,7 +81,7 @@
 - [x] **Step 3: The walk.** `SearchingState.CheckForJob` runs per member from `TryGetCheck`: walk there, look for Look Time, then go back to roaming the (grown) search. The old single-scout gate (a team of two or more, one at a time) goes. The rule that a body or gun lying there never sends one stays here; Task 3 makes those serious.
 - [x] **Step 4: Docs.** `CLAUDE.md`: Distraction and "Sending one to check" are rewritten.
 - [x] **Step 5:** Compile and commit.
-- [ ] **Step 6: Play-test gate (the user).**
+- [x] **Step 6: Play-test gate (the user).**
   - A thud outside a searched office brings one member to it.
   - Its rooms join the search, and the search runs longer.
   - Two members hearing one thud send one of them, and the other turns and carries on.
