@@ -825,10 +825,11 @@ through the player never slows the walk. **Enemies don't shove props that block 
   - **Individual memory and telling** (`JobBoard.JoinMember`, the one place an officer is put on a
     job, so every route in counts and tells). Each time he is put on a job he wasn't on (started,
     joined, called, filled, merged out; a retarget, a distraction and a glance don't count) his
-    `TimesSentToLook` rises, and at Sent To Look Threshold (3, on the officer) the job is raised to
-    an attack for everyone, so two thuds ending all clear make the third a search for an attack. It
-    fires once for him for good (`==`, not `>=`: afterwards he is only wary, and a wary officer alone
-    doesn't raise a job). **Telling:** if any member has seen Ruby himself, every member who doesn't
+    `TimesSentToLook` rises, and from Sent To Look Threshold (3, on the officer) on, every job he is
+    put on becomes a **Search for an attack** at its own place, for everyone on it (`>=`, through
+    `JobBoard.Upgrade`, so a Check turns into a Search by the usual path, another team's Check that
+    calls him in included), so two thuds ending all clear make the third, and every later look, a
+    search for an attack. **Telling:** if any member has seen Ruby himself, every member who doesn't
     know learns the newest of the seers' facts as **Told** (`WasToldOfRuby`; the newer by time wins),
     before anyone moves, and a seer on the job raises it to an attack. **Only one who saw her tells**
     (`HasSeenRuby`, never `WasToldOfRuby`), so being told can't chain: a told officer who could tell

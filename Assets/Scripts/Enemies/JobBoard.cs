@@ -1119,21 +1119,32 @@ public class JobBoard
     {
         bool isNew = !job.Has(who);
         if (!job.Add(who)) return false;
+        bool followed = false;
         if (isNew)
         {
             // Telling comes before the raise and the count so everyone's knowledge is settled before
             // anyone moves (FollowJob last).
             TellOfRuby(job);
             if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
-            // == and not >=: it fires once for him, for good. After it he is only wary, and a wary enemy
-            // alone doesn't raise a job, so a fourth look is counted but never raises again.
+            // >= and not ==: from his third look on, every job he is put on is a Search for an attack
+            // (spec decision 2: "the third becomes a search for an attack"), another team's Check
+            // included. Raising only the reason left a Check a Check, one quick look and all clear, and
+            // == let the fourth look fall back to a plain problem. It goes through Upgrade so a Check
+            // becomes a Search by the one path every other upgrade uses, at the job's own place (within
+            // SamePlace, so it doesn't move), and every member goes wary together.
             int count = who.Memory.NoteSentToLook();
             DebugLog.Info($"{who.name} has been sent to look {count} time(s).", who);
-            if (count == who.SentToLookThreshold)
-                Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has been sent to look {count} times");
+            if (count >= who.SentToLookThreshold)
+            {
+                var attack = new Incident(job.Point, StimulusResponse.SearchForAttack, job.Priority, makesSearch: true);
+                DebugLog.Info($"{job} is raised to a search for an attack: {who.name} has been sent to look {count} times.", _intel);
+                // Upgrade follows every member when it restarts the job, him included, so he isn't
+                // followed a second time below.
+                followed = Upgrade(job, attack, JobKind.Search);
+            }
         }
         else if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
-        who.FollowJob(job);
+        if (!followed) who.FollowJob(job);
         // Checked here and not at Add: he is only put in Searching by FollowJob. Not at Leave either,
         // which SearchingState.Exit calls while the machine is still changing state. By now he is
         // searching, whether he entered it on a request or was retargeted.
