@@ -65,7 +65,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _attackNearRadius = 20f;
     [Tooltip("How old the newest report of Ruby may be, in seconds, for a disturbance near it to count as an attack. Older and it's just a problem again. An enemy who has seen her ignores this and treats everything as an attack.")]
     [SerializeField, Min(0f)] private float _attackNearTime = 15f;
-    [Tooltip("The time he is sent to look at something that raises his job to an attack, so a team goes aggressive together. Counted per enemy for good: each time he is put on a job he wasn't on (started, joined, called in). Distractions and glances don't count.")]
+    [Tooltip("From this look on, every job he is put on becomes a Search for an attack, for the whole team, so a team goes aggressive together. Counted per enemy for good: each time he is put on a job he wasn't on (started, joined, called in). Distractions and glances don't count.")]
     [SerializeField, Min(1)] private int _sentToLookThreshold = 3;
 
     [Header("Searching")]
