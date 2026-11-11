@@ -177,18 +177,18 @@
   - `EnemyController`: `_postSpot` (RangeSpot, under Patrol beside Post Tolerance), `_practiceIntervalMin` (1.2 s) and `_practiceIntervalMax` (2.5 s), `RangeSpot PostSpot`, `IdleState Idle`.
   - `IdleState.Practising` (bool).
 
-- [ ] **Step 1: The post.** With `_postSpot` set, `Start` records the post from the spot (`Position`, `FacingYaw`) instead of where he stands, so he walks there at the start of play.
-- [ ] **Step 2: Practising.**
+- [x] **Step 1: The post.** With `_postSpot` set, `Start` records the post from the spot (`Position`, `FacingYaw`) instead of where he stands, so he walks there at the start of play.
+- [x] **Step 2: Practising.**
   - At his post in `IdleState`, armed, with a spot that has a target, he faces the target. Each interval (random between min and max) he calls `Room.NotePractice()` and then fires at the target through his `GunHolder` (`AimAt`, `TryFireAt`). Noting first means the shot's own Gunshot is masked.
   - `Practising` is true while he does this.
   - A target out of the gun's range warns once and he doesn't fire.
   - Unarmed at a range post, he stands at it and doesn't practise, with one `DebugLog.Info` line saying why (spec: a stated rule).
   - The shots are real: real bullets, real stimuli.
-- [ ] **Step 3: Animation.** `EnemyController.Stance` gives Aim while `Idle.Practising`, and `TryFindTarget` gives the range target then.
-- [ ] **Step 4: Gizmos.** The spot draws its standing point, a facing arrow and a line to its target. A selected enemy with a post spot draws a line to it.
-- [ ] **Step 5: Docs.** `CLAUDE.md`: a **Firing range** bullet. It covers the post spot, practising, real shots, the in-use rule and its masking (the range's map: Gunshot set to Ignore, Only While In Use, Mask Radius 8). It also covers what an aggressive officer does: walks his Aggressive route if he has one, as the table already sends him, or practises on, wary or not.
-- [ ] **Step 6: Compile and commit.**
-- [ ] **Step 7: Close the piece.** The spec's Progress ticks piece 7, noting that the other activity spots and alarms wait for assets and piece 5 part B is next. Then run the end-of-plan review, in the background, on the most capable model.
+- [x] **Step 3: Animation.** `EnemyController.Stance` gives Aim while `Idle.Practising`, and `TryFindTarget` gives the range target then.
+- [x] **Step 4: Gizmos.** The spot draws its standing point, a facing arrow and a line to its target. A selected enemy with a post spot draws a line to it.
+- [x] **Step 5: Docs.** `CLAUDE.md`: a **Firing range** bullet. It covers the post spot, practising, real shots, the in-use rule and its masking (the range's map: Gunshot set to Ignore, Only While In Use, Mask Radius 8). It also covers what an aggressive officer does: walks his Aggressive route if he has one, as the table already sends him, or practises on, wary or not.
+- [x] **Step 6: Compile and commit.**
+- [x] **Step 7: Close the piece.** The spec's Progress ticks piece 7, noting that the other activity spots and alarms wait for assets and piece 5 part B is next. Then run the end-of-plan review, in the background, on the most capable model.
 - [ ] **Step 8: Play-test gate (the user).**
   - Make a range room whose map has Gunshot: Ignore, Only While In Use, Mask Radius 8, and post an enemy at a spot with a target.
   - He walks there and fires at the target in the Aim pose.

@@ -1009,7 +1009,12 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
     enemy at Min Distance arcing back into it on his way to a spot behind him) was a steering fault,
     fixed in `c62d00c`: a walk that sets off turns on the spot. Paths costing more through a mate's
     lane went with the lanes.
-- [ ] 7. Rooms and behaviour maps: activities, firing ranges, armories and alarms
+- [x] 7. Rooms and behaviour maps: activities, firing ranges, armories and alarms
+  - Built to `docs/plans/2026-11-09-rooms-and-room-maps.md`: rooms, behaviour maps per room (with
+    armories and speech across a room), searching by room (no cap, a minimum, walking to the source
+    first, blocked walks deferring), the search area in arriving, matching and merging, and the firing
+    range. **Later, once there are assets:** the other activity spots and alarms. **Next:** distractions
+    on a search (`docs/plans/2026-11-11-distractions-on-a-search.md`), then piece 5 part B.
 - [ ] 8. Clearing hiding spots
 - [ ] 9. Breakables: light fixtures and props (much later)
 - [x] 10. Pathing: corners and curves
