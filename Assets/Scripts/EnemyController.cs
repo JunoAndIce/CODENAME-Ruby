@@ -117,6 +117,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0.1f)] private float _pauseRoamMax = 6f;
     [Tooltip("An idle enemy this close to his post, in metres, counts as at it. Where he starts is his post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave him 'away' from a post he has reached.")]
     [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
+    [Tooltip("A firing-range spot to use as his post instead of where he stands. He walks there, faces its target and practises when armed. Empty means his post is where he starts.")]
+    [SerializeField] private RangeSpot _postSpot;
+    [Tooltip("At a range post, the shortest wait between practice shots, in seconds.")]
+    [SerializeField, Min(0.1f)] private float _practiceIntervalMin = 1.2f;
+    [Tooltip("At a range post, the longest wait between practice shots, in seconds. Never below the shortest.")]
+    [SerializeField, Min(0.1f)] private float _practiceIntervalMax = 2.5f;
     [Tooltip("When every patrol point fails in a row, wait this long before trying the route again.")]
     [SerializeField, Min(0f)] private float _routeRetryTime = 3f;
 
@@ -199,6 +205,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public Vector3 PostPosition { get; private set; }
     public float PostYaw { get; private set; }
     public float PostTolerance => _postTolerance;
+    public RangeSpot PostSpot => _postSpot;
+    public float PracticeIntervalMin => _practiceIntervalMin;
+    public float PracticeIntervalMax => Mathf.Max(_practiceIntervalMin, _practiceIntervalMax);
     public float NodePauseTime => _nodePauseTime;
     public float LongPauseTime => _longPauseTime;
     public float PauseRoamMin => _pauseRoamMin;
@@ -243,9 +252,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public Health Health { get; private set; }
     public IRagdollBody RagdollBody { get; private set; }
     public GridNavigator Navigator { get; private set; }
-    public IdleState Idle { get; private set; }
     public PatrolState Patrol { get; private set; }
     public SearchingState Searching { get; private set; }
+    public IdleState Idle { get; private set; }
     public AggroState Aggro { get; private set; }
     public RearmState Rearm { get; private set; }
     public GrabbedState Grabbed { get; private set; }
@@ -293,8 +302,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private void Start()
     {
         if (_player == null) _player = FindAnyObjectByType<PlayerController>();
-        PostPosition = transform.position;
-        PostYaw = transform.eulerAngles.y;
+        // A range post is the spot, so he walks there at the start of play.
+        PostPosition = _postSpot != null ? _postSpot.Position : transform.position;
+        PostYaw = _postSpot != null ? _postSpot.FacingYaw : transform.eulerAngles.y;
         _state.SetState(HasActiveRoute ? Patrol : (EnemyStateBase)Idle);
 
         Intel = FindAnyObjectByType<Intel>();
@@ -579,6 +589,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen,
         // Tied upright on the chain, a corpse is restrained like the living; off it, it keeps its pose.
         DeadState => IsHeld ? AnimStance.Restrained : AnimStance.Frozen,
+        IdleState => Idle.Practising ? AnimStance.Aim : AnimStance.Rest,
         _ => AnimStance.Rest,
     };
 
@@ -594,9 +605,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>The state he is in, for EnemyReactions and EnemyAwareness to read. Reaching the machine itself stays with the controller.</summary>
     internal IState CurrentState => _state.Current;
 
-    /// <summary>Ruby, while it's aiming at her.</summary>
+    /// <summary>Ruby while it's aiming at her, or the range target while he practises.</summary>
     public bool TryFindTarget(out Vector3 point)
     {
+        if (Idle.Practising && _postSpot != null && _postSpot.Target != null)
+        {
+            point = _postSpot.Target.position;
+            return true;
+        }
         point = _player != null ? _player.transform.position : default;
         return _player != null && Stance == AnimStance.Aim;
     }

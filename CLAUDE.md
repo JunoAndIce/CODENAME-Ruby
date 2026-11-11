@@ -533,6 +533,22 @@ through the player never slows the walk. **Enemies don't shove props that block 
   never left wherever his last job ended. The walk gives up after Search Travel Limit with a log
   line and starts again the next time he's at his post, so a post another officer stands on can't
   have him pushing at it for good. Idle activities (a desk, a TV) are a later piece.
+- **Firing range** (`RangeSpot`, in `Enemies/`). Set an enemy's Post Spot to a `RangeSpot` and his post is
+  the spot (`Start` records its `Position` and `FacingYaw`), so he walks there at the start of play. The
+  facing is toward the spot's Target, never its own arrow (the arrow is used only with no target, which
+  warns). Practising isn't a state: at the post, armed, with a target in the gun's range, `IdleState`
+  aims (`Practising`, which gives the Aim stance and the range target to the animator) and every Practice
+  Interval Min to Max (1.2 to 2.5 s) fires a **real** shot at it, so the Gunshot stimulus is real too.
+  Before each shot it calls `Room.NotePractice()`, so the shot's own Gunshot is already masked: `Room.InUse`
+  is true for In Use Time after the last one. A range's map sets Gunshot to Ignore, Only While In Use,
+  Mask Radius 8, so shots in or within 8 m of the range bring nobody who doesn't see Ruby, and when he
+  stops (grabbed, sent searching) the range goes quiet after In Use Time and a shot there is a shot again.
+  Leaving Idle, or walking off the post, lowers the gun. Rules, not fallbacks, each in the log: unarmed at
+  a range post he stands there and doesn't practise (one log line); a target out of the gun's range warns
+  once and he doesn't fire; a spot in no room warns once (nothing masks its shots). Wary isn't aggressive
+  here: an aggressive enemy with an Aggressive route walks it, as the table already sends him, and one
+  without goes back to his post and practises on, wary or not. An enemy with no post spot pays nothing
+  new per frame.
 - **Patrol Normal and Aggressive.** These are modes of Patrol, not states. `IsAggressive` is
   **derived on every read, never stored**: he has been after Ruby (`EnemyMemory.Wary`, set by any
   search for an attack, including the one after a lost fight, and by a glance at a known body) or knows she is about (`KnowsRuby`: he has seen her, or a job mate who had told him). Neither is

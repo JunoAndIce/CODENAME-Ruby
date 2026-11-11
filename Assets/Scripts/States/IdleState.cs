@@ -11,6 +11,14 @@ public class IdleState : EnemyStateBase
     private float _walkTimer;   // how long he has been walking home
     private bool _gaveUp;       // the walk took too long: he stays where he is until he's next at his post
 
+    private float _nextShot;            // Time.time of the next practice shot
+    private bool _noGunNoted;           // the one log line for an unarmed enemy at a range post
+    private bool _outOfRangeWarned;
+    private bool _noTargetWarned;
+
+    /// <summary>At a range post, armed, shooting at the spot's target. Practising is something he does here, not a state.</summary>
+    public bool Practising { get; private set; }
+
     public IdleState(EnemyController enemy) : base(enemy) { }
 
     private bool AwayFromPost => PathGrid.FlatDistance(Enemy.transform.position, Enemy.PostPosition) > Enemy.PostTolerance;
@@ -19,17 +27,82 @@ public class IdleState : EnemyStateBase
     {
         _walkTimer = 0f;
         _gaveUp = false;
+        _nextShot = 0f;
         Enemy.Stop();
+    }
+
+    public override void Exit() => EndPractice();
+
+    private void EndPractice()
+    {
+        if (!Practising) return;
+        Practising = false;
+        Enemy.Arms.Lower();
+    }
+
+    // Only a range post pays anything here: an enemy with no post spot returns on the first line.
+    private void Practise()
+    {
+        RangeSpot spot = Enemy.PostSpot;
+        if (spot == null) return;
+
+        if (!Enemy.IsArmed)
+        {
+            if (!_noGunNoted)
+            {
+                _noGunNoted = true;
+                DebugLog.Info($"{Enemy.name} is posted at a firing range with no gun, so he stands at his post and doesn't practise.", Enemy);
+            }
+            EndPractice();
+            return;
+        }
+        _noGunNoted = false;
+
+        if (spot.Target == null)
+        {
+            if (!_noTargetWarned)
+            {
+                _noTargetWarned = true;
+                Debug.LogWarning($"{Enemy.name}: his range spot '{spot.name}' has no target, so he faces its forward and doesn't practise.", Enemy);
+            }
+            EndPractice();
+            return;
+        }
+
+        Vector3 target = spot.Target.position;
+        if (!Enemy.Arms.InRange(target))
+        {
+            if (!_outOfRangeWarned)
+            {
+                _outOfRangeWarned = true;
+                Debug.LogWarning($"{Enemy.name}: the target of range spot '{spot.name}' is out of his gun's range, so he doesn't fire.", Enemy);
+            }
+            EndPractice();
+            return;
+        }
+        _outOfRangeWarned = false;
+
+        Practising = true;
+        Enemy.Arms.AimAt(target);
+        if (Time.time < _nextShot) return;
+        _nextShot = Time.time + Random.Range(Enemy.PracticeIntervalMin, Enemy.PracticeIntervalMax);
+
+        // Noted first, so this shot's own Gunshot is already masked by the room's map.
+        Room room = spot.Room;
+        if (room != null) room.NotePractice();
+        Enemy.Arms.TryFireAt(target);
     }
 
     public override void Tick()
     {
         if (!AwayFromPost)
         {
+            Practise();
             _walkTimer = 0f;
             _gaveUp = false;
             return;
         }
+        EndPractice();
         if (_gaveUp) return;
 
         // The same limit as a search's walk: a post another enemy stands on, or one behind a

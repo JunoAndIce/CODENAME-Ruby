@@ -44,8 +44,13 @@ public class Room : MonoBehaviour
     public string Name => name;
     public int RectCount => _rects.Count;
     public float InUseTime => _inUseTime;
-    /// <summary>Whether the room counts as in use. Always false until the room-use step gives it a meaning, so a row marked Only While In Use falls through to the room around it.</summary>
-    public bool InUse => false;
+    private float _lastPractice = float.NegativeInfinity;
+
+    /// <summary>True for In Use Time after the last NotePractice, so a row marked Only While In Use applies only while someone is using the room.</summary>
+    public bool InUse => Time.time - _lastPractice <= _inUseTime;
+
+    /// <summary>A firing-range shooter calls this just before each shot, so the shot's own Gunshot is already masked.</summary>
+    public void NotePractice() => _lastPractice = Time.time;
 
     // Set by RoomIndex when it is built, never saved.
     /// <summary>The floor this room stands on, or null before the index is built.</summary>

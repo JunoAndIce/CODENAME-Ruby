@@ -7,6 +7,13 @@ internal static class EnemyGizmos
 {
     public static void DrawSelected(EnemyController enemy)
     {
+        // His range post, so a spot set on the wrong enemy shows.
+        if (enemy.PostSpot != null)
+        {
+            Gizmos.color = new Color(0.2f, 1f, 0.4f, 0.9f);
+            Gizmos.DrawLine(enemy.transform.position, enemy.PostSpot.Position);
+        }
+
         // The view, flat at eye height: green when the player is noticed, red when she's in the
         // view but hidden, grey otherwise. Edit mode has no player to test, so it stays grey.
         bool tracking = Application.isPlaying && enemy.Player != null;
