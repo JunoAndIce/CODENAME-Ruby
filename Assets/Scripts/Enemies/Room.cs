@@ -34,7 +34,7 @@ public class Room : MonoBehaviour
     [SerializeField] private List<Rect> _rects = new() { new Rect { Size = new Vector2(4f, 4f) } };
 
     [Header("Use")]
-    [Tooltip("Seconds after the player was last seen or heard in this room that it still counts as in use.")]
+    [Tooltip("Seconds after the last practice shot (NotePractice) that the room still counts as in use.")]
     [Min(0f)]
     [SerializeField] private float _inUseTime = 10f;
 

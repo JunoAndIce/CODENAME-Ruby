@@ -117,7 +117,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0.1f)] private float _pauseRoamMax = 6f;
     [Tooltip("An idle enemy this close to his post, in metres, counts as at it. Where he starts is his post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave him 'away' from a post he has reached.")]
     [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
-    [Tooltip("A firing-range spot to use as his post instead of where he stands. He walks there, faces its target and practises when armed. Empty means his post is where he starts.")]
+    [Tooltip("A firing-range spot to use as his post instead of where he stands. He walks there, faces its target and practises when armed. Used only when he has no Safe route to walk: with one, the table sends him to Patrol and he never idles at the spot. Empty means his post is where he starts.")]
     [SerializeField] private RangeSpot _postSpot;
     [Tooltip("At a range post, the shortest wait between practice shots, in seconds.")]
     [SerializeField, Min(0.1f)] private float _practiceIntervalMin = 1.2f;
@@ -343,6 +343,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         // de-aggros in the same frame.
         _giveUpRadius = Mathf.Max(_giveUpRadius, Mathf.Max(_viewRange, _closeRadius) + 1f);
         _pauseRoamMax = Mathf.Max(_pauseRoamMax, _pauseRoamMin);
+        if (_postSpot != null && _safeRoute != null && _safeRoute.Count > 0)
+            Debug.LogWarning($"{name}: has a Post Spot and a Safe route with points. He walks the route (ActiveRoute falls back to the Safe route), so he idles at the spot, and practises, only when he has no Safe route.", this);
     }
 
     // Play-mode path overlay: visible in the Scene view without selecting the enemy.

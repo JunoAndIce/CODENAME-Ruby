@@ -15,6 +15,7 @@ public class IdleState : EnemyStateBase
     private bool _noGunNoted;           // the one log line for an unarmed enemy at a range post
     private bool _outOfRangeWarned;
     private bool _noTargetWarned;
+    private bool _facingTarget;         // turned to the target from where he stands: the first shot waits for it
 
     /// <summary>At a range post, armed, shooting at the spot's target. Practising is something he does here, not a state.</summary>
     public bool Practising { get; private set; }
@@ -37,6 +38,7 @@ public class IdleState : EnemyStateBase
     {
         if (!Practising) return;
         Practising = false;
+        _facingTarget = false;
         Enemy.Arms.Lower();
     }
 
@@ -82,9 +84,10 @@ public class IdleState : EnemyStateBase
         }
         _outOfRangeWarned = false;
 
+        if (!Practising) _nextShot = Time.time + Random.Range(0.3f, 0.8f); // a beat to square up before the first shot
         Practising = true;
         Enemy.Arms.AimAt(target);
-        if (Time.time < _nextShot) return;
+        if (!_facingTarget || Time.time < _nextShot) return;
         _nextShot = Time.time + Random.Range(Enemy.PracticeIntervalMin, Enemy.PracticeIntervalMax);
 
         // Noted first, so this shot's own Gunshot is already masked by the room's map.
@@ -121,6 +124,19 @@ public class IdleState : EnemyStateBase
         if (!AwayFromPost)
         {
             Enemy.Stop();
+            // Practising he faces the target from where he really stands (up to Post Tolerance off the
+            // spot, and the target may move), not the yaw recorded from the spot at Start.
+            if (Practising && Enemy.PostSpot != null && Enemy.PostSpot.Target != null)
+            {
+                Vector3 to = Enemy.PostSpot.Target.position - Enemy.transform.position;
+                to.y = 0f;
+                if (to.sqrMagnitude > 0.0001f)
+                {
+                    _facingTarget = Enemy.Movement.TurnToYaw(Quaternion.LookRotation(to).eulerAngles.y);
+                    return;
+                }
+            }
+            _facingTarget = false;
             Enemy.Movement.TurnToYaw(Enemy.PostYaw);
             return;
         }

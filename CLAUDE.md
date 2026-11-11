@@ -630,7 +630,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   is treated as no reaction. **Rooms override rows** (`Intel.TryGetRow(point, kind, heard, out row)`): a `Room`'s map
   is read from the smallest room holding the point out through `Parent`, the first whose own row for the kind
   applies (`BehaviourMap.TryGetOwnRow`, which never warns of a missing row, since a room leaves rows unset on purpose), and
-  then the default map. A row marked **Only While In Use** applies only while `Room.InUse` (false until the room-use step), else the room around it decides. **Mask Radius** (on a map, 0 is off) is for sounds
+  then the default map. A row marked **Only While In Use** applies only while `Room.InUse` (true for In Use Time after the last `NotePractice`, a firing-range shot), else the room around it decides. **Mask Radius** (on a map, 0 is off) is for sounds
   only (`heard`, so sight is never masked): within it of a room on the same floor, measured in a straight line through walls, that room's map wins
   when its own applicable row for the kind is Ignore. An armory is a map that ignores Loose Gun. **The Body rule:** a room map's Body row set to
   Ignore is refused with one warning per map and never used, so an enemy can't be made to walk past a corpse. Problem and Attack differ in how he searches (see **Searching**), and

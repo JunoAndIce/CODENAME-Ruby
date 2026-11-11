@@ -12,6 +12,7 @@ public class RangeSpot : MonoBehaviour
 
     private Room _room;
     private bool _roomResolved;
+    private bool _noIntelWarned;
 
     public Vector3 Position => transform.position;
     public Transform Target => _target;
@@ -40,14 +41,30 @@ public class RangeSpot : MonoBehaviour
             Intel intel = FindAnyObjectByType<Intel>();
             if (intel == null)
             {
+                if (_noIntelWarned) return null;
+                _noIntelWarned = true;
                 Debug.LogError($"{name}: no Intel in the scene, so this range spot can't find its room.", this);
                 return null; // not cached: the scene may gain one
             }
             _roomResolved = true;
             _room = intel.RoomAt(transform.position);
             if (_room == null) Debug.LogWarning($"{name}: this range spot lies in no room, so nothing will mask its gunshots. Put it inside a Room whose map ignores Gunshot while in use.", this);
+            else CheckMasking(_room);
             return _room;
         }
+    }
+
+    // The same walk Intel.TryGetRow does: the first room out from this one with its own Gunshot row.
+    private void CheckMasking(Room room)
+    {
+        for (Room r = room; r != null; r = r.Parent)
+        {
+            if (r.Map == null || !r.Map.TryGetOwnRow(StimulusKind.Gunshot, out BehaviourMap.Row row)) continue;
+            if (row.Response == StimulusResponse.Ignore && row.OnlyWhileInUse) return;
+            Debug.LogWarning($"{name}: the Gunshot row that applies in room '{r.Name}' isn't Ignore with Only While In Use, so every practice shot will be heard as a real gunshot.", this);
+            return;
+        }
+        Debug.LogWarning($"{name}: no map from room '{room.Name}' outward has its own Gunshot row (Ignore, Only While In Use), so every practice shot will be heard as a real gunshot.", this);
     }
 
     private void OnValidate()
