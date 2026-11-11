@@ -159,7 +159,7 @@
 - [x] **Step 3: Merging.** Two open jobs merge when their places are within Job Match Radius, as today, **or** their marked rooms share a room. Everything else about a merge is unchanged. After a merge that moves the place, the area is rebuilt (Task 3's interface).
 - [x] **Step 4: Docs.** `CLAUDE.md`'s matching, merging and gunshot wording says "in the search area" and what it means.
 - [x] **Step 5: Compile and commit.**
-- [ ] **Step 6: Play-test gate (the user).**
+- [x] **Step 6: Play-test gate (the user).**
   - A thud in the far corner of an office already being searched, beyond 10 m from the job's spot, goes to that job and starts no second one.
   - Two sounds in one big office 12 m apart end as one team.
   - A gunshot in a marked room counts as in the area (the search starts over), not as a shot elsewhere.
