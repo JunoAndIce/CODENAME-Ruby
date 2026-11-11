@@ -9,7 +9,8 @@ using UnityEngine;
 /// search only ends once every point is gone and one held for good would keep the team there for good. A
 /// blocked walk only defers its point, until it has been blocked MaxBlocks times.
 /// Held by the job (GroupJob.Coverage), because the whole team shares it, and built the first time
-/// someone asks. The area has already flooded, so building this only copies its points. A plain class
+/// someone asks. The area has already flooded, so building this only copies its points, and when the area
+/// grows afterwards its new points are copied in (AddGround). A plain class
 /// that reads nothing but what it's given.
 /// </summary>
 public class SearchCoverage
@@ -28,11 +29,16 @@ public class SearchCoverage
     // The point each member was last blocked on, kept for his next pick only: handed straight back to him, the
     // obstacle that blocked him is still there, and a run of instant blocks would drop it after one real one.
     private readonly Dictionary<EnemyController, Vector3> _lastBlocked = new();
-    private readonly float _span;
+    private float _span;
     private int _nextToTest;
 
-    /// <summary>Time.time when this was built: when the first member reached the search's source, or they began looking again after a gunshot. Search Minimum Time counts from here.</summary>
-    public float StartedAt { get; } = Time.time;
+    /// <summary>
+    /// Time.time when this was built (when the first member reached the search's source, or they began looking
+    /// again after a gunshot), or when the area last grew into it (AddGround). Search Minimum Time counts from
+    /// here, so new ground gets the minimum's look too (spec: "Search Minimum Time starts over from when they
+    /// are added").
+    /// </summary>
+    public float StartedAt { get; private set; } = Time.time;
 
     /// <summary>Everything in the area. With no ground there it warns, and the team looks about for Search Minimum Time and then stands down.</summary>
     public SearchCoverage(SearchArea area, Object context)
@@ -45,17 +51,40 @@ public class SearchCoverage
         }
 
         _unseen.AddRange(area.Ground);
+        _span = SpanOf(area.Ground);
+    }
 
-        // How far across the area is, for spreading re-checks out: the longer side of its points' bounds.
+    /// <summary>
+    /// The area has grown (GroupJob.GrowAt, or a merge keeping both areas): its new points join what is left
+    /// to clear, and Search Minimum Time starts over, so the search runs on until they are seen and the new
+    /// ground gets its look. A point already unseen isn't added twice. Nothing new to clear restarts nothing.
+    /// The points must be the area's own (they are added to it first); this only copies them.
+    /// </summary>
+    public void AddGround(IReadOnlyList<Vector3> points)
+    {
+        int before = _unseen.Count;
+        for (int i = 0; i < points.Count; i++)
+            if (!_unseen.Contains(points[i])) _unseen.Add(points[i]);
+        if (_unseen.Count == before) return;
+
+        StartedAt = Time.time;
+        _span = SpanOf(_area.Ground);
+    }
+
+    // How far across the area is, for spreading re-checks out: the longer side of its points' bounds.
+    private static float SpanOf(IReadOnlyList<Vector3> ground)
+    {
+        if (ground.Count == 0) return 0f;
         float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
-        foreach (Vector3 point in area.Ground)
+        for (int i = 0; i < ground.Count; i++)
         {
+            Vector3 point = ground[i];
             minX = Mathf.Min(minX, point.x);
             maxX = Mathf.Max(maxX, point.x);
             minZ = Mathf.Min(minZ, point.z);
             maxZ = Mathf.Max(maxZ, point.z);
         }
-        _span = Mathf.Max(maxX - minX, maxZ - minZ);
+        return Mathf.Max(maxX - minX, maxZ - minZ);
     }
 
     /// <summary>The area this covers.</summary>

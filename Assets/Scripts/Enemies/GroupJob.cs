@@ -18,7 +18,8 @@ public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done, Signal }
 /// A few enemies dealing with one thing together. A plain object, held by JobBoard, with members, a
 /// kind, a step and a point. It **never moves anyone**: each member's state machine reads it and
 /// runs his own role, so the machine stays the one place movement is decided. JobBoard is the only
-/// caller of the members of this class that change it (Add, Remove, Upgrade); everyone else reads.
+/// caller of the members of this class that change it (Add, Remove, Upgrade, GrowAt, KeepArea); everyone
+/// else reads.
 /// </summary>
 public class GroupJob
 {
@@ -59,10 +60,69 @@ public class GroupJob
     /// <summary>
     /// What a Search covers round Point: the circle's ground and the rooms it reaches (SearchArea). Built
     /// when the job is made and again when the job moves (Upgrade), so it floods once per place and never
-    /// per step. Point and the area's place move together, so they are always the same point. Built for a
+    /// per step. It can grow (GrowAt, KeepArea), each new spot flooded once as it is added. Point and the
+    /// area's place (its current source) move together, so they are always the same point. Built for a
     /// Check too, because a Check can become a Search at the same place.
     /// </summary>
     public SearchArea Area { get; private set; }
+
+    // The points an area grew by, handed to the coverage. Shared scratch: one job grows at a time, on the
+    // main thread, and nothing is allocated per growth.
+    private static readonly List<Vector3> s_added = new();
+
+    /// <summary>
+    /// Grows the search to take in a spot (spec: "The search grows"): its circle is flooded once, the rooms
+    /// and ground it reaches that the area hasn't got join the area, and, when the team is already clearing
+    /// (Coverage built), join what is left to clear, starting Search Minimum Time over. With no coverage yet
+    /// the one built later copies the whole area, absorbed ground included. Point and the source don't move.
+    /// False when nothing new was added, which it logs, and when the spot can't be flooded (on another
+    /// floor, on no grid, nothing open round it), which SearchArea warns of. `why` names what is there, for the log.
+    /// </summary>
+    internal bool GrowAt(Vector3 spot, string why)
+    {
+        int before = Area.Ground.Count;
+        int roomsBefore = Area.Rooms.Count;
+        if (!Area.Absorb(spot, _intel.SearchAreaRadius, _intel))
+        {
+            DebugLog.Info($"{this} doesn't grow for {why} at {spot}: its circle adds no room and no ground the search hasn't already got (or couldn't be flooded, as warned).", _intel);
+            return false;
+        }
+        int added = PushNewGround(before);
+        DebugLog.Info($"{this} grows for {why} at {spot}: {Area.Rooms.Count - roomsBefore} new room(s) and {Area.Ground.Count - before} new point(s) to clear{(added > 0 ? ", and Search Minimum Time starts over" : Coverage == null ? ", cleared once the team reaches its source" : "")}.", _intel);
+        return true;
+    }
+
+    /// <summary>
+    /// Takes another job's area into this one's without flooding: its floods already ran (a merge keeping both
+    /// jobs' areas, JobBoard.Merge). New points join the coverage as for GrowAt. False when nothing new was
+    /// added, which it logs. `whose` says whose area it was, for the log.
+    /// </summary>
+    internal bool KeepArea(SearchArea other, string whose)
+    {
+        int before = Area.Ground.Count;
+        int roomsBefore = Area.Rooms.Count;
+        if (!Area.Absorb(other))
+        {
+            DebugLog.Info($"{this} keeps nothing of the search area round {other?.Place} ({whose}): it adds no room and no ground this one hasn't already got (or is on another floor, as warned).", _intel);
+            return false;
+        }
+        PushNewGround(before);
+        DebugLog.Info($"{this} keeps the search area round {other.Place} ({whose}): {Area.Rooms.Count - roomsBefore} new room(s) and {Area.Ground.Count - before} new point(s) to clear.", _intel);
+        return true;
+    }
+
+    // The area's points from `before` on are new: the coverage, when there is one, takes them in. Returns how
+    // many it took, 0 with no coverage (the one built later copies the whole area).
+    private int PushNewGround(int before)
+    {
+        if (Coverage == null) return 0;
+        int unseenBefore = Coverage.Unseen.Count;
+        s_added.Clear();
+        for (int i = before; i < Area.Ground.Count; i++) s_added.Add(Area.Ground[i]);
+        Coverage.AddGround(s_added);
+        s_added.Clear();
+        return Coverage.Unseen.Count - unseenBefore;
+    }
 
     // Where a Search's members walk to before spreading out: the place, or the ground nearest it someone
     // could reach, worked out once for the place it was found for (JobBoard.TryGetSearchStart). Keyed on
@@ -332,6 +392,9 @@ public class GroupJob
         // Check becoming a Search within a metre of its place keeps its area: it was built round that place. A louder
         // sound a step from the place keeps both, so a running search isn't thrown away, and Point never
         // drifts off the place the area was drawn round.
+        // A move rebuilds the area round the new place, so a grown area's other patches go with the old one
+        // (a merge puts back what it keeps, JobBoard.Merge). The seam for moving within a grown area instead
+        // is GrowAt at the new place and then Area.MoveSourceTo it, keeping every patch; Point moves with it.
         if (moved)
         {
             Area = new SearchArea(incident.Point, _intel.SearchAreaRadius, _intel);

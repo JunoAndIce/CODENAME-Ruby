@@ -1035,6 +1035,12 @@ public class JobBoard
     // exception is an older Search with that place inside a room it marks, which stays and only rises,
     // since it clears that room whole. An older Check always moves. `shared` is the room they have in
     // common when that, and not the place, is why they merge, for the log.
+    // **A merge keeps both areas** (the rooms plan's final review): whatever either job was searching is
+    // still searched, so the second place and its rooms aren't dropped. The younger's area, when it was a
+    // Search, is absorbed into the merged one; and when the merge moved the older and rebuilt its area round
+    // the new place, the older's own area, when it was a Search, is put back too. Both were flooded when
+    // they were built, so this copies their rooms and ground and floods nothing more. A Check's area isn't
+    // kept: a Check searches no room, so its area was never anyone's to clear.
     private void Merge(GroupJob older, GroupJob younger, Room shared)
     {
         // Built inside the call, so it compiles away with the rest of the line when logging is off.
@@ -1044,11 +1050,18 @@ public class JobBoard
         _moving.Clear();
         _moving.AddRange(younger.Members);
 
+        // Taken before Upgrade, which may rebuild the older's area and turn a Check into a Search.
+        SearchArea olderArea = older.Kind == JobKind.Search ? older.Area : null;
+        SearchArea youngerArea = younger.Kind == JobKind.Search ? younger.Area : null;
+
         Vector3 place = younger.Priority > older.Priority ? younger.Point : older.Point;
         StimulusResponse reason = BehaviourMap.Severity(younger.Reason) > BehaviourMap.Severity(older.Reason) ? younger.Reason : older.Reason;
         int priority = Mathf.Max(older.Priority, younger.Priority);
         JobKind kind = older.Kind == JobKind.Search || younger.Kind == JobKind.Search ? JobKind.Search : JobKind.Check;
         bool restarted = Upgrade(older, new Incident(place, reason, priority), kind);
+
+        if (olderArea != null && older.Area != olderArea) older.KeepArea(olderArea, "its own, from before the merge moved it");
+        if (youngerArea != null) older.KeepArea(youngerArea, $"{younger}'s, merged into it");
 
         _extras.Clear();
         for (int i = 0; i < _moving.Count; i++)

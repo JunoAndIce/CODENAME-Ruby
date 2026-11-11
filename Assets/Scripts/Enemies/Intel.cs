@@ -532,8 +532,13 @@ public class Intel : MonoBehaviour
             }
             // The checker is ringed: he's the one who goes, and the rest trail him.
             if (job.Checker != null) DrawCircle(job.Checker.transform.position, 0.9f);
-            // A Search's marked rooms, outlined in its colour, each searched whole.
-            if (job.Kind == JobKind.Search && job.Area != null) DrawSearchRooms(job.Area);
+            // A Search's patches, each circle faint (they mark what is searched, they aren't it), and its marked
+            // rooms outlined in its colour, each searched whole.
+            if (job.Kind == JobKind.Search && job.Area != null)
+            {
+                DrawSearchPatches(job.Area, Gizmos.color);
+                DrawSearchRooms(job.Area);
+            }
             // What the team hasn't looked at yet, as dots.
             if (job.Coverage != null)
                 foreach (Vector3 point in job.Coverage.Unseen) Gizmos.DrawSphere(point + Vector3.up * 0.1f, 0.08f);
@@ -548,6 +553,14 @@ public class Intel : MonoBehaviour
             UnityEditor.Handles.Label(job.Point + Vector3.up * 1.4f, $"#{job.Id} {job.Kind} · {job.Step} · {job.Count}/{job.Cap}\n{job.Reason}, priority {job.Priority}{(job.Checker != null ? $"\nchecker {job.Checker.name}" : "")}");
 #endif
         }
+    }
+
+    // Every patch's circle, faint, so a grown search shows each spot it took in; the colour is put back after.
+    private static void DrawSearchPatches(SearchArea area, Color color)
+    {
+        Gizmos.color = new Color(color.r, color.g, color.b, 0.25f);
+        for (int i = 0; i < area.Places.Count; i++) DrawCircle(area.Places[i], area.RadiusOf(i));
+        Gizmos.color = color;
     }
 
     // Raised a little and drawn inside the room's own outline, so it reads as the job's mark and not the room's gizmo.
