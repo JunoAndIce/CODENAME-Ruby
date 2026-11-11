@@ -400,10 +400,11 @@ public class SearchingState : EnemyStateBase
                 else Enemy.Movement.FaceToward(job.Point);
                 return;
 
-            // A gunshot elsewhere: the team stops and faces it for a beat before they all go.
+            // A serious thing (a gunshot, a new body, an enemy seen flying): the team stops and faces it for a
+            // beat before they all go there.
             case JobStep.Signal:
                 Enemy.Stop();
-                Enemy.Movement.FaceToward(job.SignalledShot.Point);
+                Enemy.Movement.FaceToward(job.SignalledThing.Point);
                 return;
 
             case JobStep.Gather:

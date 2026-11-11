@@ -51,16 +51,20 @@ public class EnemyReactions
 
         if (_enemy.CurrentState is SearchingState)
         {
-            // A gunshot goes to the squad whatever its priority. What it left over, a shot in the area
-            // they are already searching or one right after the last, is one more thing Ruby is doing.
             // A thing another open job covers (its place, or its search area) is that team's: he turns toward it and
             // it counts for him, but his job doesn't grow there and nobody is sent, whichever way it is handled below
             // (growing into their ground would have the next Intel Interval merge the two jobs).
             GroupJob own = _enemy.Job;
             bool othersHaveIt = own != null && _enemy.Intel != null && _enemy.Intel.AnotherJobHas(own, incident.Point);
 
-            if (incident.Mobilises && walkThere && _enemy.Intel != null)
-                return _enemy.Intel.Mobilise(_enemy, incident) || Distract(incident, othersHaveIt);
+            // A serious thing (a gunshot, a killing, a body nobody had booked, an enemy seen flying) brings his
+            // whole job, whatever its priority, before anything else: priority let a gunshot pass as a distraction,
+            // and a team about to finish walked off from it. With no running job only a gunshot or a killing goes
+            // to the squad, as before; anything else serious is handled below as it always was. What it leaves
+            // over (another job's, or right after the last move) is one more distraction for him.
+            bool onRunningJob = own != null && own.Step != JobStep.Done;
+            if (walkThere && _enemy.Intel != null && (incident.Mobilises || (onRunningJob && _enemy.Intel.Serious(incident))))
+                return _enemy.Intel.Mobilise(_enemy, incident, othersHaveIt) || Distract(incident, othersHaveIt);
 
             // On a job, anything at its place goes to the job first: a find or a flying enemy turns a check
             // into a search and a more serious thing upgrades it, for the whole team. Only what the job didn't take

@@ -34,7 +34,8 @@ public class SearchCoverage
 
     /// <summary>
     /// Time.time when this was built (when the first member reached the search's source, or they began looking
-    /// again after a gunshot), or when the area last grew into it (AddGround). Search Minimum Time counts from
+    /// again after a gunshot), when the area last grew into it (AddGround), or when the first member reached a
+    /// source a serious thing moved the job to (RestartMinimum). Search Minimum Time counts from
     /// here, so new ground gets the minimum's look too (spec: "Search Minimum Time starts over from when they
     /// are added").
     /// </summary>
@@ -70,6 +71,14 @@ public class SearchCoverage
         StartedAt = Time.time;
         _span = SpanOf(_area.Ground);
     }
+
+    /// <summary>
+    /// Search Minimum Time starts over from now, with nothing seen thrown away: the first member has reached a
+    /// new source a serious thing moved the job to (GroupJob.NoteArrived), and spreading out from it gets the
+    /// minimum's look as any source does. Without it a team whose area was all seen finished the moment the
+    /// first of them reached the body they had been called to.
+    /// </summary>
+    public void RestartMinimum() => StartedAt = Time.time;
 
     // How far across the area is, for spreading re-checks out: the longer side of its points' bounds.
     private static float SpanOf(IReadOnlyList<Vector3> ground)

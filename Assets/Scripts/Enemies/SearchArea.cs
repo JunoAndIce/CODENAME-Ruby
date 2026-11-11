@@ -164,9 +164,9 @@ public class SearchArea
 
     /// <summary>
     /// Makes one of the patches the source, the place the team walks to, keeping everything the area has:
-    /// for a job whose source moves within its grown area (GroupJob.Upgrade, once it moves by growing
-    /// rather than rebuilding). The place must be one of Places, compared exactly; anything else is the
-    /// caller's bug and is refused with an error.
+    /// a serious thing moves a job's source to its spot without throwing anything away (GroupJob.MoveSourceTo).
+    /// The place must be one of Places, compared exactly (TryGetPatchAt finds it for a spot); anything else
+    /// is the caller's bug and is refused with an error.
     /// </summary>
     public bool MoveSourceTo(Vector3 place)
     {
@@ -178,6 +178,25 @@ public class SearchArea
         }
         _source = index;
         return true;
+    }
+
+    /// <summary>
+    /// The place of the patch at a spot: the nearest patch place within a metre of it, the spacing Absorb
+    /// treats as the same patch (Growth.AlreadyThere). False when no patch is that near. The spot must be on
+    /// the area's floor (the caller checks), since places are compared flat.
+    /// </summary>
+    public bool TryGetPatchAt(Vector3 spot, out Vector3 place)
+    {
+        place = default;
+        float best = float.MaxValue;
+        for (int i = 0; i < _places.Count; i++)
+        {
+            float distance = PathGrid.FlatDistance(_places[i], spot);
+            if (distance > PointSpacing || distance >= best) continue;
+            best = distance;
+            place = _places[i];
+        }
+        return best <= PointSpacing;
     }
 
     // Whether a point lies in one of the first `count` rooms, those marked before the absorb in progress.
@@ -310,8 +329,8 @@ public class SearchArea
     /// <summary>
     /// The points the source patch's own flood reached, including cells an earlier patch had kept already:
     /// the ground joined to the source, which the walk-in may prefer without an eye-line check. Ground gives
-    /// no such guarantee once patches are absorbed. Task 3's MoveSourceTo switches which patch this is, so
-    /// the per-patch lists must survive deduplication of _ground.
+    /// no such guarantee once patches are absorbed. MoveSourceTo switches which patch this is (a serious
+    /// thing moving the source), so the per-patch lists must survive deduplication of _ground.
     /// </summary>
     public IReadOnlyList<Vector3> SourceGround => _patchGround[_source];
 

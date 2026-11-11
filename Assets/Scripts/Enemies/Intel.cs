@@ -424,8 +424,11 @@ public class Intel : MonoBehaviour
     /// <summary>Whether a point is in a job's search area: the circle round its place, or a room it marks (see JobBoard.InSearchArea).</summary>
     public bool InSearchArea(GroupJob job, Vector3 point) => _board.InSearchArea(job, point);
 
-    /// <summary>A searcher hears a gunshot (see JobBoard.Mobilise).</summary>
-    public bool Mobilise(EnemyController who, Incident shot) => _board.Mobilise(who, shot);
+    /// <summary>Whether a thing is serious: a gunshot, a killing, a body nobody had booked, or an enemy seen flying (see JobBoard.Serious).</summary>
+    public bool Serious(Incident thing) => _board.Serious(thing);
+
+    /// <summary>A searcher notices a serious thing: the whole job goes there, after a beat. True when taken (see JobBoard.Mobilise).</summary>
+    public bool Mobilise(EnemyController who, Incident thing, bool othersHaveIt) => _board.Mobilise(who, thing, othersHaveIt);
 
     /// <summary>A job member's ordinary distraction: it grows the search and sends one to check it. True when he goes (see JobBoard.Noticed).</summary>
     public bool Noticed(EnemyController who, Incident thing) => _board.Noticed(who, thing);

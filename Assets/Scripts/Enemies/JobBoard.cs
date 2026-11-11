@@ -97,7 +97,7 @@ public class JobBoard
                         AdvanceTo(job, JobStep.Done, "stands down");
                         break;
                     case JobStep.Signal:
-                        GoToSignalledShot(job);
+                        GoToSignalledThing(job);
                         break;
                 }
             }
@@ -127,9 +127,12 @@ public class JobBoard
     // (nobody gives up), and every walk to one clears it, defers it or drops it (SearchingState.Roam). Seen,
     // or no path, Search Travel Limit, or reached unseen, and it is gone; blocked, and it waits, but a point
     // is blocked at most MaxBlocks times before it is dropped too. So the unseen points only run out.
+    // A serious thing that moved the source kept the coverage, so in Go the search doesn't end until someone
+    // has reached the new source (AwaitingSource): the team called to a body must get there first.
     private bool SearchIsOver(GroupJob job, out string how)
     {
         how = null;
+        if (job.Step == JobStep.Go && job.AwaitingSource) return false;
         SearchCoverage coverage = job.Step == JobStep.Search ? CoverageOf(job) : job.Coverage;
         if (coverage == null) return false;
 
@@ -684,7 +687,8 @@ public class JobBoard
     /// <summary>
     /// A member's stimulus **at his own job's place** (the caller has tested Covers), before anything
     /// else: a more serious thing upgrades the job, and a find or a flying enemy turns a check into a search, for every
-    /// member, so the team never splits on it. True when the job took it, so he needn't be distracted;
+    /// member, so the team never splits on it. A serious thing (Serious) never gets here on a running job: Mobilise
+    /// takes it first, so what this converts is a loose gun found or anything at Alarm Speed. True when the job took it, so he needn't be distracted;
     /// false when it changed nothing, and the caller makes it a distraction. An attack is raised for
     /// the team through RaiseJobAt, before this is reached. A glance (walkThere false, a find already
     /// on the books) never changes the job: it isn't worth a walk, so it only raises and distracts.
@@ -702,84 +706,145 @@ public class JobBoard
     }
 
     /// <summary>
-    /// A searcher hears a gunshot. Enemies always go to the sound of a new shot: letting it pass as a
-    /// distraction had a team about to finish walk off as if nothing had happened. True when it was taken;
-    /// false leaves it to the caller as a distraction, for a shot in the area they are already searching
-    /// or one right after the last. In order:
-    /// 1. **He has no running job** (a search of his own, or finishing his last walk after a search ended):
-    ///    the squad decides as for any new thing, and he joins or leads a Search at the shot.
-    /// 2. **It's inside the job's search area** (InSearchArea: within the circle round its place, or in a
-    ///    room the area marks, however far from the place): a Check becomes a Search on the spot, and a Search's
-    ///    team throws away what it had seen and looks again, which starts Search Minimum Time over.
-    ///    There is nowhere new to go.
-    /// 3. **Still calling or gathering:** the team is standing and facing already, so the job just moves.
-    /// 4. **Otherwise** he signals: the team stops and faces it for React Time, then all go, as a Search.
-    /// Every member hears the same shot, so the first one does this and the rest find it done.
+    /// Whether a thing a searcher notices is **serious** (spec, "Distractions on a search"): the whole job goes,
+    /// and nobody scouts it alone. In full:
+    /// - a gunshot, or an enemy seen killed (Incident.Mobilises);
+    /// - an enemy seen flying, alive or dead: a moving thing whose source is an enemy. The senses take each
+    ///   throw once per Origin Lifetime per enemy (EnemySenses.Consider's record), which is "once per throw";
+    /// - a body the squad hasn't booked: a dead enemy the published pool doesn't know. The senses book a body
+    ///   as they notice it, and from the next publish on one who sees it only glances (EnemySenses.ScanCorpses),
+    ///   which carries no source and so is never serious: a known corpse can't keep calling the team back.
+    /// Anything else (a thud, the whip, a crate or gun thrown, a loose gun, an enemy standing on the chain) is
+    /// ordinary. Allocation-free: one parent lookup, only for a thing with a source.
     /// </summary>
-    public bool Mobilise(EnemyController who, Incident shot)
+    public bool Serious(Incident thing)
     {
-        var search = new Incident(shot.Point, shot.Reason, shot.Priority, makesSearch: true);
-        GroupJob job = who.Job;
+        if (thing.Mobilises) return true;
+        EnemyController enemy = EnemyOf(thing.Source);
+        if (enemy == null) return false;
+        if (thing.Kind is StimulusKind.MovingObject or StimulusKind.FastObject) return true;
+        return thing.Kind == StimulusKind.Body && enemy.Health.IsDead && !_intel.Published.KnowsBody(enemy);
+    }
 
+    // The enemy a source object belongs to, or null. A destroyed source reads as null through Unity's ==.
+    private static EnemyController EnemyOf(Object source) =>
+        source is Component component && component != null ? component.GetComponentInParent<EnemyController>() : null;
+
+    /// <summary>
+    /// A searcher notices a serious thing (Serious): the whole job goes (spec: "Serious: the whole job goes"),
+    /// in place of the old gunshot-only mobilise. True when it was taken; false leaves it to the caller as a
+    /// distraction (he turns, and it counts for him if Ruby is doing it), and every false says why. A taken
+    /// thing doesn't count toward his own distractions, as a taken gunshot never did. In order:
+    /// 1. **He has no running job** (a search of his own, or finishing his last walk after a search ended): a
+    ///    gunshot or a killing (the only serious things the caller sends here without a job) goes to the squad
+    ///    as any new thing does, and he joins or leads a Search there.
+    /// 2. **Another open job has it** (AnotherJobHas): it is that team's, and he only turns, as for anything
+    ///    else of theirs, or the next Intel Interval would merge the two jobs.
+    /// 3. **Off the job's floor:** refused with a warning, since a job never moves between floors.
+    /// 4. **The job rises at once:** an attack, for every member, and at least the thing's priority. A Search's
+    ///    area grows there (GrowAt, once per spot), and a gunshot inside the area as it was before (InSearchArea)
+    ///    throws away what was seen, once per Distraction Gap, because Ruby is right there. A body throws away
+    ///    nothing.
+    /// 5. **The move:** the spot becomes the job's source, keeping the old area plus the new (a Search,
+    ///    GroupJob.MoveSourceTo), or the Check becomes a Search there (Upgrade), and every member walks to it,
+    ///    then spreads out as from any source. Calling or gathering, it moves at once (they are standing
+    ///    already); otherwise the team **signals** first, stopped and facing it for React Time, and goes when
+    ///    the beat ends (GoToSignalledThing). In Signal a newer serious thing becomes where they go. A Search
+    ///    still calling or walking to that very source goes on as it is.
+    /// 6. **No yanking:** within the noticer's Distraction Gap of the last move, the job doesn't move again. A
+    ///    firefight, a tumbling body or a second sighting of a find still raises the job and grows its area,
+    ///    but is only a distraction for him. The rest who heard the same shot, in the same frame, find it done.
+    /// </summary>
+    public bool Mobilise(EnemyController who, Incident thing, bool othersHaveIt)
+    {
+        GroupJob job = who.Job;
         if (job == null || job.Step == JobStep.Done)
         {
+            if (!thing.Mobilises)
+            {
+                Debug.LogError($"{who.name} brought {thing} to the job board as serious with no running job, but only a gunshot or a killing goes to the squad from there (EnemyReactions.Investigate): it is left to him as a distraction.", who);
+                return false;
+            }
             // Not taken if it left him where he was: a full team has the shot, and he carries on.
-            Handle(who, search);
+            Handle(who, new Incident(thing.Point, thing.Reason, thing.Priority, makesSearch: true));
             return who.Job != job;
         }
 
-        // Every member hears one shot in the same frame, so an exact time match means the first hearer has
-        // already moved, converted or signalled the job for this very shot: the rest find it done. Without
-        // it the shot is "inside the area" for them, they fall through to Distract and hold still while
-        // one member walks.
-        if (job.LastShotTakenAt == Time.time) return true;
+        if (othersHaveIt)
+        {
+            DebugLog.Info($"{who.name} turns toward {thing}: it is serious, but another job has it, so {job} doesn't go there.", who);
+            return false;
+        }
+        PathGrid floor = PathGrid.At(thing.Point);
+        if (floor == null || floor != job.Area.Floor)
+        {
+            string jobFloor = job.Area.Floor != null ? job.Area.Floor.name : "no PathGrid";
+            Debug.LogWarning($"{who.name} noticed {thing}, which is serious, but it is {(floor == null ? "on no PathGrid" : $"on {floor.name}")} while {job}'s search area is on {jobFloor}: a job never moves between floors, so it stays where it is and he only turns toward it.", who);
+            return false;
+        }
 
-        // A signalling team keeps its beat. A second shot inside the area would turn the Check into a Search
-        // that restarts at the old place and never visits the signalled shot, so only a shot outside the
-        // area moves the signal, and within 1 m of the job UpdateSignal would make Upgrade return false and
-        // leave it in Signal for good. Outside the area on its floor is outside the circle round its place,
-        // which is at least a metre (Search Area Radius's minimum) from the job's place; a shot on another
-        // floor is outside the area too, and GoToSignalledShot refuses it.
+        // Tested before the growth below, after which the thing's own spot is always in the area.
+        bool inArea = InSearchArea(job, thing.Point);
+        Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} noticed something serious, {thing}");
+        job.RaisePriority(thing.Priority);
+        if (job.Kind == JobKind.Search)
+        {
+            // Once per spot: a patch already there (a second hearer, the same body seen again) floods nothing.
+            if (!job.Area.TryGetPatchAt(thing.Point, out _)) job.GrowAt(thing.Point, $"what {who.name} noticed ({thing})");
+            if (inArea && thing.Kind == StimulusKind.Gunshot) LookAgainForGunshot(job, who);
+            // Nothing open round the spot (SearchArea has warned): it can't be a source, so the job stays put.
+            if (!job.Area.TryGetPatchAt(thing.Point, out _))
+            {
+                DebugLog.Info($"{who.name} turns toward {thing}: it is serious, but its spot couldn't be taken into {job}'s search area, so the job can't go there and stays where it is.", who);
+                return false;
+            }
+        }
+
+        // Every member hears one shot in the same frame, and one scan can see a killing and then the body it left:
+        // the job has already moved, converted or signalled for this frame, and the rest find it done. Without it
+        // they fall through to the Distraction Gap below and stand still while the others go.
+        if (job.LastSeriousAt == Time.time) return true;
+
         if (job.Step == JobStep.Signal)
         {
-            if (!InSearchArea(job, shot.Point))
-            {
-                job.UpdateSignal(search);
-                job.NoteShotTaken();
-            }
+            job.UpdateSignal(thing);
+            job.NoteSeriousTaken();
+            DebugLog.Info($"{who.name} has something serious at {thing.Point}: {job} is signalling, and goes there instead when the beat ends.", who);
             return true;
         }
 
-        // In the search area: the circle round its place, or any room it marks, however far from the place.
-        if (InSearchArea(job, shot.Point))
+        // Already calling or walking in to this very source: there is nowhere new to go, and a walk started over
+        // for it would only lose ground.
+        if (job.Kind == JobKind.Search && job.Step is JobStep.Call or JobStep.Go
+            && job.Area.TryGetPatchAt(thing.Point, out Vector3 patch) && patch == job.Point)
         {
-            if (job.Kind == JobKind.Check)
-            {
-                DebugLog.Info($"{who.name} has something serious at {job}'s place.", who);
-                job.NoteShotTaken();
-                ChooseAfterRestart(job, Upgrade(job, new Incident(job.Point, shot.Reason, shot.Priority), JobKind.Search));
-                return true;
-            }
-
-            Elevate(job, shot.Reason, $"{who.name} has something serious in the search area");
-            LookAgainForGunshot(job, who);
-            return false;
+            job.NoteSeriousTaken();
+            DebugLog.Info($"{who.name} has something serious at {thing.Point}, but it is {job}'s source already and the team is {(job.Step == JobStep.Call ? "being called to it" : "walking there")}.", who);
+            return true;
         }
 
         if (job.Step is JobStep.Call or JobStep.Gather)
         {
-            DebugLog.Info($"{who.name} has something serious at {shot.Point}: {job} goes there instead.", who);
-            job.NoteShotTaken();
-            ChooseAfterRestart(job, Upgrade(job, search, JobKind.Search));
+            job.NoteSeriousTaken();
+            job.NoteSeriousMove();
+            DebugLog.Info($"{who.name} has something serious at {thing.Point}: {job} goes there instead.", who);
+            MoveTo(job, thing);
             return true;
         }
 
-        // The team has only just been sent. A shot every second must not stop them every second.
-        if (Time.time - job.LastSignalAt < who.DistractionGap) return false;
+        // The team has only just been sent. A shot every second, or a body thudding about, must not stop them
+        // every second.
+        float since = Time.time - job.LastSeriousMoveAt;
+        if (since < who.DistractionGap)
+        {
+            DebugLog.Info($"{who.name} has something serious at {thing.Point}, but {job} moved for something serious {since:0.#}s ago, within his Distraction Gap ({who.DistractionGap:0.#}s): it has grown there and doesn't move again yet.", who);
+            return false;
+        }
 
-        job.BeginSignal(search, _intel.ReactTime);
-        job.NoteShotTaken();
-        DebugLog.Info($"{who.name} has something serious at {shot.Point} and signals {job}.", who);
+        job.NoteSeriousTaken();
+        job.NoteSeriousMove();
+        job.BeginSignal(thing, _intel.ReactTime);
+        DebugLog.Info($"{who.name} has something serious at {thing.Point} and signals {job}: the team stops and faces it, then all go.", who);
         return true;
     }
 
@@ -807,15 +872,17 @@ public class JobBoard
     /// The one entry for a job member's ordinary distraction (spec: "Distractions on a search"), after his own
     /// count has taken it (EnemyReactions.Distract). True when he is now out checking it; false when he only
     /// turns toward it, which the caller does, and every false says why in the log. In order:
-    /// 1. **Not for one to check** (until serious distractions are built): a body or gun lying there, or
-    ///    anything else that says nothing of Ruby, is only for the books, and a gunshot or a killing is the whole
-    ///    team's (Mobilise). A Done job has nothing to come back to. A spot off the job's floor can't be walked to.
+    /// 1. **Not for one to check:** a serious thing (Serious: a gunshot, a killing, a body nobody had booked, an
+    ///    enemy seen flying) is the whole team's or nobody's (Mobilise), so what reaches here of one is only what
+    ///    Mobilise left over, and nobody scouts it. A body or gun lying there, or anything else that says nothing
+    ///    of Ruby, is only for the books. A Done job has nothing to come back to. A spot off the job's floor
+    ///    can't be walked to.
     /// 2. **The same thing** (decision 3): the same source object and kind, or with no source the same grid
     ///    cell, noticed by a member of this job within half a second. The first who noticed it went, so this one
     ///    turns and carries on. If the first couldn't go (the checker, say), this one goes in his place.
     /// 3. **A new thing grows the search** there at once (GroupJob.GrowAt), whoever goes and whether he gets
-    ///    there, and floods once for it: the same thing never grows again. A Check has no area to grow, and a
-    ///    team signalling is about to move to a gunshot, which rebuilds its area.
+    ///    there, and floods once for it: the same thing never grows again. A Check has no area to grow. A team
+    ///    signalling grows too: the serious move it is about to make keeps the whole area.
     /// 4. **He goes** to check it, alone, and comes back (SearchingState.CheckForJob), unless the job isn't
     ///    under way yet (a Search going or searching, a Check going or looking) or he is a Check's checker, who
     ///    has the job's own spot to reach. Several members can be out on different things at once, and one
@@ -831,9 +898,10 @@ public class JobBoard
             Debug.LogError($"{who.name} noticed {thing} as a job member, but he is on no job: only a job member's distraction comes here (EnemyReactions.Distract). He only turns toward it.", who);
             return false;
         }
-        if (thing.SaysNothingOfRuby || thing.Mobilises)
+        bool serious = Serious(thing);
+        if (serious || thing.SaysNothingOfRuby)
         {
-            DebugLog.Info($"{who.name} turns toward {thing}: {(thing.Mobilises ? "a gunshot or a killing moves the whole team (Mobilise), not one" : "nothing about it leads to Ruby (a body or gun lying there, or nothing shows where it came from)")}, so nobody goes to check it.", who);
+            DebugLog.Info($"{who.name} turns toward {thing}: {(serious ? "it is serious, which moves the whole team or nobody (Mobilise), never one" : "nothing about it leads to Ruby (a body or gun lying there, or nothing shows where it came from)")}, so nobody goes to check it.", who);
             return false;
         }
         if (job.Step == JobStep.Done)
@@ -874,13 +942,7 @@ public class JobBoard
             return true;
         }
 
-        if (job.Kind == JobKind.Search)
-        {
-            if (job.Step == JobStep.Signal)
-                DebugLog.Info($"{job} doesn't grow for {thing}: it is signalling a gunshot and is about to move there, which rebuilds its area.", _intel);
-            else
-                job.GrowAt(thing.Point, $"what {who.name} noticed ({thing})");
-        }
+        if (job.Kind == JobKind.Search) job.GrowAt(thing.Point, $"what {who.name} noticed ({thing})");
 
         bool go = CanCheck(job, who, out string whyNot);
         job.NoteNoticing(thing.Source, thing.Kind, cell, go ? who : null);
@@ -947,36 +1009,57 @@ public class JobBoard
         DebugLog.Info($"{who.name} has something serious in the search area: {job} throws away what it had seen and looks again.", who);
     }
 
-    // The beat is over: everyone goes. A shot on the area's floor was outside the area when signalled, so
-    // outside the circle round the job's place (which is the area's place: they move together), more than
-    // Search Area Radius and so more than the 1 m that counts as the same place away: the job moves and
-    // starts over from Go. A shot on another floor is outside the area however near in the plan, and a
-    // job never moves to another floor (floors are independent), so it is refused before Upgrade, with a
-    // warning; Upgrade refusing to move is the same dead end. Either way the job would sit in Signal for
-    // good, so it starts its search over where it is.
-    private void GoToSignalledShot(GroupJob job)
+    // The beat is over: everyone goes to the newest serious thing signalled. Mobilise refuses a thing off the
+    // job's floor before it signals or updates a signal, so the floor test here is a guard: a job never moves
+    // between floors (floors are independent), and leaving it in Signal would hold the team there for good.
+    private void GoToSignalledThing(GroupJob job)
     {
-        Vector3 shot = job.SignalledShot.Point;
-        if (PathGrid.At(shot) != job.Area.Floor)
+        Incident thing = job.SignalledThing;
+        if (PathGrid.At(thing.Point) != job.Area.Floor)
         {
-            Debug.LogWarning($"{job} signalled a shot at {shot}, which is on another floor from its search area (or on no grid): a job doesn't move between floors, so it starts its search over where it is instead.", _intel);
-            RestartWhereItIs(job);
+            Debug.LogError($"{job} signalled {thing}, which is on another floor from its search area (or on no grid), though Mobilise refuses those before signalling: a job doesn't move between floors, so it carries on from where it is instead.", _intel);
+            ResumeWhereItIs(job);
             return;
         }
 
-        DebugLog.Info($"{job} goes to {shot}.", _intel);
-        if (Upgrade(job, job.SignalledShot, JobKind.Search))
-        {
-            ChooseAfterRestart(job, true);
-            return;
-        }
-        Debug.LogError($"{job} signalled a shot at {shot}, outside its search area on its own floor, yet the move to it didn't start the job over: it starts its search over where it is rather than wait in Signal for good.", _intel);
-        RestartWhereItIs(job);
+        DebugLog.Info($"{job} goes to {thing.Point}.", _intel);
+        MoveTo(job, thing);
     }
 
-    // Out of Signal at the place the job already has, with nothing seen kept: the team re-plans from Go.
-    private void RestartWhereItIs(GroupJob job)
+    // Where the job goes for a serious thing: now (still calling or gathering) or when the beat ends. A Check
+    // becomes a Search there (Upgrade, which moves it when the spot is more than a metre off): a Check searches
+    // no room, so it has no area worth keeping. A Search moves its source there and keeps its whole area and
+    // what was seen (GroupJob.MoveSourceTo), and every member, those out on a check included, walks there. A
+    // spot that can't be taken into the area (SearchArea warned why) leaves the job where it is.
+    private void MoveTo(GroupJob job, Incident thing)
     {
+        if (job.Kind == JobKind.Check)
+        {
+            var search = new Incident(thing.Point, StimulusResponse.SearchForAttack, Mathf.Max(job.Priority, thing.Priority), makesSearch: true);
+            ChooseAfterRestart(job, Upgrade(job, search, JobKind.Search));
+            return;
+        }
+
+        if (!job.MoveSourceTo(thing.Point, $"the serious thing it goes to ({thing})"))
+        {
+            Debug.LogWarning($"{job} can't move its source to {thing.Point}: the spot couldn't be taken into its search area (as warned), so it carries on from where it is.", _intel);
+            ResumeWhereItIs(job);
+            return;
+        }
+        DebugLog.Info($"{job}'s source moves to {job.Point}, keeping its whole search area ({job.Area.Places.Count} place(s), {job.Area.Rooms.Count} room(s)) and what it has seen: everyone walks there, then spreads out.", _intel);
+        foreach (EnemyController member in job.Members) member.FollowJob(job);
+    }
+
+    // Out of Signal at the place the job already has, and the team walks to it again. A Search keeps its area
+    // and what was seen (its source is always one of its patches, so MoveSourceTo to it always succeeds); a
+    // Check has nothing seen to keep and starts its walk over.
+    private void ResumeWhereItIs(GroupJob job)
+    {
+        if (job.Kind == JobKind.Search && job.MoveSourceTo(job.Point, "its own source"))
+        {
+            foreach (EnemyController member in job.Members) member.FollowJob(job);
+            return;
+        }
         job.Restart(_intel.GatherTime);
         foreach (EnemyController member in job.Members) member.FollowJob(job);
         ChooseAfterRestart(job, true);

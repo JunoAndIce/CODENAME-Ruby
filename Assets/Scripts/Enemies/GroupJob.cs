@@ -8,7 +8,8 @@ public enum JobKind { Check, Search }
 /// Where a job has got to. A Check goes Call, Gather, Go, Look, StandDown, Done; a Search goes
 /// Call, Go, Search, Done. Call is the lead reacting to what he heard and then calling in the others
 /// one at a time, so nobody is on the job before he has reacted. Signal can interrupt any of them from Go
-/// on: a gunshot elsewhere, the team stopped and facing it for a beat before they all go (JobBoard.Mobilise).
+/// on: a serious thing (a gunshot, a body nobody had booked, an enemy seen flying), the team stopped and
+/// facing it for a beat before they all go there (JobBoard.Mobilise).
 /// The job's clock moves it along (JobBoard advances it); members read the step and run their own role.
 /// Values are never saved, so they may be reordered, and nothing compares them by order.
 /// </summary>
@@ -18,8 +19,8 @@ public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done, Signal }
 /// A few enemies dealing with one thing together. A plain object, held by JobBoard, with members, a
 /// kind, a step and a point. It **never moves anyone**: each member's state machine reads it and
 /// runs his own role, so the machine stays the one place movement is decided. JobBoard is the only
-/// caller of the members of this class that change it (Add, Remove, Upgrade, GrowAt, KeepArea, SendToCheck,
-/// EndCheck); everyone else reads.
+/// caller of the members of this class that change it (Add, Remove, Upgrade, GrowAt, KeepArea, MoveSourceTo,
+/// RaisePriority, SendToCheck, EndCheck); everyone else reads.
 /// </summary>
 public class GroupJob
 {
@@ -59,10 +60,11 @@ public class GroupJob
     public Vector3 Point { get; private set; }
     /// <summary>
     /// What a Search covers round Point: the circle's ground and the rooms it reaches (SearchArea). Built
-    /// when the job is made and again when the job moves (Upgrade), so it floods once per place and never
-    /// per step. It can grow (GrowAt, KeepArea), each new spot flooded once as it is added. Point and the
-    /// area's place (its current source) move together, so they are always the same point. Built for a
-    /// Check too, because a Check can become a Search at the same place.
+    /// when the job is made and again when an upgrade moves the job (Upgrade), so it floods once per place
+    /// and never per step. It can grow (GrowAt, KeepArea), each new spot flooded once as it is added, and a
+    /// serious thing moves its source within it (MoveSourceTo) without rebuilding it. Point and the area's
+    /// place (its current source) move together, so they are always the same point. Built for a Check too,
+    /// because a Check can become a Search at the same place.
     /// </summary>
     public SearchArea Area { get; private set; }
 
@@ -130,6 +132,53 @@ public class GroupJob
         Coverage.AddGround(s_added);
         s_added.Clear();
         return Coverage.Unseen.Count - unseenBefore;
+    }
+
+    /// <summary>
+    /// A serious thing has made `spot` the job's new source (spec: "The spot becomes the job's new source"): the
+    /// job moves there but keeps what it had. The spot's patch (grown into when the thing was noticed; grown
+    /// here if it wasn't) becomes the area's source and Point follows it, so Point is always one of the area's
+    /// places and the walk-in point, keyed on Point, and SourceGround are worked out for the new place. Nothing
+    /// is rebuilt and the coverage is kept, so nothing already seen is thrown away; claims are released so no
+    /// member's old point keeps another off it. Everyone walks to the new source from Go, as at the start,
+    /// except in Call, which carries on calling and sends them afterwards. Checks and noticings go with the old
+    /// walk, as for Restart. Search Minimum Time starts over once the first member reaches it (AwaitingSource).
+    /// For a Search: a Check has no area to keep and becomes a Search through Upgrade. False when the spot
+    /// can't be a patch (another floor, or nothing open round it: SearchArea warned), and nothing changes.
+    /// </summary>
+    internal bool MoveSourceTo(Vector3 spot, string why)
+    {
+        if (!Area.TryGetPatchAt(spot, out Vector3 place))
+        {
+            GrowAt(spot, why);
+            if (!Area.TryGetPatchAt(spot, out place)) return false;
+        }
+        if (!Area.MoveSourceTo(place)) return false;
+        Point = place;
+
+        Checker = null;
+        _checks.Clear();
+        _noticings.Clear();
+        _arrived.Clear();
+        _dropped.Clear();
+        if (Coverage != null)
+            foreach (EnemyController member in _members) Coverage.Release(member);
+        AwaitingSource = true;
+        if (Step != JobStep.Call) SetStep(JobStep.Go, 0f);
+        return true;
+    }
+
+    /// <summary>
+    /// A serious thing moved the source and nobody has reached it yet. The coverage was kept, so without this a
+    /// Search whose area was all seen would finish from Go (SearchIsOver) while the team was still walking to
+    /// the body they had been called to. The first arrival clears it and starts Search Minimum Time over.
+    /// </summary>
+    public bool AwaitingSource { get; private set; }
+
+    /// <summary>The priority rises to this one if it is higher, and never falls (a serious thing, which raises the job where it is).</summary>
+    internal void RaisePriority(int priority)
+    {
+        if (priority > Priority) Priority = priority;
     }
 
     // Where a Search's members walk to before spreading out: the place, or the ground nearest it someone
@@ -340,27 +389,35 @@ public class GroupJob
         _noticings[index] = n;
     }
 
-    /// <summary>The gunshot the team is signalling about, in Signal: where they face, and where they go when it ends.</summary>
-    public Incident SignalledShot { get; private set; }
-    /// <summary>When the last signal began, so a run of shots doesn't stop the team again at every one.</summary>
-    public float LastSignalAt { get; private set; } = float.NegativeInfinity;
-    /// <summary>When a gunshot last moved, converted or signalled the job, so the rest who heard the same shot find it done.</summary>
-    public float LastShotTakenAt { get; private set; } = float.NegativeInfinity;
+    /// <summary>The serious thing the team is signalling about, in Signal: where they face, and where they go when it ends.</summary>
+    public Incident SignalledThing { get; private set; }
+    /// <summary>
+    /// When a serious thing last moved the job (a signal began, or a job still calling or gathering moved at
+    /// once), so a firefight, a tumbling body or a second find doesn't yank the team about again within a
+    /// member's Distraction Gap.
+    /// </summary>
+    public float LastSeriousMoveAt { get; private set; } = float.NegativeInfinity;
+    /// <summary>When a serious thing last moved, converted or signalled the job, so the rest who heard the same shot, in the same frame, find it done.</summary>
+    public float LastSeriousAt { get; private set; } = float.NegativeInfinity;
     /// <summary>When a gunshot in the area last had the team look again, so one shot heard by the whole team throws away what they'd seen once.</summary>
     public float LastLookedAgainAt { get; private set; } = float.NegativeInfinity;
 
-    internal void NoteShotTaken() => LastShotTakenAt = Time.time;
+    internal void NoteSeriousTaken() => LastSeriousAt = Time.time;
+    internal void NoteSeriousMove() => LastSeriousMoveAt = Time.time;
     internal void NoteLookedAgain() => LastLookedAgainAt = Time.time;
 
-    internal void BeginSignal(Incident shot, float length)
+    // The whole team stops and faces it, members out on a check included: they are about to walk there with
+    // everyone (spec: "every member walks to the spot together"), so a check left running would have one of
+    // them still walking off to a thud through the beat.
+    internal void BeginSignal(Incident thing, float length)
     {
-        SignalledShot = shot;
-        LastSignalAt = Time.time;
+        SignalledThing = thing;
+        _checks.Clear();
         SetStep(JobStep.Signal, length);
     }
 
-    // Another shot during the signal: they go to the newest. The beat isn't started over.
-    internal void UpdateSignal(Incident shot) => SignalledShot = shot;
+    // Another serious thing during the signal: they go to the newest. The beat isn't started over.
+    internal void UpdateSignal(Incident thing) => SignalledThing = thing;
 
     // Every step change records its length too, so none can begin without one.
     internal void SetStep(JobStep step, float length)
@@ -392,6 +449,12 @@ public class GroupJob
             return true;
         }
         _arrived.Add(who);
+        // The first at a source a serious thing moved the job to: spreading out from it gets the minimum's look.
+        if (AwaitingSource)
+        {
+            AwaitingSource = false;
+            Coverage?.RestartMinimum();
+        }
         return TryStartSearch(length);
     }
 
@@ -437,8 +500,10 @@ public class GroupJob
         // noticed belongs to the old walk too.
         _checks.Clear();
         _noticings.Clear();
-        // A new place, or a check that has become a search: nothing here has been looked at.
+        // A new place, or a check that has become a search: nothing here has been looked at. With no coverage
+        // there is nothing for a minimum to be restarted on: the first arrival builds one.
         Coverage = null;
+        AwaitingSource = false;
         _arrived.Clear();
         _dropped.Clear();
         // Still calling people in: carry on, the walk will start from the new place afterwards.
@@ -463,7 +528,8 @@ public class GroupJob
     /// louder spot would never be visited and the team would say all clear. That covers a Check this
     /// upgrade turns into a Search too (the merge rule: the higher priority's place wins unless the older
     /// is already searching). Every route that upgrades (a match, a member's own stimulus, a merge, a
-    /// gunshot) comes through here, so they all agree.
+    /// serious thing on a Check) comes through here, so they all agree. A serious thing on a Search doesn't:
+    /// it moves the source within the area and keeps it (MoveSourceTo).
     /// </summary>
     internal bool Upgrade(Incident incident, JobKind kind, float gatherLength)
     {
@@ -477,8 +543,8 @@ public class GroupJob
         // sound a step from the place keeps both, so a running search isn't thrown away, and Point never
         // drifts off the place the area was drawn round.
         // A move rebuilds the area round the new place, so a grown area's other patches go with the old one
-        // (a merge puts back what it keeps, JobBoard.Merge). The seam for moving within a grown area instead
-        // is GrowAt at the new place and then Area.MoveSourceTo it, keeping every patch; Point moves with it.
+        // (a merge puts back what it keeps, JobBoard.Merge). A serious thing moves a Search without this, by
+        // MoveSourceTo, keeping every patch and what was seen; Point moves with it.
         if (moved)
         {
             Area = new SearchArea(incident.Point, _intel.SearchAreaRadius, _intel);
