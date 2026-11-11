@@ -71,16 +71,16 @@
   - `void JobBoard.Noticed(EnemyController who, Incident thing, Object source)`: the one entry for a job member's ordinary distraction.
   - `GroupJob`'s per-member checks (decision 4): `bool TryGetCheck(EnemyController who, out Vector3 point)`, `void SendToCheck(EnemyController who, Vector3 point)`, `void EndCheck(EnemyController who)`.
 
-- [ ] **Step 1: Routing.** On a job, `EnemyReactions.Distract` still counts the distraction for him (the personal count, unchanged), then hands it to `JobBoard.Noticed` instead of only turning and pausing. Off a job, it keeps today's turn-and-pause.
-- [ ] **Step 2: Who goes.**
+- [x] **Step 1: Routing.** On a job, `EnemyReactions.Distract` still counts the distraction for him (the personal count, unchanged), then hands it to `JobBoard.Noticed` instead of only turning and pausing. Off a job, it keeps today's turn-and-pause.
+- [x] **Step 2: Who goes.**
   - `Noticed` grows the area at the spot (`GrowAt`).
   - If no other member noticed the same thing (decision 3) within 0.5 s, this member is sent to check it.
   - If one already did, this member doesn't go: he turns toward it as today's distraction does, and that's all.
   - Several members can be out checking different things at once.
   - On a Check, the noticer is sent to look and come back, with no growth.
-- [ ] **Step 3: The walk.** `SearchingState.CheckForJob` runs per member from `TryGetCheck`: walk there, look for Look Time, then go back to roaming the (grown) search. The old single-scout gate (a team of two or more, one at a time) goes. The rule that a body or gun lying there never sends one stays here; Task 3 makes those serious.
-- [ ] **Step 4: Docs.** `CLAUDE.md`: Distraction and "Sending one to check" are rewritten.
-- [ ] **Step 5:** Compile and commit.
+- [x] **Step 3: The walk.** `SearchingState.CheckForJob` runs per member from `TryGetCheck`: walk there, look for Look Time, then go back to roaming the (grown) search. The old single-scout gate (a team of two or more, one at a time) goes. The rule that a body or gun lying there never sends one stays here; Task 3 makes those serious.
+- [x] **Step 4: Docs.** `CLAUDE.md`: Distraction and "Sending one to check" are rewritten.
+- [x] **Step 5:** Compile and commit.
 - [ ] **Step 6: Play-test gate (the user).**
   - A thud outside a searched office brings one member to it.
   - Its rooms join the search, and the search runs longer.
