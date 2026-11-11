@@ -428,7 +428,10 @@ public class Intel : MonoBehaviour
     public bool Mobilise(EnemyController who, Incident shot) => _board.Mobilise(who, shot);
 
     /// <summary>A job member's ordinary distraction: it grows the search and sends one to check it. True when he goes (see JobBoard.Noticed).</summary>
-    public bool Noticed(EnemyController who, Incident thing, Object source) => _board.Noticed(who, thing, source);
+    public bool Noticed(EnemyController who, Incident thing) => _board.Noticed(who, thing);
+
+    /// <summary>Whether an open job other than `own` has a point, by its place or its search area (see JobBoard.AnotherJobHas).</summary>
+    public bool AnotherJobHas(GroupJob own, Vector3 point) => _board.AnotherJobHas(own, point);
 
     /// <summary>What a job's team hasn't looked at yet (see JobBoard.CoverageOf).</summary>
     public SearchCoverage CoverageOf(GroupJob job) => _board.CoverageOf(job);

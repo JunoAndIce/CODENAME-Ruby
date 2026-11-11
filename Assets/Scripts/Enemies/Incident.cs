@@ -10,9 +10,10 @@ using UnityEngine;
 /// </summary>
 public readonly struct Incident
 {
-    public Incident(Vector3 point, StimulusResponse reason, int priority, bool makesSearch = false, bool saysNothingOfRuby = false, bool mobilises = false, StimulusKind? kind = null)
+    public Incident(Vector3 point, StimulusResponse reason, int priority, bool makesSearch = false, bool saysNothingOfRuby = false, bool mobilises = false, StimulusKind? kind = null, Object source = null)
     {
         Kind = kind;
+        Source = source;
         Mobilises = mobilises;
         Point = point;
         Reason = reason;
@@ -52,7 +53,14 @@ public readonly struct Incident
     /// </summary>
     public StimulusKind? Kind { get; }
 
-    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, MakesSearch, SaysNothingOfRuby, Mobilises, Kind);
+    /// <summary>
+    /// The object that made it (the crate, the gun, the body), or null for a sound with none. Lives here and
+    /// not beside the incident in a call, so a sense site that builds one can't forget it and still compile:
+    /// with the kind it is what makes two members' noticing "the same thing" (JobBoard.Noticed).
+    /// </summary>
+    public Object Source { get; }
+
+    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, MakesSearch, SaysNothingOfRuby, Mobilises, Kind, Source);
 
     // The "reason at point" the logs print, so it reads the same wherever it is written.
     public override string ToString() => $"{Reason} at {Point}";

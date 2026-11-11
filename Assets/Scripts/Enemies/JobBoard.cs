@@ -783,6 +783,22 @@ public class JobBoard
         return true;
     }
 
+    /// <summary>
+    /// Whether an open job other than `own` has this point: it is at that job's place (Covers) or inside its
+    /// search area. Such a thing is that team's, so a member of `own` only turns toward it
+    /// (EnemyReactions.Investigate) and never grows his own search into their ground. Allocation-free.
+    /// </summary>
+    public bool AnotherJobHas(GroupJob own, Vector3 point)
+    {
+        for (int i = 0; i < _jobs.Count; i++)
+        {
+            GroupJob job = _jobs[i];
+            if (job == own || job.Step == JobStep.Done || job.Count == 0) continue;
+            if (Covers(job, point) || InSearchArea(job, point)) return true;
+        }
+        return false;
+    }
+
     // Two members noticing one thing within this long send one of them (spec: "noticed within half a second of
     // each other"). Longer apart, they are two noticings, and each who can goes.
     private const float SameThingWindow = 0.5f;
@@ -807,7 +823,7 @@ public class JobBoard
     ///    where it happened either way.
     /// Nothing here touches anyone's distraction count: sending a scout shares nothing.
     /// </summary>
-    public bool Noticed(EnemyController who, Incident thing, Object source)
+    public bool Noticed(EnemyController who, Incident thing)
     {
         GroupJob job = who.Job;
         if (job == null)
@@ -826,14 +842,20 @@ public class JobBoard
             return false;
         }
         PathGrid floor = PathGrid.At(thing.Point);
-        if (floor == null || floor != job.Area.Floor || !floor.WorldToCell(thing.Point, out Vector2Int cell))
+        Vector2Int cell = default;
+        if (floor != null && floor == job.Area.Floor && !floor.WorldToCell(thing.Point, out cell))
+        {
+            Debug.LogWarning($"{who.name} noticed {thing}, which is on {job.Area.Floor.name}, {job}'s own floor, but WorldToCell can't place the point in a cell there, so there is nothing to compare it by and he only turns toward it.", who);
+            return false;
+        }
+        if (floor == null || floor != job.Area.Floor)
         {
             string jobFloor = job.Area.Floor != null ? job.Area.Floor.name : "no PathGrid";
             Debug.LogWarning($"{who.name} noticed {thing}, which is {(floor == null ? "on no PathGrid" : $"on {floor.name}")} while {job} is on {jobFloor}: nobody can walk there for the job and a search never spans floors, so he only turns toward it.", who);
             return false;
         }
 
-        if (job.FindNoticing(source, thing.Kind, cell, Time.time - SameThingWindow, out int index, out EnemyController sent))
+        if (job.FindNoticing(thing.Source, thing.Kind, cell, Time.time - SameThingWindow, out int index, out EnemyController sent))
         {
             if (sent == who) return job.TryGetCheck(who, out _);
             if (sent != null)
@@ -861,7 +883,7 @@ public class JobBoard
         }
 
         bool go = CanCheck(job, who, out string whyNot);
-        job.NoteNoticing(source, thing.Kind, cell, go ? who : null);
+        job.NoteNoticing(thing.Source, thing.Kind, cell, go ? who : null);
         if (!go)
         {
             DebugLog.Info($"{who.name} turns toward {thing}: {whyNot}.", who);
@@ -876,6 +898,9 @@ public class JobBoard
     // the team is still being called or gathered), and he isn't a Check's checker, who has its spot to reach.
     private static bool CanCheck(GroupJob job, EnemyController who, out string whyNot)
     {
+        // A Search in Go isn't excluded for want of a member to wait on: it finishes from Go anyway, and a member
+        // who hasn't arrived only keeps the step at Go a little longer, so one out checking can't stall it.
+        // (The old reason for leaving Go out was deleted with the single scout.)
         bool underWay = job.Kind == JobKind.Search ? job.Step is JobStep.Go or JobStep.Search : job.Step is JobStep.Go or JobStep.Look;
         if (!underWay)
         {

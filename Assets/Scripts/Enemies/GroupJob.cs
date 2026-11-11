@@ -306,13 +306,16 @@ public class GroupJob
     {
         for (int i = _noticings.Count - 1; i >= 0; i--)
             if (_noticings[i].At < since) _noticings.RemoveAt(i);
+        // A seen moving body's kind is its speed class, so one crate seen at two speeds by two members' staggered
+        // scans would be two things. MovingObject and FastObject are one kind here (amends decision 3); the rest stay as they are.
+        kind = SameThingKind(kind);
         // Compared by reference, never Unity's ==: a source destroyed since would read as null and match a sourceless sound.
         bool hasSource = !ReferenceEquals(source, null);
         for (int i = 0; i < _noticings.Count; i++)
         {
             Noticing n = _noticings[i];
             bool same = hasSource
-                ? ReferenceEquals(n.Source, source) && n.Kind == kind
+                ? ReferenceEquals(n.Source, source) && SameThingKind(n.Kind) == kind
                 : ReferenceEquals(n.Source, null) && n.Cell == cell;
             if (!same) continue;
             index = i;
@@ -323,6 +326,9 @@ public class GroupJob
         sent = null;
         return false;
     }
+
+    private static StimulusKind? SameThingKind(StimulusKind? kind) =>
+        kind == StimulusKind.FastObject ? StimulusKind.MovingObject : kind;
 
     internal void NoteNoticing(Object source, StimulusKind? kind, Vector2Int cell, EnemyController sent) =>
         _noticings.Add(new Noticing { Source = source, Kind = kind, Cell = cell, At = Time.time, Sent = sent });
