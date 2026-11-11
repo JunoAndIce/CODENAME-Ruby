@@ -562,18 +562,22 @@ public class JobBoard
 
     /// <summary>
     /// Whether a point is at a job's place, as a new disturbance is judged against it: the job is
-    /// open and the point is within Job Match Radius of its place on its floor, **or**, for a Search
+    /// open and the point is within Job Match Radius of any of its places (a grown search has several, one
+    /// per absorbed patch) on its floor, **or**, for a Search
     /// only, inside one of the rooms its search area marks (SearchArea.InRoom), however far from the
     /// place. The one test for FindMatch and for an enemy's own job, so they can't disagree. A more
     /// serious thing in a room a Search marks raises it where it is and never moves it (GroupJob.Upgrade).
     /// </summary>
     public bool Covers(GroupJob job, Vector3 point) => Covers(job, point, out _, out _);
 
-    // `distance` is to the place either way; `inRoom` says the point is in a room a Search marks, which
+    // `distance` is to the nearest of the job's places either way; `inRoom` says the point is in a room a Search marks, which
     // FindMatch ranks ahead of a match by Job Match Radius alone.
     private bool Covers(GroupJob job, Vector3 point, out float distance, out bool inRoom)
     {
         distance = PathGrid.FlatDistance(job.Point, point);
+        if (job.Area != null)
+            for (int i = 0; i < job.Area.Places.Count; i++)
+                distance = Mathf.Min(distance, PathGrid.FlatDistance(job.Area.Places[i], point));
         inRoom = false;
         // One emptied mid-walk is only waiting to be removed.
         if (job.Step == JobStep.Done || job.Count == 0) return false;
@@ -595,10 +599,10 @@ public class JobBoard
     }
 
     /// <summary>
-    /// Whether a point is in the job's search area: within Search Area Radius of the area's place on its
-    /// floor, or inside one of the rooms the area marks (SearchArea.Contains). Read through the area and
-    /// never as a distance to job.Point: the radius alone misses the marked rooms, which reach as far as
-    /// their walls. False with no area.
+    /// Whether a point is in the job's search area: within any patch's circle (the first is the place's
+    /// Search Area Radius) on the area's floor, or inside one of the rooms the area marks
+    /// (SearchArea.Contains). Read through the area and never as a distance to job.Point: that misses
+    /// absorbed patches and the marked rooms, which reach as far as their walls. False with no area.
     /// </summary>
     public bool InSearchArea(GroupJob job, Vector3 point) => job != null && job.Area != null && job.Area.Contains(point);
 
@@ -607,7 +611,8 @@ public class JobBoard
     /// problem/attack THEN start searching"). One flood from the first member who asks (he must be on the
     /// job's floor: the caller checks), best first:
     /// 1. The job's place, when he can reach it.
-    /// 2. Else the ground of the job's own area nearest the place that he can reach. That ground was
+    /// 2. Else the source patch's own ground (SearchArea.SourceGround, not the whole grown area, whose
+    ///    other patches were flooded from other places) nearest the place that he can reach. That ground was
     ///    flooded from the place, so it is on the place's side of every wall: a source in a nook between a
     ///    crate and a thin wall starts the team in the nook's room, never in the corridor behind the wall.
     /// 3. Else the ground he can reach nearest it as the crow flies (within the navigator's Approach
@@ -626,7 +631,7 @@ public class JobBoard
         forTeam = true;
         if (job.TryGetStart(out start)) return true;
 
-        GroundFound found = who.Navigator.FindGroundNear(job.Point, job.Area.Ground, out start);
+        GroundFound found = who.Navigator.FindGroundNear(job.Point, job.Area.SourceGround, out start);
         if (found == GroundFound.None)
         {
             why = $"no ground he can reach lies near the place {job.Point}, on its side or otherwise";

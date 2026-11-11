@@ -32,12 +32,19 @@ public class SearchArea
     private static readonly List<int> Seeds = new();           // for each newly marked room, the reached cells inside it (indices into Reached)
     private static readonly List<int> SeedRoom = new();        // which marked room each seed belongs to
     private static readonly HashSet<Vector2Int> Kept = new();      // cells already made points, so each is kept once
+    private static readonly HashSet<Vector2Int> PatchKept = new();  // cells the patch being flooded has already listed for itself
     private static readonly HashSet<Vector2Int> Flooded = new();   // cells a room's flood has already covered, so a split room floods each part once
 
     private readonly List<Room> _rooms = new();
     private readonly List<Vector3> _ground = new();
     private readonly List<Vector3> _places = new();   // each patch's place, the first the constructor's
     private readonly List<float> _radii = new();      // each patch's circle, beside its place
+    // Each patch's own reached points, beside its place: every point its flood reached, including cells an
+    // earlier patch had already kept (those are in _ground once, but belong to both patches). The walk to the
+    // source reads the source patch's list as ground "joined to the place" (SourceGround): the whole of
+    // _ground after an absorb includes points flooded from other places, possibly behind a wall.
+    private readonly List<List<Vector3>> _patchGround = new();
+    private List<Vector3> _current;                   // the list FloodPatch is filling
     private readonly PathGrid _floor;
     private int _source;                              // the patch that is the current source (Place)
 
@@ -45,6 +52,7 @@ public class SearchArea
     {
         _places.Add(place);
         _radii.Add(radius);
+        _patchGround.Add(new List<Vector3>());
         _floor = PathGrid.At(place);
         // On no grid there is nothing to flood: the area is empty, and the coverage built on it says so.
         if (_floor == null) return;
@@ -82,7 +90,11 @@ public class SearchArea
             Debug.LogWarning($"A search area round {Place} can't grow to take in {spot}: nothing within {radius:0.#} m of it is open ground on {_floor.name}.", intel);
             return false;
         }
-        if (_rooms.Count == roomsBefore && _ground.Count == groundBefore) return false;
+        if (_rooms.Count == roomsBefore && _ground.Count == groundBefore)
+        {
+            _patchGround.RemoveAt(_patchGround.Count - 1);   // FloodPatch listed it; nothing is recorded
+            return false;
+        }
 
         _places.Add(spot);
         _radii.Add(radius);
@@ -91,10 +103,13 @@ public class SearchArea
 
     /// <summary>
     /// Grows the area by another's patches, rooms and ground, copied as they are, without flooding: their
-    /// floods already ran (a merge keeps both jobs' areas). Rooms already marked and points already kept
-    /// add nothing; a point the other area kept in a part of a shared room this one never flooded is new,
-    /// and joins. False when nothing new was added (the caller logs that), and nothing is recorded then.
-    /// Also false, with a warning, for another floor, and with an error for no area.
+    /// floods already ran (a merge keeps both jobs' areas). Every patch not already present is copied with
+    /// its own reached points, so its circle counts for Contains even when it adds no room or point. Rooms
+    /// already marked and points already kept add nothing, and neither does a point lying in a room this
+    /// area marked before the absorb: that room is searched whole already, and such a point is another
+    /// area's stand-in for a room too small for the lattice, which would double this one's. True when
+    /// anything was added, patches included; false when nothing at all was (the caller logs that). Also
+    /// false, with a warning, for another floor, and with an error for no area.
     /// </summary>
     public bool Absorb(SearchArea other)
     {
@@ -110,21 +125,27 @@ public class SearchArea
             return false;
         }
 
-        int roomsBefore = _rooms.Count, groundBefore = _ground.Count;
+        int roomsBefore = _rooms.Count, groundBefore = _ground.Count, patchesBefore = _places.Count;
         foreach (Room room in other._rooms)
             if (!_rooms.Contains(room)) _rooms.Add(room);
         SeedKept();
         foreach (Vector3 point in other._ground)
-            if (_floor.WorldToCell(point, out Vector2Int cell) && Kept.Add(cell)) _ground.Add(point);
-        if (_rooms.Count == roomsBefore && _ground.Count == groundBefore) return false;
+        {
+            if (!_floor.WorldToCell(point, out Vector2Int cell) || !Kept.Add(cell)) continue;
+            if (InOwnRoom(point, roomsBefore)) { Kept.Remove(cell); continue; }
+            _ground.Add(point);
+        }
 
+        // Patches are copied with their lists, whatever else was added: the list must survive so that
+        // MoveSourceTo can later make any patch the source and SourceGround still be that patch's own.
         for (int i = 0; i < other._places.Count; i++)
         {
             if (_places.Contains(other._places[i])) continue;
             _places.Add(other._places[i]);
             _radii.Add(other._radii[i]);
+            _patchGround.Add(new List<Vector3>(other._patchGround[i]));
         }
-        return true;
+        return _rooms.Count != roomsBefore || _ground.Count != groundBefore || _places.Count != patchesBefore;
     }
 
     /// <summary>
@@ -145,6 +166,14 @@ public class SearchArea
         return true;
     }
 
+    // Whether a point lies in one of the first `count` rooms, those marked before the absorb in progress.
+    private bool InOwnRoom(Vector3 point, int count)
+    {
+        for (int i = 0; i < count; i++)
+            if (_rooms[i].Floor == _floor && _rooms[i].Contains(point)) return true;
+        return false;
+    }
+
     // Kept holds what the area already has before a patch is added, so nothing is kept twice. Rebuilt from
     // the ground rather than stored per area, since growing is rare and every area would carry the set.
     private void SeedKept()
@@ -162,6 +191,10 @@ public class SearchArea
         GridArea circle = GridArea.Circle(place, radius);
         if (!_floor.ResolveArea(circle, place, out _, out Vector3 start)) return false;
         if (!_floor.CollectGround(start, _floor.CellSize, circle.Contains, Reached)) return false;
+
+        _current = new List<Vector3>();
+        _patchGround.Add(_current);
+        PatchKept.Clear();
 
         int stride = _floor.StrideFor(PointSpacing);
         int firstNewRoom = _rooms.Count;
@@ -221,8 +254,11 @@ public class SearchArea
             // A small room whose open ground misses the points' lattice (a strip one cell wide) would be
             // outlined as searched with nothing in it to clear. Its first seed, a cell the circle reached
             // inside it, stands in, so someone has to see into it.
-            if (_ground.Count == before && hasSeed && _floor.WorldToCell(firstSeed, out Vector2Int keep) && Kept.Add(keep))
-                _ground.Add(firstSeed);
+            if (_ground.Count == before && hasSeed && _floor.WorldToCell(firstSeed, out Vector2Int keep))
+            {
+                if (Kept.Add(keep)) _ground.Add(firstSeed);
+                if (PatchKept.Add(keep)) _current.Add(firstSeed);
+            }
         }
 
         Reached.Clear();
@@ -235,6 +271,7 @@ public class SearchArea
     {
         if (!_floor.WorldToCell(cellPoint, out Vector2Int cell)) return;
         if (cell.x % stride != 0 || cell.y % stride != 0) return;
+        if (PatchKept.Add(cell)) _current.Add(cellPoint);
         if (Kept.Add(cell)) _ground.Add(cellPoint);
     }
 
@@ -255,6 +292,14 @@ public class SearchArea
 
     /// <summary>The points to clear, about a metre apart: the marked rooms whole, and every circle's ground in no such room. Absorbed points follow the earlier ones.</summary>
     public IReadOnlyList<Vector3> Ground => _ground;
+
+    /// <summary>
+    /// The points the source patch's own flood reached, including cells an earlier patch had kept already:
+    /// the ground joined to the source, which the walk-in may prefer without an eye-line check. Ground gives
+    /// no such guarantee once patches are absorbed. Task 3's MoveSourceTo switches which patch this is, so
+    /// the per-patch lists must survive deduplication of _ground.
+    /// </summary>
+    public IReadOnlyList<Vector3> SourceGround => _patchGround[_source];
 
     /// <summary>False on no grid, or with nothing open round any patch: the team has nothing to clear.</summary>
     public bool HasGround => _ground.Count > 0;
