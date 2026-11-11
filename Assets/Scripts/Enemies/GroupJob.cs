@@ -18,8 +18,8 @@ public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done, Signal }
 /// A few enemies dealing with one thing together. A plain object, held by JobBoard, with members, a
 /// kind, a step and a point. It **never moves anyone**: each member's state machine reads it and
 /// runs his own role, so the machine stays the one place movement is decided. JobBoard is the only
-/// caller of the members of this class that change it (Add, Remove, Upgrade, GrowAt, KeepArea); everyone
-/// else reads.
+/// caller of the members of this class that change it (Add, Remove, Upgrade, GrowAt, KeepArea, SendToCheck,
+/// EndCheck); everyone else reads.
 /// </summary>
 public class GroupJob
 {
@@ -75,16 +75,24 @@ public class GroupJob
     /// and ground it reaches that the area hasn't got join the area, and, when the team is already clearing
     /// (Coverage built), join what is left to clear, starting Search Minimum Time over. With no coverage yet
     /// the one built later copies the whole area, absorbed ground included. Point and the source don't move.
-    /// False when nothing new was added, which it logs, and when the spot can't be flooded (on another
-    /// floor, on no grid, nothing open round it), which SearchArea warns of. `why` names what is there, for the log.
+    /// False when nothing new was added, which it logs: the spot is still kept as a patch (one of the job's
+    /// places) unless it was already one, and a spot that can't be flooded (on another floor, on no grid,
+    /// nothing open round it) is warned of by SearchArea. `why` names what is there, for the log.
     /// </summary>
     internal bool GrowAt(Vector3 spot, string why)
     {
         int before = Area.Ground.Count;
         int roomsBefore = Area.Rooms.Count;
-        if (!Area.Absorb(spot, _intel.SearchAreaRadius, _intel))
+        SearchArea.Growth growth = Area.Absorb(spot, _intel.SearchAreaRadius, _intel);
+        if (growth != SearchArea.Growth.Added)
         {
-            DebugLog.Info($"{this} doesn't grow for {why} at {spot}: its circle adds no room and no ground the search hasn't already got (or couldn't be flooded, as warned).", _intel);
+            string what = growth switch
+            {
+                SearchArea.Growth.PatchOnly => "its circle adds no room and no ground the search hasn't already got, but the spot is kept as one of its places",
+                SearchArea.Growth.AlreadyThere => "the search already has a place there, so nothing is flooded",
+                _ => "it couldn't be flooded, as warned",
+            };
+            DebugLog.Info($"{this} doesn't grow for {why} at {spot}: {what}.", _intel);
             return false;
         }
         int added = PushNewGround(before);
@@ -233,7 +241,7 @@ public class GroupJob
         if (!_members.Remove(who)) return;
         if (who.Job == this) who.Job = null;
         if (Checker == who) Checker = null;
-        if (Scout == who) Scout = null;
+        _checks.Remove(who);
         Coverage?.Release(who);
         if (Callee == who) Callee = null;
         _arrived.Remove(who);
@@ -245,18 +253,86 @@ public class GroupJob
     public SearchCoverage Coverage { get; private set; }
     internal void SetCoverage(SearchCoverage coverage) => Coverage = coverage;
 
-    /// <summary>The member gone to check a new sound away from the job, or null. One at a time: other sounds meanwhile only make the team turn.</summary>
-    public EnemyController Scout { get; private set; }
-    /// <summary>Where the scout has gone.</summary>
-    public Vector3 ScoutPoint { get; private set; }
+    // Members out checking a distraction, each with where he has gone (decision 4: the scout walk, per member).
+    // Several can be out at once, each on his own thing. An entry lives exactly as long as the check: ended by
+    // the member himself (EndCheck, through JobBoard.CheckDone), by his leaving the job (Remove), or by the job
+    // starting over (Restart), so none can outlive the member or the job it was for.
+    private readonly Dictionary<EnemyController, Vector3> _checks = new();
 
-    internal void SendScout(EnemyController who, Vector3 point)
+    /// <summary>Who is out checking and where, for the gizmo and the checker's choice.</summary>
+    public IReadOnlyDictionary<EnemyController, Vector3> Checks => _checks;
+
+    /// <summary>Whether he is out checking a distraction for the job, and where.</summary>
+    public bool TryGetCheck(EnemyController who, out Vector3 point) => _checks.TryGetValue(who, out point);
+
+    /// <summary>
+    /// Sends a member to check a point. One already out is sent on to the newer thing (SearchingState sees the
+    /// point change and starts his walk over). His claim on the coverage goes, so nobody is kept off the point he
+    /// was heading for while he is away. A non-member is the caller's bug and is refused with an error.
+    /// </summary>
+    internal void SendToCheck(EnemyController who, Vector3 point)
     {
-        Scout = who;
-        ScoutPoint = point;
+        if (!_members.Contains(who))
+        {
+            Debug.LogError($"{(who != null ? who.name : "nobody")} was sent to check {point} for {this}, which he isn't on: only a member checks for a job.", _intel);
+            return;
+        }
+        _checks[who] = point;
+        Coverage?.Release(who);
     }
 
-    internal void ScoutBack() => Scout = null;
+    /// <summary>His check is over: he is back to his part in the job.</summary>
+    internal void EndCheck(EnemyController who) => _checks.Remove(who);
+
+    // Recent noticings, so two members noticing one thing send one of them (decision 3). The same source object
+    // and kind, or, with no source, the same grid cell. Pruned on every look, so it only ever holds the last
+    // half second's worth.
+    private struct Noticing
+    {
+        public Object Source;
+        public StimulusKind? Kind;
+        public Vector2Int Cell;
+        public float At;
+        public EnemyController Sent;   // who went to it, or null when the first to notice couldn't go
+    }
+    private readonly List<Noticing> _noticings = new();
+
+    /// <summary>
+    /// Whether a member of this job has noticed the same thing since `since`: the same source object and kind,
+    /// or, with no source, the same cell. `index` is the record, for MarkNoticingSent; -1 when none. Older
+    /// records are dropped first.
+    /// </summary>
+    internal bool FindNoticing(Object source, StimulusKind? kind, Vector2Int cell, float since, out int index, out EnemyController sent)
+    {
+        for (int i = _noticings.Count - 1; i >= 0; i--)
+            if (_noticings[i].At < since) _noticings.RemoveAt(i);
+        // Compared by reference, never Unity's ==: a source destroyed since would read as null and match a sourceless sound.
+        bool hasSource = !ReferenceEquals(source, null);
+        for (int i = 0; i < _noticings.Count; i++)
+        {
+            Noticing n = _noticings[i];
+            bool same = hasSource
+                ? ReferenceEquals(n.Source, source) && n.Kind == kind
+                : ReferenceEquals(n.Source, null) && n.Cell == cell;
+            if (!same) continue;
+            index = i;
+            sent = n.Sent;
+            return true;
+        }
+        index = -1;
+        sent = null;
+        return false;
+    }
+
+    internal void NoteNoticing(Object source, StimulusKind? kind, Vector2Int cell, EnemyController sent) =>
+        _noticings.Add(new Noticing { Source = source, Kind = kind, Cell = cell, At = Time.time, Sent = sent });
+
+    internal void MarkNoticingSent(int index, EnemyController sent)
+    {
+        Noticing n = _noticings[index];
+        n.Sent = sent;
+        _noticings[index] = n;
+    }
 
     /// <summary>The gunshot the team is signalling about, in Signal: where they face, and where they go when it ends.</summary>
     public Incident SignalledShot { get; private set; }
@@ -351,8 +427,10 @@ public class GroupJob
     internal void Restart(float gatherLength)
     {
         Checker = null;
-        // The job has moved on from what he went to check, and everyone is sent afresh (FollowJob).
-        Scout = null;
+        // The job has moved on from what they went to check, and everyone is sent afresh (FollowJob). What was
+        // noticed belongs to the old walk too.
+        _checks.Clear();
+        _noticings.Clear();
         // A new place, or a check that has become a search: nothing here has been looked at.
         Coverage = null;
         _arrived.Clear();

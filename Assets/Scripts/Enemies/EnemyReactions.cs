@@ -29,8 +29,10 @@ public class EnemyReactions
     /// or not, so it always ends on an aggressive patrol. With walkThere false he looks from where
     /// he stands instead of going to the point (a glance at a body the squad already knows).
     /// On a job, a stimulus at the job's place goes to the job first (Intel.HandleAtOwnJob, BecomeWaryAt).
+    /// `source` is the object that made it (the crate, the gun, the body), or null for a sound with none:
+    /// only a distraction on a job reads it, to tell whether two members noticed the same thing (JobBoard.Noticed).
     /// </summary>
-    public bool Investigate(Incident incident, bool walkThere = true)
+    public bool Investigate(Incident incident, bool walkThere = true, Object source = null)
     {
         if (incident.Reason == StimulusResponse.Ignore)
         {
@@ -54,7 +56,7 @@ public class EnemyReactions
             // A gunshot goes to the squad whatever its priority. What it left over, a shot in the area
             // they are already searching or one right after the last, is one more thing Ruby is doing.
             if (incident.Mobilises && walkThere && _enemy.Intel != null)
-                return _enemy.Intel.Mobilise(_enemy, incident) || Distract(incident);
+                return _enemy.Intel.Mobilise(_enemy, incident) || Distract(incident, source);
 
             // On a job, anything at its place goes to the job first: a find or a flying enemy turns a check
             // into a search and a more serious thing upgrades it, for the whole team. Only what the job didn't take
@@ -62,8 +64,8 @@ public class EnemyReactions
             GroupJob own = _enemy.Job;
             bool atOwnJob = own != null && _enemy.Intel != null && _enemy.Intel.Covers(own, incident.Point);
             if (atOwnJob && _enemy.Intel.HandleAtOwnJob(_enemy, new SearchRequest(incident, walkThere))) return true;
-            if (atOwnJob || incident.Priority <= _enemy.Searching.Priority) return Distract(incident);
-            if (own != null && !walkThere) return Distract(incident);
+            if (atOwnJob || incident.Priority <= _enemy.Searching.Priority) return Distract(incident, source);
+            if (own != null && !walkThere) return Distract(incident, source);
 
             // More serious than his search: the squad decides, as a job. A glance off a job (walkThere
             // false) is his own look from where he stands, and a scene with no Intel (already reported)
@@ -73,7 +75,9 @@ public class EnemyReactions
             {
                 _enemy.Intel.Handle(_enemy, incident);
                 // Still on the job he was on: the team that has it can't take him, so he stays and is distracted.
-                if (own != null && _enemy.Job == own) return Distract(incident);
+                // Only turned: another job has it, and checking it would walk him onto that team's ground and
+                // grow his own search into theirs.
+                if (own != null && _enemy.Job == own) return Distract(incident, source, othersHaveIt: true);
                 return true;
             }
 
@@ -128,18 +132,25 @@ public class EnemyReactions
             DebugLog.Info($"{_enemy.name} sees {victim.name} {how}: he goes for Ruby at {ruby}.", _enemy);
     }
 
-    // Something lesser happened while he was searching. He turns to look at it and the search waits
-    // a moment, but it isn't dropped or retargeted. Enough of them close together and he has had
-    // enough of Ruby provoking him: she keeps throwing things and threatening them, so he goes after her.
-    // So what counts is whether she is doing something, not how serious it is: a low-priority thud
-    // during a body search is one more thing thrown at them, on the walk there as much as once he's
-    // arrived. A body or gun lying there isn't her doing anything: he turns to look, and it doesn't count.
-    private bool Distract(Incident incident)
+    // Something lesser happened while he was searching. It isn't dropped or retargeted, but it is noticed.
+    // Enough of them close together and he has had enough of Ruby provoking him: she keeps throwing things
+    // and threatening them, so he goes after her. So what counts is whether she is doing something, not how
+    // serious it is: a low-priority thud during a body search is one more thing thrown at them, on the walk
+    // there as much as once he's arrived. A body or gun lying there isn't her doing anything: he turns to
+    // look, and it doesn't count. The count is his own, always, before anything else: what the job then does
+    // with it shares nothing (spec: "Counts stay personal").
+    //
+    // **On a job** a new one goes to the job (JobBoard.Noticed): it grows the search there, and he, or
+    // whoever of the team noticed the same thing first, walks over to check it and comes back (spec:
+    // "Distractions on a search"). One who doesn't go turns toward it and the search waits a moment, as
+    // before. `othersHaveIt` is a thing another job has: he only turns. **Off a job** (a glance, or no
+    // Intel) he only turns, as before (spec: "Off a job").
+    private bool Distract(Incident incident, Object source, bool othersHaveIt = false)
     {
         bool counts = !incident.SaysNothingOfRuby;
         int count = _enemy.Memory.NoteDistraction(Time.time, _enemy.DistractionMemory, _enemy.DistractionGap, counts, out bool isNew, out bool counted);
-        // The threshold reads the counted clock; the pause, the scout and the log read either, so a thud
-        // that only counted still turns him and sends a scout.
+        // The threshold reads the counted clock; the pause, the job and the log read either, so a thud that
+        // only counted still turns him and goes to the job.
         bool fresh = isNew || counted;
         if (counted && count >= _enemy.DistractionThreshold)
         {
@@ -148,11 +159,13 @@ public class EnemyReactions
             return true;
         }
 
-        _enemy.Searching.Distract(incident.Point, fresh);
-        // Turning to look isn't all of it: one of the team goes to see, if the job can spare him.
-        if (fresh && _enemy.Intel != null) _enemy.Intel.SendScout(_enemy, incident);
+        // Only a fresh one: the same tumbling body thudding again within Distraction Gap is one thing, so it
+        // can't send him twice or grow the search per thud.
+        bool sent = fresh && !othersHaveIt && _enemy.Job != null && _enemy.Intel != null && _enemy.Intel.Noticed(_enemy, incident, source);
+        // The one who goes sets off at once: a pause first would have him stand facing it for Distraction Time.
+        if (!sent) _enemy.Searching.Distract(incident.Point, fresh);
         string tally = counts ? $"{count} of {_enemy.DistractionThreshold}" : "not counted, it isn't Ruby doing anything";
-        DebugLog.Info($"{_enemy.name} {(fresh ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}): {tally}.", _enemy);
+        DebugLog.Info($"{_enemy.name} {(fresh ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}){(sent ? " and goes to check it" : "")}: {tally}.", _enemy);
         return true;
     }
 

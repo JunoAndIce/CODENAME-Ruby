@@ -323,14 +323,21 @@ public class JobBoard
         if (nearest != null) LogChecker(job, nearest, best);
     }
 
+    // A member out checking a distraction is away on a check of his own and has no business with the job's
+    // spot, unless everyone is: then the nearest of them is chosen, and walks over once his check is done.
     private static EnemyController NearestToSpot(GroupJob job, out float best)
+    {
+        EnemyController nearest = NearestToSpot(job, skipChecking: true, out best);
+        return nearest != null ? nearest : NearestToSpot(job, skipChecking: false, out best);
+    }
+
+    private static EnemyController NearestToSpot(GroupJob job, bool skipChecking, out float best)
     {
         EnemyController nearest = null;
         best = float.MaxValue;
         foreach (EnemyController member in job.Members)
         {
-            // A scout is away on a check of his own and has no business with the job's spot, unless he is all there is.
-            if (member == job.Scout && job.Count > 1) continue;
+            if (skipChecking && job.TryGetCheck(member, out _)) continue;
             float distance = PathGrid.FlatDistance(member.transform.position, job.Point);
             if (distance >= best) continue;
             best = distance;
@@ -776,37 +783,119 @@ public class JobBoard
         return true;
     }
 
+    // Two members noticing one thing within this long send one of them (spec: "noticed within half a second of
+    // each other"). Longer apart, they are two noticings, and each who can goes.
+    private const float SameThingWindow = 0.5f;
+
     /// <summary>
-    /// A member has noticed something new that the job can't take: it sends one to check it, and the rest
-    /// carry on. Nothing happens unless all of this holds, because each is a reason not to:
-    /// - It isn't a body or gun lying there, which is only for the books, or a gunshot, which moves everyone.
-    /// - The team has two or more, and nobody is out already.
-    /// - It's away from the area they are already searching (InSearchArea: outside the circle and every room it marks).
-    /// - A Search has started searching, or a Check is going or looking. Before a Search searches, a member sent
-    ///   off would hold up a start that waits for everyone. After a Check's look there is nothing to come back to.
-    /// The nearest goes, never a Check's checker, who has the job's own spot to reach.
+    /// The one entry for a job member's ordinary distraction (spec: "Distractions on a search"), after his own
+    /// count has taken it (EnemyReactions.Distract). True when he is now out checking it; false when he only
+    /// turns toward it, which the caller does, and every false says why in the log. In order:
+    /// 1. **Not for one to check** (until serious distractions are built): a body or gun lying there, or
+    ///    anything else that says nothing of Ruby, is only for the books, and a gunshot or a killing is the whole
+    ///    team's (Mobilise). A Done job has nothing to come back to. A spot off the job's floor can't be walked to.
+    /// 2. **The same thing** (decision 3): the same source object and kind, or with no source the same grid
+    ///    cell, noticed by a member of this job within half a second. The first who noticed it went, so this one
+    ///    turns and carries on. If the first couldn't go (the checker, say), this one goes in his place.
+    /// 3. **A new thing grows the search** there at once (GroupJob.GrowAt), whoever goes and whether he gets
+    ///    there, and floods once for it: the same thing never grows again. A Check has no area to grow, and a
+    ///    team signalling is about to move to a gunshot, which rebuilds its area.
+    /// 4. **He goes** to check it, alone, and comes back (SearchingState.CheckForJob), unless the job isn't
+    ///    under way yet (a Search going or searching, a Check going or looking) or he is a Check's checker, who
+    ///    has the job's own spot to reach. Several members can be out on different things at once, and one
+    ///    already out is sent on to the newer thing. Inside the search area as much as outside: he walks to
+    ///    where it happened either way.
+    /// Nothing here touches anyone's distraction count: sending a scout shares nothing.
     /// </summary>
-    public void SendScout(EnemyController who, Incident thing)
+    public bool Noticed(EnemyController who, Incident thing, Object source)
     {
         GroupJob job = who.Job;
-        if (job == null || thing.SaysNothingOfRuby || thing.Mobilises || job.Count < 2 || job.Scout != null) return;
-        if (!(job.Kind == JobKind.Search ? job.Step == JobStep.Search : job.Step is JobStep.Go or JobStep.Look)) return;
-        if (InSearchArea(job, thing.Point)) return;
-
-        EnemyController nearest = null;
-        float nearestDistance = float.MaxValue;
-        foreach (EnemyController member in job.Members)
+        if (job == null)
         {
-            if (member == null || member == job.Checker) continue;
-            float distance = PathGrid.FlatDistance(member.transform.position, thing.Point);
-            if (distance >= nearestDistance) continue;
-            nearest = member;
-            nearestDistance = distance;
+            Debug.LogError($"{who.name} noticed {thing} as a job member, but he is on no job: only a job member's distraction comes here (EnemyReactions.Distract). He only turns toward it.", who);
+            return false;
         }
-        if (nearest == null) return;
+        if (thing.SaysNothingOfRuby || thing.Mobilises)
+        {
+            DebugLog.Info($"{who.name} turns toward {thing}: {(thing.Mobilises ? "a gunshot or a killing moves the whole team (Mobilise), not one" : "nothing about it leads to Ruby (a body or gun lying there, or nothing shows where it came from)")}, so nobody goes to check it.", who);
+            return false;
+        }
+        if (job.Step == JobStep.Done)
+        {
+            DebugLog.Info($"{who.name} turns toward {thing}: {job} is over, so there is nothing to come back to.", who);
+            return false;
+        }
+        PathGrid floor = PathGrid.At(thing.Point);
+        if (floor == null || floor != job.Area.Floor || !floor.WorldToCell(thing.Point, out Vector2Int cell))
+        {
+            string jobFloor = job.Area.Floor != null ? job.Area.Floor.name : "no PathGrid";
+            Debug.LogWarning($"{who.name} noticed {thing}, which is {(floor == null ? "on no PathGrid" : $"on {floor.name}")} while {job} is on {jobFloor}: nobody can walk there for the job and a search never spans floors, so he only turns toward it.", who);
+            return false;
+        }
 
-        job.SendScout(nearest, thing.Point);
-        DebugLog.Info($"{job} sends {nearest.name} to check {thing} ({nearestDistance:0.#} m away); the rest carry on.", nearest);
+        if (job.FindNoticing(source, thing.Kind, cell, Time.time - SameThingWindow, out int index, out EnemyController sent))
+        {
+            if (sent == who) return job.TryGetCheck(who, out _);
+            if (sent != null)
+            {
+                DebugLog.Info($"{who.name} noticed {thing} too, but {sent.name} noticed it first and has gone to check it: {who.name} turns toward it and carries on.", who);
+                return false;
+            }
+            // The first to notice it couldn't go. It has grown the search already, so this only sends.
+            if (!CanCheck(job, who, out string notNow))
+            {
+                DebugLog.Info($"{who.name} noticed {thing} too, and nobody has gone to it, but he turns toward it instead: {notNow}.", who);
+                return false;
+            }
+            job.MarkNoticingSent(index, who);
+            SendToCheck(job, who, thing, "nobody who noticed it first could go");
+            return true;
+        }
+
+        if (job.Kind == JobKind.Search)
+        {
+            if (job.Step == JobStep.Signal)
+                DebugLog.Info($"{job} doesn't grow for {thing}: it is signalling a gunshot and is about to move there, which rebuilds its area.", _intel);
+            else
+                job.GrowAt(thing.Point, $"what {who.name} noticed ({thing})");
+        }
+
+        bool go = CanCheck(job, who, out string whyNot);
+        job.NoteNoticing(source, thing.Kind, cell, go ? who : null);
+        if (!go)
+        {
+            DebugLog.Info($"{who.name} turns toward {thing}: {whyNot}.", who);
+            return false;
+        }
+        SendToCheck(job, who, thing, job.Kind == JobKind.Check ? "a Check has no area to grow, so he looks and comes back" : "the search has grown there");
+        return true;
+    }
+
+    // Whether a member may leave the job's work to check something: it is under way (a Search going or
+    // searching; a Check going or looking, since after its look there is nothing to come back to and before Go
+    // the team is still being called or gathered), and he isn't a Check's checker, who has its spot to reach.
+    private static bool CanCheck(GroupJob job, EnemyController who, out string whyNot)
+    {
+        bool underWay = job.Kind == JobKind.Search ? job.Step is JobStep.Go or JobStep.Search : job.Step is JobStep.Go or JobStep.Look;
+        if (!underWay)
+        {
+            whyNot = $"{job} is in {job.Step}, and nobody leaves it to check something until it is under way";
+            return false;
+        }
+        if (job.Checker == who)
+        {
+            whyNot = $"he is {job}'s checker, who has the job's own spot to reach";
+            return false;
+        }
+        whyNot = null;
+        return true;
+    }
+
+    private static void SendToCheck(GroupJob job, EnemyController who, Incident thing, string note)
+    {
+        bool already = job.TryGetCheck(who, out Vector3 was);
+        job.SendToCheck(who, thing.Point);
+        DebugLog.Info($"{job} sends {who.name} to check {thing} ({PathGrid.FlatDistance(who.transform.position, thing.Point):0.#} m away){(already ? $", on from what he was checking at {was}" : "")}; {note}.", who);
     }
 
     /// <summary>What the job's team hasn't looked at yet, built the first time it's asked for, from the job's area (which has already flooded).</summary>
@@ -816,11 +905,8 @@ public class JobBoard
         return job.Coverage;
     }
 
-    /// <summary>The scout has finished his check. He returns to the job's work, or leaves with it if it has ended.</summary>
-    public void ScoutBack(GroupJob job, EnemyController who)
-    {
-        if (job.Scout == who) job.ScoutBack();
-    }
+    /// <summary>A member has finished checking what he was sent to: he returns to his part in the job.</summary>
+    public void CheckDone(GroupJob job, EnemyController who) => job.EndCheck(who);
 
     // Whatever they had cleared may not be clear now: they look again, or a team that had seen it all would
     // finish straight through the shot. A new coverage's clock starts as it's built, so Search Minimum Time

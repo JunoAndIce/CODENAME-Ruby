@@ -61,44 +61,58 @@ public class SearchArea
         FloodPatch(place, radius, intel);
     }
 
+    /// <summary>What absorbing a spot did (Absorb(spot, ...)).</summary>
+    public enum Growth
+    {
+        /// <summary>It added rooms or ground, and the spot is a new patch.</summary>
+        Added,
+        /// <summary>Its circle added no room and no point, but the spot is kept as a patch, so it still counts as one of the job's places (JobBoard.Covers).</summary>
+        PatchOnly,
+        /// <summary>The spot is within a metre of a patch already there: the same patch, so nothing was flooded or recorded.</summary>
+        AlreadyThere,
+        /// <summary>It couldn't flood as designed, and warned why.</summary>
+        Refused,
+    }
+
     /// <summary>
     /// Grows the area by a spot's circle, flooded once as the constructor floods its own: rooms holding no
     /// rooms that it reaches over open ground and the area doesn't mark yet are searched whole, and its
     /// other ground joins the points to clear. Rooms already marked add nothing, nor do points already
     /// kept. The spot becomes a patch, so Contains takes its circle in; Place, the source, doesn't move.
-    /// False when nothing new was added (the caller logs that), and nothing is recorded then. Also false,
-    /// with a warning, when it can't flood as designed: the area or the spot is on no grid, the spot is on
-    /// another floor, or nothing round the spot is open.
+    /// **A spot that adds nothing is still kept as a patch** (PatchOnly): what was noticed there counts as one
+    /// of the job's places for matching, so the next thing beside it goes to this job; the caller logs that
+    /// nothing new was added. A spot within a metre of an existing patch's place is that patch (AlreadyThere):
+    /// nothing is flooded, so a run of distractions on one spot floods once and doesn't pile up patches.
+    /// Refused, with a warning, when it can't flood as designed: the area or the spot is on no grid, the spot
+    /// is on another floor, or nothing round the spot is open.
     /// </summary>
-    public bool Absorb(Vector3 spot, float radius, Intel intel)
+    public Growth Absorb(Vector3 spot, float radius, Intel intel)
     {
         if (_floor == null)
         {
             Debug.LogWarning($"A search area round {Place} is on no PathGrid, so it can't grow to take in {spot}.", intel);
-            return false;
+            return Growth.Refused;
         }
         if (PathGrid.At(spot) != _floor)
         {
             Debug.LogWarning($"A search area round {Place} can't grow to take in {spot}: the spot is on another floor (or on no grid), and a search never spans floors.", intel);
-            return false;
+            return Growth.Refused;
         }
+        for (int i = 0; i < _places.Count; i++)
+            if (PathGrid.FlatDistance(_places[i], spot) <= PointSpacing) return Growth.AlreadyThere;
 
         int roomsBefore = _rooms.Count, groundBefore = _ground.Count;
         SeedKept();
         if (!FloodPatch(spot, radius, intel))
         {
             Debug.LogWarning($"A search area round {Place} can't grow to take in {spot}: nothing within {radius:0.#} m of it is open ground on {_floor.name}.", intel);
-            return false;
-        }
-        if (_rooms.Count == roomsBefore && _ground.Count == groundBefore)
-        {
-            _patchGround.RemoveAt(_patchGround.Count - 1);   // FloodPatch listed it; nothing is recorded
-            return false;
+            return Growth.Refused;
         }
 
+        // FloodPatch has listed the patch's own ground; its place and circle go beside it either way.
         _places.Add(spot);
         _radii.Add(radius);
-        return true;
+        return _rooms.Count == roomsBefore && _ground.Count == groundBefore ? Growth.PatchOnly : Growth.Added;
     }
 
     /// <summary>

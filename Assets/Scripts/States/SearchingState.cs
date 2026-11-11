@@ -65,11 +65,13 @@ public class SearchingState : EnemyStateBase
     // He was on a job when last looked at. Seeing it gone while he is still searching means he was
     // taken off it without leaving the state, and his job-less steps are from some earlier search.
     private bool _onJob;
-    // Sent off to check a new sound (JobBoard.SendScout): he walks there, looks, and comes back to the job.
+    // Sent off to check a distraction (JobBoard.Noticed): he walks there, looks, and comes back to the job.
+    // _checkPoint is the point this walk is for: the job sending him on to a newer thing starts it over.
     private bool _scouting;
     private bool _scoutLooking;
     private float _scoutTimer;
     private float _scoutBaseYaw;
+    private Vector3 _checkPoint;
 
     public SearchingState(EnemyController enemy) : base(enemy) { }
 
@@ -276,6 +278,9 @@ public class SearchingState : EnemyStateBase
     // still walking in when a Search ends keeps walking, so his limit keeps running.
     private void TickJob()
     {
+        // Out checking a distraction he isn't walking to the spot, so it isn't his walk's time: counted, it took
+        // a member sent off before he reached a Search's source off the job for not reaching it.
+        if (Job.TryGetCheck(Enemy, out _)) return;
         if (_arrived || Job.Step is JobStep.Call or JobStep.Gather or JobStep.StandDown or JobStep.Signal) return;
         if (Job.Step == JobStep.Done && !FinishingSearch(Job)) return;
 
@@ -374,12 +379,15 @@ public class SearchingState : EnemyStateBase
         }
 
         // Before the steps: he keeps to his check whatever they do, and comes back when it's done. If the job
-        // starts over it clears this and sends him with the rest; if it ends, he leaves with it.
-        if (job.Scout == Enemy)
+        // starts over it clears this and sends him with the rest; if it ends, he stops and leaves with it.
+        if (job.TryGetCheck(Enemy, out Vector3 checkPoint))
         {
-            CheckForJob(job);
+            CheckForJob(job, checkPoint);
             return;
         }
+        // The job ended his check for him (it started over, which also re-follows him through Begin): what his
+        // walk had got to is no longer anything's, so the next check starts from its own beginning.
+        _scouting = false;
 
         switch (job.Step)
         {
@@ -452,30 +460,55 @@ public class SearchingState : EnemyStateBase
         Enemy.Movement.LookAround(_lookBaseYaw, job.StepElapsed, Enemy.Intel.StepDuration(job));
     }
 
-    // Walks to what he was sent to check, and looks at it for Look Time. A stall looks from where he has got
-    // to, as a Check does. A walk that never arrives ends at Search Travel Limit, and no path says so.
-    private void CheckForJob(GroupJob job)
+    // Walks to what he was sent to check, and looks at it for Look Time (decision 4: the scout walk, per member).
+    // A stall looks from where he has got to, as a Check does. A walk that never arrives ends at Search Travel
+    // Limit, and no path says so. Sent on to a newer thing meanwhile, he starts over for that one. While out he
+    // clears what he sees of the team's coverage, as roaming does, so the ground the search grew by round the
+    // thing is cleared by the one standing in it. A job that ends while he is out ends his check at once: a Done
+    // job takes no new sound, so there is nothing to finish it for.
+    private void CheckForJob(GroupJob job, Vector3 point)
     {
-        if (!_scouting)
+        if (job.Step == JobStep.Done)
+        {
+            _scouting = false;
+            _roamPhase = RoamPhase.Pick;
+            DebugLog.Info($"{Enemy.name} stops checking {point}: {job} is over.", Enemy);
+            Enemy.Intel.CheckDone(job, Enemy);
+            return;
+        }
+
+        if (!_scouting || point != _checkPoint)
         {
             _scouting = true;
+            _checkPoint = point;
             _scoutLooking = false;
             _scoutTimer = 0f;
+        }
+
+        // Never built here: the coverage is built when someone first reaches the source, and a check isn't that.
+        if (job.Coverage != null)
+        {
+            _coverageTimer -= Time.fixedDeltaTime;
+            if (_coverageTimer <= 0f)
+            {
+                _coverageTimer = Enemy.ScanInterval;
+                job.Coverage.Look(Enemy);
+            }
         }
 
         _scoutTimer += Time.fixedDeltaTime;
         if (!_scoutLooking)
         {
-            NavResult result = Enemy.Movement.WalkTo(job.ScoutPoint, Enemy.SearchReach, Enemy.SearchSpeed);
+            NavResult result = Enemy.Movement.WalkTo(point, Enemy.SearchReach, Enemy.SearchSpeed);
             if (result == NavResult.Moving && _scoutTimer < Enemy.SearchTravelLimit) return;
 
             if (result == NavResult.Unreachable)
-                Debug.LogWarning($"{Enemy.name} can't reach what {job} sent him to check at {job.ScoutPoint} ({Enemy.Navigator.FailureReason}); he looks from where he stands.", Enemy);
+                Debug.LogWarning($"{Enemy.name} can't reach what {job} sent him to check at {point} ({Enemy.Navigator.FailureReason}); he looks from where he stands.", Enemy);
             // Unreachable has said why above. A stall or the limit has no line of its own, and "has checked"
             // below would claim a check he didn't finish.
             else if (result != NavResult.Arrived)
-                DebugLog.Info($"{Enemy.name} stopped short of {job.ScoutPoint} ({(result == NavResult.Blocked ? "something blocked the way" : $"Search Travel Limit of {Enemy.SearchTravelLimit:0.#}s ran out")}); he looks from where he stands.", Enemy);
-            Enemy.Movement.FaceToward(job.ScoutPoint);
+                DebugLog.Info($"{Enemy.name} stopped short of {point} ({(result == NavResult.Blocked ? "something blocked the way" : $"Search Travel Limit of {Enemy.SearchTravelLimit:0.#}s ran out")}); he looks from where he stands.", Enemy);
+            Enemy.Movement.FaceToward(point);
             _scoutBaseYaw = Enemy.transform.eulerAngles.y;
             _scoutLooking = true;
             _scoutTimer = 0f;
@@ -486,10 +519,14 @@ public class SearchingState : EnemyStateBase
         if (_scoutTimer < Enemy.LookTime) return;
 
         _scouting = false;
-        // A fresh roam brings him back into the search's area, or ends him at once if the search is over.
+        // A fresh roam brings him back into the (grown) search, or ends him at once if the search is over. One
+        // who hadn't reached a Search's source yet walks there again from here, with a fresh Search Travel Limit:
+        // the check wasn't his walk in.
         _roamPhase = RoamPhase.Pick;
-        DebugLog.Info($"{Enemy.name} has checked {job.ScoutPoint}: he comes back to {job}.", Enemy);
-        Enemy.Intel.ScoutBack(job, Enemy);
+        _rechecking = false;
+        if (!_arrived) _walkTimer = 0f;
+        DebugLog.Info($"{Enemy.name} has checked {point}: he comes back to {job}.", Enemy);
+        Enemy.Intel.CheckDone(job, Enemy);
     }
 
     // Clears the area: he heads for the nearest place nobody on the team has looked at, creeping with his view

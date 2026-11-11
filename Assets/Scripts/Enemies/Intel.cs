@@ -427,14 +427,14 @@ public class Intel : MonoBehaviour
     /// <summary>A searcher hears a gunshot (see JobBoard.Mobilise).</summary>
     public bool Mobilise(EnemyController who, Incident shot) => _board.Mobilise(who, shot);
 
-    /// <summary>A member noticed something new away from the job (see JobBoard.SendScout).</summary>
-    public void SendScout(EnemyController who, Incident thing) => _board.SendScout(who, thing);
+    /// <summary>A job member's ordinary distraction: it grows the search and sends one to check it. True when he goes (see JobBoard.Noticed).</summary>
+    public bool Noticed(EnemyController who, Incident thing, Object source) => _board.Noticed(who, thing, source);
 
     /// <summary>What a job's team hasn't looked at yet (see JobBoard.CoverageOf).</summary>
     public SearchCoverage CoverageOf(GroupJob job) => _board.CoverageOf(job);
 
-    /// <summary>The scout has finished his check (see JobBoard.ScoutBack).</summary>
-    public void ScoutBack(GroupJob job, EnemyController who) => _board.ScoutBack(job, who);
+    /// <summary>A member has finished checking what he was sent to (see JobBoard.CheckDone).</summary>
+    public void CheckDone(GroupJob job, EnemyController who) => _board.CheckDone(job, who);
 
     /// <summary>A member's stimulus at his own job's place (see JobBoard.HandleAtOwnJob).</summary>
     public bool HandleAtOwnJob(EnemyController who, SearchRequest request) => _board.HandleAtOwnJob(who, request);
@@ -542,12 +542,13 @@ public class Intel : MonoBehaviour
             // What the team hasn't looked at yet, as dots.
             if (job.Coverage != null)
                 foreach (Vector3 point in job.Coverage.Unseen) Gizmos.DrawSphere(point + Vector3.up * 0.1f, 0.08f);
-            // The scout too, with where he has gone.
-            if (job.Scout != null)
+            // Every member out checking a distraction, ringed, with a ring where he has gone and a line to it.
+            foreach (KeyValuePair<EnemyController, Vector3> check in job.Checks)
             {
-                DrawCircle(job.Scout.transform.position, 0.9f);
-                DrawCircle(job.ScoutPoint, 0.6f);
-                Gizmos.DrawLine(job.Scout.transform.position + Vector3.up * 0.2f, job.ScoutPoint);
+                if (check.Key == null) continue;
+                DrawCircle(check.Key.transform.position, 0.9f);
+                DrawCircle(check.Value, 0.6f);
+                Gizmos.DrawLine(check.Key.transform.position + Vector3.up * 0.2f, check.Value);
             }
 #if UNITY_EDITOR
             UnityEditor.Handles.Label(job.Point + Vector3.up * 1.4f, $"#{job.Id} {job.Kind} · {job.Step} · {job.Count}/{job.Cap}\n{job.Reason}, priority {job.Priority}{(job.Checker != null ? $"\nchecker {job.Checker.name}" : "")}");

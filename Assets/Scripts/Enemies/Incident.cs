@@ -10,8 +10,9 @@ using UnityEngine;
 /// </summary>
 public readonly struct Incident
 {
-    public Incident(Vector3 point, StimulusResponse reason, int priority, bool makesSearch = false, bool saysNothingOfRuby = false, bool mobilises = false)
+    public Incident(Vector3 point, StimulusResponse reason, int priority, bool makesSearch = false, bool saysNothingOfRuby = false, bool mobilises = false, StimulusKind? kind = null)
     {
+        Kind = kind;
         Mobilises = mobilises;
         Point = point;
         Reason = reason;
@@ -44,7 +45,14 @@ public readonly struct Incident
     /// </summary>
     public bool Mobilises { get; }
 
-    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, MakesSearch, SaysNothingOfRuby, Mobilises);
+    /// <summary>
+    /// The stimulus it was judged as (for a moving thing, the speed kind, MovingObject or FastObject), or null
+    /// for one no stimulus made (a lost fight's search, a job's own upgrade). Part of what makes two members'
+    /// noticing "the same thing" (JobBoard.Noticed): the same object seen moving and heard thudding is two.
+    /// </summary>
+    public StimulusKind? Kind { get; }
+
+    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, MakesSearch, SaysNothingOfRuby, Mobilises, Kind);
 
     // The "reason at point" the logs print, so it reads the same wherever it is written.
     public override string ToString() => $"{Reason} at {Point}";

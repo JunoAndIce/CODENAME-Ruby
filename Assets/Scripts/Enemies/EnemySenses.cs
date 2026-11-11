@@ -51,7 +51,7 @@ public class EnemySenses
             _enemy.Memory.Learn(new RubyFact(ruby.transform.position, stimulus.Time, Knowledge.Heard));
 
         DebugLog.Info($"{_enemy.name} hears {stimulus.Kind} from {stimulus.Position}: {row.Response} at priority {row.Priority}.", _enemy);
-        _enemy.Reactions.Investigate(new Incident(stimulus.Position, row.Response, row.Priority, mobilises: stimulus.Kind == StimulusKind.Gunshot));
+        _enemy.Reactions.Investigate(new Incident(stimulus.Position, row.Response, row.Priority, mobilises: stimulus.Kind == StimulusKind.Gunshot, kind: stimulus.Kind), source: stimulus.Source);
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ public class EnemySenses
             if (!_enemy.Intel.TryGetRow(point, StimulusKind.Body, false, out BehaviourMap.Row row)) continue;
 
             DebugLog.Info($"{_enemy.name} sees {other.name} killed: he goes to check {(hasOrigin ? "where it came from" : "where he died, since nothing shows where it came from")}, {point}.", _enemy);
-            _enemy.Reactions.Investigate(new Incident(point, row.Response, row.Priority, makesSearch: true, saysNothingOfRuby: !hasOrigin, mobilises: true));
+            _enemy.Reactions.Investigate(new Incident(point, row.Response, row.Priority, makesSearch: true, saysNothingOfRuby: !hasOrigin, mobilises: true, kind: StimulusKind.Body), source: other.transform);
         }
     }
 
@@ -146,7 +146,7 @@ public class EnemySenses
                 return;
             }
             // Marked only when taken: one he couldn't act on (in a fight, fetching a gun) may still send him.
-            if (!TooBusy && !_noticedHeld.Contains(other) && Notice(at, StimulusKind.Body, $"{other.name} on the chain"))
+            if (!TooBusy && !_noticedHeld.Contains(other) && Notice(at, StimulusKind.Body, $"{other.name} on the chain", other.transform))
                 _noticedHeld.Add(other);
         }
     }
@@ -206,7 +206,7 @@ public class EnemySenses
                 Glance(at, StimulusKind.Body, $"the body of {enemy.name}, already on the squad's books");
                 continue;
             }
-            Notice(at, StimulusKind.Body, $"the body of {enemy.name}");
+            Notice(at, StimulusKind.Body, $"the body of {enemy.name}", enemy.transform);
         }
     }
 
@@ -235,7 +235,7 @@ public class EnemySenses
                 DebugLog.Info($"{_enemy.name} sees {gun.name} on the floor, already on the squad's books; not searching.", _enemy);
                 continue;
             }
-            Notice(at, StimulusKind.LooseGun, $"the loose gun {gun.name}");
+            Notice(at, StimulusKind.LooseGun, $"the loose gun {gun.name}", gun.transform);
         }
     }
 
@@ -251,11 +251,11 @@ public class EnemySenses
         // On a job at its place, the job goes wary for everyone, not just the one who looked.
         _enemy.Reactions.BecomeWaryAt(at, $"{_enemy.name} glances at {what}");
         DebugLog.Info($"{_enemy.name} sees {what}: he looks at it from where he stands and is wary.", _enemy);
-        _enemy.Reactions.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, makesSearch: true, saysNothingOfRuby: true), walkThere: false);
+        _enemy.Reactions.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, makesSearch: true, saysNothingOfRuby: true, kind: kind), walkThere: false);
     }
 
-    // True when he took it.
-    private bool Notice(Vector3 origin, StimulusKind kind, string what)
+    // True when he took it. `source` is the thing itself (the body, the gun), so two members noticing it are one notice.
+    private bool Notice(Vector3 origin, StimulusKind kind, string what, Object source)
     {
         if (!_enemy.Intel.TryGetRow(origin, kind, false, out BehaviourMap.Row row)) return false;
 
@@ -263,7 +263,7 @@ public class EnemySenses
         // A body or a gun is found, not heard: there is nothing to check, so it is a Search, and it says
         // nothing about where Ruby is.
         bool found = kind is StimulusKind.Body or StimulusKind.LooseGun;
-        return _enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: found, saysNothingOfRuby: found));
+        return _enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: found, saysNothingOfRuby: found, kind: kind), source: source);
     }
 
     // A character is one body for this purpose, so a bone of a tumbling enemy isn't a body of its
@@ -325,7 +325,7 @@ public class EnemySenses
             // needs more than one enemy's short look, so it makes a Search there. So does anything at
             // Alarm Speed. A slower flying gun stays a Check: one knocked out of a hand is far less alarming.
             // With no origin the point is only where it is, which says nothing about her.
-            if (_enemy.Reactions.Investigate(new Incident(origin, response, priority, makesSearch: isEnemy || kind == StimulusKind.FastObject, saysNothingOfRuby: !hasOrigin))) _reactedAt[body] = now;
+            if (_enemy.Reactions.Investigate(new Incident(origin, response, priority, makesSearch: isEnemy || kind == StimulusKind.FastObject, saysNothingOfRuby: !hasOrigin, kind: kind), source: body.transform)) _reactedAt[body] = now;
             return;
         }
 
@@ -335,7 +335,7 @@ public class EnemySenses
         // Something this fast could kill, and no ordinary person throws it, so it is worth more than one
         // enemy's short look: a Search, wherever it started. Slower, it's a Check.
         // Recorded only when he took it: one he ignored (mid-fight, say) may still send him later.
-        if (_enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: kind == StimulusKind.FastObject))) _reactedAt[body] = now;
+        if (_enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: kind == StimulusKind.FastObject, kind: kind), source: body.transform)) _reactedAt[body] = now;
     }
 
     // The stronger of two rows: response by severity, priority by number, each taken on its own. An
