@@ -748,6 +748,90 @@ Aim stance and the pistol he already has.
 - **Editor:** a Shoot At Range spot is drawn with its facing and a line to its target, and each idle
   officer has a line to his post.
 
+#### Distractions on a search
+
+*(User, 2026-11-11: "A distraction should prompt an enemy to walk to the area where it happened. With
+our new search, this makes it so the player can extend searches by room and by time up to however
+high the distraction limit we set is. When the final distraction is hit, they run towards Ruby's
+location. They should only count as seeing her if they laid eyes on her.")* Today a distraction only
+turns a searcher toward it and pauses his search for Distraction Time; this replaces that for anyone
+on a job. Built after the firing range.
+
+**Two kinds of distraction** *(user: "This is where I said we get specific")*:
+
+- **Serious: the whole job goes.** A gunshot, a body lying there, or an enemy seen flying, alive or
+  dead *(user: "make gunshots a special distraction that makes all nearby enemies on the job come to
+  check. Not just one. This also applies to dead bodies and flying dead bodies... they instantly raise
+  the alert level of the job and all of them come to check together since it's a serious issue")*.
+  The job's reason and priority rise at once, and every member walks to the spot together, then
+  spreads out from it as from any source (the walk to the source, then roaming nearest-first). Nobody
+  scouts a serious thing.
+  - **The spot becomes the job's new source** *(my call)*: the job moves there, but keeps what it had,
+    adding the spot's area to its own, so nothing already seen is thrown away. Its search area is
+    then the old one and the new together, and everything that reads it (matching, merging, "in the
+    search area", the source the members walk to) reads the whole.
+  - **Gunshots go through this rule**, in place of today's mobilise *(my call)*. Kept from today: the
+    team's beat stopped and facing the shot (React Time) before it goes, the refusal of a shot on
+    another floor, and a shot inside the search area throwing away what was seen so they look again,
+    because it means Ruby is right there. A body does not throw away what was seen.
+  - **Only new finds are serious** *(my call)*: a body the squad already knows stays a glance, and a
+    flying enemy counts once per throw (Origin Lifetime, as today), so a corpse in a room can't keep
+    calling the team back.
+- **Ordinary: one goes.** Anything else that distracts him: a thud, the whip landing, a moving or
+  fast object that is neither an enemy nor a body (a thrown crate or gun), a loose gun *(user: "A
+  flying object at fast speed that's not an enemy or a body, is only scouted even though it has the
+  same priority as the dead body flying")*.
+  - **One member notices it:** he goes to check it alone *(user: "if an enemy hears something or sees
+    something on the job, they can go check it alone. Any distraction works")*.
+  - **Two or more notice the same thing:** the job sends one of them as its scout, the one of them
+    nearest the spot, and the rest carry on *(user: "If two or more hear a sound or see a flying or
+    moving object... one enemy goes to scout")*. "The same thing" is one sound, or one object seen,
+    noticed within half a second of each other *(my call)*: the first to notice goes at once, and
+    one who notices the same thing after him doesn't go too. Several members can be out checking
+    different things at once. One who noticed but doesn't go still turns toward it, as today's
+    distraction does, and it still counts for him.
+  - **A fast object on a Check** still turns the Check into a Search, as today *(my call)*: "only
+    scouted" is about members already on a Search.
+
+**The search grows** *(user: "Any rooms where the distraction touches gets added to the search.
+Extending the rooms and search time")*. Whatever is checked, ordinary or serious, adds its own area to
+the job's: the rooms its Search Area Radius circle reaches over open ground (smallest rooms only, as
+for any search) and the circle's other ground, flooded once from the spot. The new points join what
+is left to clear, so the search runs on until they are seen, and Search Minimum Time starts over from
+when they are added *(my call)*. Rooms the search already covers add nothing. **It grows when the
+distraction is noticed**, not when the checker arrives *(my call)*, and stays grown if he can't reach
+it: the team still clears it.
+
+**Counts stay personal** *(user: "each enemy still only has their own distraction limit... Any more
+distractions are counted individually, so if the other enemy isn't around to hear more distractions
+even though they sent out a scout, the scout will be the only ones whose counter will still go up")*.
+Each enemy counts only what he himself notices, by the existing rules (Distraction Gap, Distraction
+Memory, what counts as Ruby doing something). Sending a scout shares nothing. Two who hear one thud
+are at one each; afterwards only what each notices counts.
+
+**At his own limit he runs at Ruby, and sees her only with his own eyes.** He learns where she is at
+that moment, as Heard, and goes to Aggro, as today. Until she has been in his view cone with a clear
+line, **he doesn't count as seeing her**: the all-round contact Aggro gives an enemy who has seen her
+doesn't apply, so he runs at what he was told, learns no Seen fact, doesn't call her out and doesn't
+track her live. The first time she is in his view he has seen her, and every normal rule follows,
+calling the others in included *(user: "we don't need call in at the limit because enemies call in
+when they're aggro"; calling out already happens on sight)*.
+- **Only the provoked** *(user, 2026-11-11: "keep it for provoked enemies")*. Every other way into
+  Aggro without having seen her (told by word of mouth, seeing the chain drag an enemy, being hit)
+  keeps today's all-round sight, so word-of-mouth fights are unchanged. What it buys: a provoked
+  enemy who hasn't looked at her can still be slipped past from behind, and he can't spread her
+  position (or make his job mates aggressive) on hearsay.
+- **He doesn't give up on the way** *(my call)*: his Aggro Time doesn't count down while he runs to
+  where he was told she is; reaching it, the normal hold applies (Unseen Hold Time, since he hasn't
+  seen her).
+
+**On a Check** *(my call)*: a Check has no area to grow. An ordinary distraction sends the one who
+noticed it to look and come back, as the scout does today; a serious one makes the Check a Search
+there, as it does today.
+
+**Off a job** *(my call)*: the walk-to-check rule is for members of a job. A search of his own with no
+job, which happens only with a glance or a scene with no Intel, keeps today's turn-and-pause.
+
 #### Later: activity spots
 
 *(User: idle officers are "cleaning guns, watching TV, sitting at desks". Waits for assets.)*
