@@ -40,6 +40,13 @@ public class SearchingState : EnemyStateBase
     private float _walkTimer;
     // The line about a stall short of the source (or a Search's start circle) is said once per walk, not every step.
     private bool _loggedBlocked;
+    // A walk-in point found from his own reachable ground (JobBoard.TryGetSearchStart's last resort), which
+    // the job doesn't keep for the team. Kept here, for the job and place it was found for, so it floods
+    // once per place and not on every step of the walk in.
+    private bool _hasOwnStart;
+    private Vector3 _ownStart;
+    private GroupJob _ownStartJob;
+    private Vector3 _ownStartFor;
 
     // Clearing, from the moment he reaches a Search's source: he creeps toward what nobody has looked at yet,
     // or looks about if nothing is free. Reset by Begin, so an upgrade or a new place starts him over.
@@ -165,6 +172,8 @@ public class SearchingState : EnemyStateBase
         _distractLeft = 0f;
         _arrived = false;
         _loggedBlocked = false;
+        _hasOwnStart = false;   // found from where he stood then: a new search asks again
+        _ownStartJob = null;
         _roamPhase = RoamPhase.Pick;
         _rechecking = false;
         _roamCoverage = null;
@@ -677,7 +686,8 @@ public class SearchingState : EnemyStateBase
     // problem and working outward from it (user: "walk to the source of the problem/attack THEN start
     // searching"). Starting from wherever he first stood in the area had a gunshot just outside his office
     // searched from his own desk. The source is the job's place, or the ground nearest it anyone can reach
-    // (Intel.TryGetSearchStart, found once per place), and he has arrived within Search Start Radius of it:
+    // (Intel.TryGetSearchStart, found once per place and kept for the team), or, failing both, the ground in
+    // sight of it that he alone can reach (kept for him only), and he has arrived within Search Start Radius of it:
     // at once with a clear line to it (eye height, so a source at floor level isn't hidden by the floor, and
     // never through a wall), or when the walk says so, which includes stalling anywhere inside that circle,
     // so several sent to one source stop where the first ones stand instead of pushing at them for good.
@@ -700,11 +710,24 @@ public class SearchingState : EnemyStateBase
             return false;
         }
 
-        if (!Enemy.Intel.TryGetSearchStart(job, Enemy, out Vector3 source, out string why))
+        Vector3 source;
+        if (_hasOwnStart && _ownStartJob == job && _ownStartFor == job.Point)
+            source = _ownStart;
+        else
         {
-            Debug.LogWarning($"{Enemy.name} can't reach the source of {job}: {why}; he is taken off it.", Enemy);
-            Enemy.Intel.DropFromSearch(Enemy, $"he can't reach the source ({why})");
-            return false;
+            if (!Enemy.Intel.TryGetSearchStart(job, Enemy, out source, out bool forTeam, out string why))
+            {
+                Debug.LogWarning($"{Enemy.name} can't reach the source of {job}: {why}; he is taken off it.", Enemy);
+                Enemy.Intel.DropFromSearch(Enemy, $"he can't reach the source ({why})");
+                return false;
+            }
+            _hasOwnStart = !forTeam;
+            if (_hasOwnStart)
+            {
+                _ownStart = source;
+                _ownStartJob = job;
+                _ownStartFor = job.Point;
+            }
         }
 
         float radius = Enemy.Intel.SearchStartRadius;

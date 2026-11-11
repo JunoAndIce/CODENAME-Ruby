@@ -2,8 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// A firing-range post: the spot an idle enemy stands at and practises from, shooting at a target.
-/// Set it as an enemy's Post Spot. His shots are real, so the room the spot lies in is marked in use
-/// while he practises, and that room's map can hide the gunshots (Gunshot: Ignore, Only While In Use).
+/// Set it as an enemy's Post Spot. His shots are real, so the room the spot lies in, and every room
+/// around it, is marked in use while he practises (Room.NotePractice), and the map of any of them can
+/// hide the gunshots (Gunshot: Ignore, Only While In Use).
 /// </summary>
 public class RangeSpot : MonoBehaviour
 {
@@ -54,7 +55,11 @@ public class RangeSpot : MonoBehaviour
         }
     }
 
-    // The same walk Intel.TryGetRow does: the first room out from this one with its own Gunshot row.
+    // The walk Intel.TryGetRow makes for a shot here while he practises. NotePractice marks this room and
+    // every room around it in use, so an Only While In Use row applies wherever it sits on that chain, and
+    // the first room out with its own Gunshot row decides. That is usually an enclosing "Range" room, with
+    // the spot in a lane inside it. The mask step TryGetRow tries first (Mask Radius) can only turn a shot
+    // into Ignore, never undo one, so it can't break what this checks and isn't walked here.
     private void CheckMasking(Room room)
     {
         for (Room r = room; r != null; r = r.Parent)

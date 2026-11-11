@@ -34,7 +34,7 @@ public class Room : MonoBehaviour
     [SerializeField] private List<Rect> _rects = new() { new Rect { Size = new Vector2(4f, 4f) } };
 
     [Header("Use")]
-    [Tooltip("Seconds after the last practice shot (NotePractice) that the room still counts as in use.")]
+    [Tooltip("Seconds after the last practice shot (NotePractice) in this room, or in a room inside it, that the room still counts as in use.")]
     [Min(0f)]
     [SerializeField] private float _inUseTime = 10f;
 
@@ -49,8 +49,19 @@ public class Room : MonoBehaviour
     /// <summary>True for In Use Time after the last NotePractice, so a row marked Only While In Use applies only while someone is using the room.</summary>
     public bool InUse => Time.time - _lastPractice <= _inUseTime;
 
-    /// <summary>A firing-range shooter calls this just before each shot, so the shot's own Gunshot is already masked.</summary>
-    public void NotePractice() => _lastPractice = Time.time;
+    /// <summary>
+    /// A firing-range shooter calls this just before each shot, so the shot's own Gunshot is already
+    /// masked. It marks this room and every room around it (through Parent) in use. The spot's room is
+    /// the smallest one at it, often a lane or a booth inside a "Range" room, while the Gunshot row
+    /// (Ignore, Only While In Use) and the Mask Radius usually sit on that enclosing room. Marking only
+    /// the smallest left the range room never in use, so every practice shot was heard as a real gunshot
+    /// and nothing said why. Each room still counts its own In Use Time.
+    /// </summary>
+    public void NotePractice()
+    {
+        float now = Time.time;
+        for (Room room = this; room != null; room = room.Parent) room._lastPractice = now;
+    }
 
     // Set by RoomIndex when it is built, never saved.
     /// <summary>The floor this room stands on, or null before the index is built.</summary>
@@ -60,18 +71,37 @@ public class Room : MonoBehaviour
     /// <summary>Whether another room sits inside this one. Only rooms holding none are searched whole.</summary>
     public bool HoldsRooms { get; internal set; }
 
-    /// <summary>A rectangle in world space, at this object's height.</summary>
+    /// <summary>A rectangle in world space, at this object's height, built from the live values (see WorldArea).</summary>
     public GridArea AreaOf(int index)
     {
         Rect rect = _rects[index];
         return GridArea.Rectangle(transform.position + rect.Offset, rect.Size);
     }
 
+    // The world rectangles, cached by RoomIndex when it is built. Contains and DistanceOutside run inside
+    // hot loops (every room for every sound's mask, every room for every lookup, every marked room for
+    // every search test), and rebuilding each rectangle from transform.position on every call was most
+    // of their cost. Rooms don't move at runtime, so the cache is never refreshed. Null until the index is
+    // built, which is only ever in Play: in edit mode the gizmos and RoomEditor read live values (AreaOf),
+    // because a designer drags them. Not serialized.
+    [NonSerialized] private GridArea[] _world;
+
+    internal void CacheWorldAreas()
+    {
+        _world = new GridArea[_rects.Count];
+        for (int i = 0; i < _world.Length; i++) _world[i] = AreaOf(i);
+    }
+
+    // The cached rectangle once the index is built, else the live one.
+    private GridArea WorldArea(int index) => _world != null ? _world[index] : AreaOf(index);
+    private int WorldCount => _world != null ? _world.Length : _rects.Count;
+
     /// <summary>Flat test: whether the point lies inside any rectangle. Height is the floor's business.</summary>
     public bool Contains(Vector3 point)
     {
-        for (int i = 0; i < _rects.Count; i++)
-            if (AreaOf(i).Contains(point)) return true;
+        int count = WorldCount;
+        for (int i = 0; i < count; i++)
+            if (WorldArea(i).Contains(point)) return true;
         return false;
     }
 
@@ -79,9 +109,10 @@ public class Room : MonoBehaviour
     public float DistanceOutside(Vector3 point)
     {
         float best = float.PositiveInfinity;
-        for (int i = 0; i < _rects.Count; i++)
+        int count = WorldCount;
+        for (int i = 0; i < count; i++)
         {
-            GridArea area = AreaOf(i);
+            GridArea area = WorldArea(i);
             float dx = Mathf.Max(0f, Mathf.Abs(point.x - area.Centre.x) - area.HalfSize.x);
             float dz = Mathf.Max(0f, Mathf.Abs(point.z - area.Centre.z) - area.HalfSize.y);
             best = Mathf.Min(best, Mathf.Sqrt(dx * dx + dz * dz));

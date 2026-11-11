@@ -55,6 +55,8 @@ public class RoomIndex
                 if (!onFloor)
                     Debug.LogWarning($"Room '{room.Name}' rectangle {r} lies off its floor's grid (its centre is outside the area or height band of the grid the first rectangle stands on, perhaps on another floor), so it is never found by a lookup there. Move it onto that floor or put it in a room of its own.", room);
             }
+            // Rooms don't move at runtime, so their world rectangles are worked out once, here (Room.Contains).
+            room.CacheWorldAreas();
             _rooms.Add(room);
         }
 
@@ -88,6 +90,19 @@ public class RoomIndex
                 if (a.Floor != b.Floor || Holds(a, b) || Holds(b, a) || !Overlap(a, b)) continue;
                 Debug.LogWarning($"Rooms '{a.Name}' and '{b.Name}' overlap, and neither holds the other, so a point in both has no single map. Resize one so they only touch, or so one lies wholly inside the other.", a);
             }
+        }
+
+        // A room holding no rooms is searched whole and fills speech (SearchArea, Intel.Say). That is right
+        // for an office and wrong for a room placed over a whole floor to give it a map: with nothing inside
+        // it, every search there would clear the floor and every shout would reach everyone on it. More than
+        // half its grid's area is the line, warned once here, at load. Not refused: the designer may mean it.
+        foreach (Room room in _rooms)
+        {
+            if (room.HoldsRooms) continue;
+            Vector2 size = room.Floor.Size;
+            float floorArea = size.x * size.y;
+            if (floorArea <= 0f || room.Area <= 0.5f * floorArea) continue;
+            Debug.LogWarning($"Room '{room.Name}' holds no rooms and covers {room.Area:0} m², more than half of its floor '{room.Floor.name}' ({floorArea:0} m²). A room holding no rooms is searched whole and carries speech across all of it, so any search that reaches it clears that whole area and a shout in it reaches everyone in it. If it is there to give the floor a map, place the offices inside it as rooms of their own, so it holds them.", room);
         }
     }
 

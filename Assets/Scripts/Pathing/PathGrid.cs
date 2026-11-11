@@ -66,6 +66,8 @@ public class PathGrid : MonoBehaviour
     public bool IsBaked => _walkable != null;
     public float CellSize => _cellSize;
     public int CellCount => _width * _depth;
+    /// <summary>Metres covered along X and Z (y is Z). Serialized, so it reads true before the bake, as Covers does.</summary>
+    public Vector2 Size => _size;
     public float MaxFlowDistance => _maxFlowDistance;
     /// <summary>Cells of clearance paths try to keep, from Corner Margin. Rounded up, so the margin is never less than asked.</summary>
     public int MarginCells => _marginCells;

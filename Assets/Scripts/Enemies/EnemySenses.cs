@@ -28,22 +28,27 @@ public class EnemySenses
     }
 
     /// <summary>
-    /// A sound that reached him. Ruby's own sounds teach him where she is, as Heard. Then the map
-    /// decides whether it's worth a search. He goes to where the sound happened, never to the thing's
+    /// A sound that reached him. The map decides first whether it's worth a search, and only a sound
+    /// the map doesn't ignore teaches him anything: Ruby's own sounds then teach him where she is, as
+    /// Heard. He goes to where the sound happened, never to the thing's
     /// origin: an impact is checked where it landed, not at whoever threw it. Only a body he sees moving
     /// leads back to its throw (Consider), because he can see which way it came from. A sound can't tell
     /// him that.
     /// </summary>
     public void Hear(in Stimulus stimulus)
     {
+        // The row first: a sound the map ignores, or has no row for, was not heard as anything worth
+        // knowing. Learning before the lookup had Ruby firing inside a busy range's mask teach every
+        // hearer where she was, though the shot itself was masked as practice. TryGetRow only returns a
+        // row that applies (Only While In Use is already judged there).
+        if (!_enemy.Intel.TryGetRow(stimulus.Position, stimulus.Kind, true, out BehaviourMap.Row row)) return;
+
         PlayerController ruby = stimulus.Source != null ? stimulus.Source.GetComponentInParent<PlayerController>() : null;
         // Where Ruby was when she fired or whipped, not where the sound landed: a whip's stimulus
         // sits at its anchor (up to a chain's length from her, or on the enemy she grabbed), and
         // teaching that would send the hunt to the wrong place.
-        if (ruby != null)
+        if (ruby != null && row.Response != StimulusResponse.Ignore)
             _enemy.Memory.Learn(new RubyFact(ruby.transform.position, stimulus.Time, Knowledge.Heard));
-
-        if (!_enemy.Intel.TryGetRow(stimulus.Position, stimulus.Kind, true, out BehaviourMap.Row row)) return;
 
         DebugLog.Info($"{_enemy.name} hears {stimulus.Kind} from {stimulus.Position}: {row.Response} at priority {row.Priority}.", _enemy);
         _enemy.Reactions.Investigate(new Incident(stimulus.Position, row.Response, row.Priority, mobilises: stimulus.Kind == StimulusKind.Gunshot));

@@ -367,10 +367,11 @@ public class JobBoard
     /// (Idle, Patrol, or searching at a lower priority). Returns the job he is now in, or null when
     /// it's left alone. An enemy already on a job is dealt with at its own place first
     /// (HandleAtOwnJob); this is for a thing **elsewhere**. In order:
-    /// 1. **An open job is handling this** (Covers: its place is within Job Match Radius, or the thing is
-    ///    in a room its search area marks, which wins over a nearer place matched by radius alone). A
-    ///    thing in a room a Search marks raises it where it is and never moves it; a Check is moved to a
-    ///    more serious thing anywhere over a metre off (GroupJob.Upgrade). A more serious
+    /// 1. **An open job is handling this** (Covers: its place is within Job Match Radius, or, for a
+    ///    Search, the thing is in a room its search area marks, which wins over a nearer place matched by
+    ///    radius alone; a Check searches no room and matches by distance only). A thing in a room a
+    ///    Search marks raises it where it is and never moves it; a Check is moved to a more serious thing
+    ///    over a metre off (GroupJob.Upgrade). A more serious
     ///    thing upgrades it, a find or a flying enemy turns a check into a search, and a stronger reason (an attack,
     ///    where the job is a problem) raises it for every member even at the same priority. If it is
     ///    still recruiting and has room he joins, taking himself off any job he was on. Otherwise
@@ -561,14 +562,14 @@ public class JobBoard
 
     /// <summary>
     /// Whether a point is at a job's place, as a new disturbance is judged against it: the job is
-    /// open and the point is within Job Match Radius of its place on its floor, **or** inside one of the
-    /// rooms its search area marks (SearchArea.InRoom), however far from the place. The one test for
-    /// FindMatch and for an enemy's own job, so they can't disagree. A more serious thing in a room a
-    /// Search marks raises it where it is and never moves it; a Check is moved to it (GroupJob.Upgrade).
+    /// open and the point is within Job Match Radius of its place on its floor, **or**, for a Search
+    /// only, inside one of the rooms its search area marks (SearchArea.InRoom), however far from the
+    /// place. The one test for FindMatch and for an enemy's own job, so they can't disagree. A more
+    /// serious thing in a room a Search marks raises it where it is and never moves it (GroupJob.Upgrade).
     /// </summary>
     public bool Covers(GroupJob job, Vector3 point) => Covers(job, point, out _, out _);
 
-    // `distance` is to the place either way; `inRoom` says the point is in a room the job marks, which
+    // `distance` is to the place either way; `inRoom` says the point is in a room a Search marks, which
     // FindMatch ranks ahead of a match by Job Match Radius alone.
     private bool Covers(GroupJob job, Vector3 point, out float distance, out bool inRoom)
     {
@@ -577,11 +578,12 @@ public class JobBoard
         // One emptied mid-walk is only waiting to be removed.
         if (job.Step == JobStep.Done || job.Count == 0) return false;
 
-        // Something in a room the job marks is the job's: two teams must not search one office apart
-        // (spec, piece 7: "something sensed in a room a job is searching goes to that job"). A Check's
-        // area counts too, since a Check becomes a Search of that same area, and two thuds in one big
-        // office are one thing to check. InRoom tests the room's own floor.
-        inRoom = job.Area != null && job.Area.InRoom(point);
+        // Something in a room a Search marks is the Search's: two teams must not search one office apart
+        // (spec, piece 7: "something sensed in a room a job is searching goes to that job"). InRoom tests
+        // the room's own floor. Only a Search: a Check is one look at one spot and searches no room, so
+        // taking things in its marked rooms swallowed them into a job that never looked at them. A Check
+        // matches by Job Match Radius on its floor, as before rooms.
+        inRoom = job.Kind == JobKind.Search && job.Area != null && job.Area.InRoom(point);
         if (inRoom) return true;
         if (distance > _intel.JobMatchRadius) return false;
 
@@ -611,13 +613,17 @@ public class JobBoard
     /// 3. Else the ground he can reach nearest it as the crow flies (within the navigator's Approach
     ///    Radius), but only with a clear eye-height line from it to the place, the test CanSeeSpot makes,
     ///    because that ground can lie behind a wall.
-    /// Found once per place and kept on the job (keyed on its Point), so it floods once and not per step or
-    /// per member. False, with `why` saying so, when none of those holds: nothing is stored, the caller
-    /// takes him off the job as for no path, and the next member asks again from where he stands.
+    /// Only 1 and 2 are kept on the job (keyed on its Point), so they flood once per place and not per step
+    /// or per member: both are joined to the place, so anyone who can reach the place can reach them. 3 is
+    /// worked out from his own reachable ground, which another member's may not share, so it is his alone:
+    /// `forTeam` is false and the caller keeps it for him (SearchingState), and the next member asks again.
+    /// False, with `why` saying so, when none of those holds: nothing is stored, the caller takes him off
+    /// the job as for no path, and the next member asks again from where he stands.
     /// </summary>
-    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start, out string why)
+    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start, out bool forTeam, out string why)
     {
         why = null;
+        forTeam = true;
         if (job.TryGetStart(out start)) return true;
 
         GroundFound found = who.Navigator.FindGroundNear(job.Point, job.Area.Ground, out start);
@@ -632,9 +638,18 @@ public class JobBoard
             return false;
         }
 
+        // The nearest ground in sight was found from his own reachable region: a teammate cut off from it
+        // would be sent to ground he can't reach and dropped from the job, so it isn't stored for the team.
+        if (found == GroundFound.Nearest)
+        {
+            forTeam = false;
+            DebugLog.Info($"{job}'s place {job.Point} has no way in that {who.name} can reach, on its side or otherwise, so he walks to the nearest ground in sight of it he can reach, {start} ({PathGrid.FlatDistance(job.Point, start):0.#} m off), and spreads out from there. It is his alone, not kept for the team.", who);
+            return true;
+        }
+
         job.SetStart(start);
-        if (found != GroundFound.Point)
-            DebugLog.Info($"{job}'s place {job.Point} has no way in, so its members walk to {(found == GroundFound.Preferred ? "the nearest of its area's ground" : "the nearest ground in sight of it")} they can reach, {start} ({PathGrid.FlatDistance(job.Point, start):0.#} m off), and spread out from there.", who);
+        if (found == GroundFound.Preferred)
+            DebugLog.Info($"{job}'s place {job.Point} has no way in, so its members walk to the nearest of its area's ground they can reach, {start} ({PathGrid.FlatDistance(job.Point, start):0.#} m off), and spread out from there.", who);
         return true;
     }
 
@@ -981,8 +996,9 @@ public class JobBoard
         job.Lead != null && job.Step != JobStep.StandDown && job.Step != JobStep.Done && job.Step != JobStep.Signal;
 
     // Two open jobs about one place are one job: the younger's place is covered by the older (within Job
-    // Match Radius, or in a room the older marks), or their search areas mark a room in common, since
-    // otherwise two teams could search one office apart (spec, piece 7). Only the first pair found (the
+    // Match Radius, or in a room the older marks when it is a Search), or both are Searches whose areas
+    // mark a room in common, since otherwise two teams could search one office apart (spec, piece 7). A
+    // Check's marked rooms never count: it searches no room (Covers). Only the first pair found (the
     // list is oldest first) merges in a firing and the next waits for the next interval: that keeps this
     // walk simple while jobs close under it, and a squad has few jobs. The room test is two short lists
     // compared in place (SearchArea.SharedRoom), with nothing allocated.
@@ -1004,8 +1020,10 @@ public class JobBoard
         }
     }
 
-    // A room both jobs' search areas mark, or null.
-    private static Room SharedRoom(GroupJob a, GroupJob b) => a.Area != null ? a.Area.SharedRoom(b.Area) : null;
+    // A room both jobs' search areas mark, or null. Only between two Searches: a Check searches no room,
+    // so the rooms its area marks are not its business (Covers), and a Check matches by distance only.
+    private static Room SharedRoom(GroupJob a, GroupJob b) =>
+        a.Kind == JobKind.Search && b.Kind == JobKind.Search && a.Area != null ? a.Area.SharedRoom(b.Area) : null;
 
     // The older job stays and takes the combined incident: the higher reason and priority, the place of
     // the higher priority (a tie stays where the older was, so a merge doesn't move a team for nothing),
@@ -1110,11 +1128,13 @@ public class JobBoard
         return false;
     }
 
-    // Any job still open (one emptied mid-walk or Done is only waiting to be removed) whose area marks a room the given area marks.
+    // Any Search still open (one emptied mid-walk or Done is only waiting to be removed) whose area marks a
+    // room the given area marks. Only Searches, as in MergeOne: a Check's rooms never merge, so they can't
+    // pull an extra's new Search straight back.
     private bool AnyJobSharesRoom(SearchArea area)
     {
         foreach (GroupJob job in _jobs)
-            if (job.Step != JobStep.Done && job.Count > 0 && job.Area != null && job.Area.SharedRoom(area) != null) return true;
+            if (job.Kind == JobKind.Search && job.Step != JobStep.Done && job.Count > 0 && job.Area != null && job.Area.SharedRoom(area) != null) return true;
         return false;
     }
 

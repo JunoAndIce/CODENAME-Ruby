@@ -30,7 +30,7 @@ public class Intel : MonoBehaviour
     [Header("Group jobs")]
     [Tooltip("The most enemies on one check or search, the lead included. The spec's number is three.")]
     [SerializeField, Range(1, 6)] private int _jobCap = 3;
-    [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another, and two jobs this close merge. So is one inside a room the job's search area marks, however far, and two jobs whose areas mark a room in common merge too.")]
+    [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another, and two jobs this close merge. For a Search, so is one inside a room its search area marks, however far, and two Searches whose areas mark a room in common merge too. A Check searches no room, so it matches by this distance only.")]
     [SerializeField, Min(0f)] private float _jobMatchRadius = 10f;
     [Tooltip("How long a team of two or three turns toward the spot before anyone goes, in seconds. A check of one skips it.")]
     [SerializeField, Min(0f)] private float _gatherTime = 0.75f;
@@ -112,31 +112,29 @@ public class Intel : MonoBehaviour
     /// </summary>
     public bool TryGetRow(Vector3 point, StimulusKind kind, bool heard, out BehaviourMap.Row row)
     {
+        if (heard)
         {
-            if (heard)
+            PathGrid floor = PathGrid.At(point);
+            if (floor != null)
             {
-                PathGrid floor = PathGrid.At(point);
-                if (floor != null)
+                IReadOnlyList<Room> rooms = _roomIndex.Rooms;
+                for (int i = 0; i < rooms.Count; i++)
                 {
-                    IReadOnlyList<Room> rooms = _roomIndex.Rooms;
-                    for (int i = 0; i < rooms.Count; i++)
+                    Room room = rooms[i];
+                    if (room.Floor != floor || room.Map == null || room.Map.MaskRadius <= 0f) continue;
+                    float outside = room.DistanceOutside(point);
+                    if (outside <= 0f || outside > room.Map.MaskRadius) continue;
+                    if (Applies(room, kind, out BehaviourMap.Row masked) && masked.Response == StimulusResponse.Ignore)
                     {
-                        Room room = rooms[i];
-                        if (room.Floor != floor || room.Map == null || room.Map.MaskRadius <= 0f) continue;
-                        float outside = room.DistanceOutside(point);
-                        if (outside <= 0f || outside > room.Map.MaskRadius) continue;
-                        if (Applies(room, kind, out BehaviourMap.Row masked) && masked.Response == StimulusResponse.Ignore)
-                        {
-                            row = masked;
-                            return true;
-                        }
+                        row = masked;
+                        return true;
                     }
                 }
             }
-
-            for (Room room = _roomIndex.SmallestAt(point); room != null; room = room.Parent)
-                if (Applies(room, kind, out row)) return true;
         }
+
+        for (Room room = _roomIndex.SmallestAt(point); room != null; room = room.Parent)
+            if (Applies(room, kind, out row)) return true;
 
         if (_defaultMap == null)
         {
@@ -146,7 +144,9 @@ public class Intel : MonoBehaviour
         return _defaultMap.TryGetRow(kind, out row);
     }
 
-    // A room's own row for the kind, when it has a map, a row, and the row isn't held back for use.
+    // A room's own row for the kind, when it has a map, a row, and the row isn't held back for use. A
+    // practice shot marks the shooter's room and every room around it in use (Room.NotePractice), so an
+    // Only While In Use row on an enclosing range room applies too (RangeSpot.CheckMasking walks the same way).
     private static bool Applies(Room room, StimulusKind kind, out BehaviourMap.Row row)
     {
         row = default;
@@ -281,20 +281,20 @@ public class Intel : MonoBehaviour
         hearers.Clear();
         if (!noReach)
         {
-        foreach (EnemyController listener in _enemies)
-        {
-            if (listener == speaker || listener.Health.IsDead) continue;
-            // Another floor is out of range: floors are independent by design, so he simply doesn't hear.
-            FloorReach.Standing standing = _speech.Measure(listener, _speechRange, out _);
-            if (standing == FloorReach.Standing.OffGrid)
+            foreach (EnemyController listener in _enemies)
             {
-                if (_speech.FirstOffGrid(listener))
-                    Debug.LogWarning($"{listener.name} is on no PathGrid, so he can't hear speech.", listener);
-                continue;
+                if (listener == speaker || listener.Health.IsDead) continue;
+                // Another floor is out of range: floors are independent by design, so he simply doesn't hear.
+                FloorReach.Standing standing = _speech.Measure(listener, _speechRange, out _);
+                if (standing == FloorReach.Standing.OffGrid)
+                {
+                    if (_speech.FirstOffGrid(listener))
+                        Debug.LogWarning($"{listener.name} is on no PathGrid, so he can't hear speech.", listener);
+                    continue;
+                }
+                if (standing == FloorReach.Standing.InRange) hearers.Add(listener);
             }
-            if (standing == FloorReach.Standing.InRange) hearers.Add(listener);
-        }
-        _speech.End("speech", speaker);
+            _speech.End("speech", speaker);
         }
 
         // A shout also fills the speaker's own room, past the path range, when that room holds no rooms
@@ -419,7 +419,7 @@ public class Intel : MonoBehaviour
     public bool Covers(GroupJob job, Vector3 point) => _board.Covers(job, point);
 
     /// <summary>Where a Search's members walk to before they spread out: its place, or the ground nearest it they can reach (see JobBoard.TryGetSearchStart).</summary>
-    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start, out string why) => _board.TryGetSearchStart(job, who, out start, out why);
+    public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start, out bool forTeam, out string why) => _board.TryGetSearchStart(job, who, out start, out forTeam, out why);
 
     /// <summary>Whether a point is in a job's search area: the circle round its place, or a room it marks (see JobBoard.InSearchArea).</summary>
     public bool InSearchArea(GroupJob job, Vector3 point) => _board.InSearchArea(job, point);
