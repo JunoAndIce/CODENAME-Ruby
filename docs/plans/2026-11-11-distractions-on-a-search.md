@@ -133,7 +133,7 @@
 - [x] **Step 3: Docs.** `CLAUDE.md`'s Distraction and Aggro bullets.
 - [x] **Step 4:** Compile and commit.
 - [x] **Step 5: Close the work.** Add a line on this to the spec's Progress, then run the end review in the background, on Opus.
-- [ ] **Step 6: Play-test gate (the user).**
+- [x] **Step 6: Play-test gate (the user).**
   - A provoked enemy runs to where Ruby was.
   - Standing behind him in the open, she isn't spotted until she's in front of him.
   - Once he sees her he calls the others in.
