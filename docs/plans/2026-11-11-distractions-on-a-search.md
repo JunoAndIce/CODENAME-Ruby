@@ -96,20 +96,20 @@
 - Consumes: Task 1's `GrowAt` and Task 2's `Noticed`.
 - Produces: `bool JobBoard.Serious(Incident thing)`. It is true for a gunshot, a body the squad hasn't booked, or an enemy seen flying, alive or dead, once per throw.
 
-- [ ] **Step 1: The rule.** A serious thing noticed by a member:
+- [x] **Step 1: The rule.** A serious thing noticed by a member:
   - raises the job's reason to an attack and its priority;
   - moves the job's source to the spot, keeping the old area plus the new (`GrowAt`, then the source moves);
   - sends every member to walk there.
 
   Nobody scouts it.
-- [ ] **Step 2: Gunshots.** `Mobilise`'s branches fold into this rule. Kept:
+- [x] **Step 2: Gunshots.** `Mobilise`'s branches fold into this rule. Kept:
   - the stop-and-face beat for React Time before they go;
   - the refusal of a shot on another floor, with a warning;
   - a shot inside the area throwing away what was seen, once per Distraction Gap.
 
   A lone searcher with no job still joins or leads a Search at the shot, as today.
-- [ ] **Step 3: Docs.** `CLAUDE.md`: the gunshot bullet and the serious rule.
-- [ ] **Step 4:** Compile and commit.
+- [x] **Step 3: Docs.** `CLAUDE.md`: the gunshot bullet and the serious rule.
+- [x] **Step 4:** Compile and commit.
 - [ ] **Step 5: Play-test gate (the user).**
   - A gunshot near a searching team brings all of them, after a beat facing it.
   - A body found by one member brings the team.
