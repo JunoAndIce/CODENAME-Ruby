@@ -30,7 +30,7 @@ public class Intel : MonoBehaviour
     [Header("Group jobs")]
     [Tooltip("The most enemies on one check or search, the lead included. The spec's number is three.")]
     [SerializeField, Range(1, 6)] private int _jobCap = 3;
-    [Tooltip("A new disturbance this close, in metres, to an open job's place is that job's business and doesn't start another, and two jobs this close merge. For a Search, so is one inside a room its search area marks, however far, and two Searches whose areas mark a room in common merge too. A Check searches no room, so it matches by this distance only.")]
+    [Tooltip("A new disturbance this close, in metres, to any of an open job's places (its place, and every spot a grown search has taken in) is that job's business and doesn't start another, and a job whose place is this close to another's places merges into it. For a Search, so is one inside a room its search area marks, however far, and two Searches whose areas mark a room in common merge too. A Check searches no room, so it matches by this distance only.")]
     [SerializeField, Min(0f)] private float _jobMatchRadius = 10f;
     [Tooltip("How long a team of two or three turns toward the spot before anyone goes, in seconds. A check of one skips it.")]
     [SerializeField, Min(0f)] private float _gatherTime = 0.75f;
@@ -624,7 +624,9 @@ public class Intel : MonoBehaviour
     // Ruby's last reported spot and how stale it is: the picture the squad is working from. Bodies
     // and loose guns the squad has on its books are marked too. So is each job's Job Match Radius,
     // without Intel selected, because a sound or a sight in the ring goes to that job instead of starting
-    // one, and that decides what you see the squad do. A Done job's isn't: it no longer takes anything.
+    // one, and that decides what you see the squad do. It is drawn round every one of the job's places, as
+    // Covers matches (a grown search has one per patch, and Point is one of them), so a ring round Point
+    // alone hid why a thing far from it went to the job. A Done job's isn't: it no longer takes anything.
     private void OnDrawGizmos()
     {
         if (!Application.isPlaying) return;
@@ -635,7 +637,8 @@ public class Intel : MonoBehaviour
         {
             if (job.Step == JobStep.Done) continue;
             Gizmos.color = JobColor(job);
-            DrawCircle(job.Point, _jobMatchRadius);
+            IReadOnlyList<Vector3> places = job.Area.Places;
+            for (int i = 0; i < places.Count; i++) DrawCircle(places[i], _jobMatchRadius);
         }
 
         if (Published.RubyReported)

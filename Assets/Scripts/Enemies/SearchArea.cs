@@ -19,8 +19,9 @@ using UnityEngine;
 /// still searched. Every patch is on the first one's floor: floors are independent and a job never moves
 /// between them, so a spot on another floor is refused with a warning.
 ///
-/// Built once when a job is made and again when its place moves (GroupJob.Area), and each patch floods
-/// once when it is added, so a search never floods per step or per member. A plain class.
+/// Built once when a job is made and again only when a Check moves (GroupJob.Area: a Search's move keeps
+/// its area and moves the source within it), and each patch floods once when it is added, so a search
+/// never floods per step or per member. A plain class.
 /// </summary>
 public class SearchArea
 {

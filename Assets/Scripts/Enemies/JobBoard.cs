@@ -379,9 +379,13 @@ public class JobBoard
     /// (HandleAtOwnJob); this is for a thing **elsewhere**. In order:
     /// 1. **An open job is handling this** (Covers: its place is within Job Match Radius, or, for a
     ///    Search, the thing is in a room its search area marks, which wins over a nearer place matched by
-    ///    radius alone; a Check searches no room and matches by distance only). A thing in a room a
-    ///    Search marks raises it where it is and never moves it; a Check is moved to a more serious thing
-    ///    over a metre off (GroupJob.Upgrade). A more serious
+    ///    radius alone; a Check searches no room and matches by distance only). **A serious thing on a
+    ///    running Search** (Serious) goes the way it does for a member who notices it (TakeSerious: the job
+    ///    rises, grows there and signals or moves its source, a gunshot in the area making them look again),
+    ///    so what the team does doesn't depend on whether a member or a passer-by heard it first. Otherwise a
+    ///    thing in a room a Search marks raises it where it is and never moves it, a Search moved elsewhere
+    ///    keeps its area and what it has seen, and a Check is moved to a more serious thing over a metre off
+    ///    (GroupJob.Upgrade). A more serious
     ///    thing upgrades it, a find or a flying enemy turns a check into a search, and a stronger reason (an attack,
     ///    where the job is a problem) raises it for every member even at the same priority. If it is
     ///    still recruiting and has room he joins, taking himself off any job he was on. Otherwise
@@ -403,7 +407,12 @@ public class JobBoard
         if (match != null)
         {
             bool restarted = false;
-            if (Converts(match, incident)) restarted = Upgrade(match, incident, kind);
+            // Through Upgrade, a serious thing a passer-by heard first moved the Search to it and left the
+            // members who heard it too nothing to do, while a member hearing it first signalled the team. One
+            // path for both. Its refusals (a Distraction Gap, a spot the area can't take) are logged there, and
+            // the job has still risen.
+            if (match.Kind == JobKind.Search && Serious(incident)) TakeSerious(match, who, incident);
+            else if (Converts(match, incident)) restarted = Upgrade(match, incident, kind);
             else Elevate(match, incident.Reason, $"{who.name} senses {incident}");
             if (match.Recruiting)
             {
@@ -687,8 +696,10 @@ public class JobBoard
     /// <summary>
     /// A member's stimulus **at his own job's place** (the caller has tested Covers), before anything
     /// else: a more serious thing upgrades the job, and a find or a flying enemy turns a check into a search, for every
-    /// member, so the team never splits on it. A serious thing (Serious) never gets here on a running job: Mobilise
-    /// takes it first, so what this converts is a loose gun found or anything at Alarm Speed. True when the job took it, so he needn't be distracted;
+    /// member, so the team never splits on it. Only a Check member's comes here: a serious thing (Serious) on a
+    /// running job goes to Mobilise first, and anything else a member of a running Search notices is ordinary at any
+    /// priority (EnemyReactions.Investigate: one goes, the search grows, it counts), so what this converts is a
+    /// Check, for a loose gun found or anything at Alarm Speed. True when the job took it, so he needn't be distracted;
     /// false when it changed nothing, and the caller makes it a distraction. An attack is raised for
     /// the team through RaiseJobAt, before this is reached. A glance (walkThere false, a find already
     /// on the books) never changes the job: it isn't worth a walk, so it only raises and distracts.
@@ -737,7 +748,10 @@ public class JobBoard
     /// distractions (EnemyReactions.Investigate), taken or not (user, 2026-11-11). In order:
     /// 1. **He has no running job** (a search of his own, or finishing his last walk after a search ended): a
     ///    gunshot or a killing (the only serious things the caller sends here without a job) goes to the squad
-    ///    as any new thing does, and he joins or leads a Search there.
+    ///    as any new thing does, and he joins or leads a Search there (a running Search that has it takes it as
+    ///    below, through Handle).
+    /// Steps 2 to 5 are TakeSerious, which Handle uses too, for a serious thing a non-member brings to a running
+    /// Search, so the job does the same whoever noticed it first.
     /// 2. **Off the job's floor:** refused with a warning, since a job never moves between floors. Another job's
     ///    ground doesn't stop it: the team goes, and the merge folds the two jobs.
     /// 3. **The job rises at once:** an attack, for every member, and at least the thing's priority. A gunshot
@@ -764,11 +778,21 @@ public class JobBoard
                 Debug.LogError($"{who.name} brought {thing} to the job board as serious with no running job, but only a gunshot or a killing goes to the squad from there (EnemyReactions.Investigate): it is left to him as a distraction.", who);
                 return false;
             }
-            // Not taken if it left him where he was: a full team has the shot, and he carries on.
-            Handle(who, new Incident(thing.Point, thing.Reason, thing.Priority, makesSearch: true));
+            // Not taken if it left him where he was: a full team has the shot, and he carries on. The thing keeps
+            // what makes it serious (its kind, source, mobilising), so a running Search that has it takes it as a
+            // member's notice would (Handle, TakeSerious) instead of as a plain louder sound.
+            Handle(who, new Incident(thing.Point, thing.Reason, thing.Priority, makesSearch: true, thing.SaysNothingOfRuby, thing.Mobilises, thing.Kind, thing.Source));
             return who.Job != job;
         }
 
+        return TakeSerious(job, who, thing);
+    }
+
+    // Mobilise's steps 2 to 5 for a job that has a serious thing, whoever brought it: a member who noticed it
+    // (Mobilise), or anyone whose thing a running Search covers (Handle). `who` names him in the log and his
+    // Distraction Gap spaces the job's moves; nothing here makes him a member. True when the job took it.
+    private bool TakeSerious(GroupJob job, EnemyController who, Incident thing)
+    {
         // Another job's ground doesn't stop a serious thing (user, 2026-11-11): the team that noticed it goes, and
         // the next Intel Interval's merge folds the two jobs, as a gunshot always did.
         PathGrid floor = PathGrid.At(thing.Point);
@@ -816,7 +840,7 @@ public class JobBoard
             job.NoteSeriousTaken();
             job.NoteSeriousMove();
             DebugLog.Info($"{who.name} has something serious at {thing.Point}: {job} goes there instead.", who);
-            MoveTo(job, thing);
+            MoveTo(job, thing, asCheck: job.Kind == JobKind.Check);
             return true;
         }
 
@@ -841,10 +865,12 @@ public class JobBoard
     // patch already there (a second hearer, the same body seen again) floods nothing. Growing only here, and not
     // for every serious notice, keeps one left over inside a Distraction Gap from flooding a patch and restarting
     // Search Minimum Time. False, with a log line, when nothing open round the spot lets it be a source
-    // (SearchArea has warned): the job stays put. A Check has no area to grow.
+    // (SearchArea has warned): the job stays put. A Check has no area to grow, and neither has a Check converted
+    // during its beat: its Search is built at the thing when the beat ends (SignalledAsCheck), so a patch grown
+    // into the Check's circle now would only be thrown away.
     private static bool CanTakeSpot(GroupJob job, Incident thing, EnemyController who)
     {
-        if (job.Kind != JobKind.Search) return true;
+        if (job.Kind != JobKind.Search || (job.Step == JobStep.Signal && job.SignalledAsCheck)) return true;
         if (!job.Area.TryGetPatchAt(thing.Point, out _)) job.GrowAt(thing.Point, $"what {who.name} noticed ({thing})");
         if (job.Area.TryGetPatchAt(thing.Point, out _)) return true;
         DebugLog.Info($"{who.name} turns toward {thing}: it is serious, but its spot couldn't be taken into {job}'s search area, so the job can't go there and stays where it is.", who);
@@ -1027,23 +1053,28 @@ public class JobBoard
         }
 
         DebugLog.Info($"{job} goes to {thing.Point}.", _intel);
-        // The beat is over: out of Signal first, since Restart (a Check's Upgrade) leaves a Signal running so that a
-        // pending one survives a mid-beat upgrade.
+        // The beat is over: out of Signal first, since Restart (a Check's Upgrade) and MoveSourceTo leave a Signal
+        // running so that a pending one survives a mid-beat upgrade. A job that was a Check when the beat began is
+        // made a Search at the thing even if something converted it during the beat (SignalledAsCheck).
+        bool asCheck = job.Kind == JobKind.Check || job.SignalledAsCheck;
         job.SetStep(JobStep.Go, 0f);
-        MoveTo(job, thing);
+        MoveTo(job, thing, asCheck);
     }
 
     // Where the job goes for a serious thing: now (still calling or gathering) or when the beat ends. A Check
     // becomes a Search there (Upgrade, which moves it when the spot is more than a metre off): a Check searches
-    // no room, so it has no area worth keeping. A Search moves its source there and keeps its whole area and
-    // what was seen (GroupJob.MoveSourceTo), and every member, those out on a check included, walks there. A
-    // spot that can't be taken into the area (SearchArea warned why) leaves the job where it is.
-    private void MoveTo(GroupJob job, Incident thing)
+    // no room, so it has no area worth keeping. `asCheck` is a job that was a Check when its beat began and was
+    // converted during it (the third look, a non-member's find, a join from Aggro): it too gets its Search built
+    // at the thing (spec: "a serious one makes the Check a Search there"), not the Check's circle grown. A Search
+    // moves its source there and keeps its whole area and what was seen (GroupJob.MoveSourceTo), and every
+    // member, those out on a check included, walks there. A spot that can't be taken into the area (SearchArea
+    // warned why) leaves the job where it is.
+    private void MoveTo(GroupJob job, Incident thing, bool asCheck)
     {
-        if (job.Kind == JobKind.Check)
+        if (asCheck)
         {
             var search = new Incident(thing.Point, StimulusResponse.SearchForAttack, Mathf.Max(job.Priority, thing.Priority), makesSearch: true);
-            ChooseAfterRestart(job, Upgrade(job, search, JobKind.Search));
+            ChooseAfterRestart(job, Upgrade(job, search, JobKind.Search, asCheck: true));
             return;
         }
 
@@ -1062,13 +1093,13 @@ public class JobBoard
     // Check has nothing seen to keep and starts its walk over.
     private void ResumeWhereItIs(GroupJob job)
     {
+        // Restart and MoveSourceTo both leave a Signal running, so a job coming out of one for good must leave it first.
+        if (job.Step == JobStep.Signal) job.SetStep(JobStep.Go, 0f);
         if (job.Kind == JobKind.Search && job.MoveSourceTo(job.Point, "its own source"))
         {
             foreach (EnemyController member in job.Members) member.FollowJob(job);
             return;
         }
-        // Restart leaves a Signal running, so a job coming out of one for good must leave it first.
-        if (job.Step == JobStep.Signal) job.SetStep(JobStep.Go, 0f);
         job.Restart(_intel.GatherTime);
         foreach (EnemyController member in job.Members) member.FollowJob(job);
         ChooseAfterRestart(job, true);
@@ -1192,13 +1223,14 @@ public class JobBoard
     }
 
     // A more serious thing at a job's place: the reason and priority rise for everyone. If the place
-    // moved the team re-plans its walk from the first step; at the same place it carries on. True when
-    // it started over, which clears the checker: a caller whose job lands in Go chooses a new one
-    // (ChooseChecker), after its own log lines and any joining, so the choice sees the whole team.
-    private bool Upgrade(GroupJob job, Incident incident, JobKind kind)
+    // moved (a Search's source, kept within its area, or a Check rebuilt at the new place) the team re-plans
+    // its walk; at the same place it carries on. True when it did, which clears a Check's checker: a caller
+    // whose job lands in Go chooses a new one (ChooseChecker), after its own log lines and any joining, so the
+    // choice sees the whole team. `asCheck`: see GroupJob.Upgrade.
+    private bool Upgrade(GroupJob job, Incident incident, JobKind kind, bool asCheck = false)
     {
-        bool wasCheck = job.Kind == JobKind.Check;
-        bool restarted = job.Upgrade(incident, kind, _intel.GatherTime);
+        bool wasCheck = job.Kind == JobKind.Check || asCheck;
+        bool restarted = job.Upgrade(incident, kind, _intel.GatherTime, asCheck);
         if (wasCheck && job.Kind == JobKind.Search)
             DebugLog.Info($"{job} found something at {incident.Point}: the check becomes a search, and everyone goes.", _intel);
         if (incident.Reason == StimulusResponse.SearchForAttack)
@@ -1249,17 +1281,19 @@ public class JobBoard
     // and a Search if either is. Its own members keep their order, then the younger's follow up to the
     // cap, joined at once with no call: they are already at this place on this business. The younger
     // closes when its last member leaves. The ones who don't fit are extras (MergeExtras). When the
-    // younger has the higher priority the merged job moves to its place, more than a metre off, and starts
-    // over there with its area rebuilt round it (GroupJob.Upgrade), so its marked rooms follow; the one
-    // exception is an older Search with that place inside a room it marks, which stays and only rises,
-    // since it clears that room whole. An older Check always moves. `shared` is the room they have in
-    // common when that, and not the place, is why they merge, for the log.
+    // younger has the higher priority the merged job moves to its place, more than a metre off
+    // (GroupJob.Upgrade): an older Search moves its source there and keeps its whole area and what it has
+    // seen, unless that place is inside a room it marks, where it stays and only rises, since it clears that
+    // room whole; an older Check moves and starts over there with its area built round it. `shared` is the
+    // room they have in common when that, and not the place, is why they merge, for the log.
     // **A merge keeps both areas** (the rooms plan's final review): whatever either job was searching is
-    // still searched, so the second place and its rooms aren't dropped. The younger's area, when it was a
-    // Search, is absorbed into the merged one; and when the merge moved the older and rebuilt its area round
-    // the new place, the older's own area, when it was a Search, is put back too. Both were flooded when
-    // they were built, so this copies their rooms and ground and floods nothing more. A Check's area isn't
-    // kept: a Check searches no room, so its area was never anyone's to clear.
+    // still searched, so the second place and its rooms aren't dropped. The older's own area is never lost (a
+    // Search's move keeps it), and the younger's, when it was a Search, is absorbed into the merged one after
+    // the upgrade, copied from its floods with nothing more flooded. (An older Search moved to the younger's
+    // place has grown a patch there first, which floods that circle once more; absorbing the younger's area
+    // before the upgrade would save it, but would also count the younger's rooms in the stay-put test and
+    // keep the team off the higher priority's place.) A Check's area isn't kept: a Check searches no room, so
+    // its area was never anyone's to clear.
     private void Merge(GroupJob older, GroupJob younger, Room shared)
     {
         // Built inside the call, so it compiles away with the rest of the line when logging is off.
@@ -1269,8 +1303,6 @@ public class JobBoard
         _moving.Clear();
         _moving.AddRange(younger.Members);
 
-        // Taken before Upgrade, which may rebuild the older's area and turn a Check into a Search.
-        SearchArea olderArea = older.Kind == JobKind.Search ? older.Area : null;
         SearchArea youngerArea = younger.Kind == JobKind.Search ? younger.Area : null;
 
         Vector3 place = younger.Priority > older.Priority ? younger.Point : older.Point;
@@ -1279,7 +1311,6 @@ public class JobBoard
         JobKind kind = older.Kind == JobKind.Search || younger.Kind == JobKind.Search ? JobKind.Search : JobKind.Check;
         bool restarted = Upgrade(older, new Incident(place, reason, priority), kind);
 
-        if (olderArea != null && older.Area != olderArea) older.KeepArea(olderArea, "its own, from before the merge moved it");
         if (youngerArea != null) older.KeepArea(youngerArea, $"{younger}'s, merged into it");
 
         _extras.Clear();

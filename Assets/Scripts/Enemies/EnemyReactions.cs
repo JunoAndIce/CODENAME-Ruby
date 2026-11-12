@@ -28,7 +28,10 @@ public class EnemyReactions
     /// was taken; every decision is logged. A search for an attack makes him wary for good, taken
     /// or not, so it always ends on an aggressive patrol. With walkThere false he looks from where
     /// he stands instead of going to the point (a glance at a body the squad already knows).
-    /// On a job, a stimulus at the job's place goes to the job first (Intel.HandleAtOwnJob, BecomeWaryAt).
+    /// On a job, a serious thing brings the whole job (Intel.Mobilise). On a running Search anything else is
+    /// ordinary whatever its priority: one goes to check it, the search grows there, and it counts toward his
+    /// own limit (Distract). On a Check a stimulus at the job's place goes to the job first (Intel.HandleAtOwnJob,
+    /// BecomeWaryAt), and one elsewhere that outranks his search goes to the squad (Intel.Handle).
     /// </summary>
     public bool Investigate(Incident incident, bool walkThere = true)
     {
@@ -77,7 +80,22 @@ public class EnemyReactions
                 return true;
             }
 
-            // On a job, anything at its place goes to the job first: a find or a flying enemy turns a check
+            // On a running Search anything else is ordinary at any priority (user, 2026-11-11): he, or whoever of the
+            // team noticed it first, goes to check it, the search grows there and it counts toward his own limit
+            // (Distract). Outranking his search used to upgrade or move the job (HandleAtOwnJob) or take him off it to
+            // lead a new one (Handle), and nobody counted it. A glance comes here too, and only turns him, as before.
+            // Whatever one member knows the team knows, so an attack-reason thing raises the job's reason where it
+            // now reaches (its place, or the patch it grew there): cheap, and it neither moves nor restarts the job.
+            // Its priority doesn't rise, since an ordinary thing doesn't change what the team is searching for.
+            if (onRunningJob && own.Kind == JobKind.Search && _enemy.Intel != null)
+            {
+                bool taken = Distract(incident, othersHaveIt);
+                if (incident.Reason == StimulusResponse.SearchForAttack && _enemy.Job == own)
+                    _enemy.Intel.RaiseJobAt(_enemy, incident.Point, $"{_enemy.name} noticed {incident}");
+                return taken;
+            }
+
+            // On a Check, anything at its place goes to the job first: a find or a flying enemy turns the check
             // into a search and a more serious thing upgrades it, for the whole team. Only what the job didn't take
             // is a distraction for him, and a glance never changes the job, so it never retargets him.
             bool atOwnJob = own != null && _enemy.Intel != null && _enemy.Intel.Covers(own, incident.Point);
@@ -192,8 +210,13 @@ public class EnemyReactions
         hadEnough = counted && count >= _enemy.DistractionThreshold;
         if (hadEnough)
         {
+            GroupJob job = _enemy.Job;
             _enemy.Memory.ClearDistractions();
             GoAfterRuby(count, incident);
+            // Only the provoked one reacts (user, 2026-11-11): what tipped him over, serious or not, never reaches his
+            // job, so a thing only he noticed brings nobody else and grows nothing. Said, so it isn't read as dropped.
+            if (job != null && _enemy.Job != job)
+                DebugLog.Info($"{job} isn't told of {incident}: {_enemy.name} has gone after Ruby over it, and the team carries on without him.", _enemy);
         }
         return isNew || counted;
     }

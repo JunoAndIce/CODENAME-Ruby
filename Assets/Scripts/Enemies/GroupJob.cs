@@ -60,11 +60,12 @@ public class GroupJob
     public Vector3 Point { get; private set; }
     /// <summary>
     /// What a Search covers round Point: the circle's ground and the rooms it reaches (SearchArea). Built
-    /// when the job is made and again when an upgrade moves the job (Upgrade), so it floods once per place
-    /// and never per step. It can grow (GrowAt, KeepArea), each new spot flooded once as it is added, and a
-    /// serious thing moves its source within it (MoveSourceTo) without rebuilding it. Point and the area's
-    /// place (its current source) move together, so they are always the same point. Built for a Check too,
-    /// because a Check can become a Search at the same place.
+    /// when the job is made, and rebuilt only when a Check moves (Upgrade), so it floods once per place and
+    /// never per step. A Search's area is never rebuilt: it grows (GrowAt, KeepArea), each new spot flooded
+    /// once as it is added, and any move of a Search (a serious thing, a louder thing, a merge) moves its
+    /// source within it (MoveSourceTo), keeping every room and what was seen. Point and the area's place (its
+    /// current source) move together, so they are always the same point. Built for a Check too, because a
+    /// Check can become a Search at the same place.
     /// </summary>
     public SearchArea Area { get; private set; }
 
@@ -135,16 +136,20 @@ public class GroupJob
     }
 
     /// <summary>
-    /// A serious thing has made `spot` the job's new source (spec: "The spot becomes the job's new source"): the
-    /// job moves there but keeps what it had. The spot's patch (grown into when the thing was noticed; grown
-    /// here if it wasn't) becomes the area's source and Point follows it, so Point is always one of the area's
-    /// places and the walk-in point, keyed on Point, and SourceGround are worked out for the new place. Nothing
-    /// is rebuilt and the coverage is kept, so nothing already seen is thrown away; claims are released so no
-    /// member's old point keeps another off it. Everyone walks to the new source from Go, as at the start,
-    /// except in Call, which carries on calling and sends them afterwards. Checks and noticings go with the old
-    /// walk, as for Restart. Search Minimum Time starts over once the first member reaches it (AwaitingSource).
-    /// For a Search: a Check has no area to keep and becomes a Search through Upgrade. False when the spot
-    /// can't be a patch (another floor, or nothing open round it: SearchArea warned), and nothing changes.
+    /// `spot` becomes the job's new source (spec: "The spot becomes the job's new source"): the job moves there
+    /// but keeps what it had. A serious thing does this, and so does every other move of a Search (Upgrade: a
+    /// louder thing, a merge), since a Search's move keeps its rooms and what was seen (user, 2026-11-11). The
+    /// spot's patch (grown into when the thing was noticed; grown here if it wasn't) becomes the area's source
+    /// and Point follows it, so Point is always one of the area's places and the walk-in point, keyed on Point,
+    /// and SourceGround are worked out for the new place. Nothing is rebuilt and the coverage is kept, so
+    /// nothing already seen is thrown away; claims are released so no member's old point keeps another off it.
+    /// Everyone walks to the new source from Go, as at the start, except in Call, which carries on calling and
+    /// sends them afterwards, and in Signal, whose beat runs out first and then goes to the signalled thing
+    /// (setting Go here dropped a pending signal). A caller that wants out of Signal sets the step itself first
+    /// (JobBoard.ResumeWhereItIs). Checks and noticings go with the old walk, as for Restart. Search Minimum
+    /// Time starts over once the first member reaches it (AwaitingSource). For a Search: a Check has no area
+    /// to keep and becomes a Search through Upgrade. False when the spot can't be a patch (another floor, or
+    /// nothing open round it: SearchArea warned), and nothing changes.
     /// </summary>
     internal bool MoveSourceTo(Vector3 spot, string why)
     {
@@ -164,7 +169,7 @@ public class GroupJob
         if (Coverage != null)
             foreach (EnemyController member in _members) Coverage.Release(member);
         AwaitingSource = true;
-        if (Step != JobStep.Call) SetStep(JobStep.Go, 0f);
+        if (Step is not (JobStep.Call or JobStep.Signal)) SetStep(JobStep.Go, 0f);
         return true;
     }
 
@@ -294,6 +299,11 @@ public class GroupJob
         Coverage?.Release(who);
         if (Callee == who) Callee = null;
         _arrived.Remove(who);
+        // A noticing that names him as the one who went would have the next to notice the same thing defer to
+        // someone who is gone, for up to its half second: cleared, so the next who notices it goes. By reference,
+        // since a member being destroyed may already read as null through Unity's ==.
+        for (int i = 0; i < _noticings.Count; i++)
+            if (ReferenceEquals(_noticings[i].Sent, who)) MarkNoticingSent(i, null);
     }
 
     internal void RestartClock() => StepElapsed = 0f;
@@ -392,6 +402,13 @@ public class GroupJob
     /// <summary>The serious thing the team is signalling about, in Signal: where they face, and where they go when it ends.</summary>
     public Incident SignalledThing { get; private set; }
     /// <summary>
+    /// The job was a Check when its signal began. A conversion during the beat (the third look, a non-member's
+    /// find, a join from Aggro) makes it a Search round the Check's place, but the spec says a serious thing
+    /// makes the Check a Search there, at the thing: when the beat ends it is built there (JobBoard.GoToSignalledThing),
+    /// rather than growing the Check's circle and keeping its rooms as a running Search would.
+    /// </summary>
+    public bool SignalledAsCheck { get; private set; }
+    /// <summary>
     /// When a serious thing last moved the job (a signal began, or a job still calling or gathering moved at
     /// once), so a firefight, a tumbling body or a second find doesn't yank the team about again within a
     /// member's Distraction Gap.
@@ -412,6 +429,7 @@ public class GroupJob
     internal void BeginSignal(Incident thing, float length)
     {
         SignalledThing = thing;
+        SignalledAsCheck = Kind == JobKind.Check;
         _checks.Clear();
         // Noticings name who "has gone to check it", and nobody is out any more: a stale one would have the log
         // say a member who stopped for the signal is still away.
@@ -511,7 +529,8 @@ public class GroupJob
         _dropped.Clear();
         // Still calling people in: carry on, the walk will start from the new place afterwards. Signalling: the
         // beat runs out and the team goes to the signalled thing (JobBoard.GoToSignalledThing), which moves a
-        // Search's source or turns a Check into a Search there. Setting the step here dropped the pending signal
+        // Search's source or turns a Check into a Search there (a Check converted during the beat included:
+        // SignalledAsCheck). Setting the step here dropped the pending signal
         // silently when a non-member's Handle or a join from Aggro upgraded the job mid-beat. (A caller that wants
         // out of Signal sets the step itself first: JobBoard.ResumeWhereItIs.)
         if (Step is JobStep.Call or JobStep.Signal) return;
@@ -523,46 +542,66 @@ public class GroupJob
     private const float SamePlace = 1f;
 
     /// <summary>
-    /// Something more serious came up at this job's place: the reason and priority rise (never fall)
-    /// and it can make a Check into a Search. When the place moves, or it becomes a Search, the job
-    /// starts over from its first step and returns true so its members re-plan their walk; otherwise it
-    /// returns false and the job carries on as it was, Point untouched.
-    /// The place moves to an incident more than a metre away, **except that a Search stays put for one
-    /// inside a room its area marks**. A Search clears its marked rooms whole, so that spot is searched
-    /// either way, and moving there threw away what the team had seen and dropped the corridor ground
-    /// the first thing came from: it only rises. A Check is one look at one spot and searches no room, so
-    /// a louder thing anywhere else, its marked rooms included, moves it there and starts it over, or the
-    /// louder spot would never be visited and the team would say all clear. That covers a Check this
-    /// upgrade turns into a Search too (the merge rule: the higher priority's place wins unless the older
-    /// is already searching). Every route that upgrades (a match, a member's own stimulus, a merge, a
-    /// serious thing on a Check) comes through here, so they all agree. A serious thing on a Search doesn't:
-    /// it moves the source within the area and keeps it (MoveSourceTo).
+    /// Something more serious came up at this job's place: the reason and priority rise (never fall) and it
+    /// can make a Check into a Search. True when the members must re-plan their walk (the job moved, or became
+    /// a Search); false when it carries on as it was, Point untouched. Every route that upgrades (a match, a
+    /// Check member's own stimulus, a merge, the third look, a join from Aggro, a serious thing on a Check)
+    /// comes through here, so they all agree.
+    /// **A Search keeps everything it has** (user, 2026-11-11: a move of a grown Search keeps its rooms and what
+    /// was seen). It stays put for a thing within a metre of its place or inside a room its area marks, which it
+    /// clears whole either way, and only rises. Anything else moves its source there within the area
+    /// (MoveSourceTo, which grows the area at the spot first): no patch or room is dropped and the coverage is
+    /// kept. Rebuilding the area round the new place, as this once did, shrank a grown search to one circle and
+    /// threw away what was seen, and only when a non-member happened to hear the thing first: a member's
+    /// hearing of it kept everything. Only a gunshot inside the area makes a team look again
+    /// (JobBoard.LookAgainForGunshot). A spot the area can't take in (nothing open round it: SearchArea warned)
+    /// leaves the job where it is, raised, with a warning.
+    /// **A Check** is one look at one spot and searches no room, so a louder thing more than a metre off, its
+    /// marked rooms included, moves it there with its area rebuilt round the new place, and it starts over, or
+    /// the louder spot would never be visited and the team would say all clear. A Check becoming a Search
+    /// within a metre keeps its area: it was built round that place. `asCheck` treats a job that was a Check
+    /// when its signal began as a Check still (SignalledAsCheck, from JobBoard.GoToSignalledThing), and always
+    /// starts it over, so the walk leaves the beat.
     /// </summary>
-    internal bool Upgrade(Incident incident, JobKind kind, float gatherLength)
+    internal bool Upgrade(Incident incident, JobKind kind, float gatherLength, bool asCheck = false)
     {
-        bool searchStays = Kind == JobKind.Search && Area != null && Area.InRoom(incident.Point);
-        bool moved = !searchStays && PathGrid.FlatDistance(Point, incident.Point) > SamePlace;
+        if (Kind == JobKind.Search && !asCheck) return UpgradeSearch(incident);
+
+        bool moved = PathGrid.FlatDistance(Point, incident.Point) > SamePlace;
         bool becomesSearch = kind == JobKind.Search && Kind == JobKind.Check;
 
         // Point and the area move together, and only on a move, which starts the job over and throws its
         // coverage away too (Restart), so the area and what the team has left to clear always agree. A
-        // Check becoming a Search within a metre of its place keeps its area: it was built round that place. A louder
-        // sound a step from the place keeps both, so a running search isn't thrown away, and Point never
-        // drifts off the place the area was drawn round.
-        // A move rebuilds the area round the new place, so a grown area's other patches go with the old one
-        // (a merge puts back what it keeps, JobBoard.Merge). A serious thing moves a Search without this, by
-        // MoveSourceTo, keeping every patch and what was seen; Point moves with it.
+        // louder sound a step from the place keeps both, and Point never drifts off the place the area was
+        // drawn round.
         if (moved)
         {
             Area = new SearchArea(incident.Point, _intel.SearchAreaRadius, _intel);
             Point = incident.Point;
         }
         Elevate(incident.Reason);
-        if (incident.Priority > Priority) Priority = incident.Priority;
+        RaisePriority(incident.Priority);
         if (becomesSearch) Kind = JobKind.Search;
 
-        if (!moved && !becomesSearch) return false;
+        if (!moved && !becomesSearch && !asCheck) return false;
         Restart(gatherLength);
+        return true;
+    }
+
+    // A Search's upgrade: it rises, and moves only its source, keeping its area and what was seen (see Upgrade).
+    private bool UpgradeSearch(Incident incident)
+    {
+        bool stays = PathGrid.FlatDistance(Point, incident.Point) <= SamePlace || Area.InRoom(incident.Point);
+        Elevate(incident.Reason);
+        RaisePriority(incident.Priority);
+        if (stays) return false;
+
+        if (!MoveSourceTo(incident.Point, $"{incident}"))
+        {
+            Debug.LogWarning($"{this} can't move its source to {incident.Point} for {incident}: the spot couldn't be taken into its search area (as warned), so it stays where it is, raised.", _intel);
+            return false;
+        }
+        DebugLog.Info($"{this}'s source moves to {Point} for {incident}, keeping its whole search area ({Area.Places.Count} place(s), {Area.Rooms.Count} room(s)) and what it has seen: everyone walks there, then spreads out.", _intel);
         return true;
     }
 
