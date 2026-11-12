@@ -124,15 +124,15 @@
 
 - Produces: `bool EnemyController.ProvokedUnseen` (decision 5), with an internal setter.
 
-- [ ] **Step 1:** `GoAfterRuby` sets the flag before `Alert`. It clears when `DetectsPlayer()` first holds, and when he leaves Aggro by any route (`AggroState.Exit`, death, grab).
-- [ ] **Step 2: While the flag is set:**
+- [x] **Step 1:** `GoAfterRuby` sets the flag before `Alert`. It clears when `DetectsPlayer()` first holds, and when he leaves Aggro by any route (`AggroState.Exit`, death, grab).
+- [x] **Step 2: While the flag is set:**
   - `EnemyAwareness.SeesPlayer` counts only `DetectsPlayer()`, not the all-round Aggro sight, so there is no Seen fact, no call-out and no live tracking.
   - `AggroState` treats him as out of sight. He chases the Heard fact, holds no firing spot and doesn't fire.
   - His Aggro Time doesn't count while he walks to the told spot. Reaching it, the normal hold applies, with Unseen Hold Time.
   - Shared fight contact still keeps him in, as for anyone.
-- [ ] **Step 3: Docs.** `CLAUDE.md`'s Distraction and Aggro bullets.
-- [ ] **Step 4:** Compile and commit.
-- [ ] **Step 5: Close the work.** Add a line on this to the spec's Progress, then run the end review in the background, on Opus.
+- [x] **Step 3: Docs.** `CLAUDE.md`'s Distraction and Aggro bullets.
+- [x] **Step 4:** Compile and commit.
+- [x] **Step 5: Close the work.** Add a line on this to the spec's Progress, then run the end review in the background, on Opus.
 - [ ] **Step 6: Play-test gate (the user).**
   - A provoked enemy runs to where Ruby was.
   - Standing behind him in the open, she isn't spotted until she's in front of him.

@@ -1017,8 +1017,13 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
   - Built to `docs/plans/2026-11-09-rooms-and-room-maps.md`: rooms, behaviour maps per room (with
     armories and speech across a room), searching by room (no cap, a minimum, walking to the source
     first, blocked walks deferring), the search area in arriving, matching and merging, and the firing
-    range. **Later, once there are assets:** the other activity spots and alarms. **Next:** distractions
-    on a search (`docs/plans/2026-11-11-distractions-on-a-search.md`), then piece 5 part B.
+    range. **Later, once there are assets:** the other activity spots and alarms. **Next:** piece 5 part B.
+  - Distractions on a search are built, to `docs/plans/2026-11-11-distractions-on-a-search.md`: the search
+    area grows by patches; an ordinary distraction sends one member to check it; a serious one (a gunshot,
+    an unbooked body, an enemy seen flying) brings the whole job, keeping its search; each enemy counts
+    what he notices himself; and an enemy provoked to his limit sees Ruby only with his own eyes until she
+    is in his view cone (a hit gives his all-round sight back). From an enemy's third look on, every job he
+    is put on is a Search for an attack.
 - ~~8. Clearing hiding spots~~ **Removed** *(user, 2026-11-11)*: searching a whole room is built in piece 7.
 - [ ] 9. Breakables: light fixtures and props (much later)
 - [x] 10. Pathing: corners and curves
