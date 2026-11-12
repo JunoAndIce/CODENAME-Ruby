@@ -61,10 +61,21 @@ public class EnemyReactions
             // whole job, whatever its priority, before anything else: priority let a gunshot pass as a distraction,
             // and a team about to finish walked off from it. With no running job only a gunshot or a killing goes
             // to the squad, as before; anything else serious is handled below as it always was. What it leaves
-            // over (another job's, or right after the last move) is one more distraction for him.
+            // over (right after the last move, or off the job's floor) only turns him. Every enemy who notices it
+            // counts it toward his own limit first, taken by the job or not (user, 2026-11-11): the count is his,
+            // and a team that goes shares nothing. One who has had enough goes after Ruby and the job doesn't
+            // handle him as a member. Counted once, here: a second NoteDistraction in the frame would read as a
+            // repeat and he wouldn't turn.
             bool onRunningJob = own != null && own.Step != JobStep.Done;
             if (walkThere && _enemy.Intel != null && (incident.Mobilises || (onRunningJob && _enemy.Intel.Serious(incident))))
-                return _enemy.Intel.Mobilise(_enemy, incident, othersHaveIt) || Distract(incident, othersHaveIt);
+            {
+                bool fresh = CountDistraction(incident, out int count, out bool hadEnough);
+                if (hadEnough && _enemy.CurrentState is not SearchingState) return true;
+                if (_enemy.Intel.Mobilise(_enemy, incident)) return true;
+                _enemy.Searching.Distract(incident.Point, fresh);
+                DebugLog.Info($"{_enemy.name} {(fresh ? "is distracted by" : "glances again at")} {incident} (serious, but {(_enemy.Job != null ? _enemy.Job.ToString() : "the squad")} doesn't go there now): {(incident.SaysNothingOfRuby ? "not counted, it isn't Ruby doing anything" : $"{count} of {_enemy.DistractionThreshold}")}.", _enemy);
+                return true;
+            }
 
             // On a job, anything at its place goes to the job first: a find or a flying enemy turns a check
             // into a search and a more serious thing upgrades it, for the whole team. Only what the job didn't take
@@ -154,17 +165,10 @@ public class EnemyReactions
     // Intel) he only turns, as before (spec: "Off a job").
     private bool Distract(Incident incident, bool othersHaveIt = false)
     {
+        bool fresh = CountDistraction(incident, out int count, out bool hadEnough);
+        if (hadEnough) return true;
+
         bool counts = !incident.SaysNothingOfRuby;
-        int count = _enemy.Memory.NoteDistraction(Time.time, _enemy.DistractionMemory, _enemy.DistractionGap, counts, out bool isNew, out bool counted);
-        // The threshold reads the counted clock; the pause, the job and the log read either, so a thud that
-        // only counted still turns him and goes to the job.
-        bool fresh = isNew || counted;
-        if (counted && count >= _enemy.DistractionThreshold)
-        {
-            _enemy.Memory.ClearDistractions();
-            GoAfterRuby(count, incident);
-            return true;
-        }
 
         // Only a fresh one: the same tumbling body thudding again within Distraction Gap is one thing, so it
         // can't send him twice or grow the search per thud.
@@ -174,6 +178,24 @@ public class EnemyReactions
         string tally = counts ? $"{count} of {_enemy.DistractionThreshold}" : "not counted, it isn't Ruby doing anything";
         DebugLog.Info($"{_enemy.name} {(fresh ? "is distracted by" : "glances again at")} {incident} (priority {incident.Priority}, his search is {_enemy.Searching.Priority}){(sent ? " and goes to check it" : "")}: {tally}.", _enemy);
         return true;
+    }
+
+    // His own count of a distraction, split out of Distract so a serious thing is counted by everyone who notices
+    // it, before the job handles it. Returns whether it is fresh (the pause, the job and the log read that:
+    // either clock). `hadEnough` is the threshold: the count has cleared and GoAfterRuby has run.
+    private bool CountDistraction(Incident incident, out int count, out bool hadEnough)
+    {
+        bool counts = !incident.SaysNothingOfRuby;
+        count = _enemy.Memory.NoteDistraction(Time.time, _enemy.DistractionMemory, _enemy.DistractionGap, counts, out bool isNew, out bool counted);
+        // The threshold reads the counted clock; the pause, the job and the log read either, so a thud that
+        // only counted still turns him and goes to the job.
+        hadEnough = counted && count >= _enemy.DistractionThreshold;
+        if (hadEnough)
+        {
+            _enemy.Memory.ClearDistractions();
+            GoAfterRuby(count, incident);
+        }
+        return isNew || counted;
     }
 
     // He is going after her and not after the last thing she threw, so he is taught where she is right

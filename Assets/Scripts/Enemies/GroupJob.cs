@@ -413,6 +413,9 @@ public class GroupJob
     {
         SignalledThing = thing;
         _checks.Clear();
+        // Noticings name who "has gone to check it", and nobody is out any more: a stale one would have the log
+        // say a member who stopped for the signal is still away.
+        _noticings.Clear();
         SetStep(JobStep.Signal, length);
     }
 
@@ -506,8 +509,12 @@ public class GroupJob
         AwaitingSource = false;
         _arrived.Clear();
         _dropped.Clear();
-        // Still calling people in: carry on, the walk will start from the new place afterwards.
-        if (Step == JobStep.Call) return;
+        // Still calling people in: carry on, the walk will start from the new place afterwards. Signalling: the
+        // beat runs out and the team goes to the signalled thing (JobBoard.GoToSignalledThing), which moves a
+        // Search's source or turns a Check into a Search there. Setting the step here dropped the pending signal
+        // silently when a non-member's Handle or a join from Aggro upgraded the job mid-beat. (A caller that wants
+        // out of Signal sets the step itself first: JobBoard.ResumeWhereItIs.)
+        if (Step is JobStep.Call or JobStep.Signal) return;
         if (Kind == JobKind.Check && Count > 1) SetStep(JobStep.Gather, gatherLength);
         else SetStep(JobStep.Go, 0f);
     }

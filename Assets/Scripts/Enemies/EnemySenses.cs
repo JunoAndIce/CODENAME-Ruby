@@ -146,7 +146,9 @@ public class EnemySenses
                 return;
             }
             // Marked only when taken: one he couldn't act on (in a fight, fetching a gun) may still send him.
-            if (!TooBusy && !_noticedHeld.Contains(other) && Notice(at, StimulusKind.Body, $"{other.name} on the chain", other.transform))
+            // A living one standing on the chain shows exactly where Ruby is, so it says something of her (a job
+            // member goes to check it, and it counts toward his limit); a held corpse is still only a find.
+            if (!TooBusy && !_noticedHeld.Contains(other) && Notice(at, StimulusKind.Body, $"{other.name} on the chain", other.transform, showsRuby: !other.Health.IsDead))
                 _noticedHeld.Add(other);
         }
     }
@@ -255,7 +257,7 @@ public class EnemySenses
     }
 
     // True when he took it. `source` is the thing itself (the body, the gun), so two members noticing it are one notice.
-    private bool Notice(Vector3 origin, StimulusKind kind, string what, Object source)
+    private bool Notice(Vector3 origin, StimulusKind kind, string what, Object source, bool showsRuby = false)
     {
         if (!_enemy.Intel.TryGetRow(origin, kind, false, out BehaviourMap.Row row)) return false;
 
@@ -263,7 +265,7 @@ public class EnemySenses
         // A body or a gun is found, not heard: there is nothing to check, so it is a Search, and it says
         // nothing about where Ruby is.
         bool found = kind is StimulusKind.Body or StimulusKind.LooseGun;
-        return _enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: found, saysNothingOfRuby: found, kind: kind, source: source));
+        return _enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: found, saysNothingOfRuby: found && !showsRuby, kind: kind, source: source));
     }
 
     // A character is one body for this purpose, so a bone of a tumbling enemy isn't a body of its
