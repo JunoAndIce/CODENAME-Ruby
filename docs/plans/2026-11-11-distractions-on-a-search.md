@@ -110,7 +110,7 @@
   A lone searcher with no job still joins or leads a Search at the shot, as today.
 - [x] **Step 3: Docs.** `CLAUDE.md`: the gunshot bullet and the serious rule.
 - [x] **Step 4:** Compile and commit.
-- [ ] **Step 5: Play-test gate (the user).**
+- [x] **Step 5: Play-test gate (the user).**
   - A gunshot near a searching team brings all of them, after a beat facing it.
   - A body found by one member brings the team.
   - A crate thrown fast past them sends only one.
