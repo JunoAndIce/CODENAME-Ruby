@@ -412,6 +412,7 @@ public class JobBoard
             // path for both. Its refusals (a Distraction Gap, a spot the area can't take) are logged there, and
             // the job has still risen.
             if (match.Kind == JobKind.Search && Serious(incident)) TakeSerious(match, who, incident);
+            else if (match.Kind == JobKind.Search && match.Step != JobStep.Done) JoinRunningSearch(match, who, incident);
             else if (Converts(match, incident)) restarted = Upgrade(match, incident, kind);
             else Elevate(match, incident.Reason, $"{who.name} senses {incident}");
             if (match.Recruiting)
@@ -1139,6 +1140,20 @@ public class JobBoard
         return best;
     }
 
+    // An ordinary thing a non-member brings to a running Search (user, 2026-11-11: an ordinary thing is ordinary at
+    // any priority). It never moves the team's source, because whether the team moved would then depend on whether
+    // a member or a passer-by heard it first: a member's notice (Distract, Noticed) only grows the search. So the
+    // job rises (the reason through Elevate, the priority through RaisePriority, which moves nothing) and grows
+    // there, and the caller lets him join. GrowAt keeps its own refusals and logs (a spot off the grid, a patch
+    // already there floods nothing).
+    private void JoinRunningSearch(GroupJob job, EnemyController who, Incident incident)
+    {
+        Elevate(job, incident.Reason, $"{who.name} senses {incident}");
+        job.RaisePriority(incident.Priority);
+        DebugLog.Info($"{who.name} senses {incident}, which isn't serious: it joins {job}'s search where it is rather than moving it.", who);
+        job.GrowAt(incident.Point, $"what {who.name} sensed ({incident})");
+    }
+
     // The team's reason only rises, and every member shares it, so they end together. An attack makes
     // them all wary now, not each when he happens to sense it: an enemy who latched wary on his
     // own reading walked off aggressive while the rest of his job said all clear.
@@ -1229,7 +1244,9 @@ public class JobBoard
     // choice sees the whole team. `asCheck`: see GroupJob.Upgrade.
     private bool Upgrade(GroupJob job, Incident incident, JobKind kind, bool asCheck = false)
     {
-        bool wasCheck = job.Kind == JobKind.Check || asCheck;
+        // Only a job that is a Check now converts here: one already a Search through a signalled Check (asCheck)
+        // was announced when it converted, and saying so again logged the same conversion twice.
+        bool wasCheck = job.Kind == JobKind.Check;
         bool restarted = job.Upgrade(incident, kind, _intel.GatherTime, asCheck);
         if (wasCheck && job.Kind == JobKind.Search)
             DebugLog.Info($"{job} found something at {incident.Point}: the check becomes a search, and everyone goes.", _intel);
