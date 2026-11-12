@@ -825,7 +825,7 @@ public class JobBoard
         float since = Time.time - job.LastSeriousMoveAt;
         if (since < who.DistractionGap)
         {
-            DebugLog.Info($"{who.name} has something serious at {thing.Point}, but {job} moved for something serious {since:0.#}s ago, within his Distraction Gap ({who.DistractionGap:0.#}s): it has grown there and doesn't move again yet.", who);
+            DebugLog.Info($"{who.name} has something serious at {thing.Point}, but {job} moved for something serious {since:0.#}s ago, within his Distraction Gap ({who.DistractionGap:0.#}s): it doesn't grow there or move again yet.", who);
             return false;
         }
 
