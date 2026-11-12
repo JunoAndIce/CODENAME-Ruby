@@ -455,7 +455,17 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         return true;
     }
 
-    private void HandleDamaged(float amount) => Alert();
+    // A hit that doesn't floor him gives back all-round sight: he fights as any damaged enemy does (user
+    // ruling). One that floors him clears it through the state change anyway.
+    private void HandleDamaged(float amount)
+    {
+        if (ProvokedUnseen)
+        {
+            ProvokedUnseen = false;
+            DebugLog.Info($"{name} is hit while provoked: he is no longer blind to Ruby and fights as any damaged enemy does.", this);
+        }
+        Alert();
+    }
 
     // Corpses too: a dead enemy stays a body the chain can swing and throw.
     public bool CanBeGrabbed => true;

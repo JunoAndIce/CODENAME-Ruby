@@ -19,7 +19,8 @@ public class StateMachine
     /// Raised on every change of state, by the table or by SetState from outside, after the old state's
     /// Exit and before the new one's Enter, with (from, to); from is null on the first. For state the
     /// owner keeps across several states, which no single Exit can clear because it doesn't know where
-    /// it is going.
+    /// it is going. Handlers must not change state: a SetState inside one would run its whole change
+    /// between this change's Exit and Enter, leaving the new state entered from a state already left.
     /// </summary>
     public event Action<IState, IState> Changed;
 

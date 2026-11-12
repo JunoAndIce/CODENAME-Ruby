@@ -410,8 +410,9 @@ through the player never slows the walk. **Enemies don't shove props that block 
   about Y), so this only covers one placed pitched in the scene. Idle officers aggro on sight like
   the rest; an unarmed one also goes for a free gun in reach. Aggro keeps contact all round, within
   Give Up Radius (18.5 m). Damage and getting up from a ragdoll (thrown or dropped) enter Aggro from
-  any AI state. Short of seeing her, only one thing sends him to Aggro from a sense: seeing the
-  chain drag or throw an enemy (see **Senses**). A grabbed enemy standing still, a knockdown, a
+  any AI state. Short of seeing her, only two things send him to Aggro from a sense: seeing the
+  chain drag or throw an enemy (see **Senses**), and a searcher provoked to his limit
+  (`EnemyReactions.GoAfterRuby`, see **Distraction**). A grabbed enemy standing still, a knockdown, a
   death, a job mate lost: he searches, and goes to Aggro only if Ruby then comes into view. A searcher
   provoked to his limit goes to Aggro too (see **Distraction**), but blind to her until she is in his view.
 - **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
@@ -448,8 +449,9 @@ through the player never slows the walk. **Enemies don't shove props that block 
   his spot is taken off the job.
   **A provoked enemy sees her only with his own eyes** (`EnemyController.ProvokedUnseen`; spec, "At his
   own limit he runs at Ruby, and sees her only with his own eyes"). `EnemyReactions.GoAfterRuby` sets it
-  before `Alert`, and only it: word of mouth, a hit, getting up and seeing the chain drag someone keep the
-  all-round sight above. While it is set the all-round sight doesn't apply: every sight read in Aggro is
+  before `Alert`, and only it: word of mouth, getting up and seeing the chain drag someone keep the
+  all-round sight above. **A hit restores it** (user ruling): damage that doesn't floor him clears the flag in
+  `EnemyController.HandleDamaged`, with a log line, and he fights as any damaged enemy does. While it is set the all-round sight doesn't apply: every sight read in Aggro is
   `EnemyVision.CanTrackPlayer` (and contact `InContactWithPlayer`), false for him, so he chases what he was
   told (the Heard fact, or anything newer he learns), holds no firing spot and doesn't fire, and
   `EnemyAwareness.SeesPlayer` counts only `DetectsPlayer`, so he learns no Seen fact, calls nothing out and

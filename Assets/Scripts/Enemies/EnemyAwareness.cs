@@ -80,11 +80,14 @@ public class EnemyAwareness
         {
             if (_seesFrame == Time.frameCount) return _seesPlayer;
             _seesFrame = Time.frameCount;
-            // DetectsPlayer, or hunting her with a clear line: CanTrackPlayer is the clear line, and false
-            // for a provoked enemy until DetectsPlayer holds.
+            // Aggro hunts with a clear line (CanTrackPlayer, false for a provoked enemy until DetectsPlayer
+            // holds). Anyone else needs her in view first: DetectsPlayer is the cheap cone test before any
+            // raycast, so an idle enemy with her out of view casts nothing, and when it holds CanTrackPlayer
+            // clears a flagged one (Rearm) exactly as asking it first did.
             _seesPlayer = !_enemy.Health.IsDead && !_enemy.IsOverridden
-                && _enemy.Vision.CanTrackPlayer()
-                && (_enemy.CurrentState == _enemy.Aggro || _enemy.Vision.DetectsPlayer());
+                && (_enemy.CurrentState == _enemy.Aggro
+                    ? _enemy.Vision.CanTrackPlayer()
+                    : _enemy.Vision.DetectsPlayer() && _enemy.Vision.CanTrackPlayer());
             return _seesPlayer;
         }
     }
