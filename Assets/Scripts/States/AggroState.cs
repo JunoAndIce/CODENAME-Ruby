@@ -9,6 +9,9 @@ using UnityEngine;
 /// squad's stale pool), not her true position, once Sight Follow Through has run out. LostPlayer flips, never while in contact (his own, or a fight mate's: see Fights), after
 /// Aggro Time out of contact, after holding Aggro Time at the known spot without sight of her, or at
 /// once with nothing to go on; the table then sends the enemy to search.
+/// Every read of sight here is EnemyVision.CanTrackPlayer, never CanSeePlayer: a provoked enemy who hasn't
+/// laid eyes on Ruby (EnemyController.ProvokedUnseen) is out of sight to all of it, so he chases what he was
+/// told, holds no spot, fires at nothing, and his Aggro Time waits while he runs there.
 /// </summary>
 public class AggroState : EnemyStateBase
 {
@@ -41,6 +44,11 @@ public class AggroState : EnemyStateBase
     private Vector3 _avoid;
     private float _avoidUntil;
 
+    // A provoked enemy's run at where he was told Ruby is (see OnProvokedRun).
+    private bool _chaseMoving;       // the last FixedTick's chase of what he knows was under way: set there, read by Tick
+    private float _provokedRun;      // how long Aggro Time has waited on that run
+    private bool _loggedRunLimit;
+
     public AggroState(EnemyController enemy) : base(enemy) { }
 
     // The table reads this before the state's own Tick, so nothing here may rest on a flag a Tick or
@@ -55,7 +63,7 @@ public class AggroState : EnemyStateBase
             // he is told, instead of a member behind a wall giving up while another has her.
             if (MateInContact()) return false;
             if (_lostTimer >= Enemy.AggroTime) return true;
-            if (Enemy.Vision.CanSeePlayer()) return false;
+            if (Enemy.Vision.CanTrackPlayer()) return false;
             return NothingToGoOn || (_holdingAtKnown && _dwellTimer >= HoldTime);
         }
     }
@@ -69,7 +77,7 @@ public class AggroState : EnemyStateBase
     private bool MateInContact() => Enemy.Fight != null && Enemy.Intel.AnyInContact(Enemy.Fight, Enemy);
 
     // Out of sight and he knows nothing of her: no rule but "search where he stands".
-    private bool NothingToGoOn => !Enemy.Vision.CanSeePlayer() && !Enemy.Awareness.TryGetNewestRuby(out _);
+    private bool NothingToGoOn => !Enemy.Vision.CanTrackPlayer() && !Enemy.Awareness.TryGetNewestRuby(out _);
 
     /// <summary>Armed, with Ruby in sight, in range and on her feet: it's shooting, so its body aims.</summary>
     public bool Firing { get; private set; }
@@ -83,8 +91,11 @@ public class AggroState : EnemyStateBase
         _loggedNothing = false;
         _closestToKnown = float.PositiveInfinity;
         _stallTimer = 0f;
-        _hadSight = Enemy.Vision.CanSeePlayer();
+        _hadSight = Enemy.Vision.CanTrackPlayer();
         _sawHer = _hadSight;
+        _chaseMoving = false;
+        _provokedRun = 0f;
+        _loggedRunLimit = false;
         _hasSpot = false;
         _atSpot = false;
         _pickNow = false;
@@ -131,7 +142,8 @@ public class AggroState : EnemyStateBase
 
     public override void Tick()
     {
-        bool hasSight = Enemy.Vision.CanSeePlayer();
+        // First, so a provoked enemy who has her in his view is cleared before anything below reads the flag.
+        bool hasSight = Enemy.Vision.CanTrackPlayer();
         if (_hadSight && !hasSight)
             DebugLog.Info($"{Enemy.name} lost sight of {Enemy.PlayerTransform.name} — blocked by {(Enemy.Vision.SightBlocker != null ? Enemy.Vision.SightBlocker.name : "something")}.", Enemy);
         _hadSight = hasSight;
@@ -168,12 +180,33 @@ public class AggroState : EnemyStateBase
 
         // Suspended while he holds at the known spot: this timer only ends a hunt on its way there, and
         // counting the walk toward the hold cut it short. A newer point resumes it where it was.
+        // A provoked enemy's run to what he was told is suspended the same way (OnProvokedRun).
         if (Enemy.Vision.InContactWithPlayer() || mateContact) _lostTimer = 0f;
-        else if (!_holdingAtKnown) _lostTimer += Time.deltaTime;
+        else if (!_holdingAtKnown && !OnProvokedRun()) _lostTimer += Time.deltaTime;
+    }
+
+    // He doesn't give up on the way (spec: "He doesn't give up on the way"): while a provoked enemy who hasn't
+    // laid eyes on her runs at where he was told she is, his Aggro Time waits; reaching it, the normal hold
+    // applies, for Unseen Hold Time since he hasn't seen her. Only while the walk is under way: with no way
+    // there at all (Unreachable, already warned) he counts down as anyone does. Bounded by Search Travel Limit,
+    // as a walk to a search spot is, so someone standing in his way for good can't keep him in Aggro for good:
+    // past it Aggro Time counts again, which is a rule and says so.
+    private bool OnProvokedRun()
+    {
+        if (!Enemy.ProvokedUnseen || !_chaseMoving) return false;
+        _provokedRun += Time.deltaTime;
+        if (_provokedRun < Enemy.SearchTravelLimit) return true;
+        if (!_loggedRunLimit)
+        {
+            _loggedRunLimit = true;
+            DebugLog.Info($"{Enemy.name} has run at where he was told Ruby is for {Enemy.SearchTravelLimit:0.#}s (Search Travel Limit) without getting there: his Aggro Time counts down again.", Enemy);
+        }
+        return false;
     }
 
     public override void FixedTick()
     {
+        _chaseMoving = false;   // only a chase of what he knows, this step, sets it
         if (Enemy.PlayerTransform == null)
         {
             Enemy.Stop();
@@ -182,7 +215,7 @@ public class AggroState : EnemyStateBase
 
         bool armed = Enemy.IsArmed;
         float minDistance = armed ? Enemy.Arms.HeldGun.MinDistance : 0f;
-        bool inSight = Enemy.Vision.CanSeePlayer();
+        bool inSight = Enemy.Vision.CanTrackPlayer();
         // Spots are for an armed fighter who knows where she is: in sight, or just gone from it. Past that he
         // chases what he knows, as ever, and holds none.
         bool knowsHer = inSight || Enemy.Awareness.FollowingThrough;
@@ -241,12 +274,14 @@ public class AggroState : EnemyStateBase
     // Ruby was a metre past it. He stands there for Aggro Time first. A look-around animation comes later.
     private void ChaseWhatHeKnows()
     {
-        bool arrived = Enemy.Movement.ChaseKnown(Enemy.ChaseSpeed) == NavResult.Arrived;
+        NavResult result = Enemy.Movement.ChaseKnown(Enemy.ChaseSpeed);
+        bool arrived = result == NavResult.Arrived;
         if (!arrived && StalledBehindSomeone())
         {
             Enemy.Stop();
             arrived = true;
         }
+        _chaseMoving = !arrived && result == NavResult.Moving;
         // Held with a mate in contact nothing else ends the hold, so he faces where he knows she is rather than
         // nothing. Never her true position: from behind a wall that turned him to track her every step, and with
         // the camera looking straight down, it read as seeing through walls.
@@ -396,7 +431,7 @@ public class AggroState : EnemyStateBase
         // Only within range: beyond it he runs with the gun down, and a gun turned toward her
         // would twist off his hand.
         Vector3 player = Enemy.PlayerTransform.position;
-        Firing = Enemy.Vision.CanSeePlayer() && Enemy.PlayerIsUp && Enemy.Arms.InRange(player);
+        Firing = Enemy.Vision.CanTrackPlayer() && Enemy.PlayerIsUp && Enemy.Arms.InRange(player);
         if (!Firing)
         {
             Enemy.Arms.Lower();

@@ -201,6 +201,12 @@ public class EnemyReactions
     // He is going after her and not after the last thing she threw, so he is taught where she is right
     // now, once: going to where a crate landed would have him charge the crate. He doesn't go on knowing
     // where she goes after this. With no Ruby in the scene there is no one to go after.
+    //
+    // He sees her only with his own eyes until she is in his view (EnemyController.ProvokedUnseen; spec: "At
+    // his own limit he runs at Ruby, and sees her only with his own eyes"), so a provoked enemy who hasn't
+    // looked at her can be slipped past from behind and can't spread her position on hearsay. Set before
+    // Alert, so AggroState.Enter already reads him as blind. Only here: word of mouth, a hit, getting up and
+    // seeing the chain drag someone all keep Aggro's all-round sight.
     private void GoAfterRuby(int count, Incident last)
     {
         PlayerController ruby = _enemy.Player;
@@ -211,8 +217,14 @@ public class EnemyReactions
         }
 
         _enemy.Memory.Learn(new RubyFact(ruby.transform.position, Time.time, Knowledge.Heard));
-        DebugLog.Info($"{_enemy.name}: Enemies have been disturbed too much! ({count} disturbances in {_enemy.DistractionMemory:0.#}s, the last {last}); he goes after Ruby at {ruby.transform.position}.", _enemy);
-        _enemy.Alert();
+        DebugLog.Info($"{_enemy.name}: Enemies have been disturbed too much! ({count} disturbances in {_enemy.DistractionMemory:0.#}s, the last {last}); he goes after Ruby at {ruby.transform.position}, and sees her only once she is in his view.", _enemy);
+        _enemy.ProvokedUnseen = true;
+        if (_enemy.Alert()) return;
+
+        // Investigate only counts in Searching, so Alert can't refuse him; if a later route ever calls this
+        // where it can, the flag mustn't wait on a state change that isn't coming.
+        _enemy.ProvokedUnseen = false;
+        Debug.LogWarning($"{_enemy.name} has had enough of being provoked, but can't go after Ruby from {_enemy.CurrentState?.GetType().Name}: he stays where he is.", _enemy);
     }
 
     /// <summary>

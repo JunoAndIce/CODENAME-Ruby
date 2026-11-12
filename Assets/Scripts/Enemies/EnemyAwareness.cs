@@ -69,7 +69,10 @@ public class EnemyAwareness
     /// sight, so past the radius he followed her without learning where she was, and when she dropped
     /// out of sight he turned round and walked back to the old spot. The radius only decides when the
     /// hunt ends (InContactWithPlayer). Alive and on his feet only: a corpse, a held or a tumbling
-    /// enemy sees and says nothing. Cached per frame, like CanSeePlayer.
+    /// enemy sees and says nothing. Cached per frame, like CanSeePlayer. A provoked enemy who hasn't laid
+    /// eyes on her (EnemyController.ProvokedUnseen) counts only his view: no Seen fact, no call-out and no
+    /// live tracking on hearsay. CanTrackPlayer is asked first so that her coming into his view clears the
+    /// flag here too, and the call-out on first sight follows at once.
     /// </summary>
     private bool SeesPlayer
     {
@@ -77,8 +80,11 @@ public class EnemyAwareness
         {
             if (_seesFrame == Time.frameCount) return _seesPlayer;
             _seesFrame = Time.frameCount;
+            // DetectsPlayer, or hunting her with a clear line: CanTrackPlayer is the clear line, and false
+            // for a provoked enemy until DetectsPlayer holds.
             _seesPlayer = !_enemy.Health.IsDead && !_enemy.IsOverridden
-                && (_enemy.Vision.DetectsPlayer() || (_enemy.CurrentState == _enemy.Aggro && _enemy.Vision.CanSeePlayer()));
+                && _enemy.Vision.CanTrackPlayer()
+                && (_enemy.CurrentState == _enemy.Aggro || _enemy.Vision.DetectsPlayer());
             return _seesPlayer;
         }
     }
@@ -88,9 +94,10 @@ public class EnemyAwareness
     /// she is, because he watched where she went. All he ever knew otherwise was the corner she vanished
     /// at, so ducking round a crate in plain view lost him at once: it stood in for a real look at which
     /// way she ran, and needs no guess at her heading. Over quickly, so breaking sight and staying gone
-    /// still drops a fight.
+    /// still drops a fight. Never for a provoked enemy who hasn't laid eyes on her: a sighting from before
+    /// he was provoked isn't one in this hunt. SeesPlayer runs first, so the flag is current when read.
     /// </summary>
-    public bool FollowingThrough => !SeesPlayer && _enemy.CurrentState == _enemy.Aggro && Time.time - _lastSawAt <= _enemy.SightFollowThrough;
+    public bool FollowingThrough => !SeesPlayer && !_enemy.ProvokedUnseen && _enemy.CurrentState == _enemy.Aggro && Time.time - _lastSawAt <= _enemy.SightFollowThrough;
 
     // Remembering and speaking aren't states: they run beside the machine. What he sees he knows at
     // once; calling it out is bounded by Speak Interval so a long sighting isn't a shout per frame.

@@ -138,6 +138,11 @@ Two ways in:
   themselves. `SetState` itself stays on `EnemyController`: the decisions behind it live in
   `EnemyReactions`, which asks the controller to move him.
 
+`StateMachine.Changed` reports every change, the table's and `SetState`'s alike, as (from, to) between
+the old state's Exit and the new one's Enter. It is for state the owner keeps across several states,
+which no one Exit can clear because Exit doesn't know where it goes: `EnemyController` uses it to drop
+`ProvokedUnseen` on any way out of the hunt (see **Aggro**).
+
 AI states (Idle/Patrol/Searching/Aggro/Rearm) are told apart from **overrides** (Grabbed/Ragdoll/Dead)
 that are imposed externally by `EnemyStateBase.IsOverride`, and every "can he act?" test reads
 `EnemyController.IsOverridden`, not a repeated `is GrabbedState or RagdollState or DeadState`.
@@ -407,7 +412,8 @@ through the player never slows the walk. **Enemies don't shove props that block 
   Give Up Radius (18.5 m). Damage and getting up from a ragdoll (thrown or dropped) enter Aggro from
   any AI state. Short of seeing her, only one thing sends him to Aggro from a sense: seeing the
   chain drag or throw an enemy (see **Senses**). A grabbed enemy standing still, a knockdown, a
-  death, a job mate lost: he searches, and goes to Aggro only if Ruby then comes into view.
+  death, a job mate lost: he searches, and goes to Aggro only if Ruby then comes into view. A searcher
+  provoked to his limit goes to Aggro too (see **Distraction**), but blind to her until she is in his view.
 - **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
   sight, it walks to a firing spot of his own (see **Fights**), and with no spot keeps the gun's band:
   it closes in to Min Distance, holds in the metre above it, and backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyMovement.StepAway`),
@@ -440,6 +446,24 @@ through the player never slows the walk. **Enemies don't shove props that block 
   within 5 m, and warns once; no ground in reach still stops and says so. A lost fight's search
   starts from that ground too (`TryGetNearestReachable`), because a Search member who can't reach
   his spot is taken off the job.
+  **A provoked enemy sees her only with his own eyes** (`EnemyController.ProvokedUnseen`; spec, "At his
+  own limit he runs at Ruby, and sees her only with his own eyes"). `EnemyReactions.GoAfterRuby` sets it
+  before `Alert`, and only it: word of mouth, a hit, getting up and seeing the chain drag someone keep the
+  all-round sight above. While it is set the all-round sight doesn't apply: every sight read in Aggro is
+  `EnemyVision.CanTrackPlayer` (and contact `InContactWithPlayer`), false for him, so he chases what he was
+  told (the Heard fact, or anything newer he learns), holds no firing spot and doesn't fire, and
+  `EnemyAwareness.SeesPlayer` counts only `DetectsPlayer`, so he learns no Seen fact, calls nothing out and
+  doesn't follow through. He doesn't give up on the way: his Aggro Time waits while the run to the told spot
+  is under way (`AggroState.OnProvokedRun`), and reaching it the normal hold applies, for Unseen Hold Time.
+  With no way there at all he counts down as anyone does, and after Search Travel Limit (20 s) of running
+  Aggro Time counts again, with a log line, so someone standing in his way can't keep him in Aggro for
+  good. A fight mate's contact keeps him in as it does anyone, and he faces only what he knows. It clears
+  the first time `DetectsPlayer` holds (`EnemyVision.StillProvokedUnseen`, which whoever asks first runs,
+  so every reader agrees within a frame), and then every normal rule follows, the call-out that brings
+  others included. It also clears when he leaves the hunt by any route (a lost fight, a grab, a knockdown,
+  death), caught in one place: the machine's `StateMachine.Changed` hook, which `EnemyController`
+  handles. **Rearm keeps it:** an unarmed provoked enemy going for a gun hasn't seen her, and hands
+  straight back to Aggro.
 - **Fights** (`FightBoard` and `Fight`, in `Enemies/`). Everyone in Aggro belongs to one fight per floor,
   all equal. `FightBoard` is a plain class `Intel` owns and ticks beside the job board, forwarding `Join`
   and `AnyInContact`; it never moves anyone. `AggroState.Enter` calls `Join`: he takes the fight
@@ -451,6 +475,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   **Contact is shared:** `AggroState.LostPlayer` is false, and both of its timers start over, while a
   fight mate has Ruby in contact, so a member behind a wall doesn't give up while another has her. Held at the spot he knew
   meanwhile, he faces that spot, never her true position, which from behind a wall read as seeing through it.
+  A provoked member who hasn't laid eyes on her gives his mates no contact (see **Aggro**).
   **No squads:** a main squad of up to four that closed in, and a standby squad that held back behind it
   and moved up when a main member fell, were built and taken out (user, 2026-11-07). Firing spots spread
   everyone round her (standby, then, on a slightly wider ring), so the squads never showed on screen, and a
@@ -676,7 +701,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   where he was grabbed, or thrown within one scan of the release from a spot he sees
   (`WasThrownWithin`), someone is plainly on the other end of the chain: `EnemyReactions.SeeAttack`
   teaches him where Ruby is right now, as Heard, and `Alert()`s him into Aggro. That, sight of her
-  and `EnemyReactions.GoAfterRuby` (a provoked searcher, see **Distraction**) are the only ways to Aggro through the senses. **Seeing an enemy killed** (`ScanDeaths`, any enemy, in view with a clear line to the spot he died, within a scan of it) always sends him to check where what killed him came from, as a gunshot does (`Incident.Mobilises`), or where he died if nothing shows it. `ImpactDamage` stamps a body with its killer's origin, since a hit doesn't otherwise. One knocked down, or a flying enemy whose
+  and `EnemyReactions.GoAfterRuby` (a provoked searcher, see **Distraction**, who alone goes in blind to her until she is in his view) are the only ways to Aggro through the senses. **Seeing an enemy killed** (`ScanDeaths`, any enemy, in view with a clear line to the spot he died, within a scan of it) always sends him to check where what killed him came from, as a gunshot does (`Incident.Mobilises`), or where he died if nothing shows it. `ImpactDamage` stamps a body with its killer's origin, since a hit doesn't otherwise. One knocked down, or a flying enemy whose
   throw he didn't see, is a Search at the throw's origin (or where he lies), with no Aggro. He notices **corpses** within Body Notice Range in his
   view and clear sight, and **loose guns** in view and sight if he is armed. A body or gun he
   hasn't seen goes on the squad's books and he investigates it. A body the squad already knows he
@@ -864,6 +889,7 @@ through the player never slows the walk. **Enemies don't shove props that block 
   search** (`SearchingState.Exit` clears it): a count left over made the next, unrelated search
   aggro on its first or second one. **What counts is whether Ruby is doing something, not its priority** (`Incident.SaysNothingOfRuby`): a low thud during a body search counts, a body or gun lying there doesn't, and he turns to look either way. The count portrays enemies provoked by her throwing things at them, who get tired of it and go after her. **A serious thing counts too** (each who notices it, before the job handles it: see **Serious things bring the whole job**). **Counts stay personal:** each enemy counts only what he himself noticed, and sending someone to check shares nothing, so two who hear one thud are at one each and the one who went is not at two. At Distraction Threshold
   (3) he has had enough: the count clears, he is taught where **she is at that moment**, once, as a Heard fact, not where the last thing landed, and `Alert()`s into Aggro.
+  **He sees her only with his own eyes** until she is in his view cone with a clear line (`EnemyController.ProvokedUnseen`, set by `GoAfterRuby` before `Alert`; see **Aggro**): he runs at what he was told without giving up on the way, learns no Seen fact, doesn't call her out, track her, fire or take a firing spot, so a provoked enemy who hasn't looked at her can be slipped past from behind and can't spread her position on hearsay. The first time she is in his view he has seen her and every normal rule follows, the call-out that brings the others included. Only the provoked: everyone else in Aggro keeps all-round sight.
   A search from Aggro (priority 6) is outranked by nothing, so a sound only distracts a lost-fight
   searcher, except a serious thing, which brings a searcher's whole job whatever the priority, and a
   gunshot or a killing, which takes a lone searcher to the squad (see **Serious things bring the whole

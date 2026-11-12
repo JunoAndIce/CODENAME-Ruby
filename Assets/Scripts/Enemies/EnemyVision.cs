@@ -61,8 +61,35 @@ public class EnemyVision
         return true;
     }
 
-    /// <summary>Aggro's contact test: still within the give-up radius, and in sight.</summary>
-    public bool InContactWithPlayer() => DistanceToPlayer() <= _enemy.GiveUpRadius && CanSeePlayer();
+    /// <summary>
+    /// Aggro's contact test: still within the give-up radius, and in sight. Never for a provoked enemy who
+    /// hasn't laid eyes on her (StillProvokedUnseen), which also keeps him from giving his fight mates
+    /// contact (FightBoard.AnyInContact) that he hasn't got.
+    /// </summary>
+    public bool InContactWithPlayer() => !StillProvokedUnseen() && DistanceToPlayer() <= _enemy.GiveUpRadius && CanSeePlayer();
+
+    /// <summary>
+    /// Whether the hunt may use where Ruby really is: a clear line to her, at any distance, the all-round
+    /// sight Aggro gives. Every reader of sight in the hunt asks this and not CanSeePlayer (the chase, the
+    /// firing spot, shooting, holding the band, the call-out), so a provoked enemy who hasn't laid eyes on
+    /// her can't see her by any of them.
+    /// </summary>
+    public bool CanTrackPlayer() => !StillProvokedUnseen() && CanSeePlayer();
+
+    /// <summary>
+    /// Provoked and still blind to her: EnemyController.ProvokedUnseen, cleared here the first time she is
+    /// in his view with a clear line (DetectsPlayer), from which point every normal rule follows. Cleared
+    /// by whoever asks first, so the table, the state, his awareness and his fight mates all read one
+    /// answer within a frame, whatever order they run in.
+    /// </summary>
+    public bool StillProvokedUnseen()
+    {
+        if (!_enemy.ProvokedUnseen) return false;
+        if (!DetectsPlayer()) return true;
+        _enemy.ProvokedUnseen = false;
+        DebugLog.Info($"{_enemy.name} lays eyes on Ruby: from here he sees her as any hunter does.", _enemy);
+        return false;
+    }
 
     /// <summary>What blocked the last sight check, or null when the player was in view.</summary>
     public Collider SightBlocker => _sightBlocker;

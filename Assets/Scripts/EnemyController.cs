@@ -73,7 +73,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _searchDuration = 5f;
     [Tooltip("How close he gets to a search spot, in metres. If something blocks the way once he's this near (another enemy already standing on the spot, say), he looks from where he stands instead of pushing at it.")]
     [SerializeField, Min(0.5f)] private float _searchReach = 1.5f;
-    [Tooltip("The longest he walks to a search spot before searching wherever he has got to, in seconds. Keeps one he can't reach (blocked, or a crowded doorway) from walking forever.")]
+    [Tooltip("The longest he walks to a search spot before searching wherever he has got to, in seconds. Keeps one he can't reach (blocked, or a crowded doorway) from walking forever. Also how long a provoked enemy runs at where he was told Ruby is before Aggro Time counts down again.")]
     [SerializeField, Min(1f)] private float _searchTravelLimit = 20f;
     [Tooltip("How far, in degrees, his body sweeps to each side of his way while he clears a Search's area. He keeps walking his way, and his view goes with his body.")]
     [SerializeField, Range(0f, 90f)] private float _walkSweepAngle = 45f;
@@ -296,7 +296,20 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Ragdoll = new RagdollState(this);
         Dead = new DeadState(this);
 
+        _state.Changed += OnStateChanged;
         BuildTransitions();
+    }
+
+    // Every change of state comes through here, the table's and SetState's alike, so no route out of the
+    // hunt (a lost fight, a grab, a knockdown, death, or one added later) can leave ProvokedUnseen set and
+    // make a later fight blind: getting up from a throw is meant to bring back all-round sight. Rearm
+    // keeps it: an unarmed provoked enemy going for a gun hasn't seen her, and he hands straight back to
+    // Aggro, where clearing it would have given him all-round sight on hearsay.
+    private void OnStateChanged(IState from, IState to)
+    {
+        if (!ProvokedUnseen || to is AggroState or RearmState) return;
+        ProvokedUnseen = false;
+        DebugLog.Info($"{name} leaves the hunt for {to.GetType().Name} without having laid eyes on Ruby: he is no longer provoked, and his next fight sees her as any does.", this);
     }
 
     private void Start()
@@ -314,6 +327,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private void OnDestroy()
     {
+        // The fight board can still poll him (AnyInContact) until its next prune: a destroyed enemy has
+        // left the hunt like any other route out, so nothing he leaves behind reads as provoked.
+        ProvokedUnseen = false;
         if (Intel == null) return;
         Intel.Leave(this);
         Intel.Unregister(this);
@@ -460,6 +476,18 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public Fight Fight { get; internal set; }
 
     public float SquadSpacing => _squadSpacing;
+
+    /// <summary>
+    /// Provoked to his limit and sent after Ruby (EnemyReactions.GoAfterRuby), he has not yet had her in
+    /// his view cone with a clear line. Until then he counts as seeing her only with his own eyes
+    /// (spec: "At his own limit he runs at Ruby, and sees her only with his own eyes"): Aggro's
+    /// all-round sight doesn't apply, so he runs at what he was told, learns no Seen fact, calls nothing
+    /// out, tracks nothing live, holds no firing spot and doesn't fire. Only the provoked: every other
+    /// way into Aggro keeps all-round sight. GoAfterRuby is the only writer that sets it. EnemyVision
+    /// clears it the first time DetectsPlayer holds (every sight reader goes through it there, so the
+    /// first to ask that frame clears it for all), and OnStateChanged when he leaves the hunt by any route.
+    /// </summary>
+    public bool ProvokedUnseen { get; internal set; }
 
     /// <summary>The firing spot he has claimed in his fight, for the gizmo and the state. False with none.</summary>
     public bool TryGetFiringSpot(out Vector3 spot)

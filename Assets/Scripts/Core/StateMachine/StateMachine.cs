@@ -15,6 +15,14 @@ public class StateMachine
 
     public IState Current => _current?.State;
 
+    /// <summary>
+    /// Raised on every change of state, by the table or by SetState from outside, after the old state's
+    /// Exit and before the new one's Enter, with (from, to); from is null on the first. For state the
+    /// owner keeps across several states, which no single Exit can clear because it doesn't know where
+    /// it is going.
+    /// </summary>
+    public event Action<IState, IState> Changed;
+
     public void Tick()
     {
         ITransition transition = GetTransition();
@@ -29,8 +37,10 @@ public class StateMachine
     {
         if (_current?.State == state) return;
 
-        _current?.State.Exit();
+        IState from = _current?.State;
+        from?.Exit();
         _current = GetOrAddNode(state);
+        Changed?.Invoke(from, _current.State);
         _current.State.Enter();
     }
 
