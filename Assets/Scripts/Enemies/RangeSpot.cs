@@ -2,13 +2,13 @@ using UnityEngine;
 
 /// <summary>
 /// A firing-range post: the spot an idle enemy stands at and practises from, shooting at a target.
-/// Set it as an enemy's Post Spot. His shots are real, so the room the spot lies in, and every room
-/// around it, is marked in use while he practises (Room.NotePractice), and the map of any of them can
+/// Set it as an enemy's Post Spot. Their shots are real, so the room the spot lies in, and every room
+/// around it, is marked in use while they practise (Room.NotePractice), and the map of any of them can
 /// hide the gunshots (Gunshot: Ignore, Only While In Use).
 /// </summary>
 public class RangeSpot : MonoBehaviour
 {
-    [Tooltip("What he shoots at. His body turns to face it, not this object's arrow. With none he faces this object's forward and the spot warns, and he doesn't practise.")]
+    [Tooltip("What they shoot at. Their body turns to face it, not this object's arrow. With none they face this object's forward and the spot warns, and they don't practise.")]
     [SerializeField] private Transform _target;
 
     private Room _room;
@@ -55,7 +55,7 @@ public class RangeSpot : MonoBehaviour
         }
     }
 
-    // The walk Intel.TryGetRow makes for a shot here while he practises. NotePractice marks this room and
+    // The walk Intel.TryGetRow makes for a shot here while they practise. NotePractice marks this room and
     // every room around it in use, so an Only While In Use row applies wherever it sits on that chain, and
     // the first room out with its own Gunshot row decides. That is usually an enclosing "Range" room, with
     // the spot in a lane inside it. The mask step TryGetRow tries first (Mask Radius) can only turn a shot
@@ -74,7 +74,7 @@ public class RangeSpot : MonoBehaviour
 
     private void OnValidate()
     {
-        if (_target == null) Debug.LogWarning($"{name}: a range spot with no target. He would face this object's forward and not practise.", this);
+        if (_target == null) Debug.LogWarning($"{name}: a range spot with no target. They would face this object's forward and not practise.", this);
     }
 
     private void OnDrawGizmos()

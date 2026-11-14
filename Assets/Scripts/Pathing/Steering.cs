@@ -11,10 +11,10 @@ public static class Steering
     private const float StraightAheadDegrees = 30f;
 
     // The slowest SpeedToFit will return, as a share of the speed asked for. Zero would freeze an
-    // enemy whose point is right behind him at close range: the turn needs him to keep moving. At
-    // this share the circle he can orbit has radius share * v / w: 0.056 m at 7 m/s and 0.08 m at
+    // enemy whose point is right behind them at close range: the turn needs them to keep moving. At
+    // this share the circle they can orbit has radius share * v / w: 0.056 m at 7 m/s and 0.08 m at
     // 10 m/s for Turn Speed 720, inside GridNavigator's CornerReach (0.1 m), so the floor can't hold
-    // him on a corner or an arrival point. A fifth was 0.11 to 0.16 m and orbited corners forever.
+    // them on a corner or an arrival point. A fifth was 0.11 to 0.16 m and orbited corners forever.
     private const float SlowestShare = 0.1f;
 
     /// <summary>

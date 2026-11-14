@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// One enemy's body as the chain and the gun treat it: the record of being held and thrown, the gun
-/// dropped or popped out of his hand, and the corpse's darkening. Kept out of EnemyController so the
+/// dropped or popped out of their hand, and the corpse's darkening. Kept out of EnemyController so the
 /// controller doesn't carry them. The grab methods stay on the controller because they call SetState;
 /// they call this. The tuning (Grab Pop Up, Grab Pop Out, Corpse Brightness) stays on the controller
 /// and is read on every call, so retuning in the Inspector during Play keeps working.
@@ -28,12 +28,12 @@ public class EnemyBodyState
     /// <summary>On the chain right now. A death mid-swing reads this to stay held.</summary>
     public bool IsHeld { get; private set; }
 
-    /// <summary>How far he has been moved from where he was grabbed, in flat metres; 0 when he isn't held. What tells a watcher Ruby is dragging him.</summary>
+    /// <summary>How far they have been moved from where they were grabbed, in flat metres; 0 when they aren't held. What tells a watcher Ruby is dragging them.</summary>
     public float HeldMovedBy => IsHeld ? PathGrid.FlatDistance(_heldFrom, _enemy.transform.position) : 0f;
 
     /// <summary>
-    /// Whether the chain threw him within the last `within` seconds, and where he was when it let go. A
-    /// watcher tests that spot, not the body: a thrown body can be many metres off by his next scan.
+    /// Whether the chain threw them within the last `within` seconds, and where they were when it let go. A
+    /// watcher tests that spot, not the body: a thrown body can be many metres off by their next scan.
     /// </summary>
     public bool WasThrownWithin(float within, out Vector3 from)
     {
@@ -41,21 +41,21 @@ public class EnemyBodyState
         return Time.time - _thrownAt <= within;
     }
 
-    /// <summary>Whether he died within the last `within` seconds, and where. A watcher tests that spot, not the body, which a killing hit can send many metres by his next scan.</summary>
+    /// <summary>Whether they died within the last `within` seconds, and where. A watcher tests that spot, not the body, which a killing hit can send many metres by their next scan.</summary>
     public bool WasKilledWithin(float within, out Vector3 where)
     {
         where = _diedAtSpot;
         return Time.time - _diedAt <= within;
     }
 
-    /// <summary>He has just died.</summary>
+    /// <summary>They have just died.</summary>
     public void NoteDied()
     {
         _diedAtSpot = _enemy.transform.position;
         _diedAt = Time.time;
     }
 
-    /// <summary>The chain has him: records where he was grabbed and that he is held.</summary>
+    /// <summary>The chain has them: records where they were grabbed and that they are held.</summary>
     public void NoteHeld()
     {
         _heldFrom = _enemy.transform.position;
@@ -64,7 +64,7 @@ public class EnemyBodyState
 
     /// <summary>
     /// The chain let go. `thrown` is whether a watcher should see it as a throw: a thrown release, or one
-    /// let go mid-spin, where he flies out along her aim. A plain drop isn't.
+    /// let go mid-spin, where they fly out along her aim. A plain drop isn't.
     /// </summary>
     public void NoteReleased(bool thrown)
     {
@@ -82,8 +82,8 @@ public class EnemyBodyState
         if (_enemy.Arms != null) _enemy.Arms.Drop(_enemy.Body.linearVelocity);
     }
 
-    // The grab knocks the gun out of his hand: a small hop up and away from his body, on top of
-    // how he was moving.
+    // The grab knocks the gun out of their hand: a small hop up and away from their body, on top of
+    // how they were moving.
     public void PopGun()
     {
         if (!_enemy.IsArmed) return;

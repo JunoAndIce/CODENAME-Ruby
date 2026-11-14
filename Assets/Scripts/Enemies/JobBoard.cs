@@ -36,7 +36,7 @@ public class JobBoard
     // Reused by a merge: the younger job's members and the ones who didn't fit, so a firing allocates nothing.
     private readonly List<EnemyController> _moving = new();
     private readonly List<EnemyController> _extras = new();
-    // An extra's new spot is tried this many times before he is dismissed (Elsewhere Distance, in TryFindExtraSpot).
+    // An extra's new spot is tried this many times before they are dismissed (Elsewhere Distance, in TryFindExtraSpot).
     private const int ExtraSpotTries = 3;
 
     public JobBoard(Intel intel) => _intel = intel;
@@ -47,7 +47,7 @@ public class JobBoard
     // The jobs' one clock. A job, not its members, decides when each step ends, so a team looks
     // together, gestures together and a Check finishes on the same frame: members each timing their own
     // look is how one said all clear while another walked off aggressive. A Search's Done only ends its
-    // search: each member finishes his own walk, then leaves. Go has no duration, because it waits for
+    // search: each member finishes their own walk, then leaves. Go has no duration, because it waits for
     // people to reach the spot: the first arrival of a Check, every member of a Search (NoteArrived). A
     // Search's search has none either: it waits for its area to be cleared and Search Minimum Time to
     // pass (SearchIsOver), and no time cap cuts it short. Every other timed step ends once its recorded
@@ -153,10 +153,10 @@ public class JobBoard
         if (step == JobStep.Go) ChooseChecker(job);
     }
 
-    // The lead reacts to what he heard first, with nobody else on the job. Then he calls the nearest
-    // enemy: he turns to him and that enemy, only now added to the job, turns to face him. When that
-    // call has had its time he calls the next, and when nobody is left the team gathers or sets off.
-    // Each enemy is checked again as he is called: in the second or so since the sound he may have
+    // The lead reacts to what they heard first, with nobody else on the job. Then they call the nearest
+    // enemy: they turn to them and that enemy, only now added to the job, turns to face them. When that
+    // call has had its time they call the next, and when nobody is left the team gathers or sets off.
+    // Each enemy is checked again as they are called: in the second or so since the sound they may have
     // gone to Aggro, been grabbed, or been taken by another job, and a stale name must not be added.
     private void AdvanceCall(GroupJob job)
     {
@@ -178,7 +178,7 @@ public class JobBoard
         {
             EnemyController next = job.DequeueCall();
             if (job.IsFull) break;
-            // Already on the job: he heard it himself and joined, so there is nobody to call.
+            // Already on the job: they heard it themselves and joined, so there is nobody to call.
             if (next != null && job.Has(next)) continue;
             if (!CallIn(job, next)) continue;
             job.RestartClock();
@@ -192,18 +192,18 @@ public class JobBoard
     }
 
     // The lead calls one enemy in: the one place a call is made and worded, for the Call step (AdvanceCall)
-    // and a fill's calls in any other step (AdvanceFill). False, with the reason said, when he can't be
-    // called (null, gone to Aggro, grabbed, taken by another job) or the job refused him. The caller
+    // and a fill's calls in any other step (AdvanceFill). False, with the reason said, when they can't be
+    // called (null, gone to Aggro, grabbed, taken by another job) or the job refused them. The caller
     // restarts whichever clock times the call.
     private bool CallIn(GroupJob job, EnemyController next)
     {
         if (next == null || !next.Reactions.CanJoinJob(job.Priority) || job.WasDropped(next))
         {
-            DebugLog.Info($"{job.Lead.name} doesn't call {(next != null ? next.name : "an officer who is gone")}: he is no longer free.", job.Lead);
+            DebugLog.Info($"{job.Lead.name} doesn't call {(next != null ? next.name : "an officer who is gone")}: they are no longer free.", job.Lead);
             return false;
         }
 
-        // A one-enemy job he was on is closed by taking him off it: he is better used here.
+        // A one-enemy job they were on is closed by taking them off it: they are better used here.
         Leave(next);
         job.Callee = next;
         if (!JoinMember(job, next))
@@ -211,7 +211,7 @@ public class JobBoard
             job.Callee = null;
             return false;
         }
-        DebugLog.Info($"{job.Lead.name} turns to {next.name} ({PathGrid.FlatDistance(job.Lead.transform.position, next.transform.position):0.#} m away) and calls him in.", job.Lead);
+        DebugLog.Info($"{job.Lead.name} turns to {next.name} ({PathGrid.FlatDistance(job.Lead.transform.position, next.transform.position):0.#} m away) and calls them in.", job.Lead);
         return true;
     }
 
@@ -232,13 +232,13 @@ public class JobBoard
             // Full, or a Check that has reached its look: nobody more is wanted, so the whole queue goes.
             if (!job.Recruiting)
             {
-                DebugLog.Info($"{job.Lead.name} drops the {job.Pending.Count} call(s) he had queued: {job} can take no one more.", job.Lead);
+                DebugLog.Info($"{job.Lead.name} drops the {job.Pending.Count} call(s) they had queued: {job} can take no one more.", job.Lead);
                 job.ClearCalls();
                 return;
             }
 
             EnemyController next = job.DequeueCall();
-            // Already on the job: he heard it himself and joined, so there is nobody to call.
+            // Already on the job: they heard it themselves and joined, so there is nobody to call.
             if (next != null && job.Has(next)) continue;
             if (!CallIn(job, next)) continue;
             job.RestartCallClock();
@@ -250,7 +250,7 @@ public class JobBoard
     public float StepDuration(GroupJob job) => job.StepLength;
 
     // What a step lasts, read from the lead's tuning at the moment it begins and then kept on the job
-    // (StepLength): reading the current lead each tick changed a step's length when he left mid-step.
+    // (StepLength): reading the current lead each tick changed a step's length when they left mid-step.
     // A Search's search has no length: it ends when its area is cleared and the minimum has passed
     // (SearchIsOver), never on a cap, so Search Duration has no say in it.
     private float LengthOf(JobStep step, EnemyController lead) => step switch
@@ -263,7 +263,7 @@ public class JobBoard
 
     /// <summary>
     /// A member has reached the spot, or stopped short of it. A Check moves on at the first arrival (the
-    /// checker's). A Search counts a member as arrived once he reaches its source (within Search Start
+    /// checker's). A Search counts a member as arrived once they reach its source (within Search Start
     /// Radius of it), and moves on when the last one has, so its search starts with the whole team there; the line names that last one.
     /// </summary>
     public void NoteArrived(GroupJob job, EnemyController who)
@@ -275,18 +275,18 @@ public class JobBoard
     }
 
     /// <summary>
-    /// Takes a member off a Search he can't reach (no path, or Search Travel Limit run out) and sends him
-    /// back to his patrol: the line says who and why, he leaves the job (which closes if he was the last,
-    /// or starts its search if everyone left has arrived), and his search ends so the table takes him to
-    /// Patrol, the Aggressive route if the search was an attack, since it made him wary. The caller must
-    /// stop reading its job at once: his Job is null afterwards.
+    /// Takes a member off a Search they can't reach (no path, or Search Travel Limit run out) and sends them
+    /// back to their patrol: the line says who and why, they leave the job (which closes if they were the last,
+    /// or starts its search if everyone left has arrived), and their search ends so the table takes them to
+    /// Patrol, the Aggressive route if the search was an attack, since it made them wary. The caller must
+    /// stop reading its job at once: their Job is null afterwards.
     /// </summary>
     public void DropFromSearch(EnemyController who, string why)
     {
         GroupJob job = who.Job;
         if (job == null) return;
         DebugLog.Info($"{who.name} is taken off {job}: {why}.", who);
-        // Recorded first: the job's fill and call-in skip him, or he would be called straight back.
+        // Recorded first: the job's fill and call-in skip them, or they would be called straight back.
         job.NoteDropped(who);
         Leave(who);
         who.Searching.Dismiss(why);
@@ -294,7 +294,7 @@ public class JobBoard
 
     /// <summary>
     /// The member who goes to the spot while the rest follow: the one chosen when the team set off
-    /// (ChooseChecker), kept until he leaves or the job starts over, unless a nearer enemy joins in its
+    /// (ChooseChecker), kept until they leave or the job starts over, unless a nearer enemy joins in its
     /// first moments (ReconsiderOnJoin). Null for a Search, where everyone goes. A pure read: members ask from two update phases, and the choice used to be made by whoever
     /// asked first. A Check in Go or Look with nobody chosen means a path into Go forgot to choose, and
     /// every member would take it as "I walk": that is reported once per job, never quietly.
@@ -303,7 +303,7 @@ public class JobBoard
     {
         if (job.Kind != JobKind.Check) return null;
         if (job.Checker == null && (job.Step == JobStep.Go || job.Step == JobStep.Look) && _warnedNoChecker.Add(job))
-            Debug.LogError($"{job} is in {job.Step} with no checker chosen: a path into Go didn't choose one, so every member would walk to the spot himself.", _intel);
+            Debug.LogError($"{job} is in {job.Step} with no checker chosen: a path into Go didn't choose one, so every member would walk to the spot themselves.", _intel);
         return job.Checker;
     }
 
@@ -326,8 +326,8 @@ public class JobBoard
         if (nearest != null) LogChecker(job, nearest, best);
     }
 
-    // A member out checking a distraction is away on a check of his own and has no business with the job's
-    // spot, unless everyone is: then the nearest of them is chosen, and walks over once his check is done.
+    // A member out checking a distraction is away on a check of their own and has no business with the job's
+    // spot, unless everyone is: then the nearest of them is chosen, and walks over once their check is done.
     private static EnemyController NearestToSpot(GroupJob job, out float best)
     {
         EnemyController nearest = NearestToSpot(job, skipChecking: true, out best);
@@ -350,7 +350,7 @@ public class JobBoard
     }
 
     private static void LogChecker(GroupJob job, EnemyController nearest, float metres) =>
-        DebugLog.Info($"{job}: {nearest.name} is nearest the spot ({metres:0.#} m) and goes to check it; {(job.Count > 1 ? "the others follow behind" : "he goes alone")}.", nearest);
+        DebugLog.Info($"{job}: {nearest.name} is nearest the spot ({metres:0.#} m) and goes to check it; {(job.Count > 1 ? "the others follow behind" : "they go alone")}.", nearest);
 
     // The choice is meant to see everyone who heard the same sound, but the first to hear one starts the
     // job and goes into Go before the rest of the listeners have been told, so a later listener who joins
@@ -374,7 +374,7 @@ public class JobBoard
 
     /// <summary>
     /// The one decision for an enemy who senses something worth investigating and may act on it
-    /// (Idle, Patrol, or searching at a lower priority). Returns the job he is now in, or null when
+    /// (Idle, Patrol, or searching at a lower priority). Returns the job they are now in, or null when
     /// it's left alone. An enemy already on a job is dealt with at its own place first
     /// (HandleAtOwnJob); this is for a thing **elsewhere**. In order:
     /// 1. **An open job is handling this** (Covers: its place is within Job Match Radius, or, for a
@@ -388,13 +388,13 @@ public class JobBoard
     ///    (GroupJob.Upgrade). A more serious
     ///    thing upgrades it, a find or a flying enemy turns a check into a search, and a stronger reason (an attack,
     ///    where the job is a problem) raises it for every member even at the same priority. If it is
-    ///    still recruiting and has room he joins, taking himself off any job he was on. Otherwise
-    ///    he leaves it alone: he never just stands there as a second job on the same thing. One
-    ///    already on a job **stays on it** (the return is his own job) and the caller makes the thing
-    ///    a distraction, so he is never left in Searching with no job.
-    /// 2. **Nothing is.** He starts a job and becomes its lead, and calls in the free enemies near
-    ///    him, nearest first, up to the cap. A find (a body, a loose gun) is already found, and an
-    ///    enemy thrown past him needs no checking, so each starts a Search; anything else is a Check, for
+    ///    still recruiting and has room they join, taking themselves off any job they were on. Otherwise
+    ///    they leave it alone: they never just stand there as a second job on the same thing. One
+    ///    already on a job **stays on it** (the return is their own job) and the caller makes the thing
+    ///    a distraction, so they are never left in Searching with no job.
+    /// 2. **Nothing is.** They start a job and becomes its lead, and calls in the free enemies near
+    ///    them, nearest first, up to the cap. A find (a body, a loose gun) is already found, and an
+    ///    enemy thrown past them needs no checking, so each starts a Search; anything else is a Check, for
     ///    a checker to go and see.
     /// Every decision logs a line naming the job, so what the squad did is readable in the Console.
     /// </summary>
@@ -417,7 +417,7 @@ public class JobBoard
             else Elevate(match, incident.Reason, $"{who.name} senses {incident}");
             if (match.Recruiting)
             {
-                // Decided before he is taken off his job: the destination is certain by now.
+                // Decided before they are taken off their job: the destination is certain by now.
                 if (own != null && own != match) Leave(who);
                 if (!JoinMember(match, who))
                 {
@@ -426,8 +426,8 @@ public class JobBoard
                     return who.Job;
                 }
                 DebugLog.Info($"{who.name} joins {match}.", who);
-                // After he has joined, so he is counted, and after the line saying so, so a new checker
-                // reads as the result of his joining. A restart that landed in Go has no checker yet and
+                // After they have joined, so they are counted, and after the line saying so, so a new checker
+                // reads as the result of their joining. A restart that landed in Go has no checker yet and
                 // chooses here for the same reason.
                 if (restarted) ChooseAfterRestart(match, true);
                 else ReconsiderOnJoin(match);
@@ -437,8 +437,8 @@ public class JobBoard
             string why = match.IsFull ? "it is full" : "it has gone past needing anyone";
             if (own != null)
             {
-                // A team that is full or past recruiting can't take him, and dropping him from his own
-                // job here left him in Searching with no job. The full-team rule is for enemies who
+                // A team that is full or past recruiting can't take them, and dropping them from their own
+                // job here left them in Searching with no job. The full-team rule is for enemies who
                 // aren't on a job already.
                 DebugLog.Info($"{who.name} stays on {own}: {incident} is {match}'s, and {why}.", who);
                 ChooseAfterRestart(match, restarted);
@@ -455,15 +455,15 @@ public class JobBoard
 
     /// <summary>
     /// An enemy has just lost a fight and begun a search at `point` (SearchingState.Enter, on a request
-    /// AggroState.Exit marked AfterLostFight). He is already searching, so a join retargets him and never
+    /// AggroState.Exit marked AfterLostFight). They are already searching, so a join retargets them and never
     /// reaches the machine's SetState. In order:
-    /// 1. **A job is at that place:** if it's a Check or not yet an attack, he makes it a Search for an
+    /// 1. **A job is at that place:** if it's a Check or not yet an attack, they make it a Search for an
     ///    attack at a lost fight's priority, once per area (EnemyMemory.NoteRaisedAt, so the Aggro-and-back
-    ///    flip can't raise it each time), and joins it if it has room. A full job dismisses him: he is wary
-    ///    (the exit latched it), so he walks his Aggressive patrol, which is the spec's "the rest go to
+    ///    flip can't raise it each time), and joins it if it has room. A full job dismisses them: they are wary
+    ///    (the exit latched it), so they walk their Aggressive patrol, which is the spec's "the rest go to
     ///    Patrol Aggressive".
-    /// 2. **None is:** he starts a Search for an attack there, as lead, at the priority a search from
-    ///    Aggro has, which outranks every row of the map. He calls in the free enemies near him, and the
+    /// 2. **None is:** they start a Search for an attack there, as lead, at the priority a search from
+    ///    Aggro has, which outranks every row of the map. They call in the free enemies near them, and the
     ///    rest of the fight's enemies join as they lose her, up to the cap.
     /// </summary>
     public void JoinFromAggro(EnemyController who, Vector3 point)
@@ -491,19 +491,19 @@ public class JobBoard
         if (!job.Recruiting)
         {
             string why = job.IsFull ? "it is full" : "it has gone past needing anyone";
-            who.Searching.Dismiss($"{job} can't take him ({why}), so he goes back to patrol, aggressively");
+            who.Searching.Dismiss($"{job} can't take them ({why}), so they go back to patrol, aggressively");
             return;
         }
-        // Refused (JoinMember has said why): nothing more to do. He is on no job, and keeps his own search.
+        // Refused (JoinMember has said why): nothing more to do. They are on no job, and keeps their own search.
         if (!JoinMember(job, who)) return;
         DebugLog.Info($"{who.name} joins {job}.", who);
         ReconsiderOnJoin(job);
     }
 
     // A job always starts this one way: a sound's first listener (Handle), an extra a merge sent
-    // elsewhere (MergeExtras) and an enemy who has lost a fight with no job at his spot (JoinFromAggro)
-    // all lead a new job and call in the free enemies near them. He must be
-    // off any job already. Returns the job, or the one he is on when it refused him. `area` is a search
+    // elsewhere (MergeExtras) and an enemy who has lost a fight with no job at their spot (JoinFromAggro)
+    // all lead a new job and call in the free enemies near them. They must be
+    // off any job already. Returns the job, or the one they are on when it refused them. `area` is a search
     // area already built round the incident's point (an extra's spot was tested by building it), so the
     // job doesn't flood the same place twice; null builds it, as for every other job.
     private GroupJob StartJob(EnemyController who, Incident incident, JobKind kind, SearchArea area = null)
@@ -511,7 +511,7 @@ public class JobBoard
         // Nothing can match a job on no grid (Covers needs a floor), so say so now rather than let
         // every later sound there start a job of its own without a word.
         if (PathGrid.At(incident.Point) == null)
-            Debug.LogWarning($"{who.name} starts a job at {incident.Point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and he can't walk there.", who);
+            Debug.LogWarning($"{who.name} starts a job at {incident.Point}, which is on no PathGrid (off the floor, or outside its height band): no later sound there will join it, and they can't walk there.", who);
         var job = new GroupJob(kind, incident, _intel.JobCap, _intel, area);
         _jobs.Add(job);
         if (!JoinMember(job, who))
@@ -521,16 +521,16 @@ public class JobBoard
             return who.Job;
         }
         DebugLog.Info($"{who.name} starts {job} at {incident.Point}.", who);
-        // He is the only one on the job for now. The enemies he will call are only found here, by
-        // name, and are added one at a time once he has reacted (AdvanceCall), so none of them turns
-        // the moment the sound is heard: each turns afterwards, in answer to the one who calls him.
+        // They are the only one on the job for now. The enemies they will call are only found here, by
+        // name, and are added one at a time once they have reacted (AdvanceCall), so none of them turns
+        // the moment the sound is heard: each turns afterwards, in answer to the one who calls them.
         FindCallees(job, who);
         if (job.Pending.Count > 0)
         {
             job.SetStep(JobStep.Call, 0f);
-            DebugLog.Info($"{who.name} will call in {job.Pending.Count} officer(s) once he has reacted.", who);
+            DebugLog.Info($"{who.name} will call in {job.Pending.Count} officer(s) once they have reacted.", who);
         }
-        // A check of one has nobody to call or gather: he goes straight there.
+        // A check of one has nobody to call or gather: they go straight there.
         else if (job.Kind == JobKind.Check)
         {
             job.SetStep(JobStep.Go, 0f);
@@ -540,8 +540,8 @@ public class JobBoard
     }
 
     /// <summary>
-    /// Takes an enemy off his job: when he goes to Aggro, is grabbed, ragdolls, dies or is destroyed,
-    /// or finishes. The next member leads if he was the lead, and a job with nobody
+    /// Takes an enemy off their job: when they go to Aggro, is grabbed, ragdolls, dies or is destroyed,
+    /// or finishes. The next member leads if they were the lead, and a job with nobody
     /// in it closes and leaves nothing behind.
     /// </summary>
     public void Leave(EnemyController who)
@@ -562,14 +562,14 @@ public class JobBoard
         DebugLog.Info($"{who.name} leaves {job}; {job.Lead.name} leads.", who);
 
         // A Search in Go waits for everyone on it, and the one who left may have been the last one it was
-        // waiting for: without this it would wait for him for good. A job that emptied returned above,
+        // waiting for: without this it would wait for them for good. A job that emptied returned above,
         // so there is a Lead to read the length from.
         if (job.TryStartSearch(LengthOf(JobStep.Search, job.Lead)))
             DebugLog.Info($"{who.name} left, and everyone still on {job} has reached the spot: it searches.", who);
 
         // The checker went with the look half done: the nearest of the rest takes over, and the job
-        // goes back to Go so he walks to the spot from where he is and looks it over himself. In Go the
-        // nearest of the rest is chosen at once. Before Go there is no checker to lose (he is chosen as
+        // goes back to Go so they walk to the spot from where they are and looks it over themselves. In Go the
+        // nearest of the rest is chosen at once. Before Go there is no checker to lose (they are chosen as
         // the team sets off), and after the look nobody asks, so nothing is handed over and nothing logged.
         if (!wasChecker) return;
         if (job.Step == JobStep.Look)
@@ -628,22 +628,22 @@ public class JobBoard
 
     /// <summary>
     /// Where a Search's members walk before they spread out to search (user: "walk to the source of the
-    /// problem/attack THEN start searching"). One flood from the first member who asks (he must be on the
+    /// problem/attack THEN start searching"). One flood from the first member who asks (they must be on the
     /// job's floor: the caller checks), best first:
-    /// 1. The job's place, when he can reach it.
+    /// 1. The job's place, when they can reach it.
     /// 2. Else the source patch's own ground (SearchArea.SourceGround, not the whole grown area, whose
-    ///    other patches were flooded from other places) nearest the place that he can reach. That ground was
+    ///    other patches were flooded from other places) nearest the place that they can reach. That ground was
     ///    flooded from the place, so it is on the place's side of every wall: a source in a nook between a
     ///    crate and a thin wall starts the team in the nook's room, never in the corridor behind the wall.
-    /// 3. Else the ground he can reach nearest it as the crow flies (within the navigator's Approach
+    /// 3. Else the ground they can reach nearest it as the crow flies (within the navigator's Approach
     ///    Radius), but only with a clear eye-height line from it to the place, the test CanSeeSpot makes,
     ///    because that ground can lie behind a wall.
     /// Only 1 and 2 are kept on the job (keyed on its Point), so they flood once per place and not per step
     /// or per member: both are joined to the place, so anyone who can reach the place can reach them. 3 is
-    /// worked out from his own reachable ground, which another member's may not share, so it is his alone:
-    /// `forTeam` is false and the caller keeps it for him (SearchingState), and the next member asks again.
-    /// False, with `why` saying so, when none of those holds: nothing is stored, the caller takes him off
-    /// the job as for no path, and the next member asks again from where he stands.
+    /// worked out from their own reachable ground, which another member's may not share, so it is their alone:
+    /// `forTeam` is false and the caller keeps it for them (SearchingState), and the next member asks again.
+    /// False, with `why` saying so, when none of those holds: nothing is stored, the caller takes them off
+    /// the job as for no path, and the next member asks again from where they stand.
     /// </summary>
     public bool TryGetSearchStart(GroupJob job, EnemyController who, out Vector3 start, out bool forTeam, out string why)
     {
@@ -654,21 +654,21 @@ public class JobBoard
         GroundFound found = who.Navigator.FindGroundNear(job.Point, job.Area.SourceGround, out start);
         if (found == GroundFound.None)
         {
-            why = $"no ground he can reach lies near the place {job.Point}, on its side or otherwise";
+            why = $"no ground they can reach lies near the place {job.Point}, on its side or otherwise";
             return false;
         }
         if (found == GroundFound.Nearest && !ClearLineAtEye(who, start, job.Point))
         {
-            why = $"the source at {job.Point} has no ground he can reach on its side: the nearest he can reach, {start}, is cut off from it (behind a wall)";
+            why = $"the source at {job.Point} has no ground they can reach on its side: the nearest they can reach, {start}, is cut off from it (behind a wall)";
             return false;
         }
 
-        // The nearest ground in sight was found from his own reachable region: a teammate cut off from it
-        // would be sent to ground he can't reach and dropped from the job, so it isn't stored for the team.
+        // The nearest ground in sight was found from their own reachable region: a teammate cut off from it
+        // would be sent to ground they can't reach and dropped from the job, so it isn't stored for the team.
         if (found == GroundFound.Nearest)
         {
             forTeam = false;
-            DebugLog.Info($"{job}'s place {job.Point} has no way in that {who.name} can reach, on its side or otherwise, so he walks to the nearest ground in sight of it he can reach, {start} ({PathGrid.FlatDistance(job.Point, start):0.#} m off), and spreads out from there. It is his alone, not kept for the team.", who);
+            DebugLog.Info($"{job}'s place {job.Point} has no way in that {who.name} can reach, on its side or otherwise, so they walk to the nearest ground in sight of it they can reach, {start} ({PathGrid.FlatDistance(job.Point, start):0.#} m off), and spreads out from there. It is their alone, not kept for the team.", who);
             return true;
         }
 
@@ -678,8 +678,8 @@ public class JobBoard
         return true;
     }
 
-    // A clear line at the asker's eye height from `from` to `to`: the test CanSeeSpot makes from where he
-    // stands, made from somewhere else. Raised to the eyes, so a place at floor level isn't hidden by the floor.
+    // A clear line at the asker's eye height from `from` to `to`: the test CanSeeSpot makes from where they
+    // stand, made from somewhere else. Raised to the eyes, so a place at floor level isn't hidden by the floor.
     private static bool ClearLineAtEye(EnemyController who, Vector3 from, Vector3 to)
     {
         float eyeHeight = who.EyePosition.y - who.transform.position.y;
@@ -695,12 +695,12 @@ public class JobBoard
         incident.Priority > job.Priority || (incident.MakesSearch && job.Kind == JobKind.Check);
 
     /// <summary>
-    /// A member's stimulus **at his own job's place** (the caller has tested Covers), before anything
+    /// A member's stimulus **at their own job's place** (the caller has tested Covers), before anything
     /// else: a more serious thing upgrades the job, and a find or a flying enemy turns a check into a search, for every
     /// member, so the team never splits on it. Only a Check member's comes here: a serious thing (Serious) on a
     /// running job goes to Mobilise first, and anything else a member of a running Search notices is ordinary at any
     /// priority (EnemyReactions.Investigate: one goes, the search grows, it counts), so what this converts is a
-    /// Check, for a loose gun found or anything at Alarm Speed. True when the job took it, so he needn't be distracted;
+    /// Check, for a loose gun found or anything at Alarm Speed. True when the job took it, so they needn't be distracted;
     /// false when it changed nothing, and the caller makes it a distraction. An attack is raised for
     /// the team through RaiseJobAt, before this is reached. A glance (walkThere false, a find already
     /// on the books) never changes the job: it isn't worth a walk, so it only raises and distracts.
@@ -745,11 +745,11 @@ public class JobBoard
     /// <summary>
     /// A searcher notices a serious thing (Serious): the whole job goes (spec: "Serious: the whole job goes"),
     /// in place of the old gunshot-only mobilise. True when it was taken; false leaves it to the caller as a
-    /// distraction (he turns), and every false says why. The caller has already counted it toward his own
+    /// distraction (they turn), and every false says why. The caller has already counted it toward their own
     /// distractions (EnemyReactions.Investigate), taken or not (user, 2026-11-11). In order:
-    /// 1. **He has no running job** (a search of his own, or finishing his last walk after a search ended): a
+    /// 1. **They have no running job** (a search of their own, or finishing their last walk after a search ended): a
     ///    gunshot or a killing (the only serious things the caller sends here without a job) goes to the squad
-    ///    as any new thing does, and he joins or leads a Search there (a running Search that has it takes it as
+    ///    as any new thing does, and they join or leads a Search there (a running Search that has it takes it as
     ///    below, through Handle).
     /// Steps 2 to 5 are TakeSerious, which Handle uses too, for a serious thing a non-member brings to a running
     /// Search, so the job does the same whoever noticed it first.
@@ -767,7 +767,7 @@ public class JobBoard
     ///    as it is.
     /// 5. **No yanking:** within the noticer's Distraction Gap of the last move, the job doesn't move again, and
     ///    doesn't grow either. A firefight, a tumbling body or a second sighting of a find still raises the job,
-    ///    but is only a distraction for him. The rest who heard the same shot, in the same frame, find it done.
+    ///    but is only a distraction for them. The rest who heard the same shot, in the same frame, find it done.
     /// </summary>
     public bool Mobilise(EnemyController who, Incident thing)
     {
@@ -776,13 +776,13 @@ public class JobBoard
         {
             if (!thing.Mobilises)
             {
-                Debug.LogError($"{who.name} brought {thing} to the job board as serious with no running job, but only a gunshot or a killing goes to the squad from there (EnemyReactions.Investigate): it is left to him as a distraction.", who);
+                Debug.LogError($"{who.name} brought {thing} to the job board as serious with no running job, but only a gunshot or a killing goes to the squad from there (EnemyReactions.Investigate): it is left to them as a distraction.", who);
                 return false;
             }
-            // Not taken if it left him where he was: a full team has the shot, and he carries on. The thing keeps
+            // Not taken if it left them where they were: a full team has the shot, and they carry on. The thing keeps
             // what makes it serious (its kind, source, mobilising), so a running Search that has it takes it as a
             // member's notice would (Handle, TakeSerious) instead of as a plain louder sound.
-            Handle(who, new Incident(thing.Point, thing.Reason, thing.Priority, makesSearch: true, thing.SaysNothingOfRuby, thing.Mobilises, thing.Kind, thing.Source));
+            Handle(who, new Incident(thing.Point, thing.Reason, thing.Priority, makesSearch: true, thing.SaysNothingOfRed, thing.Mobilises, thing.Kind, thing.Source));
             return who.Job != job;
         }
 
@@ -790,8 +790,8 @@ public class JobBoard
     }
 
     // Mobilise's steps 2 to 5 for a job that has a serious thing, whoever brought it: a member who noticed it
-    // (Mobilise), or anyone whose thing a running Search covers (Handle). `who` names him in the log and his
-    // Distraction Gap spaces the job's moves; nothing here makes him a member. True when the job took it.
+    // (Mobilise), or anyone whose thing a running Search covers (Handle). `who` names them in the log and their
+    // Distraction Gap spaces the job's moves; nothing here makes them a member. True when the job took it.
     private bool TakeSerious(GroupJob job, EnemyController who, Incident thing)
     {
         // Another job's ground doesn't stop a serious thing (user, 2026-11-11): the team that noticed it goes, and
@@ -800,7 +800,7 @@ public class JobBoard
         if (floor == null || floor != job.Area.Floor)
         {
             string jobFloor = job.Area.Floor != null ? job.Area.Floor.name : "no PathGrid";
-            Debug.LogWarning($"{who.name} noticed {thing}, which is serious, but it is {(floor == null ? "on no PathGrid" : $"on {floor.name}")} while {job}'s search area is on {jobFloor}: a job never moves between floors, so it stays where it is and he only turns toward it.", who);
+            Debug.LogWarning($"{who.name} noticed {thing}, which is serious, but it is {(floor == null ? "on no PathGrid" : $"on {floor.name}")} while {job}'s search area is on {jobFloor}: a job never moves between floors, so it stays where it is and they only turn toward it.", who);
             return false;
         }
 
@@ -850,7 +850,7 @@ public class JobBoard
         float since = Time.time - job.LastSeriousMoveAt;
         if (since < who.DistractionGap)
         {
-            DebugLog.Info($"{who.name} has something serious at {thing.Point}, but {job} moved for something serious {since:0.#}s ago, within his Distraction Gap ({who.DistractionGap:0.#}s): it doesn't grow there or move again yet.", who);
+            DebugLog.Info($"{who.name} has something serious at {thing.Point}, but {job} moved for something serious {since:0.#}s ago, within their Distraction Gap ({who.DistractionGap:0.#}s): it doesn't grow there or move again yet.", who);
             return false;
         }
 
@@ -881,7 +881,7 @@ public class JobBoard
     /// <summary>
     /// Whether an open job other than `own` has this point: it is at that job's place (Covers) or inside its
     /// search area. Such an ordinary thing is that team's, so a member of `own` only turns toward it
-    /// (EnemyReactions.Investigate) and never grows his own search into their ground. A serious thing ignores
+    /// (EnemyReactions.Investigate) and never grows their own search into their ground. A serious thing ignores
     /// it: the team that noticed it goes, and the merge folds the two jobs. Allocation-free.
     /// </summary>
     public bool AnotherJobHas(GroupJob own, Vector3 point)
@@ -900,9 +900,9 @@ public class JobBoard
     private const float SameThingWindow = 0.5f;
 
     /// <summary>
-    /// The one entry for a job member's ordinary distraction (spec: "Distractions on a search"), after his own
-    /// count has taken it (EnemyReactions.Distract). True when he is now out checking it; false when he only
-    /// turns toward it, which the caller does, and every false says why in the log. In order:
+    /// The one entry for a job member's ordinary distraction (spec: "Distractions on a search"), after their own
+    /// count has taken it (EnemyReactions.Distract). True when they are now out checking it; false when they only
+    /// turn toward it, which the caller does, and every false says why in the log. In order:
     /// 1. **Not for one to check:** a serious thing (Serious: a gunshot, a killing, a body nobody had booked, an
     ///    enemy seen flying) is the whole team's or nobody's (Mobilise), so what reaches here of one is only what
     ///    Mobilise left over, and nobody scouts it. A body or gun lying there, or anything else that says nothing
@@ -910,14 +910,14 @@ public class JobBoard
     ///    can't be walked to.
     /// 2. **The same thing** (decision 3): the same source object and kind, or with no source the same grid
     ///    cell, noticed by a member of this job within half a second. The first who noticed it went, so this one
-    ///    turns and carries on. If the first couldn't go (the checker, say), this one goes in his place.
-    /// 3. **A new thing grows the search** there at once (GroupJob.GrowAt), whoever goes and whether he gets
+    ///    turns and carries on. If the first couldn't go (the checker, say), this one goes in their place.
+    /// 3. **A new thing grows the search** there at once (GroupJob.GrowAt), whoever goes and whether they get
     ///    there, and floods once for it: the same thing never grows again. A Check has no area to grow. A team
     ///    signalling grows too: the serious move it is about to make keeps the whole area.
-    /// 4. **He goes** to check it, alone, and comes back (SearchingState.CheckForJob), unless the job isn't
-    ///    under way yet (a Search going or searching, a Check going or looking) or he is a Check's checker, who
+    /// 4. **They go** to check it, alone, and comes back (SearchingState.CheckForJob), unless the job isn't
+    ///    under way yet (a Search going or searching, a Check going or looking) or they are a Check's checker, who
     ///    has the job's own spot to reach. Several members can be out on different things at once, and one
-    ///    already out is sent on to the newer thing. Inside the search area as much as outside: he walks to
+    ///    already out is sent on to the newer thing. Inside the search area as much as outside: they walk to
     ///    where it happened either way.
     /// Nothing here touches anyone's distraction count: sending a scout shares nothing.
     /// </summary>
@@ -926,11 +926,11 @@ public class JobBoard
         GroupJob job = who.Job;
         if (job == null)
         {
-            Debug.LogError($"{who.name} noticed {thing} as a job member, but he is on no job: only a job member's distraction comes here (EnemyReactions.Distract). He only turns toward it.", who);
+            Debug.LogError($"{who.name} noticed {thing} as a job member, but they are on no job: only a job member's distraction comes here (EnemyReactions.Distract). They only turn toward it.", who);
             return false;
         }
         bool serious = Serious(thing);
-        if (serious || thing.SaysNothingOfRuby)
+        if (serious || thing.SaysNothingOfRed)
         {
             DebugLog.Info($"{who.name} turns toward {thing}: {(serious ? "it is serious, which moves the whole team or nobody (Mobilise), never one" : "nothing about it leads to Ruby (a body or gun lying there, or nothing shows where it came from)")}, so nobody goes to check it.", who);
             return false;
@@ -944,13 +944,13 @@ public class JobBoard
         Vector2Int cell = default;
         if (floor != null && floor == job.Area.Floor && !floor.WorldToCell(thing.Point, out cell))
         {
-            Debug.LogWarning($"{who.name} noticed {thing}, which is on {job.Area.Floor.name}, {job}'s own floor, but WorldToCell can't place the point in a cell there, so there is nothing to compare it by and he only turns toward it.", who);
+            Debug.LogWarning($"{who.name} noticed {thing}, which is on {job.Area.Floor.name}, {job}'s own floor, but WorldToCell can't place the point in a cell there, so there is nothing to compare it by and they only turn toward it.", who);
             return false;
         }
         if (floor == null || floor != job.Area.Floor)
         {
             string jobFloor = job.Area.Floor != null ? job.Area.Floor.name : "no PathGrid";
-            Debug.LogWarning($"{who.name} noticed {thing}, which is {(floor == null ? "on no PathGrid" : $"on {floor.name}")} while {job} is on {jobFloor}: nobody can walk there for the job and a search never spans floors, so he only turns toward it.", who);
+            Debug.LogWarning($"{who.name} noticed {thing}, which is {(floor == null ? "on no PathGrid" : $"on {floor.name}")} while {job} is on {jobFloor}: nobody can walk there for the job and a search never spans floors, so they only turn toward it.", who);
             return false;
         }
 
@@ -965,7 +965,7 @@ public class JobBoard
             // The first to notice it couldn't go. It has grown the search already, so this only sends.
             if (!CanCheck(job, who, out string notNow))
             {
-                DebugLog.Info($"{who.name} noticed {thing} too, and nobody has gone to it, but he turns toward it instead: {notNow}.", who);
+                DebugLog.Info($"{who.name} noticed {thing} too, and nobody has gone to it, but they turn toward it instead: {notNow}.", who);
                 return false;
             }
             job.MarkNoticingSent(index, who);
@@ -982,13 +982,13 @@ public class JobBoard
             DebugLog.Info($"{who.name} turns toward {thing}: {whyNot}.", who);
             return false;
         }
-        SendToCheck(job, who, thing, job.Kind == JobKind.Check ? "a Check has no area to grow, so he looks and comes back" : "the search has grown there");
+        SendToCheck(job, who, thing, job.Kind == JobKind.Check ? "a Check has no area to grow, so they look and comes back" : "the search has grown there");
         return true;
     }
 
     // Whether a member may leave the job's work to check something: it is under way (a Search going or
     // searching; a Check going or looking, since after its look there is nothing to come back to and before Go
-    // the team is still being called or gathered), and he isn't a Check's checker, who has its spot to reach.
+    // the team is still being called or gathered), and they aren't a Check's checker, who has its spot to reach.
     private static bool CanCheck(GroupJob job, EnemyController who, out string whyNot)
     {
         // A Search in Go isn't excluded for want of a member to wait on: it finishes from Go anyway, and a member
@@ -1002,7 +1002,7 @@ public class JobBoard
         }
         if (job.Checker == who)
         {
-            whyNot = $"he is {job}'s checker, who has the job's own spot to reach";
+            whyNot = $"they are {job}'s checker, who has the job's own spot to reach";
             return false;
         }
         whyNot = null;
@@ -1013,7 +1013,7 @@ public class JobBoard
     {
         bool already = job.TryGetCheck(who, out Vector3 was);
         job.SendToCheck(who, thing.Point);
-        DebugLog.Info($"{job} sends {who.name} to check {thing} ({PathGrid.FlatDistance(who.transform.position, thing.Point):0.#} m away){(already ? $", on from what he was checking at {was}" : "")}; {note}.", who);
+        DebugLog.Info($"{job} sends {who.name} to check {thing} ({PathGrid.FlatDistance(who.transform.position, thing.Point):0.#} m away){(already ? $", on from what they were checking at {was}" : "")}; {note}.", who);
     }
 
     /// <summary>What the job's team hasn't looked at yet, built the first time it's asked for, from the job's area (which has already flooded).</summary>
@@ -1023,7 +1023,7 @@ public class JobBoard
         return job.Coverage;
     }
 
-    /// <summary>A member has finished checking what he was sent to: he returns to his part in the job.</summary>
+    /// <summary>A member has finished checking what they were sent to: they return to their part in the job.</summary>
     public void CheckDone(GroupJob job, EnemyController who) => job.EndCheck(who);
 
     // Whatever they had cleared may not be clear now: they look again, or a team that had seen it all would
@@ -1109,8 +1109,8 @@ public class JobBoard
     /// <summary>
     /// A member has learned something that makes the whole job an attack, at its place (an attack
     /// sensed, or a glance at a known body): the job's reason rises and everyone goes wary together,
-    /// so he can't latch wary alone while the job says all clear. False when the point is elsewhere or
-    /// he has no job; he is then wary on his own account, as he would be off a job.
+    /// so they can't latch wary alone while the job says all clear. False when the point is elsewhere or
+    /// they have no job; they are then wary on their own account, as they would be off a job.
     /// </summary>
     public bool RaiseJobAt(EnemyController who, Vector3 point, string why)
     {
@@ -1144,7 +1144,7 @@ public class JobBoard
     // any priority). It never moves the team's source, because whether the team moved would then depend on whether
     // a member or a passer-by heard it first: a member's notice (Distract, Noticed) only grows the search. So the
     // job rises (the reason through Elevate, the priority through RaisePriority, which moves nothing) and grows
-    // there, and the caller lets him join. GrowAt keeps its own refusals and logs (a spot off the grid, a patch
+    // there, and the caller lets them join. GrowAt keeps its own refusals and logs (a spot off the grid, a patch
     // already there floods nothing).
     private void JoinRunningSearch(GroupJob job, EnemyController who, Incident incident)
     {
@@ -1155,8 +1155,8 @@ public class JobBoard
     }
 
     // The team's reason only rises, and every member shares it, so they end together. An attack makes
-    // them all wary now, not each when he happens to sense it: an enemy who latched wary on his
-    // own reading walked off aggressive while the rest of his job said all clear.
+    // them all wary now, not each when they happen to sense it: an enemy who latched wary on their
+    // own reading walked off aggressive while the rest of their job said all clear.
     private void Elevate(GroupJob job, StimulusResponse reason, string why)
     {
         if (!job.Elevate(reason)) return;
@@ -1164,9 +1164,9 @@ public class JobBoard
         DebugLog.Info($"{job} is raised to {reason}: {why}.", _intel);
     }
 
-    // Puts an enemy on a job. One who has seen Ruby knows she is about, so a job he is on is an
-    // attack, as it would be if he had sensed the thing himself (spec piece 2).
-    // False when the job refused him (he is on another job: GroupJob.Add reports it), and then nothing else happens.
+    // Puts an enemy on a job. One who has seen Ruby knows she is about, so a job they are on is an
+    // attack, as it would be if they had sensed the thing themselves (spec piece 2).
+    // False when the job refused them (they are on another job: GroupJob.Add reports it), and then nothing else happens.
     // Every route onto a job comes through here, so this is the one place a look is counted and Ruby is
     // told of. Add returns true for someone already on the job, so whether this is a new assignment is
     // read first: a repeat join is not a new look and tells nobody anything new.
@@ -1179,9 +1179,9 @@ public class JobBoard
         {
             // Telling comes before the raise and the count so everyone's knowledge is settled before
             // anyone moves (FollowJob last).
-            TellOfRuby(job);
-            if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
-            // >= and not ==: from his third look on, every job he is put on is a Search for an attack
+            TellOfRed(job);
+            if (who.Memory.HasSeenRed) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
+            // >= and not ==: from their third look on, every job they are put on is a Search for an attack
             // (spec decision 2: "the third becomes a search for an attack"), another team's Check
             // included. Raising only the reason left a Check a Check, one quick look and all clear, and
             // == let the fourth look fall back to a plain problem. It goes through Upgrade so a Check
@@ -1193,16 +1193,16 @@ public class JobBoard
             {
                 var attack = new Incident(job.Point, StimulusResponse.SearchForAttack, job.Priority, makesSearch: true);
                 DebugLog.Info($"{job} is raised to a search for an attack: {who.name} has been sent to look {count} times.", _intel);
-                // Upgrade follows every member when it restarts the job, him included, so he isn't
+                // Upgrade follows every member when it restarts the job, them included, so they aren't
                 // followed a second time below.
                 followed = Upgrade(job, attack, JobKind.Search);
             }
         }
-        else if (who.Memory.HasSeenRuby) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
+        else if (who.Memory.HasSeenRed) Elevate(job, StimulusResponse.SearchForAttack, $"{who.name} has seen Ruby");
         if (!followed) who.FollowJob(job);
-        // Checked here and not at Add: he is only put in Searching by FollowJob. Not at Leave either,
-        // which SearchingState.Exit calls while the machine is still changing state. By now he is
-        // searching, whether he entered it on a request or was retargeted.
+        // Checked here and not at Add: they are only put in Searching by FollowJob. Not at Leave either,
+        // which SearchingState.Exit calls while the machine is still changing state. By now they are
+        // searching, whether they entered it on a request or was retargeted.
         if (who.Job != null && !who.IsSearching)
             Debug.LogError($"{who.name} is on {who.Job} but is in a state other than Searching: a member of a job must be searching.", who);
         return true;
@@ -1211,16 +1211,16 @@ public class JobBoard
     // Members who have seen Ruby tell the rest of the job where she was, as the newest of the seers' own
     // facts (the pool is not consulted: it is the seers' knowledge being passed on). Learn keeps the
     // newer by time, so a member with a fresher fact keeps it. Members who already know her are not
-    // told again. Only HasSeenRuby tells, never WasToldOfRuby: a told enemy who could tell would carry
+    // told again. Only HasSeenRed tells, never WasToldOfRed: a told enemy who could tell would carry
     // one sighting down every chain of jobs across the level, which is the removed level alert by
     // another door. Speech (Intel.Say) is separate and doesn't mark anyone told.
-    private void TellOfRuby(GroupJob job)
+    private void TellOfRed(GroupJob job)
     {
         EnemyController seer = null;
         RubyFact newest = default;
         foreach (EnemyController member in job.Members)
         {
-            if (!member.Memory.HasSeenRuby || !member.Memory.TryGetNewestRuby(null, out RubyFact fact)) continue;
+            if (!member.Memory.HasSeenRed || !member.Memory.TryGetNewestRed(null, out RubyFact fact)) continue;
             if (seer != null && fact.Time <= newest.Time) continue;
             seer = member;
             newest = fact;
@@ -1230,10 +1230,10 @@ public class JobBoard
         RubyFact told = newest.WithSource(Knowledge.Told);
         foreach (EnemyController member in job.Members)
         {
-            if (member.Memory.KnowsRuby) continue;
+            if (member.Memory.KnowsRed) continue;
             member.Memory.Learn(told);
-            member.Memory.BeToldOfRuby();
-            DebugLog.Info($"{seer.name} tells {member.name} he has seen Ruby near {newest.Position}.", member);
+            member.Memory.BeToldOfRed();
+            DebugLog.Info($"{seer.name} tells {member.name} they have seen Ruby near {newest.Position}.", member);
         }
     }
 
@@ -1348,7 +1348,7 @@ public class JobBoard
     }
 
     // The members of a merge who had no room, already off their job. A problem job sends them back to
-    // patrol. An attack job sends each to search somewhere else, as a team of his own that recruits as
+    // patrol. An attack job sends each to search somewhere else, as a team of their own that recruits as
     // any lead does, so the squad spreads over the area instead of piling on one spot. Dismissed
     // enemies may be filled into another job later: they are free.
     private void MergeExtras(GroupJob older)
@@ -1358,16 +1358,16 @@ public class JobBoard
             EnemyController who = _extras[i];
             if (older.Reason != StimulusResponse.SearchForAttack)
             {
-                who.Searching.Dismiss($"{older} has no room for him and it is only a problem");
+                who.Searching.Dismiss($"{older} has no room for them and it is only a problem");
                 continue;
             }
 
             if (!TryFindExtraSpot(older, out Vector3 spot, out SearchArea searchArea))
             {
-                who.Searching.Dismiss($"{older} has no room for him and no open spot {_intel.JobMatchRadius + 2f:0.#} to {2.5f * _intel.JobMatchRadius:0.#} m from {older.Point} was found in {ExtraSpotTries} tries that no other job covers or shares a room with (or the place is on no grid), so he goes back to patrol");
+                who.Searching.Dismiss($"{older} has no room for them and no open spot {_intel.JobMatchRadius + 2f:0.#} to {2.5f * _intel.JobMatchRadius:0.#} m from {older.Point} was found in {ExtraSpotTries} tries that no other job covers or shares a room with (or the place is on no grid), so they go back to patrol");
                 continue;
             }
-            DebugLog.Info($"{who.name} has no room on {older}: he searches {spot} ({PathGrid.FlatDistance(older.Point, spot):0.#} m from it) instead.", who);
+            DebugLog.Info($"{who.name} has no room on {older}: they search {spot} ({PathGrid.FlatDistance(older.Point, spot):0.#} m from it) instead.", who);
             StartJob(who, new Incident(spot, older.Reason, older.Priority), JobKind.Search, searchArea);
         }
         _extras.Clear();
@@ -1456,13 +1456,13 @@ public class JobBoard
         if (status == FloorReach.Status.NoGrid)
         {
             if (_calling.FirstNoGrid(lead))
-                Debug.LogWarning($"{lead.name} is on no PathGrid, so he can't call anyone in: the officers he'd recruit are found along the floor, which needs a grid. He works alone.", lead);
+                Debug.LogWarning($"{lead.name} is on no PathGrid, so they can't call anyone in: the officers they'd recruit are found along the floor, which needs a grid. They work alone.", lead);
             return;
         }
         if (status == FloorReach.Status.NoReach)
         {
             if (_calling.FirstNoReach(lead))
-                Debug.LogWarning($"{lead.name} can't call anyone in: no walkable ground is within reach of where he stands (against a blocked cell?). He works alone.", lead);
+                Debug.LogWarning($"{lead.name} can't call anyone in: no walkable ground is within reach of where they stand (against a blocked cell?). They work alone.", lead);
             return;
         }
 
@@ -1471,8 +1471,8 @@ public class JobBoard
         for (int i = 0; i < enemies.Count; i++)
         {
             EnemyController enemy = enemies[i];
-            // One this job dropped for not reaching the spot isn't called back. His own stimulus (Handle)
-            // can still put him on it: that is a new thing he heard or saw, and stimuli are bounded.
+            // One this job dropped for not reaching the spot isn't called back. Their own stimulus (Handle)
+            // can still put them on it: that is a new thing they heard or saw, and stimuli are bounded.
             if (enemy == lead || !enemy.Reactions.CanJoinJob(job.Priority) || job.WasDropped(enemy)) continue;
             // An enemy off the grid is no candidate and, unlike a listener, is not warned about.
             if (_calling.Measure(enemy, _intel.SpeechRange, out float metres) != FloorReach.Standing.InRange) continue;

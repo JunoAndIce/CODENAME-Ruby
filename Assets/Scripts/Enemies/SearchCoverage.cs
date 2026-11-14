@@ -18,7 +18,7 @@ public class SearchCoverage
     private const int MaxRaysPerLook = 32;      // sight rays one member may spend per scan, so a big open room can't spike a frame
     private const float ClaimSpacing = 2f;      // two members don't head for points this close together
     private const int RecheckTries = 6;         // random points a re-check draws, keeping the farthest that qualifies
-    private const float MinRecheckDistance = 1f; // a re-check never picks a spot this near him, so a tiny area can't have him re-picking where he stands every step
+    private const float MinRecheckDistance = 1f; // a re-check never picks a spot this near them, so a tiny area can't have them re-picking where they stand every step
     private const int MaxBlocks = 3;            // walks to one point blocked this many times in all, by anyone, and it is dropped
 
     private readonly SearchArea _area;
@@ -26,8 +26,8 @@ public class SearchCoverage
     private readonly Dictionary<EnemyController, Vector3> _claims = new();
     // Times a walk to each unseen point has been blocked. Points come from one list and are compared exactly.
     private readonly Dictionary<Vector3, int> _blocks = new();
-    // The point each member was last blocked on, kept for his next pick only: handed straight back to him, the
-    // obstacle that blocked him is still there, and a run of instant blocks would drop it after one real one.
+    // The point each member was last blocked on, kept for their next pick only: handed straight back to them, the
+    // obstacle that blocked them is still there, and a run of instant blocks would drop it after one real one.
     private readonly Dictionary<EnemyController, Vector3> _lastBlocked = new();
     private float _span;
     private int _nextToTest;
@@ -111,7 +111,7 @@ public class SearchCoverage
     public bool IsUnseen(Vector3 point) => _unseen.Contains(point);
 
     /// <summary>
-    /// Clears what he can see from here. Through his own view and a clear line, the same test as for Ruby,
+    /// Clears what they can see from here. Through their own view and a clear line, the same test as for Ruby,
     /// so a point cleared is a place she couldn't have stood unseen. It tests on from where the last look
     /// stopped, so the rays a scan can't afford are spent on the next one.
     /// </summary>
@@ -138,7 +138,7 @@ public class SearchCoverage
         }
     }
 
-    /// <summary>One point, looked at now by the same test as Look: true, and cleared, when he sees it. For the spot he has just walked to, which a scan's round may not reach before he moves on.</summary>
+    /// <summary>One point, looked at now by the same test as Look: true, and cleared, when they see it. For the spot they have just walked to, which a scan's round may not reach before they move on.</summary>
     public bool TrySee(EnemyController who, Vector3 point)
     {
         if (!_unseen.Contains(point) || !who.Vision.InView(point) || !who.CanSeeSpot(point)) return false;
@@ -148,14 +148,14 @@ public class SearchCoverage
     }
 
     /// <summary>
-    /// Gives him the nearest unseen point nobody else is heading for, among those blocked the fewest times, so
-    /// after a blocked walk he moves on to others and comes back to it only when nothing less blocked is free.
-    /// False when there is none free: the rest are claimed, or close to a claim, and he re-checks
+    /// Gives them the nearest unseen point nobody else is heading for, among those blocked the fewest times, so
+    /// after a blocked walk they move on to others and comes back to it only when nothing less blocked is free.
+    /// False when there is none free: the rest are claimed, or close to a claim, and they re-checks
     /// (TryClaimRecheck) or waits for someone else to finish.
     /// </summary>
     public bool TryClaimNearest(EnemyController who, out Vector3 point)
     {
-        // His last claim is finished with now. Left in place, it would keep the others away from there for good.
+        // Their last claim is finished with now. Left in place, it would keep the others away from there for good.
         _claims.Remove(who);
         point = default;
         float nearest = float.MaxValue;
@@ -166,7 +166,7 @@ public class SearchCoverage
         bool justBlockedFree = false;
         foreach (Vector3 candidate in _unseen)
         {
-            // The point he was just blocked on waits for this pick, unless nothing else is free.
+            // The point they were just blocked on waits for this pick, unless nothing else is free.
             if (avoid && candidate == justBlocked)
             {
                 justBlockedFree = !NearAnotherClaim(who, candidate);
@@ -194,9 +194,9 @@ public class SearchCoverage
     /// <summary>
     /// A spot to walk to and sweep while the search waits out its minimum with nothing free to clear, re-checking
     /// what was seen (spec: "emulate confusion or double checking"). A random point of the area's ground at least
-    /// a quarter of its span from him, the farthest of a few draws, and not near another member's claim, so the
-    /// team doesn't bunch up and he never picks where he stands. False when no draw qualifies: he looks about
-    /// where he is instead.
+    /// a quarter of its span from them, the farthest of a few draws, and not near another member's claim, so the
+    /// team doesn't bunch up and they never pick where they stand. False when no draw qualifies: they look about
+    /// where they are instead.
     /// </summary>
     public bool TryClaimRecheck(EnemyController who, out Vector3 point)
     {
@@ -243,9 +243,9 @@ public class SearchCoverage
     }
 
     /// <summary>
-    /// His walk to a point was blocked: something stood in the way (a crate being pushed, a teammate), which
-    /// says nothing about whether the point can be cleared, so it isn't dropped. His claim goes and the point
-    /// waits behind the unblocked ones (TryClaimNearest), so he moves on to others and someone tries it later.
+    /// Their walk to a point was blocked: something stood in the way (a crate being pushed, a teammate), which
+    /// says nothing about whether the point can be cleared, so it isn't dropped. Their claim goes and the point
+    /// waits behind the unblocked ones (TryClaimNearest), so they move on to others and someone tries it later.
     /// Blocked MaxBlocks times in all, by anyone, it is dropped with a warning saying so, because a block that
     /// keeps happening is no longer bad luck. True when that dropped it.
     /// </summary>
@@ -264,7 +264,7 @@ public class SearchCoverage
         return true;
     }
 
-    /// <summary>He has left the job: others may head near where he was going.</summary>
+    /// <summary>They have left the job: others may head near where they were going.</summary>
     public void Release(EnemyController who)
     {
         _claims.Remove(who);

@@ -164,8 +164,8 @@ public class Disturbance : MonoBehaviour
         if (length > 0f && normal.magnitude >= WallNormalShare * length && Mathf.Abs(side) > 1e-6f)
             return point + normal.normalized * (Mathf.Sign(side) * ImpactSurfaceOffset);
 
-        // A floor contact, or a carrier level with the face: back toward the carrier, but no farther than he is,
-        // or the point overshot him and could land in a blocked cell beside a thin wall on his other side.
+        // A floor contact, or a carrier level with the face: back toward the carrier, but no farther than they are,
+        // or the point overshot them and could land in a blocked cell beside a thin wall on their other side.
         float toCarrierLength = toCarrier.magnitude;
         if (toCarrierLength > 1e-6f)
             return point + toCarrier / toCarrierLength * Mathf.Min(ImpactSurfaceOffset, toCarrierLength);

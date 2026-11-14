@@ -58,7 +58,7 @@ public class FloorReach
 
     /// <summary>
     /// Where one enemy stands against the flood: inside range (metres set), outside it or on
-    /// another floor (floors are independent by design, so he simply doesn't hear), or on no grid
+    /// another floor (floors are independent by design, so they simply don't hear), or on no grid
     /// at all, which only the caller knows whether to warn about.
     /// </summary>
     public Standing Measure(EnemyController enemy, float range, out float metres)

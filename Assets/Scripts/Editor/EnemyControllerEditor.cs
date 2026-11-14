@@ -70,8 +70,8 @@ public class EnemyControllerEditor : Editor
         if (!enemy.HasAggressiveRoute)
         {
             EditorGUILayout.HelpBox(enemy.SafeRoute.Count > 0
-                ? "No Aggressive route: once aggressive, this enemy keeps walking his Safe route."
-                : "No Aggressive route: once aggressive, this enemy stays at his post, alert.", MessageType.Info);
+                ? "No Aggressive route: once aggressive, this enemy keeps walking their Safe route."
+                : "No Aggressive route: once aggressive, this enemy stays at their post, alert.", MessageType.Info);
         }
 
         if (GUILayout.Button($"Add Patrol Point ({RouteNames[s_editing]} route)")) AddPoint();

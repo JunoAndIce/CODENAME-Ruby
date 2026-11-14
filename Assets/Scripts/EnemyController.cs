@@ -9,38 +9,38 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Header("Moving")]
     [SerializeField] private float _chaseSpeed = 2f;
     [SerializeField] private float _patrolSpeed = 1f;
-    [Tooltip("Patrol speed once he's aggressive, as a multiple of Patrol Speed: above 1 hurries him, below 1 slows him to a wary creep (0.5 is half speed). Applies to whichever route he walks, and to an idle enemy walking back to his post.")]
+    [Tooltip("Patrol speed once they're aggressive, as a multiple of Patrol Speed: above 1 hurries them, below 1 slows them to a wary creep (0.5 is half speed). Applies to whichever route they walk, and to an idle enemy walking back to their post.")]
     [SerializeField, Range(0.1f, 3f)] private float _aggressiveSpeedFactor = 1.25f;
     [SerializeField] private float _searchSpeed = 1.5f;
-    [Tooltip("His speed while he clears a Search's area, as a multiple of Search Speed: below 1, so he creeps and looks. Walking in to the area stays at full Search Speed.")]
+    [Tooltip("Their speed while they clear a Search's area, as a multiple of Search Speed: below 1, so they creep and looks. Walking in to the area stays at full Search Speed.")]
     [SerializeField, Range(0.1f, 1f)] private float _clearingSpeedFactor = 0.6f;
-    [Tooltip("A follower's walking speed behind the checker, as a multiple of Search Speed: below 1 so the team trails slowly behind him.")]
+    [Tooltip("A follower's walking speed behind the checker, as a multiple of Search Speed: below 1 so the team trails slowly behind them.")]
     [SerializeField, Range(0.2f, 1f)] private float _followSpeedFactor = 0.8f;
     [Tooltip("How fast the body turns while walking a path, in degrees a second: lower makes wider arcs round bends. The legs' own turn on the model (CharacterAnimator's Turn Speed) is separate.")]
     [SerializeField, Min(1f)] private float _turnSpeed = 720f;
-    [Tooltip("The room he keeps round other enemies, in metres from centre to centre. Walking any path he curves away from anyone inside this, harder the closer they are, and he doesn't choose a roaming or wandering spot inside it. Capsules touch at about 0.7 m, so below that it does nothing. 0 turns it off.")]
+    [Tooltip("The room they keep round other enemies, in metres from centre to centre. Walking any path they curve away from anyone inside this, harder the closer they are, and they don't choose a roaming or wandering spot inside it. Capsules touch at about 0.7 m, so below that it does nothing. 0 turns it off.")]
     [SerializeField, Min(0f)] private float _personalSpace = 1.5f;
     [Tooltip("Seconds without getting closer before a patrol move counts as blocked (another enemy on the spot, a prop, a jammed doorway).")]
     [SerializeField, Min(0.1f)] private float _stuckTime = 1.5f;
 
     [Header("Sight")]
-    [Tooltip("How far he sees in front of him, within View Angle, if in sight.")]
+    [Tooltip("How far they see in front of them, within View Angle, if in sight.")]
     [FormerlySerializedAs("_alertRadius")] [SerializeField, Min(0f)] private float _viewRange = 12f;
-    [Tooltip("How wide the view in front of him is, in degrees, centred on his facing.")]
+    [Tooltip("How wide the view in front of them is, in degrees, centred on their facing.")]
     [SerializeField, Range(1f, 360f)] private float _viewAngle = 100f;
-    [Tooltip("Whichever way he faces, he notices Ruby this close, if in sight, so she can't stand right behind him.")]
+    [Tooltip("Whichever way they face, they notice Ruby this close, if in sight, so she can't stand right behind them.")]
     [SerializeField, Min(0f)] private float _closeRadius = 2f;
     [Tooltip("Height above the enemy's centre that sight is cast from.")]
     [SerializeField] private float _eyeHeight = 0.5f;
 
     [Header("Senses")]
-    [Tooltip("Seconds between his sweeps for moving bodies, corpses and loose guns. Each enemy starts at a random offset so a squad doesn't sweep on the same step.")]
+    [Tooltip("Seconds between their sweeps for moving bodies, corpses and loose guns. Each enemy starts at a random offset so a squad doesn't sweep on the same step.")]
     [SerializeField, Min(0.05f)] private float _scanInterval = 0.2f;
-    [Tooltip("How far he notices a loose body (thrown, tumbling or held) moving at Notice Speed or faster, with a clear line to it. Corpses and dropped guns aren't limited by this: see Body Notice Range and View Range.")]
+    [Tooltip("How far they notice a loose body (thrown, tumbling or held) moving at Notice Speed or faster, with a clear line to it. Corpses and dropped guns aren't limited by this: see Body Notice Range and View Range.")]
     [SerializeField, Min(0f)] private float _motionRadius = 15f;
-    [Tooltip("How close a corpse must be for him to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
+    [Tooltip("How close a corpse must be for them to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
     [SerializeField, Min(0f)] private float _bodyNoticeRange = 6f;
-    [Tooltip("How far a body on the chain must be moved from where it was grabbed, in metres measured flat, before he takes it as Ruby dragging it and goes for her. Keep it above the charging throw's jiggle (0.1 m).")]
+    [Tooltip("How far a body on the chain must be moved from where it was grabbed, in metres measured flat, before they take it as Ruby dragging it and goes for her. Keep it above the charging throw's jiggle (0.1 m).")]
     [SerializeField, Min(0f)] private float _draggedDistance = 0.5f;
 
     [Header("Fighting")]
@@ -48,16 +48,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _giveUpRadius = 18f;
     [Tooltip("Seconds out of contact (out of sight, or beyond Give Up Radius) before aggro turns to searching.")]
     [SerializeField] private float _aggroTime = 1.5f;
-    [Tooltip("For this long after he loses sight of Ruby in a fight, in seconds, he still knows where she is, because he watched where she went. So running round a crate in plain view doesn't lose him at once. Higher is harder to shake. 0: he only ever knows where he last saw her.")]
+    [Tooltip("For this long after they lose sight of Ruby in a fight, in seconds, they still know where she is, because they watched where she went. So running round a crate in plain view doesn't lose them at once. Higher is harder to shake. 0: they only ever know where they last saw her.")]
     [SerializeField, Min(0f)] private float _sightFollowThrough = 1f;
-    [Tooltip("How long he holds at the spot he knew if he hasn't seen Ruby at all in this fight, in seconds, before he starts searching. Getting up, or hurt by something thrown, he is hunting nothing he saw. Once he has seen her in the fight he holds for Aggro Time instead.")]
+    [Tooltip("How long they hold at the spot they knew if they haven't seen Ruby at all in this fight, in seconds, before they start searching. Getting up, or hurt by something thrown, they are hunting nothing they saw. Once they have seen her in the fight they hold for Aggro Time instead.")]
     [SerializeField, Min(0f)] private float _unseenHoldTime = 1f;
-    [Tooltip("How close he must get to where he last knew Ruby was, in metres measured flat and with a clear line to it, to count as there and hold. A place and not a point, so several hunters don't push at each other to stand on one spot.")]
+    [Tooltip("How close they must get to where they last knew Ruby was, in metres measured flat and with a clear line to it, to count as there and hold. A place and not a point, so several hunters don't push at each other to stand on one spot.")]
     [SerializeField, Min(0f)] private float _knownSpotRadius = 3f;
-    [Tooltip("While he sees Ruby, he calls out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
+    [Tooltip("While they see Ruby, they call out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
 
-    [Tooltip("The least distance between two fighters' firing spots, in metres, measured flat. Each armed enemy in a fight claims a spot of his own round Ruby and nobody else takes one this close to it. Also how far past his band Ruby moves before he picks again (half of it).")]
+    [Tooltip("The least distance between two fighters' firing spots, in metres, measured flat. Each armed enemy in a fight claims a spot of their own round Ruby and nobody else takes one this close to it. Also how far past their band Ruby moves before they pick again (half of it).")]
     [SerializeField, Min(0.5f)] private float _squadSpacing = 2f;
 
     [Header("Suspicion")]
@@ -65,37 +65,37 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _attackNearRadius = 20f;
     [Tooltip("How old the newest report of Ruby may be, in seconds, for a disturbance near it to count as an attack. Older and it's just a problem again. An enemy who has seen her ignores this and treats everything as an attack.")]
     [SerializeField, Min(0f)] private float _attackNearTime = 15f;
-    [Tooltip("From this look on, every job he is put on becomes a Search for an attack, for the whole team, so a team goes aggressive together. Counted per enemy for good: each time he is put on a job he wasn't on (started, joined, called in). Distractions and glances don't count.")]
+    [Tooltip("From this look on, every job they are put on becomes a Search for an attack, for the whole team, so a team goes aggressive together. Counted per enemy for good: each time they are put on a job they weren't on (started, joined, called in). Distractions and glances don't count.")]
     [SerializeField, Min(1)] private int _sentToLookThreshold = 3;
 
     [Header("Searching")]
-    [Tooltip("How long a search of his own for an attack lasts once he has reached the spot, in seconds: a glance at something already known, or any search in a scene with no Intel. The walk there doesn't count. A group Search has no time cap: it ends once its area is cleared and Intel's Search Minimum Time has passed.")]
+    [Tooltip("How long a search of their own for an attack lasts once they have reached the spot, in seconds: a glance at something already known, or any search in a scene with no Intel. The walk there doesn't count. A group Search has no time cap: it ends once its area is cleared and Intel's Search Minimum Time has passed.")]
     [SerializeField, Min(0f)] private float _searchDuration = 5f;
-    [Tooltip("How close he gets to a search spot, in metres. If something blocks the way once he's this near (another enemy already standing on the spot, say), he looks from where he stands instead of pushing at it.")]
+    [Tooltip("How close they get to a search spot, in metres. If something blocks the way once they're this near (another enemy already standing on the spot, say), they look from where they stand instead of pushing at it.")]
     [SerializeField, Min(0.5f)] private float _searchReach = 1.5f;
-    [Tooltip("The longest he walks to a search spot before searching wherever he has got to, in seconds. Keeps one he can't reach (blocked, or a crowded doorway) from walking forever. Also how long a provoked enemy runs at where he was told Ruby is before Aggro Time counts down again.")]
+    [Tooltip("The longest they walk to a search spot before searching wherever they have got to, in seconds. Keeps one they can't reach (blocked, or a crowded doorway) from walking forever. Also how long a provoked enemy runs at where they were told Ruby is before Aggro Time counts down again.")]
     [SerializeField, Min(1f)] private float _searchTravelLimit = 20f;
-    [Tooltip("How far, in degrees, his body sweeps to each side of his way while he clears a Search's area. He keeps walking his way, and his view goes with his body.")]
+    [Tooltip("How far, in degrees, their body sweeps to each side of their way while they clear a Search's area. They keep walking their way, and their view goes with their body.")]
     [SerializeField, Range(0f, 90f)] private float _walkSweepAngle = 45f;
-    [Tooltip("How much each look varies while he waits in a search for somewhere free to go, as a share of Look Time: at 0.5 each lasts from half to one and a half times Look Time.")]
+    [Tooltip("How much each look varies while they wait in a search for somewhere free to go, as a share of Look Time: at 0.5 each lasts from half to one and a half times Look Time.")]
     [SerializeField, Range(0f, 0.9f)] private float _roamLookVariation = 0.5f;
-    [Tooltip("How close a follower keeps behind the enemy who goes to check, in metres. He stops here and holds, facing the spot, so the team trails the checker and never crowds him.")]
+    [Tooltip("How close a follower keeps behind the enemy who goes to check, in metres. They stop here and holds, facing the spot, so the team trails the checker and never crowds them.")]
     [SerializeField, Min(1f)] private float _followDistance = 3f;
 
     [Header("Looking")]
-    [Tooltip("How long he looks around a spot he went to check, in seconds, before standing down. A search for an attack looks for Search Duration instead.")]
+    [Tooltip("How long they look around a spot they went to check, in seconds, before standing down. A search for an attack looks for Search Duration instead.")]
     [SerializeField, Min(0.1f)] private float _lookTime = 1.5f;
-    [Tooltip("How long he holds still after finding nothing, in seconds: the gesture, until there is an animation for it.")]
+    [Tooltip("How long they hold still after finding nothing, in seconds: the gesture, until there is an animation for it.")]
     [SerializeField, Min(0f)] private float _standDownTime = 1f;
-    [Tooltip("How far, in degrees, his body turns to each side of where he was facing while he looks around.")]
+    [Tooltip("How far, in degrees, their body turns to each side of where they were facing while they look around.")]
     [SerializeField, Range(0f, 180f)] private float _lookSweepAngle = 70f;
     [Tooltip("Seconds for one full sweep, left to right and back.")]
     [SerializeField, Min(0.2f)] private float _lookSweepPeriod = 2f;
 
     [Header("Provoked")]
-    [Tooltip("How long he turns to look at a lesser disturbance while searching, in seconds. The search waits meanwhile, so he doesn't lose search time.")]
+    [Tooltip("How long they turn to look at a lesser disturbance while searching, in seconds. The search waits meanwhile, so they don't lose search time.")]
     [SerializeField, Min(0.1f)] private float _distractionTime = 1f;
-    [Tooltip("How many provocations inside Distraction Memory it takes before he has had enough of Ruby and goes after her, knowing where she is at that moment. Only things she is doing count, not a body or gun lying there.")]
+    [Tooltip("How many provocations inside Distraction Memory it takes before they have had enough of Ruby and goes after her, knowing where she is at that moment. Only things she is doing count, not a body or gun lying there.")]
     [SerializeField, Min(1)] private int _distractionThreshold = 3;
     [Tooltip("How long a distraction counts toward the jig, in seconds.")]
     [SerializeField, Min(1f)] private float _distractionMemory = 12f;
@@ -103,21 +103,21 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _distractionGap = 2f;
 
     [Header("Patrol")]
-    [Tooltip("Walked while unaware. Empty = he idles at his post. One point 4 m or more across (a circle's diameter, a rectangle's longer side) is wandered rather than stood on. Edit with the Scene-view handles when this enemy is selected.")]
+    [Tooltip("Walked while unaware. Empty = they idle at their post. One point 4 m or more across (a circle's diameter, a rectangle's longer side) is wandered rather than stood on. Edit with the Scene-view handles when this enemy is selected.")]
     [SerializeField] private PatrolRoute _safeRoute = new();
-    [Tooltip("Walked instead of the Safe route once he's aggressive: after he has seen Ruby or been sent after her (an attack search, or a glance at a body). Edit it with the same Scene-view handles (the toggle below picks which route they edit). Empty: a patroller keeps walking his Safe route, and an idle enemy stays at his post, alert.")]
+    [Tooltip("Walked instead of the Safe route once they're aggressive: after they have seen Ruby or been sent after her (an attack search, or a glance at a body). Edit it with the same Scene-view handles (the toggle below picks which route they edit). Empty: a patroller keeps walking their Safe route, and an idle enemy stays at their post, alert.")]
     [SerializeField] private PatrolRoute _aggressiveRoute = new();
     [Tooltip("Default wait at each patrol point; a point's own Pause Time overrides it.")]
     [SerializeField, Min(0f)] private float _nodePauseTime = 1.5f;
-    [Tooltip("A pause at a patrol point this long or longer, in seconds, isn't spent standing still: he moves about inside the point's area for the length of it.")]
+    [Tooltip("A pause at a patrol point this long or longer, in seconds, isn't spent standing still: they move about inside the point's area for the length of it.")]
     [SerializeField, Min(0f)] private float _longPauseTime = 10f;
-    [Tooltip("In a long pause, the shortest he stays at one spot before moving to another in the point's area, in seconds.")]
+    [Tooltip("In a long pause, the shortest they stay at one spot before moving to another in the point's area, in seconds.")]
     [SerializeField, Min(0.1f)] private float _pauseRoamMin = 3f;
-    [Tooltip("In a long pause, the longest he stays at one spot before moving to another in the point's area, in seconds. Never below the shortest.")]
+    [Tooltip("In a long pause, the longest they stay at one spot before moving to another in the point's area, in seconds. Never below the shortest.")]
     [SerializeField, Min(0.1f)] private float _pauseRoamMax = 6f;
-    [Tooltip("An idle enemy this close to his post, in metres, counts as at it. Where he starts is his post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave him 'away' from a post he has reached.")]
+    [Tooltip("An idle enemy this close to their post, in metres, counts as at it. Where they start is their post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave them 'away' from a post they have reached.")]
     [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
-    [Tooltip("A firing-range spot to use as his post instead of where he stands. He walks there, faces its target and practises when armed. Used only when he has no Safe route to walk: with one, the table sends him to Patrol and he never idles at the spot. Empty means his post is where he starts.")]
+    [Tooltip("A firing-range spot to use as their post instead of where they stand. They walk there, faces its target and practises when armed. Used only when they have no Safe route to walk: with one, the table sends them to Patrol and they never idle at the spot. Empty means their post is where they start.")]
     [SerializeField] private RangeSpot _postSpot;
     [Tooltip("At a range post, the shortest wait between practice shots, in seconds.")]
     [SerializeField, Min(0.1f)] private float _practiceIntervalMin = 1.2f;
@@ -131,9 +131,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _getUpTime = 1f;
     [Tooltip("How bright a corpse's colours are, as a share of the living enemy's, so the dead read at a glance.")]
     [SerializeField, Range(0f, 1f)] private float _corpseBrightness = 0.35f;
-    [Tooltip("How fast the gun pops up out of the enemy's hand when the chain grabs him, in m/s: a small hop, to sell the grab.")]
+    [Tooltip("How fast the gun pops up out of the enemy's hand when the chain grabs them, in m/s: a small hop, to sell the grab.")]
     [SerializeField, Min(0f)] private float _grabPopUp = 3f;
-    [Tooltip("How fast the popped gun moves away from his body, in m/s, so it clears his hands.")]
+    [Tooltip("How fast the popped gun moves away from their body, in m/s, so it clears their hands.")]
     [SerializeField, Min(0f)] private float _grabPopOut = 2f;
 
     [Header("Gun")]
@@ -187,21 +187,21 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public bool HasAggressiveRoute => _aggressiveRoute != null && _aggressiveRoute.Count > 0;
 
     /// <summary>
-    /// Whether he patrols aggressively: he has been after Ruby (an attack search, or a glance at a
+    /// Whether they patrol aggressively: they have been after Ruby (an attack search, or a glance at a
     /// body), has seen her, or has been told of her by a teammate who had (on a job). Derived on every
-    /// read and never stored, and none is ever cleared, so he never goes back.
+    /// read and never stored, and none is ever cleared, so they never go back.
     /// </summary>
-    public bool IsAggressive => Memory.Wary || Memory.KnowsRuby;
+    public bool IsAggressive => Memory.Wary || Memory.KnowsRed;
 
     /// <summary>
-    /// The route he walks now: the Aggressive one when he's aggressive and has one, else the Safe
-    /// one. An aggressive enemy with no Aggressive route walking his Safe route is a rule, not a
+    /// The route they walk now: the Aggressive one when they're aggressive and has one, else the Safe
+    /// one. An aggressive enemy with no Aggressive route walking their Safe route is a rule, not a
     /// fallback, and the Inspector says so.
     /// </summary>
     public PatrolRoute ActiveRoute => IsAggressive && HasAggressiveRoute ? _aggressiveRoute : _safeRoute;
     public bool HasActiveRoute => ActiveRoute != null && ActiveRoute.Count > 0;
     public float CurrentPatrolSpeed => IsAggressive ? _patrolSpeed * _aggressiveSpeedFactor : _patrolSpeed;
-    /// <summary>Where he started: where an idle enemy stands, and goes back to after a search or a fall.</summary>
+    /// <summary>Where they started: where an idle enemy stands, and goes back to after a search or a fall.</summary>
     public Vector3 PostPosition { get; private set; }
     public float PostYaw { get; private set; }
     public float PostTolerance => _postTolerance;
@@ -234,18 +234,18 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     internal PlayerController Player => _player;
 
     public Rigidbody Body { get; private set; }
-    /// <summary>What he knows about Ruby: his own sightings and what he was told.</summary>
+    /// <summary>What they know about Ruby: their own sightings and what they were told.</summary>
     public EnemyMemory Memory { get; private set; }
-    /// <summary>What he hears, and what else he notices without sight.</summary>
+    /// <summary>What they hear, and what else they notice without sight.</summary>
     public EnemySenses Senses { get; private set; }
-    /// <summary>His view cone, close circle and line of sight.</summary>
+    /// <summary>Their view cone, close circle and line of sight.</summary>
     public EnemyVision Vision { get; private set; }
     public EnemyReactions Reactions { get; private set; }
-    /// <summary>His walking, turning and facing, and the walks the states ask for.</summary>
+    /// <summary>Their walking, turning and facing, and the walks the states ask for.</summary>
     public EnemyMovement Movement { get; private set; }
-    /// <summary>What he takes in each frame: sight of Ruby, what he learns and says, and the newest thing he knows.</summary>
+    /// <summary>What they take in each frame: sight of Ruby, what they learn and says, and the newest thing they know.</summary>
     public EnemyAwareness Awareness { get; private set; }
-    /// <summary>His record of the chain, and the gun and corpse handling that goes with it.</summary>
+    /// <summary>Their record of the chain, and the gun and corpse handling that goes with it.</summary>
     public EnemyBodyState BodyState { get; private set; }
     /// <summary>The scene's shared pool, or null when there is none (an error was logged at Start).</summary>
     public Intel Intel { get; private set; }
@@ -303,19 +303,19 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // Every change of state comes through here, the table's and SetState's alike, so no route out of the
     // hunt (a lost fight, a grab, a knockdown, death, or one added later) can leave ProvokedUnseen set and
     // make a later fight blind: getting up from a throw is meant to bring back all-round sight. Rearm
-    // keeps it: an unarmed provoked enemy going for a gun hasn't seen her, and he hands straight back to
-    // Aggro, where clearing it would have given him all-round sight on hearsay.
+    // keeps it: an unarmed provoked enemy going for a gun hasn't seen her, and they hand straight back to
+    // Aggro, where clearing it would have given them all-round sight on hearsay.
     private void OnStateChanged(IState from, IState to)
     {
         if (!ProvokedUnseen || to is AggroState or RearmState) return;
         ProvokedUnseen = false;
-        DebugLog.Info($"{name} leaves the hunt for {to.GetType().Name} without having laid eyes on Ruby: he is no longer provoked, and his next fight sees her as any does.", this);
+        DebugLog.Info($"{name} leaves the hunt for {to.GetType().Name} without having laid eyes on Ruby: they are no longer provoked, and their next fight sees her as any does.", this);
     }
 
     private void Start()
     {
         if (_player == null) _player = FindAnyObjectByType<PlayerController>();
-        // A range post is the spot, so he walks there at the start of play.
+        // A range post is the spot, so they walk there at the start of play.
         PostPosition = _postSpot != null ? _postSpot.Position : transform.position;
         PostYaw = _postSpot != null ? _postSpot.FacingYaw : transform.eulerAngles.y;
         _state.SetState(HasActiveRoute ? Patrol : (EnemyStateBase)Idle);
@@ -327,8 +327,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private void OnDestroy()
     {
-        // The fight board can still poll him (AnyInContact) until its next prune: a destroyed enemy has
-        // left the hunt like any other route out, so nothing he leaves behind reads as provoked.
+        // The fight board can still poll them (AnyInContact) until its next prune: a destroyed enemy has
+        // left the hunt like any other route out, so nothing they leave behind reads as provoked.
         ProvokedUnseen = false;
         if (Intel == null) return;
         Intel.Leave(this);
@@ -360,7 +360,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         _giveUpRadius = Mathf.Max(_giveUpRadius, Mathf.Max(_viewRange, _closeRadius) + 1f);
         _pauseRoamMax = Mathf.Max(_pauseRoamMax, _pauseRoamMin);
         if (_postSpot != null && _safeRoute != null && _safeRoute.Count > 0)
-            Debug.LogWarning($"{name}: has a Post Spot and a Safe route with points. He walks the route (ActiveRoute falls back to the Safe route), so he idles at the spot, and practises, only when he has no Safe route.", this);
+            Debug.LogWarning($"{name}: has a Post Spot and a Safe route with points. They walk the route (ActiveRoute falls back to the Safe route), so they idle at the spot, and practises, only when they have no Safe route.", this);
     }
 
     // Play-mode path overlay: visible in the Scene view without selecting the enemy.
@@ -386,7 +386,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
         At(Aggro, Searching, new FuncPredicate(() => Aggro.LostPlayer));
 
-        // Unarmed with a free gun in reach: he goes for it from any AI state. The rows above are listed
+        // Unarmed with a free gun in reach: they go for it from any AI state. The rows above are listed
         // first, so they win: an unarmed enemy who notices Ruby takes Aggro first, and Aggro hands on to Rearm.
         At(Idle, Rearm, new FuncPredicate(WantsGun));
         At(Patrol, Rearm, new FuncPredicate(WantsGun));
@@ -398,8 +398,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         At(Searching, Patrol, new FuncPredicate(() => Searching.Finished && HasActiveRoute));
         At(Searching, Idle, new FuncPredicate(() => Searching.Finished && !HasActiveRoute));
 
-        // The route he walks follows how aggressive he is (IsAggressive), so becoming aggressive can hand an
-        // idle enemy a route to walk, or leave a patroller with none for his mode and send him to his post.
+        // The route they walk follows how aggressive they are (IsAggressive), so becoming aggressive can hand an
+        // idle enemy a route to walk, or leave a patroller with none for their mode and send them to their post.
         At(Idle, Patrol, new FuncPredicate(() => HasActiveRoute));
         At(Patrol, Idle, new FuncPredicate(() => !HasActiveRoute));
 
@@ -446,7 +446,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     // Externally driven transitions. Nothing can poll for these, so they bypass the table.
     // EnemyReactions.Investigate is one too: a sound happens once, so there is nothing for the table to poll.
-    /// <summary>Sends him into Aggro (hurt, or told by an enemy who sees Ruby). True when that moved him: not when he was already there, or can't act.</summary>
+    /// <summary>Sends them into Aggro (hurt, or told by an enemy who sees Ruby). True when that moved them: not when they were already there, or can't act.</summary>
     public bool Alert()
     {
         if (IsOverridden) return false;
@@ -455,14 +455,14 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         return true;
     }
 
-    // A hit that doesn't floor him gives back all-round sight: he fights as any damaged enemy does (user
-    // ruling). One that floors him clears it through the state change anyway.
+    // A hit that doesn't floor them gives back all-round sight: they fight as any damaged enemy does (user
+    // ruling). One that floors them clears it through the state change anyway.
     private void HandleDamaged(float amount)
     {
         if (ProvokedUnseen)
         {
             ProvokedUnseen = false;
-            DebugLog.Info($"{name} is hit while provoked: he is no longer blind to Ruby and fights as any damaged enemy does.", this);
+            DebugLog.Info($"{name} is hit while provoked: they are no longer blind to Ruby and fights as any damaged enemy does.", this);
         }
         Alert();
     }
@@ -474,13 +474,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public bool IsHeld => BodyState.IsHeld;
 
     /// <summary>
-    /// The job he is on, or null: a handful of enemies dealing with one thing together (GroupJob).
-    /// Only the job board sets it, as it adds and removes members, and SearchingState gives him up on exit.
+    /// The job they are on, or null: a handful of enemies dealing with one thing together (GroupJob).
+    /// Only the job board sets it, as it adds and removes members, and SearchingState gives them up on exit.
     /// </summary>
     public GroupJob Job { get; internal set; }
 
     /// <summary>
-    /// The fight he is in, or null: the enemies after Ruby together on his floor (Fight). Only the fight
+    /// The fight they are in, or null: the enemies after Ruby together on their floor (Fight). Only the fight
     /// board sets it, as it joins and drops members by polling their state.
     /// </summary>
     public Fight Fight { get; internal set; }
@@ -488,18 +488,18 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float SquadSpacing => _squadSpacing;
 
     /// <summary>
-    /// Provoked to his limit and sent after Ruby (EnemyReactions.GoAfterRuby), he has not yet had her in
-    /// his view cone with a clear line. Until then he counts as seeing her only with his own eyes
-    /// (spec: "At his own limit he runs at Ruby, and sees her only with his own eyes"): Aggro's
-    /// all-round sight doesn't apply, so he runs at what he was told, learns no Seen fact, calls nothing
+    /// Provoked to their limit and sent after Ruby (EnemyReactions.GoAfterRed), they have not yet had her in
+    /// their view cone with a clear line. Until then they count as seeing her only with their own eyes
+    /// (spec: "At their own limit they run at Ruby, and sees her only with their own eyes"): Aggro's
+    /// all-round sight doesn't apply, so they run at what they were told, learns no Seen fact, calls nothing
     /// out, tracks nothing live, holds no firing spot and doesn't fire. Only the provoked: every other
-    /// way into Aggro keeps all-round sight. GoAfterRuby is the only writer that sets it. EnemyVision
+    /// way into Aggro keeps all-round sight. GoAfterRed is the only writer that sets it. EnemyVision
     /// clears it the first time DetectsPlayer holds (every sight reader goes through it there, so the
-    /// first to ask that frame clears it for all), and OnStateChanged when he leaves the hunt by any route.
+    /// first to ask that frame clears it for all), and OnStateChanged when they leave the hunt by any route.
     /// </summary>
     public bool ProvokedUnseen { get; internal set; }
 
-    /// <summary>The firing spot he has claimed in his fight, for the gizmo and the state. False with none.</summary>
+    /// <summary>The firing spot they have claimed in their fight, for the gizmo and the state. False with none.</summary>
     public bool TryGetFiringSpot(out Vector3 spot)
     {
         spot = default;
@@ -521,7 +521,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public void EndGrab(bool wasSpun)
     {
-        // Let go mid-spin he flies out along her aim, which is a throw to anyone watching. A plain drop isn't.
+        // Let go mid-spin they fly out along her aim, which is a throw to anyone watching. A plain drop isn't.
         BodyState.NoteReleased(wasSpun);
         if (Health.IsDead)
         {
@@ -556,23 +556,23 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>Forwards to EnemyMovement.Stop; states keep calling Enemy.Stop().</summary>
     public void Stop() => Movement.Stop();
 
-    /// <summary>A clear line at his eye height to a place on the floor. Raised to his eyes because a spot can lie at or under floor level, where the floor itself would block it.</summary>
+    /// <summary>A clear line at their eye height to a place on the floor. Raised to their eyes because a spot can lie at or under floor level, where the floor itself would block it.</summary>
     internal bool CanSeeSpot(Vector3 point)
     {
         point.y = EyePosition.y;
         return Vision.HasClearSight(point, null);
     }
 
-    // The one way into Searching: whoever sends him there asks first (RequestSearch) and Enter takes
+    // The one way into Searching: whoever sends them there asks first (RequestSearch) and Enter takes
     // it. A default start at some remembered spot let a caller that forgot to ask search at the wrong place, silently.
     private SearchRequest? _pendingSearch;
 
     /// <summary>
-    /// Sends him to a job's place for its reason, as a search: requested from Idle or Patrol, a
-    /// retarget if he is already searching (which includes SearchingState.Enter itself: the machine has
+    /// Sends them to a job's place for its reason, as a search: requested from Idle or Patrol, a
+    /// retarget if they are already searching (which includes SearchingState.Enter itself: the machine has
     /// made Searching current before calling it, so a job joined from there retargets and never calls
-    /// SetState). The job board has already put him on the job's member list.
-    /// A search for an attack makes him wary, as any other does.
+    /// SetState). The job board has already put them on the job's member list.
+    /// A search for an attack makes them wary, as any other does.
     /// </summary>
     internal void FollowJob(GroupJob job)
     {
@@ -601,7 +601,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     }
 
     /// <summary>
-    /// Asks for the search the next entry into Searching will begin: the one way in. Whoever moves him
+    /// Asks for the search the next entry into Searching will begin: the one way in. Whoever moves them
     /// there asks first (Investigate, FollowJob), or Aggro on its way out after a lost fight. A search
     /// already running takes Retarget instead, which has no Enter.
     /// </summary>
@@ -642,10 +642,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>In the Searching state right now. The job board reads it to check that a member of a job is searching.</summary>
     public bool IsSearching => _state.Current is SearchingState;
 
-    /// <summary>The state he is in, for EnemyReactions and EnemyAwareness to read. Reaching the machine itself stays with the controller.</summary>
+    /// <summary>The state they are in, for EnemyReactions and EnemyAwareness to read. Reaching the machine itself stays with the controller.</summary>
     internal IState CurrentState => _state.Current;
 
-    /// <summary>Ruby while it's aiming at her, or the range target while he practises.</summary>
+    /// <summary>Ruby while it's aiming at her, or the range target while they practise.</summary>
     public bool TryFindTarget(out Vector3 point)
     {
         if (Idle.Practising && _postSpot != null && _postSpot.Target != null)

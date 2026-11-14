@@ -225,7 +225,7 @@ public class Tether
     internal void PassThroughAfterEnd(PassThrough passThrough, float seconds)
     {
         // Gathered now, not reused from the tether's start: an officer let go goes limp and collides
-        // through his bones, which were switched off while he was held.
+        // through their bones, which were switched off while they were held.
         if (_host != null) passThrough.Begin(_playerColliders, Footprint.BodyColliders(_host), seconds);
     }
 

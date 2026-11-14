@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// What one enemy takes in each frame: whether he has Ruby in his eyes, what he learns and calls out
-/// when he does, the newest thing he knows about her, and the moment he turns aggressive. Kept out of
+/// What one enemy takes in each frame: whether they have Ruby in their eyes, what they learn and calls out
+/// when they do, the newest thing they know about her, and the moment they turn aggressive. Kept out of
 /// EnemyController so the controller doesn't carry the bookkeeping. Not called EnemyKnowledge:
 /// Knowledge is already the enum on RubyFact. The tuning (Speak Interval, the patrol speeds) and the
 /// player stay on the controller and are read on every call, so retuning in the Inspector during Play
@@ -24,7 +24,7 @@ public class EnemyAwareness
         _enemy = enemy;
     }
 
-    /// <summary>Runs beside the machine, after the state's Tick: what he sees he knows, and the aggressive log.</summary>
+    /// <summary>Runs beside the machine, after the state's Tick: what they see they know, and the aggressive log.</summary>
     public void Update()
     {
         UpdateKnowledge();
@@ -32,46 +32,46 @@ public class EnemyAwareness
     }
 
     // IsAggressive is derived, so nothing "enters" it; this catches the moment it turns true, once,
-    // and says why and which route he'll walk. It never goes false again.
+    // and says why and which route they'll walk. It never goes false again.
     private void LogBecameAggressive()
     {
         bool aggressive = _enemy.IsAggressive;
         if (aggressive && !_wasAggressive)
         {
-            string why = _enemy.Memory.HasSeenRuby ? "he has seen Ruby" : _enemy.Memory.WasToldOfRuby ? "he has been told of Ruby" : "he has been sent after her";
-            string route = _enemy.HasAggressiveRoute ? "his Aggressive route" : _enemy.HasActiveRoute ? "his Safe route (he has no Aggressive one)" : "no route: he stays at his post, alert";
-            DebugLog.Info($"{_enemy.name} is now aggressive: {why}. From here he patrols at {_enemy.AggressiveSpeedFactor:0.##}x ({_enemy.CurrentPatrolSpeed:0.##} m/s, from {_enemy.PatrolSpeed:0.##}) on {route}, looking around at each point.", _enemy);
+            string why = _enemy.Memory.HasSeenRed ? "they have seen Ruby" : _enemy.Memory.WasToldOfRed ? "they have been told of Ruby" : "they have been sent after her";
+            string route = _enemy.HasAggressiveRoute ? "their Aggressive route" : _enemy.HasActiveRoute ? "their Safe route (they have no Aggressive one)" : "no route: they stay at their post, alert";
+            DebugLog.Info($"{_enemy.name} is now aggressive: {why}. From here they patrol at {_enemy.AggressiveSpeedFactor:0.##}x ({_enemy.CurrentPatrolSpeed:0.##} m/s, from {_enemy.PatrolSpeed:0.##}) on {route}, looking around at each point.", _enemy);
         }
         _wasAggressive = aggressive;
     }
 
     /// <summary>
-    /// Where Ruby most likely is, as far as he knows: the newer of his own memory and the published
-    /// pool. Works from memory alone when the scene has no Intel. False when he knows nothing.
+    /// Where Ruby most likely is, as far as they know: the newer of their own memory and the published
+    /// pool. Works from memory alone when the scene has no Intel. False when they know nothing.
     /// </summary>
-    public bool TryGetNewestRuby(out Vector3 point)
+    public bool TryGetNewestRed(out Vector3 point)
     {
-        bool known = TryGetNewestRubyFact(out RubyFact fact);
+        bool known = TryGetNewestRedFact(out RubyFact fact);
         point = fact.Position;
         return known;
     }
 
-    /// <summary>The whole newest fact about Ruby, with when and how he knows it. False when he knows nothing.</summary>
-    public bool TryGetNewestRubyFact(out RubyFact fact)
+    /// <summary>The whole newest fact about Ruby, with when and how they know it. False when they know nothing.</summary>
+    public bool TryGetNewestRedFact(out RubyFact fact)
     {
         IntelSnapshot pool = _enemy.Intel != null ? _enemy.Intel.Published : IntelSnapshot.Empty;
-        return _enemy.Memory.TryGetNewestRuby(pool, out fact);
+        return _enemy.Memory.TryGetNewestRed(pool, out fact);
     }
 
     /// <summary>
-    /// Whether he has Ruby in his eyes this frame: noticed, or already hunting her with a clear line
+    /// Whether they have Ruby in their eyes this frame: noticed, or already hunting her with a clear line
     /// to her, at any distance. Not only within Give Up Radius: Aggro chases her whenever she's in
-    /// sight, so past the radius he followed her without learning where she was, and when she dropped
-    /// out of sight he turned round and walked back to the old spot. The radius only decides when the
-    /// hunt ends (InContactWithPlayer). Alive and on his feet only: a corpse, a held or a tumbling
+    /// sight, so past the radius they followed her without learning where she was, and when she dropped
+    /// out of sight they turned round and walked back to the old spot. The radius only decides when the
+    /// hunt ends (InContactWithPlayer). Alive and on their feet only: a corpse, a held or a tumbling
     /// enemy sees and says nothing. Cached per frame, like CanSeePlayer. A provoked enemy who hasn't laid
-    /// eyes on her (EnemyController.ProvokedUnseen) counts only his view: no Seen fact, no call-out and no
-    /// live tracking on hearsay. CanTrackPlayer is asked first so that her coming into his view clears the
+    /// eyes on her (EnemyController.ProvokedUnseen) counts only their view: no Seen fact, no call-out and no
+    /// live tracking on hearsay. CanTrackPlayer is asked first so that her coming into their view clears the
     /// flag here too, and the call-out on first sight follows at once.
     /// </summary>
     private bool SeesPlayer
@@ -93,16 +93,16 @@ public class EnemyAwareness
     }
 
     /// <summary>
-    /// He lost sight of her only a moment ago, hunting her: for Sight Follow Through he still knows where
-    /// she is, because he watched where she went. All he ever knew otherwise was the corner she vanished
-    /// at, so ducking round a crate in plain view lost him at once: it stood in for a real look at which
+    /// They lost sight of her only a moment ago, hunting her: for Sight Follow Through they still know where
+    /// she is, because they watched where she went. All they ever knew otherwise was the corner she vanished
+    /// at, so ducking round a crate in plain view lost them at once: it stood in for a real look at which
     /// way she ran, and needs no guess at her heading. Over quickly, so breaking sight and staying gone
     /// still drops a fight. Never for a provoked enemy who hasn't laid eyes on her: a sighting from before
-    /// he was provoked isn't one in this hunt. SeesPlayer runs first, so the flag is current when read.
+    /// they were provoked isn't one in this hunt. SeesPlayer runs first, so the flag is current when read.
     /// </summary>
     public bool FollowingThrough => !SeesPlayer && !_enemy.ProvokedUnseen && _enemy.CurrentState == _enemy.Aggro && Time.time - _lastSawAt <= _enemy.SightFollowThrough;
 
-    // Remembering and speaking aren't states: they run beside the machine. What he sees he knows at
+    // Remembering and speaking aren't states: they run beside the machine. What they see they know at
     // once; calling it out is bounded by Speak Interval so a long sighting isn't a shout per frame.
     private void UpdateKnowledge()
     {

@@ -19,7 +19,7 @@ public readonly struct Incident
         Reason = reason;
         Priority = priority;
         MakesSearch = makesSearch;
-        SaysNothingOfRuby = saysNothingOfRuby;
+        SaysNothingOfRed = saysNothingOfRuby;
     }
 
     /// <summary>Where it came from: a sound's origin, a thrown body's release point, or where a body lies.</summary>
@@ -34,10 +34,10 @@ public readonly struct Incident
     public bool MakesSearch { get; }
     /// <summary>
     /// It isn't Ruby doing anything: a body or gun lies wherever it ended up, so it doesn't add to what
-    /// provokes him into going after her (EnemyReactions.Distract). A separate question from MakesSearch: a
+    /// provokes them into going after her (EnemyReactions.Distract). A separate question from MakesSearch: a
     /// flying enemy makes a Search, and that one is her doing.
     /// </summary>
-    public bool SaysNothingOfRuby { get; }
+    public bool SaysNothingOfRed { get; }
 
     /// <summary>
     /// A gunshot, or an enemy seen killed: whoever is searching responds whatever its priority (JobBoard.Mobilise). Priority can't
@@ -60,15 +60,15 @@ public readonly struct Incident
     /// </summary>
     public Object Source { get; }
 
-    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, MakesSearch, SaysNothingOfRuby, Mobilises, Kind, Source);
+    public Incident WithReason(StimulusResponse reason) => new Incident(Point, reason, Priority, MakesSearch, SaysNothingOfRed, Mobilises, Kind, Source);
 
     // The "reason at point" the logs print, so it reads the same wherever it is written.
     public override string ToString() => $"{Reason} at {Point}";
 }
 
 /// <summary>
-/// An incident and how to act on it: whether he walks to the point, or looks from where he stands
-/// (a glance at something the squad already knows), and whether he is searching because he lost a
+/// An incident and how to act on it: whether they walk to the point, or looks from where they stand
+/// (a glance at something the squad already knows), and whether they are searching because they lost a
 /// fight. Travels together because only the search itself cares about the second half, and it must not
 /// be lost on the way there.
 /// </summary>
@@ -84,8 +84,8 @@ public readonly struct SearchRequest
     public Incident Incident { get; }
     public bool WalkThere { get; }
     /// <summary>
-    /// He is searching because he lost Ruby in a fight (AggroState.Exit sets it): on entering Searching he
-    /// joins or starts a job there (Intel.JoinFromAggro). A flag and not a test for priority 6, so the
+    /// They are searching because they lost Ruby in a fight (AggroState.Exit sets it): on entering Searching they
+    /// join or starts a job there (Intel.JoinFromAggro). A flag and not a test for priority 6, so the
     /// job's priority can be whatever the board decides without this changing meaning.
     /// </summary>
     public bool AfterLostFight { get; }

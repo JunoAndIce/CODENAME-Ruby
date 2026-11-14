@@ -34,13 +34,13 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0f)] private float _jobMatchRadius = 10f;
     [Tooltip("How long a team of two or three turns toward the spot before anyone goes, in seconds. A check of one skips it.")]
     [SerializeField, Min(0f)] private float _gatherTime = 0.75f;
-    [Tooltip("How long the enemy who heard something looks at it before he calls anyone, in seconds. Nobody else is on the job until he has reacted.")]
+    [Tooltip("How long the enemy who heard something looks at it before they call anyone, in seconds. Nobody else is on the job until they have reacted.")]
     [SerializeField, Min(0f)] private float _reactTime = 0.5f;
-    [Tooltip("How long each call takes, in seconds: he turns to the nearest enemy and calls him, and that enemy turns to face him. Then the next nearest, and so on.")]
+    [Tooltip("How long each call takes, in seconds: they turn to the nearest enemy and calls them, and that enemy turns to face them. Then the next nearest, and so on.")]
     [SerializeField, Min(0f)] private float _callTime = 0.6f;
     [Tooltip("The circle that marks what a search covers, in metres round its place: the open ground it reaches, and every room holding no rooms that it reaches over open ground, searched whole. Members first walk to the place (Search Start Radius) and spread out from there.")]
     [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
-    [Tooltip("How near, in metres, a Search's member must come to its place (or, when the place has no way in, to the ground he can reach nearest it) before he starts searching. Everyone walks to the source and spreads out from there, so a search reads as going to the problem and then working outward. The search proper starts when the last member has arrived. Several members arriving together count once they stall inside it, so they don't push at each other.")]
+    [Tooltip("How near, in metres, a Search's member must come to its place (or, when the place has no way in, to the ground they can reach nearest it) before they start searching. Everyone walks to the source and spreads out from there, so a search reads as going to the problem and then working outward. The search proper starts when the last member has arrived. Several members arriving together count once they stall inside it, so they don't push at each other.")]
     [SerializeField, Min(0.5f)] private float _searchStartRadius = 2f;
     [Tooltip("The least time a search lasts, in seconds, from when the first member reached its place. It ends once everything is cleared and this has passed; until then a member with nothing left to clear walks to spots across the area and sweeps them again. No time cap cuts a search short. A gunshot in the area starts it over.")]
     [SerializeField, Min(0f)] private float _searchMinimumTime = 5f;
@@ -69,7 +69,7 @@ public class Intel : MonoBehaviour
     // The shared pool: inbox, publish clock and the published snapshot. Intel ticks it and forwards to it.
     private readonly KnowledgePool _pool = new();
     // One reach per use, each with warn-once sets of its own. Each enemy warns once about a setup
-    // problem, however often he speaks or is spoken to; a sound that nobody can hear warns once per
+    // problem, however often they speak or is spoken to; a sound that nobody can hear warns once per
     // source object, not once per shot.
     private readonly FloorReach _speech = new();
     private readonly FloorReach _sound = new();
@@ -154,9 +154,9 @@ public class Intel : MonoBehaviour
         return !row.OnlyWhileInUse || room.InUse;
     }
 
-    // A start circle as big as the area would count a member as arrived wherever he stands in it, which
+    // A start circle as big as the area would count a member as arrived wherever they stand in it, which
     // defeats walking to the source and spreading out from there. A warning and not a clamp: the values are
-    // the designer's, and a quiet change would hide which one he got wrong.
+    // the designer's, and a quiet change would hide which one they got wrong.
     private void OnValidate()
     {
         if (_searchStartRadius >= _searchAreaRadius)
@@ -239,7 +239,7 @@ public class Intel : MonoBehaviour
     /// <summary>Drops a sighting in the inbox. It reaches everyone at the next publish; the newest report wins.</summary>
     public void Report(RubyFact fact, EnemyController reporter) => _pool.Report(fact, reporter);
 
-    /// <summary>The squad has a dead enemy on its books. True only the first time anyone reports him.</summary>
+    /// <summary>The squad has a dead enemy on its books. True only the first time anyone reports them.</summary>
     public bool ReportBody(EnemyController body) => _pool.ReportBody(body);
 
     /// <summary>The squad has a loose gun on its books. True only the first time anyone reports it.</summary>
@@ -249,7 +249,7 @@ public class Intel : MonoBehaviour
     /// A spoken report: every other living enemy within Speech Range along the floor learns it at
     /// once, as Told, and it goes in the inbox too. Measured in path metres, so a shout doesn't
     /// carry through a wall to the room behind it. It is also **word of mouth**: an enemy who sees
-    /// Ruby recruits everyone who hears him, whatever they were doing, so each one is alerted into
+    /// Ruby recruits everyone who hears them, whatever they were doing, so each one is alerted into
     /// Aggro (not the grabbed, ragdolling or dead, which Alert refuses). Piece 6 will cap how many
     /// of them fight; until then everyone told joins.
     /// </summary>
@@ -261,16 +261,16 @@ public class Intel : MonoBehaviour
         if (status == FloorReach.Status.NoGrid)
         {
             if (_speech.FirstNoGrid(speaker))
-                Debug.LogWarning($"{speaker.name} is on no PathGrid, so nobody hears him: speech travels along the floor, which needs a grid.", speaker);
+                Debug.LogWarning($"{speaker.name} is on no PathGrid, so nobody hears them: speech travels along the floor, which needs a grid.", speaker);
             return;
         }
-        // Against a blocked cell the path range reaches no one, but his room still hears him, so this
+        // Against a blocked cell the path range reaches no one, but their room still hears them, so this
         // warns and goes on to the room fill instead of returning.
         bool noReach = status == FloorReach.Status.NoReach;
         if (noReach)
         {
             if (_speech.FirstNoReach(speaker))
-                Debug.LogWarning($"{speaker.name}'s speech reaches no one along the floor: no walkable ground is within reach of where he stands (against a blocked cell?). Only his room hears him.", speaker);
+                Debug.LogWarning($"{speaker.name}'s speech reaches no one along the floor: no walkable ground is within reach of where they stand (against a blocked cell?). Only their room hears them.", speaker);
         }
         RubyFact told = fact.WithSource(Knowledge.Told);
         // Collected first, while the scratch field is intact, and told afterwards, as Hear does:
@@ -284,12 +284,12 @@ public class Intel : MonoBehaviour
             foreach (EnemyController listener in _enemies)
             {
                 if (listener == speaker || listener.Health.IsDead) continue;
-                // Another floor is out of range: floors are independent by design, so he simply doesn't hear.
+                // Another floor is out of range: floors are independent by design, so they simply don't hear.
                 FloorReach.Standing standing = _speech.Measure(listener, _speechRange, out _);
                 if (standing == FloorReach.Standing.OffGrid)
                 {
                     if (_speech.FirstOffGrid(listener))
-                        Debug.LogWarning($"{listener.name} is on no PathGrid, so he can't hear speech.", listener);
+                        Debug.LogWarning($"{listener.name} is on no PathGrid, so they can't hear speech.", listener);
                     continue;
                 }
                 if (standing == FloorReach.Standing.InRange) hearers.Add(listener);
@@ -328,7 +328,7 @@ public class Intel : MonoBehaviour
         {
             if (!nested) _saying = false;
         }
-        DebugLog.Info($"{speaker.name} calls out Ruby's position: {heard} heard ({heard - inRange} of them only because they share his room), {joined} joined the fight.", speaker);
+        DebugLog.Info($"{speaker.name} calls out Ruby's position: {heard} heard ({heard - inRange} of them only because they share their room), {joined} joined the fight.", speaker);
     }
 
     /// <summary>
@@ -372,12 +372,12 @@ public class Intel : MonoBehaviour
         foreach (EnemyController listener in _enemies)
         {
             if (listener == sourceOwner || listener.Health.IsDead) continue;
-            // Another floor is out of range: floors are independent by design, so he simply doesn't hear.
+            // Another floor is out of range: floors are independent by design, so they simply don't hear.
             FloorReach.Standing standing = _sound.Measure(listener, stimulus.Loudness, out _);
             if (standing == FloorReach.Standing.OffGrid)
             {
                 if (_sound.FirstOffGrid(listener))
-                    Debug.LogWarning($"{listener.name} is on no PathGrid, so he can't hear sounds.", listener);
+                    Debug.LogWarning($"{listener.name} is on no PathGrid, so they can't hear sounds.", listener);
                 continue;
             }
             if (standing == FloorReach.Standing.InRange) listeners.Add(listener);
@@ -399,20 +399,20 @@ public class Intel : MonoBehaviour
     /// <summary>The one decision for an enemy who senses something worth investigating: see JobBoard.Handle.</summary>
     public GroupJob Handle(EnemyController who, Incident incident) => _board.Handle(who, incident);
 
-    /// <summary>Takes an enemy off his job (see JobBoard.Leave).</summary>
+    /// <summary>Takes an enemy off their job (see JobBoard.Leave).</summary>
     public void Leave(EnemyController who) => _board.Leave(who);
 
-    /// <summary>He has gone to Aggro: he joins the fight on his floor or starts one (see FightBoard.Join).</summary>
+    /// <summary>They have gone to Aggro: they join the fight on their floor or starts one (see FightBoard.Join).</summary>
     public Fight Join(EnemyController who) => _fights.Join(who);
 
 
-    /// <summary>Whether anyone in the fight but him has Ruby in contact (see FightBoard.AnyInContact).</summary>
+    /// <summary>Whether anyone in the fight but them has Ruby in contact (see FightBoard.AnyInContact).</summary>
     public bool AnyInContact(Fight fight, EnemyController except) => _fights.AnyInContact(fight, except);
 
-    /// <summary>An enemy who has just lost a fight joins or starts a job at the spot he searches (see JobBoard.JoinFromAggro).</summary>
+    /// <summary>An enemy who has just lost a fight joins or starts a job at the spot they search (see JobBoard.JoinFromAggro).</summary>
     public void JoinFromAggro(EnemyController who, Vector3 point) => _board.JoinFromAggro(who, point);
 
-    /// <summary>Takes a member off a search he can't reach and sends him back to his patrol (see JobBoard.DropFromSearch).</summary>
+    /// <summary>Takes a member off a search they can't reach and sends them back to their patrol (see JobBoard.DropFromSearch).</summary>
     public void DropFromSearch(EnemyController who, string why) => _board.DropFromSearch(who, why);
 
     /// <summary>Whether a point is at a job's place (see JobBoard.Covers).</summary>
@@ -430,7 +430,7 @@ public class Intel : MonoBehaviour
     /// <summary>A searcher notices a serious thing: the whole job goes there, after a beat. True when taken (see JobBoard.Mobilise).</summary>
     public bool Mobilise(EnemyController who, Incident thing) => _board.Mobilise(who, thing);
 
-    /// <summary>A job member's ordinary distraction: it grows the search and sends one to check it. True when he goes (see JobBoard.Noticed).</summary>
+    /// <summary>A job member's ordinary distraction: it grows the search and sends one to check it. True when they go (see JobBoard.Noticed).</summary>
     public bool Noticed(EnemyController who, Incident thing) => _board.Noticed(who, thing);
 
     /// <summary>Whether an open job other than `own` has a point, by its place or its search area (see JobBoard.AnotherJobHas).</summary>
@@ -439,10 +439,10 @@ public class Intel : MonoBehaviour
     /// <summary>What a job's team hasn't looked at yet (see JobBoard.CoverageOf).</summary>
     public SearchCoverage CoverageOf(GroupJob job) => _board.CoverageOf(job);
 
-    /// <summary>A member has finished checking what he was sent to (see JobBoard.CheckDone).</summary>
+    /// <summary>A member has finished checking what they were sent to (see JobBoard.CheckDone).</summary>
     public void CheckDone(GroupJob job, EnemyController who) => _board.CheckDone(job, who);
 
-    /// <summary>A member's stimulus at his own job's place (see JobBoard.HandleAtOwnJob).</summary>
+    /// <summary>A member's stimulus at their own job's place (see JobBoard.HandleAtOwnJob).</summary>
     public bool HandleAtOwnJob(EnemyController who, SearchRequest request) => _board.HandleAtOwnJob(who, request);
 
     /// <summary>A member has learned something that makes the whole job an attack (see JobBoard.RaiseJobAt).</summary>
@@ -536,7 +536,7 @@ public class Intel : MonoBehaviour
                 Gizmos.DrawLine(lead.transform.position + Vector3.up * 0.2f, member.transform.position + Vector3.up * 0.2f);
                 Gizmos.DrawLine(member.transform.position + Vector3.up * 0.2f, job.Point);
             }
-            // The checker is ringed: he's the one who goes, and the rest trail him.
+            // The checker is ringed: they're the one who goes, and the rest trail them.
             if (job.Checker != null) DrawCircle(job.Checker.transform.position, 0.9f);
             // A Search's patches, each circle faint (they mark what is searched, they aren't it), and its marked
             // rooms outlined in its colour, each searched whole.
@@ -548,7 +548,7 @@ public class Intel : MonoBehaviour
             // What the team hasn't looked at yet, as dots.
             if (job.Coverage != null)
                 foreach (Vector3 point in job.Coverage.Unseen) Gizmos.DrawSphere(point + Vector3.up * 0.1f, 0.08f);
-            // Every member out checking a distraction, ringed, with a ring where he has gone and a line to it.
+            // Every member out checking a distraction, ringed, with a ring where they have gone and a line to it.
             foreach (KeyValuePair<EnemyController, Vector3> check in job.Checks)
             {
                 if (check.Key == null) continue;
@@ -641,12 +641,12 @@ public class Intel : MonoBehaviour
             for (int i = 0; i < places.Count; i++) DrawCircle(places[i], _jobMatchRadius);
         }
 
-        if (Published.RubyReported)
+        if (Published.RedReported)
         {
             Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(Published.Ruby.Position, 0.5f);
+            Gizmos.DrawWireSphere(Published.Red.Position, 0.5f);
 #if UNITY_EDITOR
-            UnityEditor.Handles.Label(Published.Ruby.Position + Vector3.up * 0.8f, $"Ruby reported {Time.time - Published.Ruby.Time:0.0}s ago");
+            UnityEditor.Handles.Label(Published.Red.Position + Vector3.up * 0.8f, $"Ruby reported {Time.time - Published.Red.Time:0.0}s ago");
 #endif
         }
 

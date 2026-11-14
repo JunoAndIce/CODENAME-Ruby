@@ -3,9 +3,9 @@ using UnityEngine;
 
 /// <summary>
 /// Every open fight and who is in it. A plain class that Intel owns and ticks, like JobBoard; Intel
-/// forwards what the enemies call. It never moves anyone: each enemy's AggroState reads his fight. Membership is polled in Advance rather than
-/// hooked into state exits, because an exit can't tell where he is going and Rearm, which hands back
-/// to Aggro, must keep his place.
+/// forwards what the enemies call. It never moves anyone: each enemy's AggroState reads their fight. Membership is polled in Advance rather than
+/// hooked into state exits, because an exit can't tell where they are going and Rearm, which hands back
+/// to Aggro, must keep their place.
 /// </summary>
 public class FightBoard
 {
@@ -22,9 +22,9 @@ public class FightBoard
 
 
     /// <summary>
-    /// He has gone to Aggro: he joins the fight on his floor that has the member nearest him, however far
-    /// away, or starts one when his floor has none. Joined already (Rearm hands back through Aggro), it
-    /// changes nothing and he keeps his place.
+    /// They have gone to Aggro: they join the fight on their floor that has the member nearest them, however far
+    /// away, or starts one when their floor has none. Joined already (Rearm hands back through Aggro), it
+    /// changes nothing and they keep their place.
     /// </summary>
     public Fight Join(EnemyController who)
     {
@@ -35,7 +35,7 @@ public class FightBoard
         if (floor == null)
         {
             if (_warnedNoGrid.Add(who))
-                Debug.LogWarning($"{who.name}: stands on no baked grid, so he can't join a fight by floor and fights alone.", who);
+                Debug.LogWarning($"{who.name}: stands on no baked grid, so they can't join a fight by floor and fights alone.", who);
         }
         else
         {
@@ -113,7 +113,7 @@ public class FightBoard
             EnemyController member = members[i];
             if (Fighting(member)) continue;
             members.RemoveAt(i);
-            // The one place a claim is guaranteed to go with its owner, whichever way he left (dead, grabbed,
+            // The one place a claim is guaranteed to go with its owner, whichever way they left (dead, grabbed,
             // destroyed). A destroyed key is still the same dictionary key.
             fight.Release(member);
             if (member == null) continue;   // destroyed: nothing more to clear
@@ -122,12 +122,12 @@ public class FightBoard
         }
     }
 
-    /// <summary>Whether anyone in the fight other than him has Ruby in contact (in sight within Give Up Radius). Contact is cached per frame, so this is cheap to ask.</summary>
+    /// <summary>Whether anyone in the fight other than them has Ruby in contact (in sight within Give Up Radius). Contact is cached per frame, so this is cheap to ask.</summary>
     public bool AnyInContact(Fight fight, EnemyController except)
     {
         foreach (EnemyController member in fight.MemberList)
         {
-            // Grabbed, down or dead but not yet pruned: he has nothing to tell the rest.
+            // Grabbed, down or dead but not yet pruned: they have nothing to tell the rest.
             if (member == except || !Fighting(member)) continue;
             if (member.Vision.InContactWithPlayer()) return true;
         }

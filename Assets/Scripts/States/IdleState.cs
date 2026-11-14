@@ -1,23 +1,23 @@
 using UnityEngine;
 
 /// <summary>
-/// At his post. Where he started is his post: after a search, a fall or a shove he walks back to
-/// it and turns the way he started, so an idle enemy is never left standing wherever his last
-/// job ended. Aggressive, he comes back at the aggressive patrol speed. Noticing Ruby, hearing something or wanting a gun
+/// At their post. Where they started is their post: after a search, a fall or a shove they walk back to
+/// it and turns the way they started, so an idle enemy is never left standing wherever their last
+/// job ended. Aggressive, they come back at the aggressive patrol speed. Noticing Ruby, hearing something or wanting a gun
 /// is the table's business, not this state's.
 /// </summary>
 public class IdleState : EnemyStateBase
 {
-    private float _walkTimer;   // how long he has been walking home
-    private bool _gaveUp;       // the walk took too long: he stays where he is until he's next at his post
+    private float _walkTimer;   // how long they have been walking home
+    private bool _gaveUp;       // the walk took too long: they stay where they are until they're next at their post
 
     private float _nextShot;            // Time.time of the next practice shot
     private bool _noGunNoted;           // the one log line for an unarmed enemy at a range post
     private bool _outOfRangeWarned;
     private bool _noTargetWarned;
-    private bool _facingTarget;         // turned to the target from where he stands: the first shot waits for it
+    private bool _facingTarget;         // turned to the target from where they stand: the first shot waits for it
 
-    /// <summary>At a range post, armed, shooting at the spot's target. Practising is something he does here, not a state.</summary>
+    /// <summary>At a range post, armed, shooting at the spot's target. Practising is something they do here, not a state.</summary>
     public bool Practising { get; private set; }
 
     public IdleState(EnemyController enemy) : base(enemy) { }
@@ -53,7 +53,7 @@ public class IdleState : EnemyStateBase
             if (!_noGunNoted)
             {
                 _noGunNoted = true;
-                DebugLog.Info($"{Enemy.name} is posted at a firing range with no gun, so he stands at his post and doesn't practise.", Enemy);
+                DebugLog.Info($"{Enemy.name} is posted at a firing range with no gun, so they stand at their post and doesn't practise.", Enemy);
             }
             EndPractice();
             return;
@@ -65,7 +65,7 @@ public class IdleState : EnemyStateBase
             if (!_noTargetWarned)
             {
                 _noTargetWarned = true;
-                Debug.LogWarning($"{Enemy.name}: his range spot '{spot.name}' has no target, so he faces its forward and doesn't practise.", Enemy);
+                Debug.LogWarning($"{Enemy.name}: their range spot '{spot.name}' has no target, so they face its forward and doesn't practise.", Enemy);
             }
             EndPractice();
             return;
@@ -77,7 +77,7 @@ public class IdleState : EnemyStateBase
             if (!_outOfRangeWarned)
             {
                 _outOfRangeWarned = true;
-                Debug.LogWarning($"{Enemy.name}: the target of range spot '{spot.name}' is out of his gun's range, so he doesn't fire.", Enemy);
+                Debug.LogWarning($"{Enemy.name}: the target of range spot '{spot.name}' is out of their gun's range, so they don't fire.", Enemy);
             }
             EndPractice();
             return;
@@ -109,22 +109,22 @@ public class IdleState : EnemyStateBase
         if (_gaveUp) return;
 
         // The same limit as a search's walk: a post another enemy stands on, or one behind a
-        // jam, mustn't have him pushing at it for good.
+        // jam, mustn't have them pushing at it for good.
         _walkTimer += Time.deltaTime;
         if (_walkTimer < Enemy.SearchTravelLimit) return;
 
         _gaveUp = true;
-        DebugLog.Info($"{Enemy.name} hasn't got back to his post in {Enemy.SearchTravelLimit:0.#}s; he stays where he is.", Enemy);
+        DebugLog.Info($"{Enemy.name} hasn't got back to their post in {Enemy.SearchTravelLimit:0.#}s; they stay where they are.", Enemy);
     }
 
-    // PathTo stops him on arrival, and warns once itself when there's no way back. A post he
+    // PathTo stops them on arrival, and warns once itself when there's no way back. A post they
     // can't reach is that warning, then standing: not a silent walk to somewhere else.
     public override void FixedTick()
     {
         if (!AwayFromPost)
         {
             Enemy.Stop();
-            // Practising he faces the target from where he really stands (up to Post Tolerance off the
+            // Practising they face the target from where they really stand (up to Post Tolerance off the
             // spot, and the target may move), not the yaw recorded from the spot at Start.
             if (Practising && Enemy.PostSpot != null && Enemy.PostSpot.Target != null)
             {

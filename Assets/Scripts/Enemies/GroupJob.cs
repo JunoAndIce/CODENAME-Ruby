@@ -6,8 +6,8 @@ public enum JobKind { Check, Search }
 
 /// <summary>
 /// Where a job has got to. A Check goes Call, Gather, Go, Look, StandDown, Done; a Search goes
-/// Call, Go, Search, Done. Call is the lead reacting to what he heard and then calling in the others
-/// one at a time, so nobody is on the job before he has reacted. Signal can interrupt any of them from Go
+/// Call, Go, Search, Done. Call is the lead reacting to what they heard and then calling in the others
+/// one at a time, so nobody is on the job before they have reacted. Signal can interrupt any of them from Go
 /// on: a serious thing (a gunshot, a body nobody had booked, an enemy seen flying), the team stopped and
 /// facing it for a beat before they all go there (JobBoard.Mobilise).
 /// The job's clock moves it along (JobBoard advances it); members read the step and run their own role.
@@ -18,7 +18,7 @@ public enum JobStep { Call, Gather, Go, Look, StandDown, Search, Done, Signal }
 /// <summary>
 /// A few enemies dealing with one thing together. A plain object, held by JobBoard, with members, a
 /// kind, a step and a point. It **never moves anyone**: each member's state machine reads it and
-/// runs his own role, so the machine stays the one place movement is decided. JobBoard is the only
+/// runs their own role, so the machine stays the one place movement is decided. JobBoard is the only
 /// caller of the members of this class that change it (Add, Remove, Upgrade, GrowAt, KeepArea, MoveSourceTo,
 /// RaisePriority, SendToCheck, EndCheck); everyone else reads.
 /// </summary>
@@ -223,13 +223,13 @@ public class GroupJob
     public bool IsFull => _members.Count >= Cap;
     public bool Has(EnemyController who) => _members.Contains(who);
 
-    /// <summary>The enemy who started it, or the next member if he has left. Null for a job with nobody in it.</summary>
+    /// <summary>The enemy who started it, or the next member if they have left. Null for a job with nobody in it.</summary>
     public EnemyController Lead => _members.Count > 0 ? _members[0] : null;
 
     /// <summary>
-    /// The member who goes to the spot and looks while the rest follow him (a Check only; a Search
+    /// The member who goes to the spot and looks while the rest follow them (a Check only; a Search
     /// sends everyone). The one nearest the spot when the team sets off, or a nearer enemy who joins in
-    /// its first moments. Null until chosen, and again when he leaves or the job starts over; JobBoard
+    /// its first moments. Null until chosen, and again when they leave or the job starts over; JobBoard
     /// chooses the nearest remaining at once, if the job is then going (Go). Everyone else reads it,
     /// through Intel.CheckerOf.
     /// </summary>
@@ -239,7 +239,7 @@ public class GroupJob
     private readonly List<EnemyController> _pending = new();
     /// <summary>Enemies the lead will call in, nearest first, one at a time: all of them during Call, and the ones a fill found later in any other step (JobBoard.AdvanceFill). Not members yet: they carry on as they were until called.</summary>
     public IReadOnlyList<EnemyController> Pending => _pending;
-    /// <summary>The enemy being called right now: he faces the lead (and, during Call only, the lead faces him). Null between calls.</summary>
+    /// <summary>The enemy being called right now: they face the lead (and, during Call only, the lead faces them). Null between calls.</summary>
     public EnemyController Callee { get; internal set; }
     /// <summary>
     /// Seconds since the last call a fill made. Its own clock beside StepElapsed, because a fill happens
@@ -251,7 +251,7 @@ public class GroupJob
     // A job that can no longer take anyone (full, or a Check that has reached its look) drops the
     // queue whole: the people in it are free, and calling one at a time to refuse each would be noise.
     internal void ClearCalls() => _pending.Clear();
-    /// <summary>The lead has finished reacting to what he heard, so the calls may begin.</summary>
+    /// <summary>The lead has finished reacting to what they heard, so the calls may begin.</summary>
     public bool Reacted { get; internal set; }
     internal void QueueCall(EnemyController who) => _pending.Add(who);
     internal EnemyController DequeueCall()
@@ -274,15 +274,15 @@ public class GroupJob
         CallElapsed += dt;
     }
 
-    /// <summary>True when he is on this job afterwards, including when he already was; false when refused.</summary>
+    /// <summary>True when they are on this job afterwards, including when they already were; false when refused.</summary>
     internal bool Add(EnemyController who)
     {
         if (_members.Contains(who)) return true;
-        // Every path onto a job takes him off his last one first (JobBoard.Leave), so this is a bug in the
-        // caller. Refused rather than moved: two jobs each listing him would each send him somewhere.
+        // Every path onto a job takes them off their last one first (JobBoard.Leave), so this is a bug in the
+        // caller. Refused rather than moved: two jobs each listing them would each send them somewhere.
         if (who.Job != null)
         {
-            Debug.LogError($"{who.name} is already on {who.Job} and can't join {this}: he must leave it first.", who);
+            Debug.LogError($"{who.name} is already on {who.Job} and can't join {this}: they must leave it first.", who);
             return false;
         }
         _members.Add(who);
@@ -299,7 +299,7 @@ public class GroupJob
         Coverage?.Release(who);
         if (Callee == who) Callee = null;
         _arrived.Remove(who);
-        // A noticing that names him as the one who went would have the next to notice the same thing defer to
+        // A noticing that names them as the one who went would have the next to notice the same thing defer to
         // someone who is gone, for up to its half second: cleared, so the next who notices it goes. By reference,
         // since a member being destroyed may already read as null through Unity's ==.
         for (int i = 0; i < _noticings.Count; i++)
@@ -312,35 +312,35 @@ public class GroupJob
     public SearchCoverage Coverage { get; private set; }
     internal void SetCoverage(SearchCoverage coverage) => Coverage = coverage;
 
-    // Members out checking a distraction, each with where he has gone (decision 4: the scout walk, per member).
-    // Several can be out at once, each on his own thing. An entry lives exactly as long as the check: ended by
-    // the member himself (EndCheck, through JobBoard.CheckDone), by his leaving the job (Remove), or by the job
+    // Members out checking a distraction, each with where they have gone (decision 4: the scout walk, per member).
+    // Several can be out at once, each on their own thing. An entry lives exactly as long as the check: ended by
+    // the member themselves (EndCheck, through JobBoard.CheckDone), by their leaving the job (Remove), or by the job
     // starting over (Restart), so none can outlive the member or the job it was for.
     private readonly Dictionary<EnemyController, Vector3> _checks = new();
 
     /// <summary>Who is out checking and where, for the gizmo and the checker's choice.</summary>
     public IReadOnlyDictionary<EnemyController, Vector3> Checks => _checks;
 
-    /// <summary>Whether he is out checking a distraction for the job, and where.</summary>
+    /// <summary>Whether they are out checking a distraction for the job, and where.</summary>
     public bool TryGetCheck(EnemyController who, out Vector3 point) => _checks.TryGetValue(who, out point);
 
     /// <summary>
     /// Sends a member to check a point. One already out is sent on to the newer thing (SearchingState sees the
-    /// point change and starts his walk over). His claim on the coverage goes, so nobody is kept off the point he
-    /// was heading for while he is away. A non-member is the caller's bug and is refused with an error.
+    /// point change and starts their walk over). Their claim on the coverage goes, so nobody is kept off the point they
+    /// were heading for while they are away. A non-member is the caller's bug and is refused with an error.
     /// </summary>
     internal void SendToCheck(EnemyController who, Vector3 point)
     {
         if (!_members.Contains(who))
         {
-            Debug.LogError($"{(who != null ? who.name : "nobody")} was sent to check {point} for {this}, which he isn't on: only a member checks for a job.", _intel);
+            Debug.LogError($"{(who != null ? who.name : "nobody")} was sent to check {point} for {this}, which they aren't on: only a member checks for a job.", _intel);
             return;
         }
         _checks[who] = point;
         Coverage?.Release(who);
     }
 
-    /// <summary>His check is over: he is back to his part in the job.</summary>
+    /// <summary>Their check is over: they are back to their part in the job.</summary>
     internal void EndCheck(EnemyController who) => _checks.Remove(who);
 
     // Recent noticings, so two members noticing one thing send one of them (decision 3). The same source object
@@ -456,7 +456,7 @@ public class GroupJob
 
     /// <summary>
     /// A member has reached the spot. A Check moves on from Go to its look at the first arrival, the
-    /// checker's. A Search marks him and moves on to its search only when every current member has
+    /// checker's. A Search marks them and moves on to its search only when every current member has
     /// arrived, so a member called from far away isn't left with no search time. False when the job
     /// didn't move: it wasn't going (a late arrival, or a second one), or someone is still walking.
     /// The length is that of the look or the search the job moves on to.
@@ -479,12 +479,12 @@ public class GroupJob
         return TryStartSearch(length);
     }
 
-    // Who this job took off for not reaching the spot. Without it the next fill calls him straight back,
-    // he walks up to another Search Travel Limit, and two stuck members on staggered timers could keep a
+    // Who this job took off for not reaching the spot. Without it the next fill calls them straight back,
+    // they walk up to another Search Travel Limit, and two stuck members on staggered timers could keep a
     // Search in Go for good. Cleared by Restart: a moved place or a conversion is a different walk.
     private readonly HashSet<EnemyController> _dropped = new();
     internal void NoteDropped(EnemyController who) => _dropped.Add(who);
-    /// <summary>He was taken off this job for not reaching the spot, so it doesn't call him again.</summary>
+    /// <summary>They were taken off this job for not reaching the spot, so it doesn't call them again.</summary>
     public bool WasDropped(EnemyController who) => _dropped.Contains(who);
 
     /// <summary>

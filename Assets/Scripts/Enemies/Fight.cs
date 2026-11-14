@@ -41,15 +41,15 @@ public class Fight
         return true;
     }
 
-    /// <summary>He takes a spot as his. Replaces the one he held.</summary>
+    /// <summary>They take a spot as their. Replaces the one they held.</summary>
     public void Claim(EnemyController who, Vector3 spot) => _claims[who] = spot;
 
-    /// <summary>He gives up his spot, if he held one. Safe on a destroyed member.</summary>
+    /// <summary>They give up their spot, if they held one. Safe on a destroyed member.</summary>
     public void Release(EnemyController who) => _claims.Remove(who);
 
     public bool TryGetClaim(EnemyController who, out Vector3 spot) => _claims.TryGetValue(who, out spot);
 
-    /// <summary>Whether a claim other than his own lies within spacing of a spot, measured flat.</summary>
+    /// <summary>Whether a claim other than their own lies within spacing of a spot, measured flat.</summary>
     public bool IsClaimedNear(Vector3 spot, float spacing, EnemyController except)
     {
         foreach (KeyValuePair<EnemyController, Vector3> claim in _claims)

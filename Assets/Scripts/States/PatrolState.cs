@@ -3,13 +3,13 @@ using UnityEngine;
 
 /// <summary>
 /// Walking a route, unaware, or wary. Which route is the enemy's business: the Aggressive one
-/// once he's aggressive and has one, else the Safe one (EnemyController.ActiveRoute). Each point
+/// once they're aggressive and has one, else the Safe one (EnemyController.ActiveRoute). Each point
 /// is an area (PatrolPoint): reached at its
 /// centre, or at the nearest open spot inside it when the centre is occupied. A point that
 /// can't be reached at all is skipped with a warning, so one bad point never freezes the
 /// route; if every point fails in a row the enemy holds and retries instead of spinning.
 /// A route of one wide point is wandered instead: random open spots inside it, one after
-/// another (PatrolRoute.Wanders). Aggressive, he walks at Aggressive Speed Factor times Patrol Speed and looks around at each point
+/// another (PatrolRoute.Wanders). Aggressive, they walk at Aggressive Speed Factor times Patrol Speed and looks around at each point
 /// instead of standing. Owns its own progress, so nothing outside can corrupt it.
 /// </summary>
 public class PatrolState : EnemyStateBase
@@ -25,14 +25,14 @@ public class PatrolState : EnemyStateBase
     private int _direction = 1;
     private float _pauseTimer;
     private bool _paused;
-    private float _lookBaseYaw;   // where he faced on arriving: an aggressive pause sweeps about it
+    private float _lookBaseYaw;   // where they faced on arriving: an aggressive pause sweeps about it
     private float _lookElapsed;
     private float _pauseDuration;   // how long this pause lasts, so the sweep fits it
     // A long pause, spent moving about inside the point's area (Long Pause Time) rather than standing.
     private bool _pauseRoams;
     private bool _pauseWalking;
     private Vector3 _pauseSpot;
-    private float _pauseRoamTimer;  // until he next moves
+    private float _pauseRoamTimer;  // until they next move
     private bool _pauseRoamWarned;  // the point's area has nowhere to go, or a spot in it no way to: said once per pause
     private int _failStreak;
     private float _holdTimer;
@@ -46,7 +46,7 @@ public class PatrolState : EnemyStateBase
 
     // Rejoin where we are, not at point 0, after a chase or search pulled us away. The walk
     // there starts a fresh history: any point may follow it. Also what a change of route does, so
-    // becoming aggressive puts him on the nearest point of the new route.
+    // becoming aggressive puts them on the nearest point of the new route.
     private void Restart()
     {
         _route = Route;
@@ -61,7 +61,7 @@ public class PatrolState : EnemyStateBase
         if (Enemy.HasActiveRoute) _index = Route.NearestIndex(Enemy.transform.position);
 
         if (Enemy.IsAggressive && Enemy.HasActiveRoute)
-            DebugLog.Info($"{Enemy.name} starts his aggressive patrol on {(ReferenceEquals(Route, Enemy.AggressiveRoute) ? "his Aggressive route" : "his Safe route")}, at {PointName(_index)}, speed {Enemy.CurrentPatrolSpeed:0.##}.", Enemy);
+            DebugLog.Info($"{Enemy.name} starts their aggressive patrol on {(ReferenceEquals(Route, Enemy.AggressiveRoute) ? "their Aggressive route" : "their Safe route")}, at {PointName(_index)}, speed {Enemy.CurrentPatrolSpeed:0.##}.", Enemy);
     }
 
     public override void Tick()
@@ -100,10 +100,10 @@ public class PatrolState : EnemyStateBase
         }
         if (_paused)
         {
-            // A long pause, walking to his next spot in the area.
+            // A long pause, walking to their next spot in the area.
             if (_pauseRoams && _index < Route.Count && PauseRoam(Route[_index])) return;
 
-            // Aggressive, he looks about at each point instead of standing.
+            // Aggressive, they look about at each point instead of standing.
             if (Enemy.IsAggressive) Enemy.Movement.LookAround(_lookBaseYaw, _lookElapsed, _pauseDuration);
             else Enemy.Stop();
             return;
@@ -158,8 +158,8 @@ public class PatrolState : EnemyStateBase
         }
     }
 
-    // A long pause reads as a man waiting about, not a statue: every so often he walks to another spot in
-    // the point's area, for as long as the pause lasts. True while he's walking. A spot he can't get to just
+    // A long pause reads as a man waiting about, not a statue: every so often they walk to another spot in
+    // the point's area, for as long as the pause lasts. True while they're walking. A spot they can't get to just
     // starts the next wait. The pause's own timer runs throughout, so it ends on time even mid-walk.
     private bool PauseRoam(PatrolPoint point)
     {
@@ -172,7 +172,7 @@ public class PatrolState : EnemyStateBase
             // centre and the walk found no way to, which shouldn't: said once per pause.
             if (walk == NavResult.Unreachable && !_pauseRoamWarned)
             {
-                Debug.LogWarning($"{Enemy.name}: {PointName(_index)}'s pause picked a spot he has no way to ({Enemy.Navigator.FailureReason}): he waits where he is instead.", Enemy);
+                Debug.LogWarning($"{Enemy.name}: {PointName(_index)}'s pause picked a spot they have no way to ({Enemy.Navigator.FailureReason}): they wait where they are instead.", Enemy);
                 _pauseRoamWarned = true;
             }
             _pauseWalking = false;
@@ -189,7 +189,7 @@ public class PatrolState : EnemyStateBase
         if (!Enemy.Movement.TryPickWanderSpot(point, out _pauseSpot))
         {
             if (!_pauseRoamWarned)
-                Debug.LogWarning($"{Enemy.name}: {PointName(_index)} has a long pause, but nowhere to move to in its area ({Enemy.Navigator.FailureReason}): he stays where he is. Make the area bigger, or its pause shorter than Long Pause Time.", Enemy);
+                Debug.LogWarning($"{Enemy.name}: {PointName(_index)} has a long pause, but nowhere to move to in its area ({Enemy.Navigator.FailureReason}): they stay where they are. Make the area bigger, or its pause shorter than Long Pause Time.", Enemy);
             _pauseRoamWarned = true;
             return false;
         }

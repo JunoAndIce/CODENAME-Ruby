@@ -6,7 +6,7 @@ using UnityEngine;
 /// Reports wait in an inbox; every interval the inbox is merged into a new immutable IntelSnapshot
 /// (Published) that every enemy reads. It is stale on purpose: between publishes it lags the truth,
 /// so a fight Ruby has left doesn't end the instant she is out of sight, and an enemy mid-decision
-/// holds a snapshot that can't change under him.
+/// holds a snapshot that can't change under them.
 /// </summary>
 public class KnowledgePool
 {
@@ -30,7 +30,7 @@ public class KnowledgePool
         _pendingReporter = reporter;
     }
 
-    /// <summary>The squad has a dead enemy on its books. True only the first time anyone reports him.</summary>
+    /// <summary>The squad has a dead enemy on its books. True only the first time anyone reports them.</summary>
     public bool ReportBody(EnemyController body) => _knownBodies.Add(body);
 
     /// <summary>The squad has a loose gun on its books. True only the first time anyone reports it.</summary>
@@ -49,7 +49,7 @@ public class KnowledgePool
 
     private void Publish(Object logContext)
     {
-        bool rubyChanged = _hasPendingRuby && (!Published.RubyReported || _pendingRuby.Time > Published.Ruby.Time);
+        bool rubyChanged = _hasPendingRuby && (!Published.RedReported || _pendingRuby.Time > Published.Red.Time);
         // Bodies and guns are only ever added within a level, so a count change is a real change.
         bool bodiesChanged = _knownBodies.Count != Published.Bodies.Count;
         bool gunsChanged = _knownGuns.Count != Published.Guns.Count;
@@ -57,13 +57,13 @@ public class KnowledgePool
 
         // Always a new object: an enemy mid-decision holds the old one and must see it unchanged.
         Published = new IntelSnapshot(
-            Published.RubyReported || _hasPendingRuby,
-            rubyChanged ? _pendingRuby : Published.Ruby,
+            Published.RedReported || _hasPendingRuby,
+            rubyChanged ? _pendingRuby : Published.Red,
             _knownBodies,
             _knownGuns);
 
         DebugLog.Info(rubyChanged
-            ? $"Intel published: Ruby last at {Published.Ruby.Position} (reported by {(_pendingReporter != null ? _pendingReporter.name : "someone")})."
+            ? $"Intel published: Ruby last at {Published.Red.Position} (reported by {(_pendingReporter != null ? _pendingReporter.name : "someone")})."
             : $"Intel published: {Published.Bodies.Count} bod{(Published.Bodies.Count == 1 ? "y" : "ies")}, {Published.Guns.Count} loose gun(s).", logContext);
     }
 }

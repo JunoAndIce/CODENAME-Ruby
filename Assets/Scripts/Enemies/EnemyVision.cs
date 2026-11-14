@@ -21,14 +21,14 @@ public class EnemyVision
         _enemy = enemy;
     }
 
-    // Detection: noticed means in his view, and in sight.
+    // Detection: noticed means in their view, and in sight.
     public bool DetectsPlayer() => _enemy.Player != null && InView(_enemy.Player.transform.position) && CanSeePlayer();
 
     /// <summary>
-    /// Whether a point is in his view: the cone in front of him out to View Range, or the close
-    /// circle all round, which is there so nobody can stand right behind him unnoticed. Measured
+    /// Whether a point is in their view: the cone in front of them out to View Range, or the close
+    /// circle all round, which is there so nobody can stand right behind them unnoticed. Measured
     /// flat, and only the shape: whether anything blocks the line is CanSeePlayer's business.
-    /// With no horizontal facing there's no cone: only the close circle counts. His root never
+    /// With no horizontal facing there's no cone: only the close circle counts. Their root never
     /// pitches in play (its rotation is frozen and only turned about Y), so this only covers an
     /// enemy placed pitched in the scene.
     /// </summary>
@@ -63,8 +63,8 @@ public class EnemyVision
 
     /// <summary>
     /// Aggro's contact test: still within the give-up radius, and in sight. Never for a provoked enemy who
-    /// hasn't laid eyes on her (StillProvokedUnseen), which also keeps him from giving his fight mates
-    /// contact (FightBoard.AnyInContact) that he hasn't got.
+    /// hasn't laid eyes on her (StillProvokedUnseen), which also keeps them from giving their fight mates
+    /// contact (FightBoard.AnyInContact) that they haven't got.
     /// </summary>
     public bool InContactWithPlayer() => !StillProvokedUnseen() && DistanceToPlayer() <= _enemy.GiveUpRadius && CanSeePlayer();
 
@@ -78,8 +78,8 @@ public class EnemyVision
 
     /// <summary>
     /// Provoked and still blind to her: EnemyController.ProvokedUnseen, cleared here the first time she is
-    /// in his view with a clear line (DetectsPlayer), from which point every normal rule follows. Cleared
-    /// by whoever asks first, so the table, the state, his awareness and his fight mates all read one
+    /// in their view with a clear line (DetectsPlayer), from which point every normal rule follows. Cleared
+    /// by whoever asks first, so the table, the state, their awareness and their fight mates all read one
     /// answer within a frame, whatever order they run in.
     /// </summary>
     public bool StillProvokedUnseen()
@@ -87,7 +87,7 @@ public class EnemyVision
         if (!_enemy.ProvokedUnseen) return false;
         if (!DetectsPlayer()) return true;
         _enemy.ProvokedUnseen = false;
-        DebugLog.Info($"{_enemy.name} lays eyes on Ruby: from here he sees her as any hunter does.", _enemy);
+        DebugLog.Info($"{_enemy.name} lays eyes on Ruby: from here they see her as any hunter does.", _enemy);
         return false;
     }
 
@@ -112,13 +112,13 @@ public class EnemyVision
     }
 
     /// <summary>
-    /// Whether the line from his eyes to a point is clear. The target's own colliders don't block
+    /// Whether the line from their eyes to a point is clear. The target's own colliders don't block
     /// it, so a body can be checked from its centre without its skin getting in the way.
     /// </summary>
     public bool HasClearSight(Vector3 point, Transform target) => FindSightBlocker(_enemy.EyePosition, point, target) == null;
 
     /// <summary>
-    /// The same test from an eye somewhere else, such as a firing spot he is thinking of walking to.
+    /// The same test from an eye somewhere else, such as a firing spot they are thinking of walking to.
     /// </summary>
     public bool HasClearSightFrom(Vector3 eye, Vector3 point, Transform target) => FindSightBlocker(eye, point, target) == null;
 

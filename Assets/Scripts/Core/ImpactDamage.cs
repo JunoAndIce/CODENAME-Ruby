@@ -81,8 +81,8 @@ public class ImpactDamage : MonoBehaviour
 
         DebugLog.Info($"{name} hit by {collision.collider.name} at {speed:0.0} m/s: {damage:0.0} damage.", this);
         _health.ApplyDamage(damage);
-        // Whoever watches him die goes to where the killing thing came from, and only the thing knows that:
-        // a character on his feet isn't stamped by a hit (Disturbance), and he isn't limp until a frame later.
+        // Whoever watches them die goes to where the killing thing came from, and only the thing knows that:
+        // a character on their feet isn't stamped by a hit (Disturbance), and they aren't limp until a frame later.
         if (_health.IsDead && other != null && Disturbance.TryGetOrigin(other, out Vector3 origin))
             Disturbance.Stamp(_health.GetComponent<Rigidbody>(), origin);
         _knockdown?.KnockDown();

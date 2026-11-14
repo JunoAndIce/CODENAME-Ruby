@@ -51,8 +51,8 @@ public class GridNavigator
     private FlowField _field;
     private readonly List<Vector3> _trace = new();
 
-    // Getting as near as he can to a point he has no path to: a flood from where he stands, so what
-    // it reaches is what he can get to, and the reached spot nearest the point.
+    // Getting as near as they can to a point they have no path to: a flood from where they stand, so what
+    // it reaches is what they can get to, and the reached spot nearest the point.
     private FlowField _approachField;
     private Vector3 _approachGoal;
     private Vector3 _approachSpot;
@@ -91,9 +91,9 @@ public class GridNavigator
     }
 
     /// <summary>
-    /// Path to a fixed point (the walk back to his post, or a chase of what he knows) along this enemy's own field.
+    /// Path to a fixed point (the walk back to their post, or a chase of what they know) along this enemy's own field.
     /// Stops on arrival and says so; Unreachable when no step can be taken (already warned). With getClose,
-    /// a point he has no path to is approached instead (see Approach).
+    /// a point they have no path to is approached instead (see Approach).
     /// </summary>
     public NavResult MoveTo(Vector3 point, float speed, bool getClose = false)
     {
@@ -111,9 +111,9 @@ public class GridNavigator
     }
 
     /// <summary>
-    /// Where to go for a point: the point itself when he can get to it, else the ground he can reach
-    /// nearest it, within Approach Radius. False when there is none, or he is on no grid. Floods from
-    /// where he stands, so ask it for a decision and not every step.
+    /// Where to go for a point: the point itself when they can get to it, else the ground they can reach
+    /// nearest it, within Approach Radius. False when there is none, or they are on no grid. Floods from
+    /// where they stand, so ask it for a decision and not every step.
     /// </summary>
     public bool TryGetNearestReachable(Vector3 point, out Vector3 spot)
     {
@@ -121,7 +121,7 @@ public class GridNavigator
         PathGrid grid = PathGrid.At(_agent.Body.position);
         if (grid == null) return false;
 
-        // A one-off decision, so it floods from where he stands now: the throttle would hand back the last
+        // A one-off decision, so it floods from where they stand now: the throttle would hand back the last
         // goal's spot, and AggroState.Exit would start the search there while logging the new one.
         FindApproach(grid, point, force: true);
         spot = _approachSpot;
@@ -129,12 +129,12 @@ public class GridNavigator
     }
 
     /// <summary>
-    /// Ground he can reach for a point, from one flood from where he stands, best first: the point itself;
+    /// Ground they can reach for a point, from one flood from where they stand, best first: the point itself;
     /// else, of `preferred` (ground the caller trusts to be on the point's side, such as cells a flood from
-    /// the point reached), the one nearest the point that he can reach; else the reached ground nearest it
+    /// the point reached), the one nearest the point that they can reach; else the reached ground nearest it
     /// within Approach Radius, as the crow flies, which can lie on the far side of a wall from the point:
     /// the caller should check that one. None on no grid or with nothing in reach. The flood reads cells
-    /// by X and Z only, so the caller must have him on the point's floor. A decision, not a step.
+    /// by X and Z only, so the caller must have them on the point's floor. A decision, not a step.
     /// </summary>
     public GroundFound FindGroundNear(Vector3 point, IReadOnlyList<Vector3> preferred, out Vector3 spot)
     {
@@ -168,7 +168,7 @@ public class GridNavigator
 
     /// <summary>
     /// Chase a moving target along its floor's shared field. Stops on top of it. With getClose, a target
-    /// he has no path to is approached instead (see Approach).
+    /// they have no path to is approached instead (see Approach).
     /// </summary>
     public void ChaseTo(Transform target, float speed, bool getClose = false)
     {
@@ -236,7 +236,7 @@ public class GridNavigator
         // Move on once the next corner is in straight sight, not on getting near this one:
         // around the end of a thin wall, switching early aims the enemy straight into it. Sight at
         // the clearance the pull accepted that corner at, as the off-route check above: asking for
-        // the corner's own clearance rejected a run through a doorway to a roomy corner, so he
+        // the corner's own clearance rejected a run through a doorway to a roomy corner, so they
         // walked onto the corner before turning.
         while (_routeIndex < _route.Count - 1
                && (FlatDistance(position, _route[_routeIndex]) <= CornerReach
@@ -401,20 +401,20 @@ public class GridNavigator
         return NavResult.Moving;
     }
 
-    // A rule and not a silent fallback, so it warns: someone hunting a target he has no path to walks to
-    // the ground he can reach nearest it. A body can stand where the grid has no way in, such as tight
-    // behind a crate, and standing still until his timer ran out lost her while she hadn't moved. Only
+    // A rule and not a silent fallback, so it warns: someone hunting a target they have no path to walks to
+    // the ground they can reach nearest it. A body can stand where the grid has no way in, such as tight
+    // behind a crate, and standing still until their timer ran out lost her while she hadn't moved. Only
     // for a hunt: a walk to a post or a follower's walk still stops and says so.
     private NavResult Approach(PathGrid grid, Vector3 goal, float speed)
     {
         FindApproach(grid, goal);
         if (!_approachFound)
         {
-            Fail($"no path to {goal} on {grid.name}, and no ground he can reach within {ApproachRadius:0.#} m of it — standing still.");
+            Fail($"no path to {goal} on {grid.name}, and no ground they can reach within {ApproachRadius:0.#} m of it — standing still.");
             return NavResult.Unreachable;
         }
 
-        // His own flood can reach the goal although the goal's field gave no step (the field's last cell,
+        // Their own flood can reach the goal although the goal's field gave no step (the field's last cell,
         // a goal on clearance-blocked ground): the walk still happens, and a warning that says "0 m from
         // it" would claim a detour that isn't one.
         bool atGoal = FlatDistance(goal, _approachSpot) < ApproachSameSpot
@@ -422,15 +422,15 @@ public class GridNavigator
         if (!_approachWarned && !atGoal)
         {
             Object context = _agent as Object;
-            Debug.LogWarning($"{(context != null ? context.name : "agent")}: no path to {goal} on {grid.name} (too tight for the grid, or walled off), so he goes as near as he can get: {_approachSpot}, {FlatDistance(goal, _approachSpot):0.#} m from it.", context);
+            Debug.LogWarning($"{(context != null ? context.name : "agent")}: no path to {goal} on {grid.name} (too tight for the grid, or walled off), so they go as near as they can get: {_approachSpot}, {FlatDistance(goal, _approachSpot):0.#} m from it.", context);
             _approachWarned = true;
         }
 
         NavResult result = MoveToArea(GridArea.Circle(_approachSpot, ApproachReach), speed);
         if (result is NavResult.Moving or NavResult.Arrived) return result;
 
-        // Blocked is someone standing in the way: MoveToArea has already steered, and Fail would zero his
-        // velocity and warn every step, leaving him frozen even after the blocker moved. Keep going, as
+        // Blocked is someone standing in the way: MoveToArea has already steered, and Fail would zero their
+        // velocity and warn every step, leaving them frozen even after the blocker moved. Keep going, as
         // SearchingState.WalkToSpot does; Aggro's timers bound it. Only Unreachable fails.
         if (result == NavResult.Blocked) return NavResult.Moving;
 

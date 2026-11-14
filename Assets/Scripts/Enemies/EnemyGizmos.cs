@@ -7,7 +7,7 @@ internal static class EnemyGizmos
 {
     public static void DrawSelected(EnemyController enemy)
     {
-        // His range post, so a spot set on the wrong enemy shows.
+        // Their range post, so a spot set on the wrong enemy shows.
         if (enemy.PostSpot != null)
         {
             Gizmos.color = new Color(0.2f, 1f, 0.4f, 0.9f);
@@ -21,7 +21,7 @@ internal static class EnemyGizmos
         Gizmos.color = inView ? (enemy.Vision.CanSeePlayer() ? Color.green : Color.red) : Color.grey;
         Vector3 eye = enemy.EyePosition;
         DrawFlatCircle(eye, enemy.CloseRadius);
-        // Pitched straight up or down he has no facing and no cone (see InView), so draw none
+        // Pitched straight up or down they have no facing and no cone (see InView), so draw none
         // rather than invent a direction.
         if (EnemyVision.TryFlatForward(enemy.transform, out Vector3 flatForward)) DrawFlatArc(eye, flatForward, enemy.ViewAngle, enemy.ViewRange);
 
@@ -34,9 +34,9 @@ internal static class EnemyGizmos
         Gizmos.color = new Color(1f, 0.4f, 0.8f);
         Gizmos.DrawWireSphere(enemy.transform.position, enemy.BodyNoticeRange);
 
-        // Attack Near Radius round where she was last reported, and inside it where he counts as having reached
-        // the spot he knew. Only on the selected enemy: drawn on every enemy in Play, the rings piled up and hid
-        // the scene. In edit mode there is no news of Ruby, so the ring is drawn round him, to judge its size.
+        // Attack Near Radius round where she was last reported, and inside it where they count as having reached
+        // the spot they knew. Only on the selected enemy: drawn on every enemy in Play, the rings piled up and hid
+        // the scene. In edit mode there is no news of Ruby, so the ring is drawn round them, to judge its size.
         if (TryGetRecentNews(enemy, out RubyFact news))
         {
             Gizmos.color = AttackNearColour;
@@ -66,14 +66,14 @@ internal static class EnemyGizmos
             Gizmos.DrawWireSphere(enemy.transform.position, gun.MinDistance);
         }
 
-        // How far he goes for a free gun once unarmed. Drawn armed or not, because that's when it's set up. 0 means he never re-arms, so nothing.
+        // How far they go for a free gun once unarmed. Drawn armed or not, because that's when it's set up. 0 means they never re-arms, so nothing.
         if (enemy.RearmRadius > 0f)
         {
             Gizmos.color = new Color(0.25f, 0.6f, 1f);
             Gizmos.DrawWireSphere(enemy.transform.position, enemy.RearmRadius);
         }
 
-        // The firing spot he has claimed in his fight, and the way he'd walk to it.
+        // The firing spot they have claimed in their fight, and the way they'd walk to it.
         if (Application.isPlaying && enemy.TryGetFiringSpot(out Vector3 firingSpot))
         {
             Gizmos.color = Color.yellow;
@@ -99,12 +99,12 @@ internal static class EnemyGizmos
 
     private static readonly Color AttackNearColour = new(1f, 0.55f, 0.1f, 0.6f);
 
-    // Around where he last heard or saw of Ruby, while that report is recent enough to count. Playing doesn't
-    // mean he has woken: the prefab open in Prefab Mode during Play never runs Awake, so it has no Memory to ask.
+    // Around where they last heard or saw of Ruby, while that report is recent enough to count. Playing doesn't
+    // mean they have woken: the prefab open in Prefab Mode during Play never runs Awake, so it has no Memory to ask.
     private static bool TryGetRecentNews(EnemyController enemy, out RubyFact news)
     {
         news = default;
-        return Application.isPlaying && enemy.Memory != null && enemy.Awareness.TryGetNewestRubyFact(out news)
+        return Application.isPlaying && enemy.Memory != null && enemy.Awareness.TryGetNewestRedFact(out news)
             && Time.time - news.Time <= enemy.AttackNearTime;
     }
 

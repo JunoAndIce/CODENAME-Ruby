@@ -13,7 +13,7 @@ public interface IPathAgent
     float StuckTime { get; }
 
     /// <summary>
-    /// Steer one physics step toward target. mustReach is true when the target is a point he must
+    /// Steer one physics step toward target. mustReach is true when the target is a point they must
     /// actually reach (a goal on a clear line, a route corner, a field's last step into the goal
     /// cell) and false for any other flow-field step, which rolls ahead every step and can't be
     /// orbited.

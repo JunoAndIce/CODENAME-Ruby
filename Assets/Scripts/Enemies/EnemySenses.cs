@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// One enemy's senses beyond sight: what he hears, and what he notices moving, dead or
+/// One enemy's senses beyond sight: what they hear, and what they notice moving, dead or
 /// dropped. Kept out of EnemyController so its scans don't grow the controller further.
 /// </summary>
 public class EnemySenses
@@ -28,12 +28,12 @@ public class EnemySenses
     }
 
     /// <summary>
-    /// A sound that reached him. The map decides first whether it's worth a search, and only a sound
-    /// the map doesn't ignore teaches him anything: Ruby's own sounds then teach him where she is, as
-    /// Heard. He goes to where the sound happened, never to the thing's
-    /// origin: an impact is checked where it landed, not at whoever threw it. Only a body he sees moving
-    /// leads back to its throw (Consider), because he can see which way it came from. A sound can't tell
-    /// him that.
+    /// A sound that reached them. The map decides first whether it's worth a search, and only a sound
+    /// the map doesn't ignore teaches them anything: Ruby's own sounds then teach them where she is, as
+    /// Heard. They go to where the sound happened, never to the thing's
+    /// origin: an impact is checked where it landed, not at whoever threw it. Only a body they see moving
+    /// leads back to its throw (Consider), because they can see which way it came from. A sound can't tell
+    /// them that.
     /// </summary>
     public void Hear(in Stimulus stimulus)
     {
@@ -56,9 +56,9 @@ public class EnemySenses
 
     /// <summary>
     /// Every Scan Interval: looks for enemies on the chain, for bodies moving within Motion Radius that
-    /// he can see clearly (a fast one is FastObject, a slower one MovingObject), for corpses and for loose
+    /// they can see clearly (a fast one is FastObject, a slower one MovingObject), for corpses and for loose
     /// guns. The map decides what each is worth. A moving body is reacted to once per Origin Lifetime, so a
-    /// settled thrown body doesn't keep him searching.
+    /// settled thrown body doesn't keep them searching.
     /// </summary>
     public void Scan()
     {
@@ -74,19 +74,19 @@ public class EnemySenses
 
         // Only the motion scan needs the stimulus rules (Notice and Alarm Speed, Origin Lifetime).
         // Intel reports their absence once, at enable; corpses and guns don't need them. Skipped while
-        // he is too busy to act on it: nothing it finds is marked taken, so a body spun in front of him
+        // they are too busy to act on it: nothing it finds is marked taken, so a body spun in front of them
         // in a fight was swept, judged and refused again every scan.
         if (Stimuli.Rules != null && !TooBusy) ScanMotion(now);
         ScanCorpses();
         ScanLooseGuns();
     }
 
-    // An enemy killed in his view with a clear line: he always goes to check where what killed him came from,
-    // on a job together or not, as a gunshot takes anyone searching. A partner dying beside him and him only
-    // searching the body read as not caring. No Aggro: he hasn't seen who did it. No origin means nothing
-    // shows where it came from, so he checks where the enemy died. A knockdown doesn't do this: it stays
+    // An enemy killed in their view with a clear line: they always go to check where what killed them came from,
+    // on a job together or not, as a gunshot takes anyone searching. A partner dying beside them and them only
+    // searching the body read as not caring. No Aggro: they haven't seen who did it. No origin means nothing
+    // shows where it came from, so they check where the enemy died. A knockdown doesn't do this: it stays
     // Consider's Search, which keeps a step between a fall and a death. One scan's window, tested at the
-    // spot he died, as for a throw (ScanHeld), and once each, since the window can span two scans.
+    // spot they died, as for a throw (ScanHeld), and once each, since the window can span two scans.
     private void ScanDeaths()
     {
         float window = _enemy.ScanInterval + Time.fixedDeltaTime;
@@ -103,21 +103,21 @@ public class EnemySenses
             Vector3 point = hasOrigin ? source : where;
             if (!_enemy.Intel.TryGetRow(point, StimulusKind.Body, false, out BehaviourMap.Row row)) continue;
 
-            DebugLog.Info($"{_enemy.name} sees {other.name} killed: he goes to check {(hasOrigin ? "where it came from" : "where he died, since nothing shows where it came from")}, {point}.", _enemy);
+            DebugLog.Info($"{_enemy.name} sees {other.name} killed: they go to check {(hasOrigin ? "where it came from" : "where they died, since nothing shows where it came from")}, {point}.", _enemy);
             _enemy.Reactions.Investigate(new Incident(point, row.Response, row.Priority, makesSearch: true, saysNothingOfRuby: !hasOrigin, mobilises: true, kind: StimulusKind.Body, source: other.transform));
         }
     }
 
-    // An enemy on the chain, in his view with a clear line. Standing where he was grabbed, he is walked
+    // An enemy on the chain, in their view with a clear line. Standing where they were grabbed, they are walked
     // over to and searched around; dragged or thrown, someone is plainly on the other end, and that is
-    // the one thing short of seeing Ruby that sends him to Aggro. The view and not the all-round motion
+    // the one thing short of seeing Ruby that sends them to Aggro. The view and not the all-round motion
     // sense, because a body standing still has nothing to catch the eye from behind. Its own record
-    // rather than _reactedAt, or a grab he had taken would blind him to what follows for Origin Lifetime.
+    // rather than _reactedAt, or a grab they had taken would blind them to what follows for Origin Lifetime.
     private void ScanHeld()
     {
-        // One more physics step than the scan's interval, so a throw between two of his scans falls
+        // One more physics step than the scan's interval, so a throw between two of their scans falls
         // inside one of them. The spot it left from, not the body: at 90 m/s it is 18 m off by then. A
-        // flying body he only saw after that isn't a throw he saw: that is Consider's Search at its origin.
+        // flying body they only saw after that isn't a throw they saw: that is Consider's Search at its origin.
         float throwWindow = _enemy.ScanInterval + Time.fixedDeltaTime;
 
         IReadOnlyList<EnemyController> enemies = _enemy.Intel.Enemies;
@@ -145,9 +145,9 @@ public class EnemySenses
                 _enemy.Reactions.SeeAttack(other, "being dragged on the chain");
                 return;
             }
-            // Marked only when taken: one he couldn't act on (in a fight, fetching a gun) may still send him.
+            // Marked only when taken: one they couldn't act on (in a fight, fetching a gun) may still send them.
             // A living one standing on the chain shows exactly where Ruby is, so it says something of her (a job
-            // member goes to check it, and it counts toward his limit); a held corpse is still only a find.
+            // member goes to check it, and it counts toward their limit); a held corpse is still only a find.
             if (!TooBusy && !_noticedHeld.Contains(other) && Notice(at, StimulusKind.Body, $"{other.name} on the chain", other.transform, showsRuby: !other.Health.IsDead))
                 _noticedHeld.Add(other);
         }
@@ -183,7 +183,7 @@ public class EnemySenses
 
     // Corpses come from the squad's registered enemies, not a physics sweep: a body at rest has
     // trigger colliders, and the registry is short and needs no buffer to overflow. The cheap
-    // tests (dead, known) run first, so the one sight ray is only for a corpse he could notice.
+    // tests (dead, known) run first, so the one sight ray is only for a corpse they could notice.
     private void ScanCorpses()
     {
         IReadOnlyList<EnemyController> enemies = _enemy.Intel.Enemies;
@@ -196,10 +196,10 @@ public class EnemySenses
             Vector3 at = enemy.transform.position;
             if (!_enemy.Vision.InView(at, _enemy.BodyNoticeRange) || !_enemy.Vision.HasClearSight(at, enemy.transform)) continue;
 
-            // Known to the squad but not to him: he stops and looks at it where he stands, and is wary
+            // Known to the squad but not to them: they stop and looks at it where they stand, and is wary
             // from then on, but doesn't go to it: someone has already been. Unknown to both: it goes
-            // on the squad's books and he searches where it lies. The pool is read as published, a
-            // little stale, like everything else he reads from it.
+            // on the squad's books and they search where it lies. The pool is read as published, a
+            // little stale, like everything else they read from it.
             bool squadKnows = _enemy.Intel.Published.KnowsBody(enemy);
             _enemy.Intel.ReportBody(enemy);
             _enemy.Memory.RememberBody(enemy);
@@ -241,9 +241,9 @@ public class EnemySenses
         }
     }
 
-    // A look from where he stands at something the squad already knows about: it isn't worth a
-    // walk, but he mustn't pass it by, and it tells him she's about. Checked as a problem at the
-    // kind's own priority, so it can't pull him off anything that outranks it.
+    // A look from where they stand at something the squad already knows about: it isn't worth a
+    // walk, but they mustn't pass it by, and it tells them she's about. Checked as a problem at the
+    // kind's own priority, so it can't pull them off anything that outranks it.
     private void Glance(Vector3 at, StimulusKind kind, string what)
     {
         if (!_enemy.Intel.TryGetRow(at, kind, false, out BehaviourMap.Row row)) return;
@@ -252,11 +252,11 @@ public class EnemySenses
 
         // On a job at its place, the job goes wary for everyone, not just the one who looked.
         _enemy.Reactions.BecomeWaryAt(at, $"{_enemy.name} glances at {what}");
-        DebugLog.Info($"{_enemy.name} sees {what}: he looks at it from where he stands and is wary.", _enemy);
+        DebugLog.Info($"{_enemy.name} sees {what}: they look at it from where they stand and is wary.", _enemy);
         _enemy.Reactions.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, makesSearch: true, saysNothingOfRuby: true, kind: kind), walkThere: false);
     }
 
-    // True when he took it. `source` is the thing itself (the body, the gun), so two members noticing it are one notice.
+    // True when they took it. `source` is the thing itself (the body, the gun), so two members noticing it are one notice.
     private bool Notice(Vector3 origin, StimulusKind kind, string what, Object source, bool showsRuby = false)
     {
         if (!_enemy.Intel.TryGetRow(origin, kind, false, out BehaviourMap.Row row)) return false;
@@ -281,13 +281,13 @@ public class EnemySenses
     {
         if (body == _enemy.Body || body.isKinematic) return;
 
-        // An enemy on his feet walks about; that's his own business, not a sound. Only one
+        // An enemy on their feet walks about; that's their own business, not a sound. Only one
         // that's held on the chain or tumbling counts.
         EnemyController enemy = body.GetComponentInParent<EnemyController>();
         if (enemy != null && !enemy.IsHeld && !IsTumbling(body)) return;
 
-        // A body too slow to catch the eye still counts when it is an enemy down in front of him: one
-        // knocked down or killed may hardly move. Held and slow is ScanHeld's, which walks him over.
+        // A body too slow to catch the eye still counts when it is an enemy down in front of them: one
+        // knocked down or killed may hardly move. Held and slow is ScanHeld's, which walks them over.
         float speed = body.linearVelocity.magnitude;
         if (speed < Stimuli.Rules.NoticeSpeed && (enemy == null || enemy.IsHeld || !_enemy.Vision.InView(body.position))) return;
         if (!_enemy.Vision.HasClearSight(body.worldCenterOfMass, body.transform)) return;
@@ -297,9 +297,9 @@ public class EnemySenses
         bool hasOrigin = Disturbance.TryGetOrigin(body, out Vector3 thrownFrom);
         Vector3 origin = hasOrigin ? thrownFrom : body.position;
 
-        // The map is that of where he sees it, so the rows are read at the body's own position: judged at
+        // The map is that of where they see it, so the rows are read at the body's own position: judged at
         // the origin, a crate thrown out of a room that ignores moving objects would be ignored in the
-        // corridor too. The origin stays the point he investigates and what it teaches of Ruby.
+        // corridor too. The origin stays the point they investigate and what it teaches of Ruby.
         Vector3 judgedAt = body.position;
         // A flying pistol or enemy is judged by what it is as well as how fast it moves: speed alone
         // would call a flung pistol a mere moving object, and a thrown enemy (a body) one too. Anything
@@ -336,7 +336,7 @@ public class EnemySenses
         DebugLog.Info($"{_enemy.name} notices {kind} {body.name} at {speed:F1} m/s: {row.Response} at priority {row.Priority}.", _enemy);
         // Something this fast could kill, and no ordinary person throws it, so it is worth more than one
         // enemy's short look: a Search, wherever it started. Slower, it's a Check.
-        // Recorded only when he took it: one he ignored (mid-fight, say) may still send him later.
+        // Recorded only when they took it: one they ignored (mid-fight, say) may still send them later.
         if (_enemy.Reactions.Investigate(new Incident(origin, row.Response, row.Priority, makesSearch: kind == StimulusKind.FastObject, kind: kind, source: body.transform))) _reactedAt[body] = now;
     }
 

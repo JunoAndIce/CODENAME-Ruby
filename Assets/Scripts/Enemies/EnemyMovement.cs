@@ -11,22 +11,22 @@ using UnityEngine;
 public class EnemyMovement
 {
     private const float WanderSpotRadius = 0.5f;
-    private const float RoomStrength = 2f;      // how hard someone close bends his walk: at arm's length, about 60 degrees off his way
-    private const float RoomLookAhead = 0.75f;  // how far along the bent walk must be open ground, or he doesn't bend
+    private const float RoomStrength = 2f;      // how hard someone close bends their walk: at arm's length, about 60 degrees off their way
+    private const float RoomLookAhead = 0.75f;  // how far along the bent walk must be open ground, or they don't bend
     private const float SameFloorHeight = 1f;   // farther apart than this in height, they aren't sharing a floor
     private const int FreeSpotTries = 4;
 
-    // He doesn't shove a prop that blocks the grid. A prop only blocks while it rests, and one he is pushing
-    // never rests, so the way through it stayed open and he kept pushing, however good the way round. Stopped,
-    // it settles, blocks the grid, and he paths round it. Anything else, such as a loose gun, stays pushable:
-    // nothing plans round it, so treating it as a wall would leave him stuck on it.
+    // They don't shove a prop that blocks the grid. A prop only blocks while it rests, and one they are pushing
+    // never rests, so the way through it stayed open and they kept pushing, however good the way round. Stopped,
+    // it settles, blocks the grid, and they path round it. Anything else, such as a loose gun, stays pushable:
+    // nothing plans round it, so treating it as a wall would leave them stuck on it.
     private static readonly System.Func<Rigidbody, bool> PropsStopHim = body => body.TryGetComponent(out GridObstacle _);
 
     private readonly EnemyController _enemy;
     private readonly CapsuleCollider _capsule;
 
-    // The sweeping walk: he walks along _sweepWay while his body, and so his view, swings across it. The way
-    // has to be held apart from his facing, which every other walk reads it from. Each enemy has his own
+    // The sweeping walk: they walk along _sweepWay while their body, and so their view, swings across it. The way
+    // has to be held apart from their facing, which every other walk reads it from. Each enemy has their own
     // phase, so a team doesn't swing together.
     private readonly float _sweepPhase = Random.Range(0f, Mathf.PI * 2f);
     private bool _sweepNextMove;
@@ -48,11 +48,11 @@ public class EnemyMovement
 
     /// <summary>
     /// Curved Movement for realism.
-    /// He turns his walking heading at Turn Speed, and slows to fit the turn only for a point he must reach.
-    /// Setting off, he turns on the spot instead: the arc is for bends in a walk, and the facing he had
-    /// standing isn't a walking heading. Holding or backing away he faces Ruby, so an arc from there walked
-    /// an enemy at the gun's Min Distance into her on his way to a spot behind him, got him backed away,
-    /// and he dropped the spot and picked another, over and over with her standing still.
+    /// They turn their walking heading at Turn Speed, and slows to fit the turn only for a point they must reach.
+    /// Setting off, they turn on the spot instead: the arc is for bends in a walk, and the facing they had
+    /// standing isn't a walking heading. Holding or backing away they face Ruby, so an arc from there walked
+    /// an enemy at the gun's Min Distance into her on their way to a spot behind them, got them backed away,
+    /// and they dropped the spot and picked another, over and over with her standing still.
     /// Every path the navigator follows comes through here, so all of them keep Personal Space (MakeRoom).
     /// </summary>
     public void MoveToward(Vector3 target, float speed, bool mustReach)
@@ -64,7 +64,7 @@ public class EnemyMovement
         bool settingOff = Time.fixedTime - _lastWalkStep > Time.fixedDeltaTime * 1.5f;
         _lastWalkStep = Time.fixedTime;
 
-        // Picked up from his facing when a sweeping walk begins, then kept: he strays from it to look.
+        // Picked up from their facing when a sweeping walk begins, then kept: they stray from it to look.
         bool sweeping = _sweepNextMove;
         _sweepNextMove = false;
         if (sweeping && Time.fixedTime - _lastSweepStep > Time.fixedDeltaTime * 1.5f) _sweepWay = transform.forward;
@@ -79,9 +79,9 @@ public class EnemyMovement
             direction = MakeRoom(direction);
             // The sweeping walk keeps its own way, picked up as it begins.
             if (settingOff && !sweeping) heading = direction.normalized;
-            // Fit the speed only to a point he must reach. A flow-field step rolls ahead every
+            // Fit the speed only to a point they must reach. A flow-field step rolls ahead every
             // step, so there is nothing to orbit and the cap would only slow a chase on ordinary
-            // bends; its last step, the goal cell, stops rolling and is a point he must reach.
+            // bends; its last step, the goal cell, stops rolling and is a point they must reach.
             if (mustReach)
                 fitted = Steering.SpeedToFit(speed, _enemy.TurnSpeed, distance, Vector3.Angle(heading, direction));
             heading = Steering.TurnToward(heading, direction, _enemy.TurnSpeed * Time.fixedDeltaTime);
@@ -98,17 +98,17 @@ public class EnemyMovement
             if (heading.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(heading, Vector3.up) * Quaternion.Euler(0f, sweep, 0f);
         }
 
-        // The fitted speed, so the animation sees him slow in a tight turn.
+        // The fitted speed, so the animation sees them slow in a tight turn.
         IntendedSpeed = fitted;
         VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, heading * fitted, PropsStopHim));
     }
 
-    // Bends a walk away from any enemy inside Personal Space, harder the closer he is, so they curve round
+    // Bends a walk away from any enemy inside Personal Space, harder the closer they are, so they curve round
     // each other instead of walking into each other's capsules and pushing. Equal weights block each other
     // (PushLimit), so without this two in a doorway stood grinding until a timer ran out. One dead ahead also
-    // adds a step to his own right: met head-on, pushing straight back would only stop them both, and each
-    // going right is how two people pass. Only for one on his feet: a body down or on the chain isn't anyone
-    // to make room for. A bend into a wall isn't taken: he keeps to his way and the push rule handles it,
+    // adds a step to their own right: met head-on, pushing straight back would only stop them both, and each
+    // going right is how two people pass. Only for one on their feet: a body down or on the chain isn't anyone
+    // to make room for. A bend into a wall isn't taken: they keep to their way and the push rule handles it,
     // because a corridor too narrow to pass in has no room to make. With no Intel there is no list of who
     // else is here, which Start has already reported.
     private Vector3 MakeRoom(Vector3 direction)
@@ -134,7 +134,7 @@ public class EnemyMovement
             if (gap >= space) continue;
 
             float press = 1f - gap / space;
-            // Standing exactly on him there is no way out to read: back the way he was going.
+            // Standing exactly on them there is no way out to read: back the way they were going.
             Vector3 outward = gap > 0.001f ? offset / gap : -forward;
             away += outward * press;
             float ahead = Vector3.Dot(-outward, forward);
@@ -150,7 +150,7 @@ public class EnemyMovement
         return bent;
     }
 
-    /// <summary>Whether another enemy on his feet stands within Personal Space of a point.</summary>
+    /// <summary>Whether another enemy on their feet stands within Personal Space of a point.</summary>
     public bool IsSpaceTaken(Vector3 point)
     {
         Intel intel = _enemy.Intel;
@@ -174,7 +174,7 @@ public class EnemyMovement
     }
 
     /// <summary>
-    /// A random spot in an area, at least minDistance from where he stands, and not inside anyone's space
+    /// A random spot in an area, at least minDistance from where they stand, and not inside anyone's space
     /// when one can be found in a few tries. In a crowded area the last try stands: walking there and being
     /// blocked is already handled, and a false here means something else, that the area has no ground.
     /// </summary>
@@ -217,8 +217,8 @@ public class EnemyMovement
     }
 
     /// <summary>
-    /// Turns his body toward a heading about Y, at Turn Speed, and says whether he's facing it.
-    /// For standing at his post: facing the way he started once he's back.
+    /// Turns their body toward a heading about Y, at Turn Speed, and says whether they're facing it.
+    /// For standing at their post: facing the way they started once they're back.
     /// </summary>
     public bool TurnToYaw(float yaw)
     {
@@ -244,11 +244,11 @@ public class EnemyMovement
     }
 
     /// <summary>
-    /// Stops and turns his body side to side about where he was facing, baseYaw, so a look reads as
+    /// Stops and turns their body side to side about where they were facing, baseYaw, so a look reads as
     /// looking about. The look lasts duration, and the sweep is stretched to a whole number of
-    /// sweeps within it, so he ends facing the way he began: a fixed period left a 1.5 s look 70
-    /// degrees off the spot he'd been looking at. It sets the heading about Y alone: his root never
-    /// pitches in play, and a tilt would drive him off the floor. For FixedTick, where the walk also
+    /// sweeps within it, so they end facing the way they began: a fixed period left a 1.5 s look 70
+    /// degrees off the spot they'd been looking at. It sets the heading about Y alone: their root never
+    /// pitches in play, and a tilt would drive them off the floor. For FixedTick, where the walk also
     /// writes the heading.
     /// </summary>
     public void LookAround(float baseYaw, float elapsed, float duration)
@@ -294,7 +294,7 @@ public class EnemyMovement
     public NavResult WanderTo(Vector3 spot, float speed) => WalkTo(spot, WanderSpotRadius, speed);
 
     /// <summary>
-    /// The same walk, at a search's creep, with his body and view sweeping side to side across his way
+    /// The same walk, at a search's creep, with their body and view sweeping side to side across their way
     /// instead of stopping to turn. Only the next move sweeps, so it can't outlive the walk that asked for it.
     /// </summary>
     public NavResult SweepTo(Vector3 spot, float speed)
@@ -309,18 +309,18 @@ public class EnemyMovement
     public NavResult WalkTo(Vector3 point, float reach, float speed) => _enemy.Navigator.MoveToArea(GridArea.Circle(point, reach), speed);
 
     /// <summary>
-    /// Chase the newest thing he knows of Ruby, not Ruby herself, so breaking sight can drop a fight.
-    /// Arrived when he is on the spot; Unreachable (and stopped) when he has nothing to go on.
+    /// Chase the newest thing they know of Ruby, not Ruby herself, so breaking sight can drop a fight.
+    /// Arrived when they are on the spot; Unreachable (and stopped) when they have nothing to go on.
     /// </summary>
     public NavResult ChaseKnown(float speed)
     {
-        if (!_enemy.Awareness.TryGetNewestRuby(out Vector3 point))
+        if (!_enemy.Awareness.TryGetNewestRed(out Vector3 point))
         {
             Stop();
             return NavResult.Unreachable;
         }
         // A place and not a point: enemies of equal weight block each other, so several sent to one
-        // point pushed at each other to get onto it. The line stops him counting as there from the far
+        // point pushed at each other to get onto it. The line stops them counting as there from the far
         // side of a wall.
         if (PathGrid.FlatDistance(_enemy.transform.position, point) <= _enemy.KnownSpotRadius && _enemy.CanSeeSpot(point))
         {
@@ -330,7 +330,7 @@ public class EnemyMovement
         return _enemy.Navigator.MoveTo(point, speed, getClose: true);
     }
 
-    /// <summary>Chase the player along this floor's shared flow field, or as near as he can get when she stands where the grid has no way in.</summary>
+    /// <summary>Chase the player along this floor's shared flow field, or as near as they can get when she stands where the grid has no way in.</summary>
     public void PathToPlayer(float speed)
     {
         PlayerController player = _enemy.Player;

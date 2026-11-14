@@ -24,7 +24,7 @@ public readonly struct RubyFact
 
 /// <summary>
 /// What the squad's shared pool held at its last publish. A new object every publish, never edited
-/// afterwards, so a snapshot an enemy holds can't change under him mid-decision. It is stale on
+/// afterwards, so a snapshot an enemy holds can't change under them mid-decision. It is stale on
 /// purpose: it republishes once a second, which is how Ruby gets away from a fight.
 /// </summary>
 public class IntelSnapshot
@@ -36,16 +36,16 @@ public class IntelSnapshot
 
     public IntelSnapshot(bool rubyReported, RubyFact ruby, IEnumerable<EnemyController> bodies, IEnumerable<Gun> guns)
     {
-        RubyReported = rubyReported;
-        Ruby = ruby;
+        RedReported = rubyReported;
+        Red = ruby;
         _bodies = new HashSet<EnemyController>(bodies);
         _guns = new HashSet<Gun>(guns);
     }
 
     /// <summary>Anyone has reported Ruby since the level began.</summary>
-    public bool RubyReported { get; }
-    /// <summary>The newest report of her. Meaningless unless RubyReported.</summary>
-    public RubyFact Ruby { get; }
+    public bool RedReported { get; }
+    /// <summary>The newest report of her. Meaningless unless RedReported.</summary>
+    public RubyFact Red { get; }
     /// <summary>Dead enemies the squad has reported. Never forgotten within a level.</summary>
     public IReadOnlyCollection<EnemyController> Bodies => _bodies;
     /// <summary>Loose guns the squad has reported.</summary>
@@ -56,7 +56,7 @@ public class IntelSnapshot
 }
 
 /// <summary>
-/// What one enemy knows about Ruby. His own knowledge (what he saw, heard or was told) is acted on
+/// What one enemy knows about Ruby. Their own knowledge (what they saw, heard or was told) is acted on
 /// at once, with no delay; the shared pool is what the squad published, up to a second old, and is
 /// only consulted beside it. Whichever is newer wins.
 /// </summary>
@@ -67,12 +67,12 @@ public class EnemyMemory
     private readonly HashSet<EnemyController> _bodies = new();
     private readonly HashSet<Gun> _guns = new();
 
-    /// <summary>He has seen her with his own eyes at least once. Never cleared: it is what makes him wary for good.</summary>
-    public bool HasSeenRuby { get; private set; }
+    /// <summary>They have seen her with their own eyes at least once. Never cleared: it is what makes them wary for good.</summary>
+    public bool HasSeenRed { get; private set; }
 
     /// <summary>
-    /// He has been after her, or has been shown she's about (a search for an attack, a body he was
-    /// told of): from then on he patrols aggressively. Never cleared, like HasSeenRuby, because the
+    /// They have been after her, or has been shown she's about (a search for an attack, a body they were
+    /// told of): from then on they patrol aggressively. Never cleared, like HasSeenRed, because the
     /// level doesn't relax once an enemy has gone looking for her.
     /// </summary>
     public bool Wary { get; private set; }
@@ -82,9 +82,9 @@ public class EnemyMemory
     public void BecomeWary() => Wary = true;
 
     /// <summary>
-    /// How many times he has been put on a job he wasn't on (started one, joined, was called in). Never
-    /// expires or clears: it is his own record, so a third look raises the job even when the first two
-    /// were minutes apart, and it can never reach the threshold twice for him (see JobBoard.JoinMember).
+    /// How many times they have been put on a job they weren't on (started one, joined, was called in). Never
+    /// expires or clears: it is their own record, so a third look raises the job even when the first two
+    /// were minutes apart, and it can never reach the threshold twice for them (see JobBoard.JoinMember).
     /// </summary>
     public int TimesSentToLook { get; private set; }
 
@@ -92,28 +92,28 @@ public class EnemyMemory
     public int NoteSentToLook() => ++TimesSentToLook;
 
     /// <summary>
-    /// A teammate who had seen Ruby told him of her, on a job. He acts on it (KnowsRuby) but is not a
-    /// witness: only HasSeenRuby tells others in turn. Letting a told enemy tell would spread one
+    /// A teammate who had seen Ruby told them of her, on a job. They act on it (KnowsRed) but is not a
+    /// witness: only HasSeenRed tells others in turn. Letting a told enemy tell would spread one
     /// sighting down every chain of jobs through the level, which is the removed level alert by another
-    /// door. Never cleared, like HasSeenRuby.
+    /// door. Never cleared, like HasSeenRed.
     /// </summary>
-    public bool WasToldOfRuby { get; private set; }
+    public bool WasToldOfRed { get; private set; }
 
-    // JobBoard.TellOfRuby is the only caller. It doesn't set HasSeenRuby: Learn does that, and only
+    // JobBoard.TellOfRed is the only caller. It doesn't set HasSeenRed: Learn does that, and only
     // for a Seen fact, which a told one never is.
-    public void BeToldOfRuby() => WasToldOfRuby = true;
+    public void BeToldOfRed() => WasToldOfRed = true;
 
-    /// <summary>He has seen her or been told of her: what makes him patrol aggressively and read every disturbance as an attack.</summary>
-    public bool KnowsRuby => HasSeenRuby || WasToldOfRuby;
+    /// <summary>They have seen her or been told of her: what makes them patrol aggressively and read every disturbance as an attack.</summary>
+    public bool KnowsRed => HasSeenRed || WasToldOfRed;
 
     private Vector3 _raisedAt;
     private bool _hasRaisedAt;
 
     /// <summary>
-    /// Whether he should raise a job to an attack for having lost a fight, once per area: true, and the
+    /// Whether they should raise a job to an attack for having lost a fight, once per area: true, and the
     /// place is recorded, the first time or when it is at least radius (flat) from the one recorded; false
-    /// when it is the same area. The flip from Aggro to Searching can repeat within one fight, and he
-    /// mustn't raise the job each time. Only the raise is once per area: he still joins.
+    /// when it is the same area. The flip from Aggro to Searching can repeat within one fight, and they
+    /// mustn't raise the job each time. Only the raise is once per area: they still join.
     /// </summary>
     public bool NoteRaisedAt(Vector3 point, float radius)
     {
@@ -128,7 +128,7 @@ public class EnemyMemory
     private float _lastCounted = float.NegativeInfinity;
 
     /// <summary>
-    /// Notes that something lesser happened while he was searching, and returns how many he has had
+    /// Notes that something lesser happened while they were searching, and returns how many they have had
     /// within memory seconds. Two clocks. `isNew`: it is more than gap since the last disturbance of any
     /// kind, so a thrown body's ten thuds and a firefight's run of shots are each one thing to respond to,
     /// not a dozen. `counted`: it `counts` (a body or gun lying there doesn't) and is more than gap since the last one that was counted. They are apart because one clock let an uncounted thing, a body noticed, swallow the real provocation that followed within the gap: no count, no pause, no scout.
@@ -136,7 +136,7 @@ public class EnemyMemory
     public int NoteDistraction(float now, float memory, float gap, bool counts, out bool isNew, out bool counted)
     {
         // A loop rather than RemoveAll with a lambda: the lambda captures now and memory, so it
-        // allocated on every sound an enemy hears while he searches. Same order kept.
+        // allocated on every sound an enemy hears while they search. Same order kept.
         int kept = 0;
         for (int i = 0; i < _distractions.Count; i++)
         {
@@ -168,30 +168,30 @@ public class EnemyMemory
     public bool KnowsGun(Gun gun) => _guns.Contains(gun);
     public void RememberGun(Gun gun) => _guns.Add(gun);
 
-    /// <summary>Takes in a fact if it is newer than what he has. An older report never overwrites a fresher one.</summary>
+    /// <summary>Takes in a fact if it is newer than what they have. An older report never overwrites a fresher one.</summary>
     public void Learn(RubyFact fact)
     {
-        if (fact.Source == Knowledge.Seen) HasSeenRuby = true;
+        if (fact.Source == Knowledge.Seen) HasSeenRed = true;
         if (_hasRuby && _ruby.Time >= fact.Time) return;
         _ruby = fact;
         _hasRuby = true;
     }
 
     /// <summary>
-    /// The newer of his own fact and the pool's. On a tie his own wins: it needed no publish to
-    /// reach him. False when he knows nothing and the pool has nothing.
+    /// The newer of their own fact and the pool's. On a tie their own wins: it needed no publish to
+    /// reach them. False when they know nothing and the pool has nothing.
     /// </summary>
-    public bool TryGetNewestRuby(IntelSnapshot pool, out RubyFact fact)
+    public bool TryGetNewestRed(IntelSnapshot pool, out RubyFact fact)
     {
-        bool poolHas = pool != null && pool.RubyReported;
-        if (_hasRuby && (!poolHas || _ruby.Time >= pool.Ruby.Time))
+        bool poolHas = pool != null && pool.RedReported;
+        if (_hasRuby && (!poolHas || _ruby.Time >= pool.Red.Time))
         {
             fact = _ruby;
             return true;
         }
         if (poolHas)
         {
-            fact = pool.Ruby.WithSource(Knowledge.Pool);
+            fact = pool.Red.WithSource(Knowledge.Pool);
             return true;
         }
         fact = default;

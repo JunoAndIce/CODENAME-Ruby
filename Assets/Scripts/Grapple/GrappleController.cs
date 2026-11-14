@@ -446,9 +446,9 @@ public class GrappleController : MonoBehaviour
             else _grabbed.EndGrab(parked);
             _grabbed = null;
         }
-        // Only now, once the host has been let go: an officer goes limp there, and his bones only
+        // Only now, once the host has been let go: an officer goes limp there, and their bones only
         // switch on then. Unity drops an ignore pair set while a collider was off, so a window
-        // started before the let-go missed his limbs, and her own throw could knock her down.
+        // started before the let-go missed their limbs, and her own throw could knock her down.
         // Knocked down, she's about to lie on her limbs, not the capsule a pass-through would cover.
         if (_user.CanAct && (thrown || parked)) _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
         if (_tether.Node != null) _tether.Node.IsOccupied = false;

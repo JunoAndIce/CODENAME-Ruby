@@ -20,14 +20,14 @@ public class BehaviourMap : ScriptableObject
     /// <summary>Priorities run from 1 (least) to 5 (most). A search from Aggro sits one above, so it outranks every row.</summary>
     public const int MinPriority = 1;
     public const int MaxPriority = 5;
-    /// <summary>A search from Aggro outranks every map row (one above the top of the scale), so a sound can't pull him off a lost player.</summary>
+    /// <summary>A search from Aggro outranks every map row (one above the top of the scale), so a sound can't pull them off a lost player.</summary>
     public const int FromAggroPriority = MaxPriority + 1;
 
     [Serializable]
     public struct Row
     {
         public StimulusKind Kind;
-        [Tooltip("1 to 5. Higher outranks lower. A search only gives way to a higher number; an equal or lower one only distracts him.")]
+        [Tooltip("1 to 5. Higher outranks lower. A search only gives way to a higher number; an equal or lower one only distracts them.")]
         [Range(MinPriority, MaxPriority)] public int Priority;
         public StimulusResponse Response;
         [Tooltip("Applies only while the room is in use; otherwise the room around it decides. Only meaningful on a room's map.")]
