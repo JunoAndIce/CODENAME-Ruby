@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// At their post. Where they started is their post: after a search, a fall or a shove they walk back to
-/// it and turns the way they started, so an idle enemy is never left standing wherever their last
+/// it and turn the way they started, so an idle enemy is never left standing wherever their last
 /// job ended. Aggressive, they come back at the aggressive patrol speed. Noticing Ruby, hearing something or wanting a gun
 /// is the table's business, not this state's.
 /// </summary>

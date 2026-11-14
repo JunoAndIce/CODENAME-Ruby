@@ -36,7 +36,7 @@ public class Intel : MonoBehaviour
     [SerializeField, Min(0f)] private float _gatherTime = 0.75f;
     [Tooltip("How long the enemy who heard something looks at it before they call anyone, in seconds. Nobody else is on the job until they have reacted.")]
     [SerializeField, Min(0f)] private float _reactTime = 0.5f;
-    [Tooltip("How long each call takes, in seconds: they turn to the nearest enemy and calls them, and that enemy turns to face them. Then the next nearest, and so on.")]
+    [Tooltip("How long each call takes, in seconds: they turn to the nearest enemy and call them, and that enemy turns to face them. Then the next nearest, and so on.")]
     [SerializeField, Min(0f)] private float _callTime = 0.6f;
     [Tooltip("The circle that marks what a search covers, in metres round its place: the open ground it reaches, and every room holding no rooms that it reaches over open ground, searched whole. Members first walk to the place (Search Start Radius) and spread out from there.")]
     [SerializeField, Min(1f)] private float _searchAreaRadius = 6f;
@@ -69,7 +69,7 @@ public class Intel : MonoBehaviour
     // The shared pool: inbox, publish clock and the published snapshot. Intel ticks it and forwards to it.
     private readonly KnowledgePool _pool = new();
     // One reach per use, each with warn-once sets of its own. Each enemy warns once about a setup
-    // problem, however often they speak or is spoken to; a sound that nobody can hear warns once per
+    // problem, however often they speak or are spoken to; a sound that nobody can hear warns once per
     // source object, not once per shot.
     private readonly FloorReach _speech = new();
     private readonly FloorReach _sound = new();
@@ -402,7 +402,7 @@ public class Intel : MonoBehaviour
     /// <summary>Takes an enemy off their job (see JobBoard.Leave).</summary>
     public void Leave(EnemyController who) => _board.Leave(who);
 
-    /// <summary>They have gone to Aggro: they join the fight on their floor or starts one (see FightBoard.Join).</summary>
+    /// <summary>They have gone to Aggro: they join the fight on their floor or start one (see FightBoard.Join).</summary>
     public Fight Join(EnemyController who) => _fights.Join(who);
 
 

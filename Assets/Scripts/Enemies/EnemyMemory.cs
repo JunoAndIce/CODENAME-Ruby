@@ -56,7 +56,7 @@ public class IntelSnapshot
 }
 
 /// <summary>
-/// What one enemy knows about Ruby. Their own knowledge (what they saw, heard or was told) is acted on
+/// What one enemy knows about Ruby. Their own knowledge (what they saw, heard or were told) is acted on
 /// at once, with no delay; the shared pool is what the squad published, up to a second old, and is
 /// only consulted beside it. Whichever is newer wins.
 /// </summary>
@@ -71,7 +71,7 @@ public class EnemyMemory
     public bool HasSeenRed { get; private set; }
 
     /// <summary>
-    /// They have been after her, or has been shown she's about (a search for an attack, a body they were
+    /// They have been after her, or have been shown she's about (a search for an attack, a body they were
     /// told of): from then on they patrol aggressively. Never cleared, like HasSeenRed, because the
     /// level doesn't relax once an enemy has gone looking for her.
     /// </summary>
@@ -92,7 +92,7 @@ public class EnemyMemory
     public int NoteSentToLook() => ++TimesSentToLook;
 
     /// <summary>
-    /// A teammate who had seen Ruby told them of her, on a job. They act on it (KnowsRed) but is not a
+    /// A teammate who had seen Ruby told them of her, on a job. They act on it (KnowsRed) but are not a
     /// witness: only HasSeenRed tells others in turn. Letting a told enemy tell would spread one
     /// sighting down every chain of jobs through the level, which is the removed level alert by another
     /// door. Never cleared, like HasSeenRed.

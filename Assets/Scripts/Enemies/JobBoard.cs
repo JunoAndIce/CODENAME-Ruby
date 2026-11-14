@@ -392,7 +392,7 @@ public class JobBoard
     ///    they leave it alone: they never just stand there as a second job on the same thing. One
     ///    already on a job **stays on it** (the return is their own job) and the caller makes the thing
     ///    a distraction, so they are never left in Searching with no job.
-    /// 2. **Nothing is.** They start a job and becomes its lead, and calls in the free enemies near
+    /// 2. **Nothing is.** They start a job and become its lead, and call in the free enemies near
     ///    them, nearest first, up to the cap. A find (a body, a loose gun) is already found, and an
     ///    enemy thrown past them needs no checking, so each starts a Search; anything else is a Check, for
     ///    a checker to go and see.
@@ -494,7 +494,7 @@ public class JobBoard
             who.Searching.Dismiss($"{job} can't take them ({why}), so they go back to patrol, aggressively");
             return;
         }
-        // Refused (JoinMember has said why): nothing more to do. They are on no job, and keeps their own search.
+        // Refused (JoinMember has said why): nothing more to do. They are on no job, and keep their own search.
         if (!JoinMember(job, who)) return;
         DebugLog.Info($"{who.name} joins {job}.", who);
         ReconsiderOnJoin(job);
@@ -540,7 +540,7 @@ public class JobBoard
     }
 
     /// <summary>
-    /// Takes an enemy off their job: when they go to Aggro, is grabbed, ragdolls, dies or is destroyed,
+    /// Takes an enemy off their job: when they go to Aggro, are grabbed, ragdoll, die or are destroyed,
     /// or finishes. The next member leads if they were the lead, and a job with nobody
     /// in it closes and leaves nothing behind.
     /// </summary>
@@ -568,7 +568,7 @@ public class JobBoard
             DebugLog.Info($"{who.name} left, and everyone still on {job} has reached the spot: it searches.", who);
 
         // The checker went with the look half done: the nearest of the rest takes over, and the job
-        // goes back to Go so they walk to the spot from where they are and looks it over themselves. In Go the
+        // goes back to Go so they walk to the spot from where they are and look it over themselves. In Go the
         // nearest of the rest is chosen at once. Before Go there is no checker to lose (they are chosen as
         // the team sets off), and after the look nobody asks, so nothing is handed over and nothing logged.
         if (!wasChecker) return;
@@ -749,7 +749,7 @@ public class JobBoard
     /// distractions (EnemyReactions.Investigate), taken or not (user, 2026-11-11). In order:
     /// 1. **They have no running job** (a search of their own, or finishing their last walk after a search ended): a
     ///    gunshot or a killing (the only serious things the caller sends here without a job) goes to the squad
-    ///    as any new thing does, and they join or leads a Search there (a running Search that has it takes it as
+    ///    as any new thing does, and they join or lead a Search there (a running Search that has it takes it as
     ///    below, through Handle).
     /// Steps 2 to 5 are TakeSerious, which Handle uses too, for a serious thing a non-member brings to a running
     /// Search, so the job does the same whoever noticed it first.
@@ -914,7 +914,7 @@ public class JobBoard
     /// 3. **A new thing grows the search** there at once (GroupJob.GrowAt), whoever goes and whether they get
     ///    there, and floods once for it: the same thing never grows again. A Check has no area to grow. A team
     ///    signalling grows too: the serious move it is about to make keeps the whole area.
-    /// 4. **They go** to check it, alone, and comes back (SearchingState.CheckForJob), unless the job isn't
+    /// 4. **They go** to check it, alone, and come back (SearchingState.CheckForJob), unless the job isn't
     ///    under way yet (a Search going or searching, a Check going or looking) or they are a Check's checker, who
     ///    has the job's own spot to reach. Several members can be out on different things at once, and one
     ///    already out is sent on to the newer thing. Inside the search area as much as outside: they walk to
@@ -982,7 +982,7 @@ public class JobBoard
             DebugLog.Info($"{who.name} turns toward {thing}: {whyNot}.", who);
             return false;
         }
-        SendToCheck(job, who, thing, job.Kind == JobKind.Check ? "a Check has no area to grow, so they look and comes back" : "the search has grown there");
+        SendToCheck(job, who, thing, job.Kind == JobKind.Check ? "a Check has no area to grow, so they look and come back" : "the search has grown there");
         return true;
     }
 
@@ -1202,7 +1202,7 @@ public class JobBoard
         if (!followed) who.FollowJob(job);
         // Checked here and not at Add: they are only put in Searching by FollowJob. Not at Leave either,
         // which SearchingState.Exit calls while the machine is still changing state. By now they are
-        // searching, whether they entered it on a request or was retargeted.
+        // searching, whether they entered it on a request or were retargeted.
         if (who.Job != null && !who.IsSearching)
             Debug.LogError($"{who.name} is on {who.Job} but is in a state other than Searching: a member of a job must be searching.", who);
         return true;

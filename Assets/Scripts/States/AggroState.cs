@@ -154,7 +154,7 @@ public class AggroState : EnemyStateBase
         if (nothing && !_loggedNothing)
             DebugLog.Info(MateInContact()
                 ? $"{Enemy.name} knows nothing of where Ruby is, but a fight mate has her: they wait to be told."
-                : $"{Enemy.name} has nothing to go on: they can't see Ruby and knows nothing of where she is, so they search where they stand.", Enemy);
+                : $"{Enemy.name} has nothing to go on: they can't see Ruby and know nothing of where she is, so they search where they stand.", Enemy);
         _loggedNothing = nothing;
 
         // Sight coming back means the fight carries on: the dwell starts over. So does following her
@@ -217,7 +217,7 @@ public class AggroState : EnemyStateBase
         float minDistance = armed ? Enemy.Arms.HeldGun.MinDistance : 0f;
         bool inSight = Enemy.Vision.CanTrackPlayer();
         // Spots are for an armed fighter who knows where she is: in sight, or just gone from it. Past that they
-        // chase what they know, as ever, and holds none.
+        // chase what they know, as ever, and hold none.
         bool knowsHer = inSight || Enemy.Awareness.FollowingThrough;
         if (!armed || !knowsHer || Enemy.Fight == null) ReleaseSpot();
         Move move = Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance);
@@ -226,7 +226,7 @@ public class AggroState : EnemyStateBase
         // next step would loop. The spot is dropped and left alone for a while, and they pick another.
         if (move == Move.BackAway && _hasSpot && !_atSpot)
         {
-            DebugLog.Info($"{Enemy.name} was backed away from Ruby on their way to their firing spot: they drop it and picks another.", Enemy);
+            DebugLog.Info($"{Enemy.name} was backed away from Ruby on their way to their firing spot: they drop it and pick another.", Enemy);
             _avoid = _spot;
             _avoidUntil = Time.time + AvoidTime;
             Enemy.Fight?.Release(Enemy);
@@ -289,7 +289,7 @@ public class AggroState : EnemyStateBase
         if (arrived && !_holdingAtKnown)
         {
             _dwellTimer = 0f;
-            DebugLog.Info($"{Enemy.name} reached where they last knew Ruby was and holds there for {HoldTime:0.#}s.", Enemy);
+            DebugLog.Info($"{Enemy.name} reached where they last knew Ruby was and hold there for {HoldTime:0.#}s.", Enemy);
         }
         // A newer fact that moves the point sends them off again, and the dwell starts over.
         else if (!arrived)
@@ -354,7 +354,7 @@ public class AggroState : EnemyStateBase
             if (result == NavResult.Arrived) _atSpot = true;
             else if (result == NavResult.Blocked || result == NavResult.Unreachable)
             {
-                DebugLog.Info($"{Enemy.name} cannot get to their firing spot ({result}: {Enemy.Navigator.FailureReason}): they drop it and picks another.", Enemy);
+                DebugLog.Info($"{Enemy.name} cannot get to their firing spot ({result}: {Enemy.Navigator.FailureReason}): they drop it and pick another.", Enemy);
                 _avoid = _spot;
                 _avoidUntil = Time.time + AvoidTime;
                 fight.Release(Enemy);

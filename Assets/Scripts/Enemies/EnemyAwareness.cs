@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// What one enemy takes in each frame: whether they have Ruby in their eyes, what they learn and calls out
+/// What one enemy takes in each frame: whether they have Ruby in their eyes, what they learn and call out
 /// when they do, the newest thing they know about her, and the moment they turn aggressive. Kept out of
 /// EnemyController so the controller doesn't carry the bookkeeping. Not called EnemyKnowledge:
 /// Knowledge is already the enum on RubyFact. The tuning (Speak Interval, the patrol speeds) and the

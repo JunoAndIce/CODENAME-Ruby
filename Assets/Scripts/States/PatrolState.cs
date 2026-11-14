@@ -3,13 +3,13 @@ using UnityEngine;
 
 /// <summary>
 /// Walking a route, unaware, or wary. Which route is the enemy's business: the Aggressive one
-/// once they're aggressive and has one, else the Safe one (EnemyController.ActiveRoute). Each point
+/// once they're aggressive and have one, else the Safe one (EnemyController.ActiveRoute). Each point
 /// is an area (PatrolPoint): reached at its
 /// centre, or at the nearest open spot inside it when the centre is occupied. A point that
 /// can't be reached at all is skipped with a warning, so one bad point never freezes the
 /// route; if every point fails in a row the enemy holds and retries instead of spinning.
 /// A route of one wide point is wandered instead: random open spots inside it, one after
-/// another (PatrolRoute.Wanders). Aggressive, they walk at Aggressive Speed Factor times Patrol Speed and looks around at each point
+/// another (PatrolRoute.Wanders). Aggressive, they walk at Aggressive Speed Factor times Patrol Speed and look around at each point
 /// instead of standing. Owns its own progress, so nothing outside can corrupt it.
 /// </summary>
 public class PatrolState : EnemyStateBase

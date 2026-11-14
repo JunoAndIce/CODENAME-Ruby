@@ -67,7 +67,7 @@ public readonly struct Incident
 }
 
 /// <summary>
-/// An incident and how to act on it: whether they walk to the point, or looks from where they stand
+/// An incident and how to act on it: whether they walk to the point, or look from where they stand
 /// (a glance at something the squad already knows), and whether they are searching because they lost a
 /// fight. Travels together because only the search itself cares about the second half, and it must not
 /// be lost on the way there.
@@ -85,7 +85,7 @@ public readonly struct SearchRequest
     public bool WalkThere { get; }
     /// <summary>
     /// They are searching because they lost Ruby in a fight (AggroState.Exit sets it): on entering Searching they
-    /// join or starts a job there (Intel.JoinFromAggro). A flag and not a test for priority 6, so the
+    /// join or start a job there (Intel.JoinFromAggro). A flag and not a test for priority 6, so the
     /// job's priority can be whatever the board decides without this changing meaning.
     /// </summary>
     public bool AfterLostFight { get; }

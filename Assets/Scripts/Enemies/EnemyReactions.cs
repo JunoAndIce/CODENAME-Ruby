@@ -110,7 +110,7 @@ public class EnemyReactions
             if (walkThere && _enemy.Intel != null)
             {
                 _enemy.Intel.Handle(_enemy, incident);
-                // Still on the job they were on: the team that has it can't take them, so they stay and is distracted.
+                // Still on the job they were on: the team that has it can't take them, so they stay and are distracted.
                 // Only turned: another job has it, and checking it would walk them onto that team's ground and
                 // grow their own search into theirs.
                 if (own != null && _enemy.Job == own) return Distract(incident, othersHaveIt: true);
@@ -226,7 +226,7 @@ public class EnemyReactions
     // where she goes after this. With no Ruby in the scene there is no one to go after.
     //
     // They see her only with their own eyes until she is in their view (EnemyController.ProvokedUnseen; spec: "At
-    // their own limit they run at Ruby, and sees her only with their own eyes"), so a provoked enemy who hasn't
+    // their own limit they run at Ruby, and see her only with their own eyes"), so a provoked enemy who hasn't
     // looked at her can be slipped past from behind and can't spread her position on hearsay. Set before
     // Alert, so AggroState.Enter already reads them as blind. Only here: word of mouth, a hit, getting up and
     // seeing the chain drag someone all keep Aggro's all-round sight.

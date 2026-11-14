@@ -49,7 +49,7 @@ public class SearchingState : EnemyStateBase
     private Vector3 _ownStartFor;
 
     // Clearing, from the moment they reach a Search's source: they creep toward what nobody has looked at yet,
-    // or looks about if nothing is free. Reset by Begin, so an upgrade or a new place starts them over.
+    // or look about if nothing is free. Reset by Begin, so an upgrade or a new place starts them over.
     private enum RoamPhase { Pick, Walk, Look }
     private RoamPhase _roamPhase;
     private Vector3 _roamSpot;
@@ -65,7 +65,7 @@ public class SearchingState : EnemyStateBase
     // They were on a job when last looked at. Seeing it gone while they are still searching means they were
     // taken off it without leaving the state, and their job-less steps are from some earlier search.
     private bool _onJob;
-    // Sent off to check a distraction (JobBoard.Noticed): they walk there, looks, and comes back to the job.
+    // Sent off to check a distraction (JobBoard.Noticed): they walk there, look, and come back to the job.
     // _checkPoint is the point this walk is for: the job sending them on to a newer thing starts it over.
     private bool _scouting;
     private bool _scoutLooking;
@@ -114,7 +114,7 @@ public class SearchingState : EnemyStateBase
         }
         Apply(request);
         Begin();
-        // Having lost a fight they join or starts a job at the spot, so the squad searches together. Here
+        // Having lost a fight they join or start a job at the spot, so the squad searches together. Here
         // and not in AggroState.Exit, which runs while they are still in Aggro. It doesn't re-enter the
         // machine: SetState has made Searching current before calling Enter, so the job board's FollowJob
         // takes its Retarget branch and never calls SetState. With no Intel they keep the search of their own
@@ -315,7 +315,7 @@ public class SearchingState : EnemyStateBase
     // An area move, not a point: enemies of equal weight block each other (the push rule), so two
     // sent to one spot used to leave the second pushing at the first until the travel limit. The
     // navigator arrives once progress stalls inside the area, which is how they end up beside the
-    // first enemy and looks from there. No path at all is a setup problem and warns; a stall
+    // first enemy and look from there. No path at all is a setup problem and warns; a stall
     // outside the area is only crowding, and is logged.
     public override void FixedTick()
     {
@@ -378,8 +378,8 @@ public class SearchingState : EnemyStateBase
             return;
         }
 
-        // Before the steps: they keep to their check whatever they do, and comes back when it's done. If the job
-        // starts over it clears this and sends them with the rest; if it ends, they stop and leaves with it.
+        // Before the steps: they keep to their check whatever they do, and come back when it's done. If the job
+        // starts over it clears this and sends them with the rest; if it ends, they stop and leave with it.
         if (job.TryGetCheck(Enemy, out Vector3 checkPoint))
         {
             CheckForJob(job, checkPoint);
@@ -461,7 +461,7 @@ public class SearchingState : EnemyStateBase
         Enemy.Movement.LookAround(_lookBaseYaw, job.StepElapsed, Enemy.Intel.StepDuration(job));
     }
 
-    // Walks to what they were sent to check, and looks at it for Look Time (decision 4: the scout walk, per member).
+    // Walks to what they were sent to check, and look at it for Look Time (decision 4: the scout walk, per member).
     // A stall looks from where they have got to, as a Check does. A walk that never arrives ends at Search Travel
     // Limit, and no path says so. Sent on to a newer thing meanwhile, they start over for that one. While out they
     // clear what they see of the team's coverage, as roaming does, so the ground the search grew by round the
@@ -531,7 +531,7 @@ public class SearchingState : EnemyStateBase
     }
 
     // Clears the area: they head for the nearest place nobody on the team has looked at, creeping with their view
-    // sweeping across their way, and moves on as soon as anyone has seen it, so they only walk as far as they need
+    // sweeping across their way, and move on as soon as anyone has seen it, so they only walk as far as they need
     // to see round the crate. With nothing free to head for while the search goes on, they re-checks: walks to a
     // spot across the area and sweeps it, which is what keeps a team busy through Search Minimum Time in a room
     // it saw at a glance. Only when there is no spot for that either does they look about where they stand. Every
@@ -644,7 +644,7 @@ public class SearchingState : EnemyStateBase
 
     // A re-check: walk to a spot of seen ground and sweep on the way. Nothing to clear, so nothing is dropped:
     // it ends on arrival, when the search ends (busywork has nothing to finish), or, when they can't get there or
-    // runs out Search Travel Limit, with a look about where they stand before they pick again. Looking first, and
+    // run out Search Travel Limit, with a look about where they stand before they pick again. Looking first, and
     // not picking again at once, keeps an area that offers them nowhere to go from having them re-plan every step.
     private void RecheckWalk(GroupJob job)
     {
@@ -677,8 +677,8 @@ public class SearchingState : EnemyStateBase
     }
 
     // A follower trails the checker slowly and never closer than Follow Distance: they stop there and
-    // faces the spot, so the team spreads out behind the one who goes rather than crowding them, and
-    // keeps closing up while the checker looks, until they are that near. They chase the checker along the
+    // face the spot, so the team spreads out behind the one who goes rather than crowding them, and
+    // keep closing up while the checker looks, until they are that near. They chase the checker along the
     // floor's shared field toward the checker's transform (ChaseTo), which re-floods only when the
     // checker changes cell, at most five times a second, and which every follower reads: a team of
     // three costs the one flood, not one each. A field of their own toward a point (PathTo) re-flooded
@@ -731,7 +731,7 @@ public class SearchingState : EnemyStateBase
     // so several sent to one source stop where the first ones stand instead of pushing at them for good.
     // By the user's rule a member who can't reach it is taken off the job: no ground near the source they can
     // reach, or no path into the circle (after the warning). A stall short of the circle isn't "can't
-    // reach", so they keep trying (MoveToArea steers on every call and keeps returning Blocked until they make
+    // reach", so they keep trying (MoveToArea steers on every call and keep returning Blocked until they make
     // progress), and Search Travel Limit (TickJob) bounds it.
     private bool WalkToSource(GroupJob job)
     {
@@ -798,7 +798,7 @@ public class SearchingState : EnemyStateBase
     }
 
     // They are as close as they will get. They face the spot, so the sweep they join is about it and ends
-    // on it, and tells the squad: a Check's first arrival moves the job from Go to its look, a Search's
+    // on it, and tell the squad: a Check's first arrival moves the job from Go to its look, a Search's
     // last one to its search. In a Search they go straight on to clearing: no stop at the edge to look.
     private void Arrive(string why)
     {

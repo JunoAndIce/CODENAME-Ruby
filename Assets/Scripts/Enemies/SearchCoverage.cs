@@ -47,7 +47,7 @@ public class SearchCoverage
         _area = area;
         if (!area.HasGround)
         {
-            Debug.LogWarning($"A search at {area.Place} has no ground to clear (on no PathGrid, or nothing open within {area.Radius:0.#} m): its team looks about where they are for Search Minimum Time and then stands down.", context);
+            Debug.LogWarning($"A search at {area.Place} has no ground to clear (on no PathGrid, or nothing open within {area.Radius:0.#} m): its team looks about where they are for Search Minimum Time and then stand down.", context);
             return;
         }
 
@@ -149,9 +149,9 @@ public class SearchCoverage
 
     /// <summary>
     /// Gives them the nearest unseen point nobody else is heading for, among those blocked the fewest times, so
-    /// after a blocked walk they move on to others and comes back to it only when nothing less blocked is free.
-    /// False when there is none free: the rest are claimed, or close to a claim, and they re-checks
-    /// (TryClaimRecheck) or waits for someone else to finish.
+    /// after a blocked walk they move on to others and come back to it only when nothing less blocked is free.
+    /// False when there is none free: the rest are claimed, or close to a claim, and they re-check
+    /// (TryClaimRecheck) or wait for someone else to finish.
     /// </summary>
     public bool TryClaimNearest(EnemyController who, out Vector3 point)
     {

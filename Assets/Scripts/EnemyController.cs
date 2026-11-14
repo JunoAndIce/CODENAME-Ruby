@@ -12,7 +12,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("Patrol speed once they're aggressive, as a multiple of Patrol Speed: above 1 hurries them, below 1 slows them to a wary creep (0.5 is half speed). Applies to whichever route they walk, and to an idle enemy walking back to their post.")]
     [SerializeField, Range(0.1f, 3f)] private float _aggressiveSpeedFactor = 1.25f;
     [SerializeField] private float _searchSpeed = 1.5f;
-    [Tooltip("Their speed while they clear a Search's area, as a multiple of Search Speed: below 1, so they creep and looks. Walking in to the area stays at full Search Speed.")]
+    [Tooltip("Their speed while they clear a Search's area, as a multiple of Search Speed: below 1, so they creep and look. Walking in to the area stays at full Search Speed.")]
     [SerializeField, Range(0.1f, 1f)] private float _clearingSpeedFactor = 0.6f;
     [Tooltip("A follower's walking speed behind the checker, as a multiple of Search Speed: below 1 so the team trails slowly behind them.")]
     [SerializeField, Range(0.2f, 1f)] private float _followSpeedFactor = 0.8f;
@@ -40,7 +40,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _motionRadius = 15f;
     [Tooltip("How close a corpse must be for them to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
     [SerializeField, Min(0f)] private float _bodyNoticeRange = 6f;
-    [Tooltip("How far a body on the chain must be moved from where it was grabbed, in metres measured flat, before they take it as Ruby dragging it and goes for her. Keep it above the charging throw's jiggle (0.1 m).")]
+    [Tooltip("How far a body on the chain must be moved from where it was grabbed, in metres measured flat, before they take it as Ruby dragging it and go for her. Keep it above the charging throw's jiggle (0.1 m).")]
     [SerializeField, Min(0f)] private float _draggedDistance = 0.5f;
 
     [Header("Fighting")]
@@ -79,7 +79,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Range(0f, 90f)] private float _walkSweepAngle = 45f;
     [Tooltip("How much each look varies while they wait in a search for somewhere free to go, as a share of Look Time: at 0.5 each lasts from half to one and a half times Look Time.")]
     [SerializeField, Range(0f, 0.9f)] private float _roamLookVariation = 0.5f;
-    [Tooltip("How close a follower keeps behind the enemy who goes to check, in metres. They stop here and holds, facing the spot, so the team trails the checker and never crowds them.")]
+    [Tooltip("How close a follower keeps behind the enemy who goes to check, in metres. They stop here and hold, facing the spot, so the team trails the checker and never crowds them.")]
     [SerializeField, Min(1f)] private float _followDistance = 3f;
 
     [Header("Looking")]
@@ -95,7 +95,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Header("Provoked")]
     [Tooltip("How long they turn to look at a lesser disturbance while searching, in seconds. The search waits meanwhile, so they don't lose search time.")]
     [SerializeField, Min(0.1f)] private float _distractionTime = 1f;
-    [Tooltip("How many provocations inside Distraction Memory it takes before they have had enough of Ruby and goes after her, knowing where she is at that moment. Only things she is doing count, not a body or gun lying there.")]
+    [Tooltip("How many provocations inside Distraction Memory it takes before they have had enough of Ruby and go after her, knowing where she is at that moment. Only things she is doing count, not a body or gun lying there.")]
     [SerializeField, Min(1)] private int _distractionThreshold = 3;
     [Tooltip("How long a distraction counts toward the jig, in seconds.")]
     [SerializeField, Min(1f)] private float _distractionMemory = 12f;
@@ -117,7 +117,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0.1f)] private float _pauseRoamMax = 6f;
     [Tooltip("An idle enemy this close to their post, in metres, counts as at it. Where they start is their post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave them 'away' from a post they have reached.")]
     [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
-    [Tooltip("A firing-range spot to use as their post instead of where they stand. They walk there, faces its target and practises when armed. Used only when they have no Safe route to walk: with one, the table sends them to Patrol and they never idle at the spot. Empty means their post is where they start.")]
+    [Tooltip("A firing-range spot to use as their post instead of where they stand. They walk there, face its target and practise when armed. Used only when they have no Safe route to walk: with one, the table sends them to Patrol and they never idle at the spot. Empty means their post is where they start.")]
     [SerializeField] private RangeSpot _postSpot;
     [Tooltip("At a range post, the shortest wait between practice shots, in seconds.")]
     [SerializeField, Min(0.1f)] private float _practiceIntervalMin = 1.2f;
@@ -188,13 +188,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     /// <summary>
     /// Whether they patrol aggressively: they have been after Ruby (an attack search, or a glance at a
-    /// body), has seen her, or has been told of her by a teammate who had (on a job). Derived on every
+    /// body), have seen her, or have been told of her by a teammate who had (on a job). Derived on every
     /// read and never stored, and none is ever cleared, so they never go back.
     /// </summary>
     public bool IsAggressive => Memory.Wary || Memory.KnowsRed;
 
     /// <summary>
-    /// The route they walk now: the Aggressive one when they're aggressive and has one, else the Safe
+    /// The route they walk now: the Aggressive one when they're aggressive and have one, else the Safe
     /// one. An aggressive enemy with no Aggressive route walking their Safe route is a rule, not a
     /// fallback, and the Inspector says so.
     /// </summary>
@@ -243,7 +243,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public EnemyReactions Reactions { get; private set; }
     /// <summary>Their walking, turning and facing, and the walks the states ask for.</summary>
     public EnemyMovement Movement { get; private set; }
-    /// <summary>What they take in each frame: sight of Ruby, what they learn and says, and the newest thing they know.</summary>
+    /// <summary>What they take in each frame: sight of Ruby, what they learn and say, and the newest thing they know.</summary>
     public EnemyAwareness Awareness { get; private set; }
     /// <summary>Their record of the chain, and the gun and corpse handling that goes with it.</summary>
     public EnemyBodyState BodyState { get; private set; }
@@ -490,9 +490,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>
     /// Provoked to their limit and sent after Ruby (EnemyReactions.GoAfterRed), they have not yet had her in
     /// their view cone with a clear line. Until then they count as seeing her only with their own eyes
-    /// (spec: "At their own limit they run at Ruby, and sees her only with their own eyes"): Aggro's
-    /// all-round sight doesn't apply, so they run at what they were told, learns no Seen fact, calls nothing
-    /// out, tracks nothing live, holds no firing spot and doesn't fire. Only the provoked: every other
+    /// (spec: "At their own limit they run at Ruby, and see her only with their own eyes"): Aggro's
+    /// all-round sight doesn't apply, so they run at what they were told, learn no Seen fact, call nothing
+    /// out, track nothing live, hold no firing spot and don't fire. Only the provoked: every other
     /// way into Aggro keeps all-round sight. GoAfterRed is the only writer that sets it. EnemyVision
     /// clears it the first time DetectsPlayer holds (every sight reader goes through it there, so the
     /// first to ask that frame clears it for all), and OnStateChanged when they leave the hunt by any route.

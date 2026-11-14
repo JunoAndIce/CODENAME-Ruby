@@ -23,7 +23,7 @@ public class FightBoard
 
     /// <summary>
     /// They have gone to Aggro: they join the fight on their floor that has the member nearest them, however far
-    /// away, or starts one when their floor has none. Joined already (Rearm hands back through Aggro), it
+    /// away, or start one when their floor has none. Joined already (Rearm hands back through Aggro), it
     /// changes nothing and they keep their place.
     /// </summary>
     public Fight Join(EnemyController who)

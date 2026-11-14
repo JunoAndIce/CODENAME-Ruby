@@ -196,7 +196,7 @@ public class EnemySenses
             Vector3 at = enemy.transform.position;
             if (!_enemy.Vision.InView(at, _enemy.BodyNoticeRange) || !_enemy.Vision.HasClearSight(at, enemy.transform)) continue;
 
-            // Known to the squad but not to them: they stop and looks at it where they stand, and is wary
+            // Known to the squad but not to them: they stop and look at it where they stand, and are wary
             // from then on, but doesn't go to it: someone has already been. Unknown to both: it goes
             // on the squad's books and they search where it lies. The pool is read as published, a
             // little stale, like everything else they read from it.
@@ -252,7 +252,7 @@ public class EnemySenses
 
         // On a job at its place, the job goes wary for everyone, not just the one who looked.
         _enemy.Reactions.BecomeWaryAt(at, $"{_enemy.name} glances at {what}");
-        DebugLog.Info($"{_enemy.name} sees {what}: they look at it from where they stand and is wary.", _enemy);
+        DebugLog.Info($"{_enemy.name} sees {what}: they look at it from where they stand and are wary.", _enemy);
         _enemy.Reactions.Investigate(new Incident(at, StimulusResponse.SearchForProblem, row.Priority, makesSearch: true, saysNothingOfRuby: true, kind: kind), walkThere: false);
     }
 
