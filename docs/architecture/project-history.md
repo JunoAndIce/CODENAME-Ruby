@@ -43,8 +43,18 @@ breaking off) isn't built, and needs a trigger of its own now the level alert is
 built to `docs/plans/2026-11-09-rooms-and-room-maps.md`: rooms, room maps, searching by room and the
 firing range. Its other activity spots and alarms wait for assets. Distractions on a search are built
 to `docs/plans/2026-11-11-distractions-on-a-search.md` (sending one to check, serious things bringing the
-whole job, the search growing, and the provoked enemy who sees Ruby only with their own eyes). Patrolling
-together (piece 5 part B) comes next, and much later breakables. Piece 8, clearing hiding spots, was removed (user, 2026-11-11).
+whole job, the search growing, and the provoked enemy who sees Ruby only with their own eyes). Piece 8,
+clearing hiding spots, was removed (user, 2026-11-11).
+
+**Patrolling together (piece 5 part B) is shelved** (user, 2026-11-18: "Enemy scope is big enough"). In its
+place, enemies track Ruby's path, built to `docs/specs/2026-11-18-enemy-path-tracking.md` and
+`docs/plans/2026-11-18-enemy-path-tracking.md`: out of sight they know where she vanished and which way she was
+going, hunt a guess at where she went (one bounded flood per fact), and lose her only after one Lose Sight Time
+(4 s), which replaced Aggro Time, Sight Follow Through and Unseen Hold Time; a 0.25 s glimpse grace keeps a
+flickering line of sight from twitching them, they call out the vanish, and a lost fight's search grows to
+where she was heading. The same plan trimmed the enemy's Inspector from 57 fields to 47 (an audit with the
+user). **Next:** the pathing clean-up, smarter routes to Ruby without being blocked off, designed separately.
+Much later, breakables.
 
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
 account of what is built, and its section on the Path Grid, colliders and navigation is written for

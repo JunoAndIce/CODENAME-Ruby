@@ -1,6 +1,6 @@
 # Enemy path tracking, and trimming the enemy's fields
 
-**Status:** design, 2026-11-18. Branch `enemy_states_0.2`. Approved approach: B (a guess ahead along
+**Status:** built 2026-11-18, to `docs/plans/2026-11-18-enemy-path-tracking.md`; awaiting the user's play-test. Branch `enemy_states_0.2`. Approved approach: B (a guess ahead along
 the floor). Patrol together (piece 5 part B) is shelved for this *(user)*. The pathing clean-up
 ("smarter paths to Ruby without being blocked off") is the next piece, designed separately.
 
