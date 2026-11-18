@@ -602,7 +602,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>What its body is doing, for its animation. Firing, it aims; moving otherwise, it runs.</summary>
     public AnimStance Stance => _state.Current switch
     {
-        AggroState => Aggro.Firing ? AnimStance.Aim : Movement.IntendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
+        AggroState => Aggro.Aiming ? AnimStance.Aim : Movement.IntendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
         RearmState => Movement.IntendedSpeed > 0f ? AnimStance.Run : AnimStance.Rest,
         GrabbedState => AnimStance.Restrained,
         RagdollState => Ragdoll.Standing ? AnimStance.GettingUp : AnimStance.Frozen,
@@ -624,13 +624,21 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>The state they are in, for EnemyReactions and EnemyAwareness to read. Reaching the machine itself stays with the controller.</summary>
     internal IState CurrentState => _state.Current;
 
-    /// <summary>Ruby while it's aiming at her, or the range target while they practise.</summary>
+    /// <summary>
+    /// What their gun points at, or the range target while they practise. In Aggro it is the hunt's own aim point:
+    /// Ruby in sight, where they last saw her in the glimpse grace, never her true position through a crate.
+    /// </summary>
     public bool TryFindTarget(out Vector3 point)
     {
         if (Idle.Practising && _postSpot != null && _postSpot.Target != null)
         {
             point = _postSpot.Target.position;
             return true;
+        }
+        if (_state.Current == Aggro)
+        {
+            point = Aggro.AimPoint;
+            return Aggro.Aiming;
         }
         point = _player != null ? _player.transform.position : default;
         return _player != null && Stance == AnimStance.Aim;

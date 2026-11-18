@@ -221,12 +221,16 @@ public class EnemyAwareness
         if (sees)
         {
             Vector3 position = _enemy.Player.transform.position;
+            // Read before it is overwritten: sight back within the grace is the same sighting, not a new one. A flicker
+            // counted as new called her out at once, past Speak Interval, so a mate flickering at a crate's edge handed
+            // every hunter a fresh fact, and a fresh flood, many times a second.
+            bool newSighting = Time.time - _lastSawAt > GlimpseGrace;
             _lastSawAt = Time.time;
             var fact = new RubyFact(position, Time.time, Knowledge.Seen, SampleVelocity(position, Time.time));
             _lastSeenFact = fact;
             _vanishPending = false;
             _enemy.Memory.Learn(fact);
-            if (_enemy.Intel != null && (!_wasSeeing || Time.time >= _nextSpeak))
+            if (_enemy.Intel != null && (newSighting || Time.time >= _nextSpeak))
             {
                 _nextSpeak = Time.time + _enemy.SpeakInterval;
                 _enemy.Intel.Say(_enemy, fact);
@@ -234,12 +238,10 @@ public class EnemyAwareness
         }
         else
         {
-            if (_wasSeeing)
-            {
-                _samplePositions.Clear();
-                _sampleTimes.Clear();
-                _vanishPending = _enemy.CurrentState == _enemy.Aggro && !_enemy.ProvokedUnseen;
-            }
+            // The heading samples survive a flicker (SampleVelocity drops them only after a gap longer than the grace):
+            // cleared here, a flicker just before she ducked away left too short a run to read, and a running Ruby
+            // was called out as standing still.
+            if (_wasSeeing) _vanishPending = _enemy.CurrentState == _enemy.Aggro && !_enemy.ProvokedUnseen;
             // Nothing is learned out of sight: they know her path up to where she vanished, never where she is now.
         }
         CallOutVanish(sees);
@@ -265,8 +267,15 @@ public class EnemyAwareness
     }
 
     // Her flat velocity over the samples inside the heading window, the newest included. Zero over too short a span.
+    // A gap no longer than the grace is the same sighting, and averaging across it still reads a true distance over
+    // time; a longer gap is a new sighting, which mustn't average across the time she was hidden.
     private Vector3 SampleVelocity(Vector3 position, float now)
     {
+        if (_sampleTimes.Count > 0 && now - _sampleTimes[_sampleTimes.Count - 1] > GlimpseGrace)
+        {
+            _samplePositions.Clear();
+            _sampleTimes.Clear();
+        }
         _samplePositions.Add(position);
         _sampleTimes.Add(now);
         int drop = 0;

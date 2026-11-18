@@ -512,7 +512,14 @@ public class JobBoard
     {
         if (!guess.HasValue) return;
         GroupJob job = who.Job;
-        if (job == null || job.Kind != JobKind.Search || job.Area.TryGetPatchAt(guess.Value, out _)) return;
+        if (job == null) return;
+        if (job.Kind != JobKind.Search)
+        {
+            // A Check searches no area, so there is nowhere to grow: it stayed a Check because this area was raised once already.
+            DebugLog.Info($"{who.name} joined {job}, a Check, which has no search area: where they saw Ruby heading ({guess.Value}) isn't added.", who);
+            return;
+        }
+        if (job.Area.TryGetPatchAt(guess.Value, out _)) return;
         job.GrowAt(guess.Value, $"where {who.name} saw Ruby heading");
     }
 

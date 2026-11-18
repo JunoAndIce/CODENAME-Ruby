@@ -60,7 +60,11 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
     frame and flickers at a crate's edge, so she counts as gone only after a quarter second without it
     (`InGlimpseGrace`). Meanwhile an armed enemy keeps their firing spot and its claim and faces
     `LastSeenPosition`; with no spot they hold facing it, or keep walking to it when they were closing in. They
-    don't fire, and don't back away. Without it each flicker dropped the spot, flooded a guess, turned them to it
+    keep the gun up on that point (`AggroState.Aiming` and `AimPoint`, which the stance and the arm read) but
+    don't fire, and don't back away; only a failed walk picks a new spot, since a scheduled pick filters by the
+    chase field, which floods from her live cell. Sight back within the grace is the same sighting: it calls
+    nothing out (a flicker used to call her out past Speak Interval, handing every hunter a new fact and flood),
+    and her heading samples carry across it. Without it each flicker dropped the spot, flooded a guess, turned them to it
     and re-picked a spot when she showed.
   - **The vanish call-out.** When the grace runs out in a fight they say the last fact they saw, heading and all,
     once (`EnemyAwareness.CallOutVanish`, through `Intel.Say`). Call-outs otherwise come only while seeing her, so
@@ -73,7 +77,8 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
     logged. Guess Distance is a field and not her speed times the timer: she runs 15 m/s, which put the guess 60 m
     off. Selected in Play, an enemy draws the vanish point, her heading and the guess.
   - **Hunting the guess** (`AggroState.HuntGuess`): past the grace they walk to the guess at Chase Speed and, within
-    Search Reach, look round it (`EnemyMovement.LookAround`) until sight comes back or the hunt ends. A newer fact
+    Search Reach, look round it (`EnemyMovement.LookAround`, looped, so a hunt a mate keeps going doesn't leave
+    them frozen facing where they arrived) until sight comes back or the hunt ends. A newer fact
     (a mate's call-out, the pool) moves the guess more than half a metre and sends them on. Everyone told the same
     thing gets the same guess, so one whose walk reports Blocked (Stuck Time) looks round where they stand instead
     of pushing at a mate's back, and one with no way there does the same; both log.

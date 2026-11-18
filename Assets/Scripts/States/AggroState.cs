@@ -76,9 +76,16 @@ public class AggroState : EnemyStateBase
     /// <summary>Armed, with Ruby in sight, in range and on her feet: it's shooting, so its body aims.</summary>
     public bool Firing { get; private set; }
 
+    /// <summary>The gun is up: firing, or held on where they last saw her through the glimpse grace. The stance reads this.</summary>
+    public bool Aiming { get; private set; }
+
+    /// <summary>Where the gun points while Aiming: Ruby in sight, where they last saw her in the grace.</summary>
+    public Vector3 AimPoint { get; private set; }
+
     public override void Enter()
     {
         Firing = false;
+        Aiming = false;
         _lostTimer = 0f;
         _loggedNothing = false;
         _hadSight = Enemy.Vision.CanTrackPlayer();
@@ -110,6 +117,7 @@ public class AggroState : EnemyStateBase
     public override void Exit()
     {
         Firing = false;
+        Aiming = false;
         // Rearming, grabbed or searching, they hold no spot (the board drops it too, if they leave the fight).
         ReleaseSpot();
         if (LostPlayer)
@@ -197,7 +205,7 @@ public class AggroState : EnemyStateBase
         if (!knowsHer)
         {
             HuntGuess();
-            Shoot();
+            Shoot(false);
             return;
         }
 
@@ -250,7 +258,7 @@ public class AggroState : EnemyStateBase
                 break;
         }
 
-        Shoot();
+        Shoot(grace);
     }
 
     // In the grace a chaser keeps on toward where they last saw her, so a flicker doesn't stop them dead. Its end is
@@ -293,7 +301,9 @@ public class AggroState : EnemyStateBase
             _lookElapsed = 0f;
         }
         _lookElapsed += Time.fixedDeltaTime;
-        Enemy.Movement.LookAround(_lookBaseYaw, _lookElapsed, Enemy.LoseSightTime);
+        // Looped: a mate in contact keeps the hunt going past one sweep, and a sweep that ran out left them frozen
+        // facing wherever they arrived. Each sweep ends where it began, so the wrap doesn't jump.
+        Enemy.Movement.LookAround(_lookBaseYaw, _lookElapsed % Enemy.LoseSightTime, Enemy.LoseSightTime);
     }
 
     // Faces her in sight, and where they last saw her in the grace.
@@ -311,7 +321,9 @@ public class AggroState : EnemyStateBase
     {
         Fight fight = Enemy.Fight;
 
-        if (Time.time >= _lastPick + RepickGap)
+        // In the grace only a walk that failed picks again: a scheduled pick filters by the chase field, which floods
+        // from her live cell, so it read where she really is and could drop the spot the grace exists to hold.
+        if ((inSight || _pickNow) && Time.time >= _lastPick + RepickGap)
         {
             // At once: asked for, or Ruby has moved so their spot is past half a spacing outside their band.
             // Otherwise about once a second.
@@ -397,15 +409,30 @@ public class AggroState : EnemyStateBase
         return distance < minDistance ? Move.BackAway : Move.Hold;
     }
 
-    private void Shoot()
+    // In the grace they keep the gun up on where they last saw her and don't fire: lowering it on each flicker of
+    // the sight ray flicked the arm and the stance between Aim and Rest at a crate's edge.
+    private void Shoot(bool grace)
     {
         Firing = false;
+        Aiming = false;
         if (!Enemy.IsArmed) return;
+
+        if (grace)
+        {
+            Vector3 lastSeen = Enemy.Awareness.LastSeenPosition;
+            Aiming = Enemy.Arms.InRange(lastSeen);
+            AimPoint = lastSeen;
+            if (Aiming) Enemy.Arms.AimAt(lastSeen);
+            else Enemy.Arms.Lower();
+            return;
+        }
 
         // Only within range: beyond it they run with the gun down, and a gun turned toward her
         // would twist off their hand.
         Vector3 player = Enemy.PlayerTransform.position;
         Firing = Enemy.Vision.CanTrackPlayer() && Enemy.PlayerIsUp && Enemy.Arms.InRange(player);
+        Aiming = Firing;
+        AimPoint = player;
         if (!Firing)
         {
             Enemy.Arms.Lower();
