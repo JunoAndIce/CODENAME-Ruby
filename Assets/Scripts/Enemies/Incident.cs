@@ -74,11 +74,12 @@ public readonly struct Incident
 /// </summary>
 public readonly struct SearchRequest
 {
-    public SearchRequest(Incident incident, bool walkThere = true, bool afterLostFight = false)
+    public SearchRequest(Incident incident, bool walkThere = true, bool afterLostFight = false, Vector3? guess = null)
     {
         Incident = incident;
         WalkThere = walkThere;
         AfterLostFight = afterLostFight;
+        Guess = guess;
     }
 
     public Incident Incident { get; }
@@ -89,4 +90,9 @@ public readonly struct SearchRequest
     /// job's priority can be whatever the board decides without this changing meaning.
     /// </summary>
     public bool AfterLostFight { get; }
+    /// <summary>
+    /// After a lost fight, where they guessed Ruby was heading (EnemyAwareness.TryGetGuess), when that isn't the
+    /// vanish point itself: the job they join grows to take it in, so the search covers where she went too.
+    /// </summary>
+    public Vector3? Guess { get; }
 }

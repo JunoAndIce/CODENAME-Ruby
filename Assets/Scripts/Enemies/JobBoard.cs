@@ -465,13 +465,18 @@ public class JobBoard
     /// 2. **None is:** they start a Search for an attack there, as lead, at the priority a search from
     ///    Aggro has, which outranks every row of the map. They call in the free enemies near them, and the
     ///    rest of the fight's enemies join as they lose her, up to the cap.
+    ///
+    /// Either way, the job they end up on grows to take in `guess`, where they guessed she was heading
+    /// (EnemyAwareness.TryGetGuess; null when it is the vanish point itself), so the search covers where she went
+    /// as well as where she vanished (spec 2026-11-18). Dismissed or refused, they are on no job and grow nothing.
     /// </summary>
-    public void JoinFromAggro(EnemyController who, Vector3 point)
+    public void JoinFromAggro(EnemyController who, Vector3 point, Vector3? guess)
     {
         GroupJob job = FindMatch(point);
         if (job == null)
         {
             StartJob(who, new Incident(point, StimulusResponse.SearchForAttack, BehaviourMap.FromAggroPriority), JobKind.Search);
+            GrowToGuess(who, guess);
             return;
         }
 
@@ -498,6 +503,17 @@ public class JobBoard
         if (!JoinMember(job, who)) return;
         DebugLog.Info($"{who.name} joins {job}.", who);
         ReconsiderOnJoin(job);
+        GrowToGuess(who, guess);
+    }
+
+    // The job they are on now (a join can be reconsidered onto another) takes in where they saw Ruby heading.
+    // GrowAt logs its own refusals (off the grid, nothing new); a place the area already has is left alone.
+    private static void GrowToGuess(EnemyController who, Vector3? guess)
+    {
+        if (!guess.HasValue) return;
+        GroupJob job = who.Job;
+        if (job == null || job.Kind != JobKind.Search || job.Area.TryGetPatchAt(guess.Value, out _)) return;
+        job.GrowAt(guess.Value, $"where {who.name} saw Ruby heading");
     }
 
     // A job always starts this one way: a sound's first listener (Handle), an extra a merge sent

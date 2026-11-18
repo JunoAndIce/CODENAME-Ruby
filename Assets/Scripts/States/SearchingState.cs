@@ -120,7 +120,7 @@ public class SearchingState : EnemyStateBase
         // takes its Retarget branch and never calls SetState. With no Intel they keep the search of their own
         // they have just begun (a scene with no Intel is reported elsewhere).
         if (request.AfterLostFight && Enemy.Intel != null)
-            Enemy.Intel.JoinFromAggro(Enemy, request.Incident.Point);
+            Enemy.Intel.JoinFromAggro(Enemy, request.Incident.Point, request.Guess);
     }
 
     public override void Exit()

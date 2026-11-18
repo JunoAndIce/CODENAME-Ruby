@@ -410,7 +410,7 @@ public class Intel : MonoBehaviour
     public bool AnyInContact(Fight fight, EnemyController except) => _fights.AnyInContact(fight, except);
 
     /// <summary>An enemy who has just lost a fight joins or starts a job at the spot they search (see JobBoard.JoinFromAggro).</summary>
-    public void JoinFromAggro(EnemyController who, Vector3 point) => _board.JoinFromAggro(who, point);
+    public void JoinFromAggro(EnemyController who, Vector3 point, Vector3? guess) => _board.JoinFromAggro(who, point, guess);
 
     /// <summary>Takes a member off a search they can't reach and sends them back to their patrol (see JobBoard.DropFromSearch).</summary>
     public void DropFromSearch(EnemyController who, string why) => _board.DropFromSearch(who, why);

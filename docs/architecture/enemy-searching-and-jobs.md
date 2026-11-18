@@ -168,7 +168,11 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
     so the flip from Aggro to Searching and back can't raise it each time), and join it if it has room;
     a full or past-recruiting job dismisses them to Patrol Aggressive, since they are wary by then. With no
     job there they lead a Search for an attack and call in the free officers. A lost-fight team past
-    the cap goes to Patrol Aggressive and starts no job of its own.
+    the cap goes to Patrol Aggressive and starts no job of its own. **The job then grows to where they saw
+    her heading** (`SearchRequest.Guess`, the guess `AggroState.Exit` read from `EnemyAwareness.TryGetGuess`;
+    `GroupJob.GrowAt`, "where ... saw Ruby heading"), so the search covers where she went as well as where she
+    vanished. With no heading the guess is the vanish point and nothing extra is grown; dismissed or refused,
+    they are on no job and grow nothing.
   - **Individual memory and telling** (`JobBoard.JoinMember`, the one place an officer is put on a
     job, so every route in counts and tells). Each time they are put on a job they weren't on (started,
     joined, called, filled, merged out; a retarget, a distraction and a glance don't count) their

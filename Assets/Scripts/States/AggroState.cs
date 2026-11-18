@@ -121,6 +121,9 @@ public class AggroState : EnemyStateBase
             // mouth and never saw her would otherwise lose the fight and go back to a Normal patrol.
             Enemy.Reactions.BecomeWary();
             Vector3 known = Enemy.Awareness.TryGetNewestRed(out Vector3 newest) ? newest : Enemy.transform.position;
+            // Where they guessed she went, so the search covers it as well as where she vanished. Null when the guess
+            // is the vanish point itself (no heading, nothing ahead): there is nothing more to take in.
+            Vector3? guess = Enemy.Awareness.TryGetGuess(out Vector3 guessed) && PathGrid.FlatDistance(guessed, known) > SpotReach ? guessed : (Vector3?)null;
             // A spot with no way in would take everyone off the job for not reaching it, so the search
             // starts from the ground nearest it. Its area still takes in where she was.
             if (Enemy.Navigator.TryGetNearestReachable(known, out Vector3 reachable) && reachable != known)
@@ -128,7 +131,7 @@ public class AggroState : EnemyStateBase
                 DebugLog.Info($"{Enemy.name} can't reach {known}, where they lost Ruby: the search starts from {reachable}, the nearest they can get.", Enemy);
                 known = reachable;
             }
-            Enemy.RequestSearch(new SearchRequest(new Incident(known, StimulusResponse.SearchForAttack, BehaviourMap.FromAggroPriority), afterLostFight: true));
+            Enemy.RequestSearch(new SearchRequest(new Incident(known, StimulusResponse.SearchForAttack, BehaviourMap.FromAggroPriority), afterLostFight: true, guess: guess));
         }
         if (Enemy.IsArmed) Enemy.Arms.Lower();
     }
