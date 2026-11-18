@@ -5,21 +5,29 @@ using UnityEngine;
 /// <summary>How an enemy came to know a fact. Numbered and saved, so values never shift.</summary>
 public enum Knowledge { Seen = 0, Heard = 1, Told = 2, Pool = 3 }
 
-/// <summary>Where Ruby was, when, and how it is known. Immutable: a fact that is passed around never changes.</summary>
+/// <summary>
+/// Where Ruby was, when, how it is known, and which way she was going. Immutable: a fact that is passed
+/// around never changes. Velocity is her flat walking velocity as the witness saw it (zero when nobody
+/// saw her move: a sound, or a first glimpse with one sample). It is her path, not a live position: once
+/// she is out of sight, the hunt goes where she was heading (EnemyAwareness.TryGetGuess).
+/// </summary>
 public readonly struct RubyFact
 {
     public readonly Vector3 Position;
     public readonly float Time;
     public readonly Knowledge Source;
+    public readonly Vector3 Velocity;
 
-    public RubyFact(Vector3 position, float time, Knowledge source)
+    public RubyFact(Vector3 position, float time, Knowledge source, Vector3 velocity = default)
     {
         Position = position;
         Time = time;
         Source = source;
+        Velocity = velocity;
     }
 
-    public RubyFact WithSource(Knowledge source) => new(Position, Time, source);
+    // The heading travels with the fact: a call-out or the pool passes on where she was going, not only where she was.
+    public RubyFact WithSource(Knowledge source) => new(Position, Time, source, Velocity);
 }
 
 /// <summary>

@@ -52,6 +52,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _knownSpotRadius = 3f;
     [Tooltip("While they see Ruby, they call out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
+    [Tooltip("How far ahead of where they lost Ruby they guess she has gone, in path metres along her heading: through the doorway she ran at, behind the side of the crate she was making for. Kept short on purpose: Ruby runs fast, and a guess derived from her speed landed rooms away.")]
+    [SerializeField, Min(1f)] private float _guessDistance = 8f;
 
     [Tooltip("The least distance between two fighters' firing spots, in metres, measured flat. Each armed enemy in a fight claims a spot of their own round Ruby and nobody else takes one this close to it. Also how far past their band Ruby moves before they pick again (half of it).")]
     [FormerlySerializedAs("_squadSpacing")] [SerializeField, Min(0.5f)] private float _spotSpacing = 2f;
@@ -170,6 +172,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     internal float DistractionGap => _distractionGap;
     internal float AttackNearTime => _attackNearTime;
     internal float SpeakInterval => _speakInterval;
+    internal float GuessDistance => _guessDistance;
     internal float AggressiveSpeedFactor => _aggressiveSpeedFactor;
     internal float AttackNearRadius => _attackNearRadius;
     internal int SentToLookThreshold => _sentToLookThreshold;

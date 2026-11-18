@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -18,6 +19,31 @@ public class EnemyAwareness
     private float _nextSpeak;
     private bool _wasAggressive;
     private float _lastSawAt = float.NegativeInfinity;
+
+    // Her path, as they saw it (spec 2026-11-18): her positions over the last half second in view, so a Seen fact
+    // carries the heading averaged over them and one frame's twitch doesn't swing it. Cleared when sight goes,
+    // or a later sighting would average across the gap.
+    private const float HeadingWindow = 0.5f;
+    private const float MinSampleSpan = 0.1f;    // under this there is no movement to read (a first glimpse has one sample)
+    private readonly List<Vector3> _samplePositions = new();
+    private readonly List<float> _sampleTimes = new();
+    private RubyFact _lastSeenFact;
+
+    // Sight is one ray to her centre a frame, and at a crate's edge it flickers. She counts as gone only after this
+    // long without it (user, 2026-11-18): each flicker used to drop a firing spot, flood a guess, turn them to it
+    // and pick a spot again when she showed. A constant, not a field: it is invisible in play.
+    public const float GlimpseGrace = 0.25f;
+    private bool _vanishPending;   // they lost her in a fight and haven't yet called out where she went
+
+    // The guess at where she went (TryGetGuess). One flood per fact, never per frame: CollectReached walks the whole grid.
+    private const float MinHeadingSpeed = 0.5f;  // slower than this she was standing still: no heading to follow
+    private const float LateralWeight = 0.5f;    // how much straying sideways from her heading costs, against distance along it
+    private readonly FloorReach _reach = new();
+    private readonly List<Vector3> _reachedPoints = new();
+    private readonly List<float> _reachedMetres = new();
+    private bool _hasCache;
+    private float _cacheTime;
+    private Vector3 _cachePosition;
 
     public EnemyAwareness(EnemyController enemy)
     {
@@ -102,6 +128,104 @@ public class EnemyAwareness
     /// </summary>
     public bool FollowingThrough => !SeesPlayer && !_enemy.ProvokedUnseen && _enemy.CurrentState == _enemy.Aggro && Time.time - _lastSawAt <= _enemy.SightFollowThrough;
 
+    /// <summary>
+    /// They lost sight of her in a fight no more than Glimpse Grace ago: she hasn't counted as gone yet. Aggro keeps
+    /// their firing spot and faces where they last saw her meanwhile, and makes no guess. Never for a provoked enemy
+    /// who hasn't laid eyes on her: they have no sighting to hold on to.
+    /// </summary>
+    public bool InGlimpseGrace => !SeesPlayer && !_enemy.ProvokedUnseen && _enemy.CurrentState == _enemy.Aggro && Time.time - _lastSawAt <= GlimpseGrace;
+
+    /// <summary>Where they last actually saw her. Read in the glimpse grace, which only follows a sighting.</summary>
+    public Vector3 LastSeenPosition => _lastSeenFact.Position;
+
+    /// <summary>The last guess worked out (TryGetGuess), for the gizmos: reading these never floods.</summary>
+    public bool HasGuess { get; private set; }
+    public Vector3 GuessFrom { get; private set; }
+    public Vector3 GuessHeading { get; private set; }
+    public Vector3 Guess { get; private set; }
+
+    /// <summary>
+    /// Where Ruby has gone, as far as they can tell: from the newest fact, the reachable spot within Guess Distance
+    /// (path metres) that lies furthest along her heading, so through the doorway she ran at or behind the side of the
+    /// crate she was making for. A fact with no heading, or one the floor gives nothing ahead of, guesses the fact's own
+    /// spot, which is a rule and logs. Cached against the fact: a newer fact floods again, the same fact never does.
+    /// False only when they know nothing.
+    /// </summary>
+    public bool TryGetGuess(out Vector3 guess)
+    {
+        guess = default;
+        if (!TryGetNewestRedFact(out RubyFact fact)) return false;
+        if (_hasCache && fact.Time == _cacheTime && fact.Position == _cachePosition)
+        {
+            guess = Guess;
+            return true;
+        }
+        guess = WorkOutGuess(fact, out Vector3 heading);
+        _hasCache = true;
+        _cacheTime = fact.Time;
+        _cachePosition = fact.Position;
+        HasGuess = true;
+        GuessFrom = fact.Position;
+        GuessHeading = heading;
+        Guess = guess;
+        return true;
+    }
+
+    private Vector3 WorkOutGuess(RubyFact fact, out Vector3 heading)
+    {
+        heading = fact.Velocity;
+        heading.y = 0f;
+        float speed = heading.magnitude;
+        if (speed < MinHeadingSpeed)
+        {
+            heading = Vector3.zero;
+            DebugLog.Info($"{_enemy.name} has no heading for Ruby ({fact.Source} fact, {speed:0.##} m/s: she stood still, or it was only heard): they hunt the spot itself, {fact.Position}.", _enemy);
+            return fact.Position;
+        }
+
+        FloorReach.Status status = _reach.Begin(fact.Position, _enemy.GuessDistance);
+        if (status == FloorReach.Status.NoGrid)
+        {
+            if (_reach.FirstNoGrid(_enemy))
+                Debug.LogWarning($"{_enemy.name} can't guess where Ruby went from {fact.Position}: it is on no PathGrid. They hunt that spot itself.", _enemy);
+            return fact.Position;
+        }
+        if (status == FloorReach.Status.NoReach)
+        {
+            DebugLog.Info($"{_enemy.name} can't guess where Ruby went: where they lost her, {fact.Position}, has no walkable ground in reach (tight behind something?). They hunt that spot itself.", _enemy);
+            return fact.Position;
+        }
+        // Collected while the scratch field is ours, scored after End: nothing may flood in between.
+        _reachedPoints.Clear();
+        _reachedMetres.Clear();
+        _reach.Field.CollectReached(_reachedPoints, _reachedMetres);
+        _reach.End("the guess at where Ruby went", _enemy);
+
+        Vector3 direction = heading / speed;
+        bool found = false;
+        float bestScore = float.NegativeInfinity;
+        Vector3 best = fact.Position;
+        for (int i = 0; i < _reachedPoints.Count; i++)
+        {
+            Vector3 offset = _reachedPoints[i] - fact.Position;
+            offset.y = 0f;
+            float along = Vector3.Dot(offset, direction);
+            if (along <= 0f) continue;
+            float score = along - LateralWeight * (offset - direction * along).magnitude;
+            if (score <= bestScore) continue;
+            bestScore = score;
+            best = _reachedPoints[i];
+            found = true;
+        }
+        if (!found)
+        {
+            DebugLog.Info($"{_enemy.name} finds no ground ahead of where they lost Ruby, {fact.Position}, along her heading: they hunt that spot itself.", _enemy);
+            return fact.Position;
+        }
+        DebugLog.Info($"{_enemy.name} guesses Ruby went to {best}, {PathGrid.FlatDistance(best, fact.Position):0.#} m on from {fact.Position} along her heading ({speed:0.#} m/s).", _enemy);
+        return best;
+    }
+
     // Remembering and speaking aren't states: they run beside the machine. What they see they know at
     // once; calling it out is bounded by Speak Interval so a long sighting isn't a shout per frame.
     private void UpdateKnowledge()
@@ -109,8 +233,11 @@ public class EnemyAwareness
         bool sees = SeesPlayer;
         if (sees)
         {
+            Vector3 position = _enemy.Player.transform.position;
             _lastSawAt = Time.time;
-            var fact = new RubyFact(_enemy.Player.transform.position, Time.time, Knowledge.Seen);
+            var fact = new RubyFact(position, Time.time, Knowledge.Seen, SampleVelocity(position, Time.time));
+            _lastSeenFact = fact;
+            _vanishPending = false;
             _enemy.Memory.Learn(fact);
             if (_enemy.Intel != null && (!_wasSeeing || Time.time >= _nextSpeak))
             {
@@ -118,11 +245,56 @@ public class EnemyAwareness
                 _enemy.Intel.Say(_enemy, fact);
             }
         }
-        // Not called out: nobody else watched where she went, and they have their own eyes to follow through with.
-        else if (FollowingThrough)
+        else
         {
-            _enemy.Memory.Learn(new RubyFact(_enemy.Player.transform.position, Time.time, Knowledge.Seen));
+            if (_wasSeeing)
+            {
+                _samplePositions.Clear();
+                _sampleTimes.Clear();
+                _vanishPending = _enemy.CurrentState == _enemy.Aggro && !_enemy.ProvokedUnseen;
+            }
+            // Not called out: nobody else watched where she went, and they have their own eyes to follow through with.
+            if (FollowingThrough)
+                _enemy.Memory.Learn(new RubyFact(_enemy.Player.transform.position, Time.time, Knowledge.Seen));
         }
+        CallOutVanish(sees);
         _wasSeeing = sees;
+    }
+
+    // When the grace runs out in a fight they say where they lost her and which way she was going, once, so mates and
+    // the pool hunt where she went too. Before this, call-outs came only while seeing her, so the last one was up to a
+    // Speak Interval older than the vanish, and a first-sight call-out had one sample and no heading.
+    private void CallOutVanish(bool sees)
+    {
+        if (!_vanishPending) return;
+        if (sees || _enemy.CurrentState != _enemy.Aggro || _enemy.ProvokedUnseen)
+        {
+            _vanishPending = false;
+            return;
+        }
+        if (Time.time - _lastSawAt <= GlimpseGrace) return;
+        _vanishPending = false;
+        Vector3 heading = _lastSeenFact.Velocity;
+        DebugLog.Info($"{_enemy.name} lost sight of Ruby at {_lastSeenFact.Position}, heading {heading.normalized} at {heading.magnitude:0.#} m/s: they call it out.", _enemy);
+        if (_enemy.Intel != null) _enemy.Intel.Say(_enemy, _lastSeenFact);
+    }
+
+    // Her flat velocity over the samples inside the heading window, the newest included. Zero over too short a span.
+    private Vector3 SampleVelocity(Vector3 position, float now)
+    {
+        _samplePositions.Add(position);
+        _sampleTimes.Add(now);
+        int drop = 0;
+        while (drop < _sampleTimes.Count - 1 && now - _sampleTimes[drop] > HeadingWindow) drop++;
+        if (drop > 0)
+        {
+            _samplePositions.RemoveRange(0, drop);
+            _sampleTimes.RemoveRange(0, drop);
+        }
+        float span = now - _sampleTimes[0];
+        if (span < MinSampleSpan) return Vector3.zero;
+        Vector3 moved = position - _samplePositions[0];
+        moved.y = 0f;
+        return moved / span;
     }
 }

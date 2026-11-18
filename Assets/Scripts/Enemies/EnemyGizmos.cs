@@ -34,14 +34,28 @@ internal static class EnemyGizmos
         Gizmos.color = new Color(1f, 0.4f, 0.8f);
         Gizmos.DrawWireSphere(enemy.transform.position, enemy.BodyNoticeRange);
 
-        // Attack Near Radius round where she was last reported, and inside it where they count as having reached
-        // the spot they knew. Only on the selected enemy: drawn on every enemy in Play, the rings piled up and hid
-        // the scene. In edit mode there is no news of Ruby, so the ring is drawn round them, to judge its size.
+        // The path they hunt once Ruby is out of sight: where they lost her, which way she was going, and their guess
+        // at where she went. The cached guess only: drawing never floods.
+        if (Application.isPlaying && enemy.Memory != null && enemy.Awareness.HasGuess)
+        {
+            Vector3 lift = Vector3.up * 0.15f;
+            Vector3 from = enemy.Awareness.GuessFrom + lift;
+            Vector3 guess = enemy.Awareness.Guess + lift;
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(from, 0.25f);
+            Gizmos.DrawLine(from, from + enemy.Awareness.GuessHeading * 0.5f);
+            Gizmos.color = new Color(1f, 0.85f, 0.2f, 0.6f);
+            Gizmos.DrawLine(from, guess);
+            Gizmos.DrawSphere(guess, 0.3f);
+        }
+
+        // Attack Near Radius round where she was last reported. Only on the selected enemy: drawn on every enemy in
+        // Play, the rings piled up and hid the scene. In edit mode there is no news of Ruby, so the ring is drawn
+        // round them, to judge its size.
         if (TryGetRecentNews(enemy, out RubyFact news))
         {
             Gizmos.color = AttackNearColour;
             DrawFlatCircle(news.Position + Vector3.up * 0.1f, enemy.AttackNearRadius);
-            DrawFlatCircle(news.Position + Vector3.up * 0.1f, enemy.KnownSpotRadius);
 #if UNITY_EDITOR
             UnityEditor.Handles.Label(news.Position + Vector3.up * 0.8f + Vector3.right * enemy.AttackNearRadius, $"Attack Near Radius {enemy.AttackNearRadius:0.#} m, reported {Time.time - news.Time:0.0}s ago");
 #endif
