@@ -36,58 +36,76 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   all round so she can't stand right behind them; with no horizontal facing there's no cone, only
   the circle. An officer's root never pitches in play (its rotation is frozen and only ever turned
   about Y), so this only covers one placed pitched in the scene. Idle officers aggro on sight like
-  the rest; an unarmed one also goes for a free gun in reach. Aggro keeps contact all round, within
-  Give Up Radius (18.5 m). Damage and getting up from a ragdoll (thrown or dropped) enter Aggro from
+  the rest; an unarmed one also goes for a free gun in reach. Aggro keeps contact all round, at any
+  distance, while they see her. Damage and getting up from a ragdoll (thrown or dropped) enter Aggro from
   any AI state. Short of seeing her, only two things send them to Aggro from a sense: seeing the
   chain drag or throw an enemy (see **Senses**), and a searcher provoked to their limit
   (`EnemyReactions.GoAfterRed`, see **Distraction**), who goes blind to her until she is in their view.
   A grabbed enemy standing still, a knockdown, a death, a job mate lost: they search, and go to Aggro
   only if Ruby then comes into view.
-- **Aggro** hunts along the shared chase field. Armed (a `GunHolder` with a `Gun`), with Ruby in
-  sight, it walks to a firing spot of their own (see **Fights**), and with no spot keeps the gun's band:
-  it closes in to Min Distance, holds in the metre above it, and backs away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyMovement.StepAway`),
-  standing its ground when cornered. It fires alongside all of that, whenever she's in sight, in
-  range and on her feet (`AggroState.Firing`); firing is not a state. It only aims within range:
-  beyond it they run with the gun down. Contact holds while the player is in sight within
-  Give Up Radius. **Past the radius, sight still teaches them where she is and they call it out**
-  (`EnemyAwareness.SeesPlayer` counts an Aggro enemy's clear line at any distance); the radius
-  only decides when the hunt ends. They used to chase her real position whenever she was in sight but
-  learn it only within the radius, so past it they followed her without updating what they knew, and
-  when she dropped out of sight they walked back to the old spot, again and again as she stepped in
-  and out of range. (The other fix, treating her as gone past the radius even in plain sight, would
-  have them ignore her standing in the open.) Out of sight they chase **what they know**, not where she
-  really is (see **Knowledge**), though for Sight Follow Through (1 s) after losing her they still know
-  where she is (`EnemyAwareness.FollowingThrough`, on the shared chase field, not called out), because they watched where she went: knowing only the corner she vanished at, they lost her the moment she ducked round a crate in plain view. The fight ends one of three ways, never while they are in contact:
-  - Aggro Time (1.5 s) of walking without contact (out of sight, or past the radius, even in
-    sight: they then search where they last saw her). The timer is suspended while they hold at the
-    spot, because counting the walk toward the hold cut it short.
-  - Arriving at the spot they knew and **holding there for Aggro Time**, or for Unseen Hold Time (1 s) if they haven't seen her at all in this fight, such as after getting up from a throw: they have nothing to wait for, and holding for Aggro Time left them standing while a team checked and left without them. The spot is a place and not a point: within Known Spot Radius (3 m) with a clear line to it, or held up just outside that behind another hunter, they count as there, so several don't push at each other to stand on it. Reaching it doesn't end the
-    hunt: giving up the instant they arrived dropped fights while Ruby was a metre past it. Sight
-    coming back, or a newer fact that moves the spot, restarts the hold.
-  - Knowing nothing about where she is: they search where they stand, with a log line.
+- **Aggro** hunts Ruby. Built to `docs/specs/2026-11-18-enemy-path-tracking.md`. **In sight**, unarmed,
+  they chase her along the shared chase field; armed (a `GunHolder` with a `Gun`), they walk to a firing spot of
+  their own (see **Fights**), and with no spot keep the gun's band: they close in to Min Distance, hold in the
+  metre above it, and back away facing her inside it (`GridNavigator.TryFindSpotAway`, `EnemyMovement.StepAway`),
+  standing their ground when cornered. They fire alongside all of that, whenever she's in sight, in range and on
+  her feet (`AggroState.Firing`); firing is not a state. They only aim within range: beyond it they run with the
+  gun down. **Contact is seeing her**, a clear line at any distance (`EnemyVision.InContactWithPlayer`); there is no
+  give-up radius. It used to make two rules of one idea: sight past it still taught them where she was but counted
+  as no contact.
+  **Out of sight they know her path, never her position.** Each Seen fact carries her heading
+  (`RubyFact.Velocity`, averaged over her last half second in view, `EnemyAwareness.SampleVelocity`), and nothing is
+  learned while she is out of sight. Sight Follow Through, which handed them her live position for a while, is
+  gone: it was psychic, and Aggro Time ended the hunt under it anyway.
+  - **The glimpse grace** (`EnemyAwareness.GlimpseGrace`, 0.25 s, a constant; user's choice). Sight is one ray a
+    frame and flickers at a crate's edge, so she counts as gone only after a quarter second without it
+    (`InGlimpseGrace`). Meanwhile an armed enemy keeps their firing spot and its claim and faces
+    `LastSeenPosition`; with no spot they hold facing it, or keep walking to it when they were closing in. They
+    don't fire, and don't back away. Without it each flicker dropped the spot, flooded a guess, turned them to it
+    and re-picked a spot when she showed.
+  - **The vanish call-out.** When the grace runs out in a fight they say the last fact they saw, heading and all,
+    once (`EnemyAwareness.CallOutVanish`, through `Intel.Say`). Call-outs otherwise come only while seeing her, so
+    mates would hunt a fact up to a Speak Interval older, and a first-sight call-out has no heading.
+  - **The guess** (`EnemyAwareness.TryGetGuess`): one flood from the newest fact's position out to Guess Distance
+    (8 m of path, on the enemy), through a `FloorReach`, and the reached cell furthest along her heading less half its
+    sideways stray. So it lands through the doorway she ran at, or behind the side of the crate she was making for.
+    Cached against the fact: collecting a flood walks the whole grid, so it runs once per new fact, never per frame.
+    No heading (under 0.5 m/s, or a sound), no grid, or nothing reachable ahead guesses the fact's own spot, each
+    logged. Guess Distance is a field and not her speed times the timer: she runs 15 m/s, which put the guess 60 m
+    off. Selected in Play, an enemy draws the vanish point, her heading and the guess.
+  - **Hunting the guess** (`AggroState.HuntGuess`): past the grace they walk to the guess at Chase Speed and, within
+    Search Reach, look round it (`EnemyMovement.LookAround`) until sight comes back or the hunt ends. A newer fact
+    (a mate's call-out, the pool) moves the guess more than half a metre and sends them on. Everyone told the same
+    thing gets the same guess, so one whose walk reports Blocked (Stuck Time) looks round where they stand instead
+    of pushing at a mate's back, and one with no way there does the same; both log.
+  - **One timer, Lose Sight Time** (4 s, on the enemy), replaces Aggro Time, Sight Follow Through and Unseen Hold
+    Time. It counts from the last time anyone in the fight had her in contact, the grace included, and when it
+    runs out `LostPlayer` sends them to search. Any glimpse, theirs or a mate's, starts it over. Knowing nothing at
+    all ends the hunt at once, with a log line. There is no hold at a spot any more, so Known Spot Radius and the
+    "stalled behind someone" rule went with it. One who never saw her in this fight (up from a throw, told by word
+    of mouth) hunts what they were told and loses her after Lose Sight Time like anyone: Unseen Hold Time used to cut
+    that short so a team that came to check didn't leave without them, and that special case went with the field.
 
   The search starts from where the hunt was leading, or where they stand when they knew nothing:
   `AggroState.Exit` requests it (see **Searching**), and only when `LostPlayer` is what's sending
-  them there, since Exit also runs on the way to Rearm, Grabbed, Ragdoll and Dead.
-  The chase is a **hunt** (`GridNavigator`'s `getClose`): tight behind a crate, Ruby's cell can have no
-  way in on the grid, and a hunter with no path used to stand still and warn while the crate hid her
-  and Aggro Time ran out with her standing there. They now walk to the ground they can reach nearest her,
-  within 5 m, and warns once; no ground in reach still stops and says so. A lost fight's search
-  starts from that ground too (`TryGetNearestReachable`), because a Search member who can't reach
-  their spot is taken off the job.
+  them there, since Exit also runs on the way to Rearm, Grabbed, Ragdoll and Dead. A spot with no way in starts
+  the search from the ground they can reach nearest it (`TryGetNearestReachable`), because a Search member who
+  can't reach their spot is taken off the job.
+  In sight, the chase is a **hunt** (`GridNavigator`'s `getClose`): tight behind a crate, Ruby's cell can have no
+  way in on the grid, and they walk to the ground they can reach nearest her, within 5 m, and warn once; no ground
+  in reach still stops and says so.
   **A provoked enemy sees her only with their own eyes** (`EnemyController.ProvokedUnseen`; spec, "At their
   own limit they run at Ruby, and see her only with their own eyes"). `EnemyReactions.GoAfterRed` sets it
   before `Alert`, and only it: word of mouth, getting up and seeing the chain drag someone keep the
   all-round sight above. **A hit restores it** (user ruling): damage that doesn't floor them clears the flag in
   `EnemyController.HandleDamaged`, with a log line, and they fight as any damaged enemy does. While it is set the all-round sight doesn't apply: every sight read in Aggro is
-  `EnemyVision.CanTrackPlayer` (and contact `InContactWithPlayer`), false for them, so they chase what they were
-  told (the Heard fact, or anything newer they learn), holds no firing spot and doesn't fire, and
-  `EnemyAwareness.SeesPlayer` counts only `DetectsPlayer`, so they learn no Seen fact, calls nothing out and
-  doesn't follow through. They don't give up on the way: their Aggro Time waits while the run to the told spot
-  is under way (`AggroState.OnProvokedRun`), and reaching it the normal hold applies, for Unseen Hold Time.
+  `EnemyVision.CanTrackPlayer` (and contact `InContactWithPlayer`), false for them, so they hunt the guess of what
+  they were told (the Heard fact, or anything newer they learn), get no glimpse grace, hold no firing spot and don't
+  fire, and `EnemyAwareness.SeesPlayer` counts only `DetectsPlayer`, so they learn no Seen fact and call nothing out.
+  They don't give up on the way: their Lose Sight Time waits while the walk to the guess is under way
+  (`AggroState.OnProvokedRun`), and once there it counts as for anyone.
   With no way there at all they count down as anyone does, and after Search Travel Limit (20 s) of running
-  Aggro Time counts again, with a log line, so someone standing in their way can't keep them in Aggro for
-  good. A fight mate's contact keeps them in as it does anyone, and they face only what they know. It clears
+  Lose Sight Time counts again, with a log line, so someone standing in their way can't keep them in Aggro for
+  good. A fight mate's contact keeps them in as it does anyone. It clears
   the first time `DetectsPlayer` holds (`EnemyVision.StillProvokedUnseen`, which whoever asks first runs,
   so every reader agrees within a frame), and then every normal rule follows, the call-out that brings
   others included. It also clears when they leave the hunt by any route (a lost fight, a grab, a knockdown,
@@ -102,19 +120,19 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   member who is destroyed, dead or in neither Aggro nor Rearm (so grabbed, downed and searching all drop
   them at once, and getting up rejoins them by the normal route). A fight nobody is in closes.
   `EnemyController.Fight` is set only by the board. On no grid they fight alone, with one warning.
-  **Contact is shared:** `AggroState.LostPlayer` is false, and both of its timers start over, while a
-  fight mate has Ruby in contact, so a member behind a wall doesn't give up while another has her. Held at the spot they knew
-  meanwhile, they face that spot, never her true position, which from behind a wall read as seeing through it.
+  **Contact is shared:** `AggroState.LostPlayer` is false, and its timer starts over, while a
+  fight mate has Ruby in contact, so a member behind a wall doesn't give up while another has her. Out of sight meanwhile they hunt the guess of
+  the newest fact, which the contact holder's call-outs keep moving; never her true position.
   A provoked member who hasn't laid eyes on her gives their mates no contact (see **Aggro**).
   **No squads:** a main squad of up to four that closed in, and a standby squad that held back behind it
   and moved up when a main member fell, were built and taken out (user, 2026-11-07). Firing spots spread
   everyone round her (standby, then, on a slightly wider ring), so the squads never showed on screen, and a
   standby member moving up had nowhere new to walk.
   **Firing spots** (`FiringSpots`, a static picker, with claims kept in the `Fight`). An armed member
-  with Ruby in sight, or following through, walks to a spot of their own and holds there facing her, firing
+  with Ruby in sight, or in the glimpse grace, walks to a spot of their own and holds there facing her, firing
   as before, so a fight spreads into a loose crossfire instead of closing along one line. The pick is
-  round where they know she is (her true position only in sight or following through; past that they chase
-  what they know and hold no spot): 16 angles on 3 rings across the gun's band (its Min Distance out to
+  round where they know she is (her true position in sight, where they last saw her in the grace; past that they hunt the guess
+  and hold no spot): 16 angles on 3 rings across the gun's band (its Min Distance out to
   Range less the hold band). A candidate must be walkable and on the floor's shared chase field
   (`FieldToward`, read with `TryGetDistance`: "ground they can reach", out to the field's own bound; it
   refreshes only when read as a route, so the pick asks it to with `FlowField.Refresh`), with them on that
@@ -124,9 +142,9 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   her), near where they stand, the middle of the band, and not on a mate's line to her; the best few (a
   budget of 4) then get an eye-height ray, anything solid but characters blocking it, as sight does. Their
   current spot is kept unless a new one beats it by a margin. They re-picks about once a second
-  (staggered), and at once when their spot falls inside the gun's Min Distance or more than half a spacing past the band's far side, their shot is
-  blocked, a walk to it is refused, or they are backed away from her on the way there (either spot is left
-  alone for 3 s); never sooner than 0.25 s after the last pick. While Ruby runs, her spot leaves their band often, so
+  (staggered), and at once when their spot falls inside the gun's Min Distance or more than half a spacing past the band's far side, a walk to
+  it is refused, or they are backed away from her on the way there (either spot is left
+  alone for 3 s); never sooner than 0.25 s after the last pick. A blocked shot no longer re-picks: losing the shot is the glimpse grace, which holds the spot, and past it they hold none. While Ruby runs, her spot leaves their band often, so
   re-picks then come about every 0.25 s rather than every second: bounded, and each costs an A\* re-plan. Backing away inside Min Distance is as
   before, and cornered they stand and fights. With no spot they keep the band behaviour, with a log line
   once per fight. Claims go when they leave Aggro (`AggroState.Exit`), loses their gun or knows nothing of
@@ -238,7 +256,8 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   `HasSeenRed || WasToldOfRed`, and it is what `IsAggressive` and the problem-to-attack upgrade
   read. Being told is not seeing: only `HasSeenRed` lets them tell others in turn (see **Group jobs**). Between two things they know, **the newer by time wins**, and on a tie their own beats the
   pool's, because it needed no publish to reach them. `EnemyAwareness.TryGetNewestRed` combines their
-  memory with the pool's published snapshot and is what Aggro chases once she's out of sight.
+  memory with the pool's published snapshot. Out of sight, Aggro hunts the guess made from the newest fact
+  (`TryGetGuess`); a fact carries her heading (`RubyFact.Velocity`) along with where and when.
   Seeing, remembering and speaking aren't states: `EnemyAwareness.Update` runs beside the machine.
 - **The shared pool** (`KnowledgePool`, a plain class that `Intel`, one per scene, owns and ticks;
   `Intel` forwards `Report`, `ReportBody`, `ReportGun` and `Published`). Officers report into an
@@ -349,5 +368,5 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   every member and from each member to the spot, the checker ringed, each member out checking a distraction ringed too with a ring where they were sent and a line to it, and a label with the job's id,
   kind, step, members over cap, reason, priority and checker. `Intel` also marks, in Play whenever
   Gizmos are on (no toggle), each open job's Job Match Radius round every one of its places, as `Covers` matches (a grown search has one per patch; in edit mode, with `Intel` selected, the same ring round `Intel`, for sizing it), where Ruby was last reported ("reported Xs ago") and the bodies and
-  loose guns the squad has on its books. A selected enemy with recent news of Ruby draws Attack Near Radius round where she was last reported, orange, with a label and Known Spot Radius inside it (only when selected: drawn on every enemy, the rings piled up), and in edit mode it draws round them, for sizing it. Every officer's routes show
+  loose guns the squad has on its books. A selected enemy with recent news of Ruby draws Attack Near Radius round where she was last reported, orange, with a label (only when selected: drawn on every enemy, the rings piled up), and in edit mode it draws round them, for sizing it. In Play it also draws the path it hunts: the vanish point, her heading and the guess. Every officer's routes show
   faintly, cyan for Safe and orange for Aggressive.

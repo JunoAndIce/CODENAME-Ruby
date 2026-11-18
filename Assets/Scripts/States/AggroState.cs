@@ -1,38 +1,31 @@
 using UnityEngine;
 
 /// <summary>
-/// Hunting the player. Unarmed, or without sight of her, the enemy chases along the shared flow
-/// field. Armed with her in sight, it walks to a firing spot of its own and holds there facing her; with
-/// no spot it keeps its gun's band: it closes in to Min Distance, holds in the metre above that, and
-/// backs away inside it, still facing her. Firing happens alongside all
-/// of these, not as its own state. Out of sight it chases what it knows of her (its memory and the
-/// squad's stale pool), not her true position, once Sight Follow Through has run out. LostPlayer flips, never while in contact (their own, or a fight mate's: see Fights), after
-/// Aggro Time out of contact, after holding Aggro Time at the known spot without sight of her, or at
-/// once with nothing to go on; the table then sends the enemy to search.
+/// Hunting the player. In sight, unarmed, the enemy chases her along the shared flow field; armed, it walks to a
+/// firing spot of its own and holds there facing her, and with no spot keeps its gun's band: it closes in to Min
+/// Distance, holds in the metre above that, and backs away inside it, still facing her. Firing happens alongside all
+/// of these, not as its own state.
+/// Out of sight they know her path, never her position (spec 2026-11-18): for the glimpse grace (EnemyAwareness,
+/// 0.25 s) they hold their spot and face where they last saw her, and past it they walk to where they guess she went
+/// (EnemyAwareness.TryGetGuess) and look round there. LostPlayer flips after Lose Sight Time without contact (their
+/// own sight of her, or a fight mate's), or at once with nothing to go on; the table then sends them to search.
 /// Every read of sight here is EnemyVision.CanTrackPlayer, never CanSeePlayer: a provoked enemy who hasn't
-/// laid eyes on Ruby (EnemyController.ProvokedUnseen) is out of sight to all of it, so they chase what they were
-/// told, holds no spot, fires at nothing, and their Aggro Time waits while they run there.
+/// laid eyes on Ruby (EnemyController.ProvokedUnseen) is out of sight to all of it, so they hunt what they were
+/// told, hold no spot, fire at nothing, and their Lose Sight Time waits while they run there.
 /// </summary>
 public class AggroState : EnemyStateBase
 {
     private const float HoldBand = 1f;       // metres above Min Distance where an armed enemy stands still: without it, it jitters between advancing and backing off
     private const float BackAwayStep = 2f;   // how far ahead a backing-away enemy looks for open floor
-    private const float SpotReach = 0.5f;    // how close to their firing spot counts as there
+    private const float SpotReach = 0.5f;    // how close to their firing spot counts as there; also how far a guess must move to be a new one
     private const float SpotLeave = 1f;      // shoved this far off it, they walk back: a wider gap than SpotReach, or they'd twitch at its edge
     private const float PickInterval = 1f;   // seconds between the picks of a spot they hold, staggered per enemy
-    private const float RepickGap = 0.25f;   // no pick sooner than this after the last, whatever asked: a changing band or a blocked shot can't make them pick every step
+    private const float RepickGap = 0.25f;   // no pick sooner than this after the last, whatever asked: a changing band can't make them pick every step
     private const float AvoidTime = 3f;      // a spot they couldn't reach is left alone this long, or the pick would choose it again
 
-    private float _lostTimer;
+    private float _lostTimer;       // seconds since anyone in the fight had her in contact
     private bool _hadSight;
-    private bool _holdingAtKnown;   // out of sight and standing on the spot they knew
-    private float _dwellTimer;      // how long they have held there
     private bool _loggedNothing;    // the nothing-to-go-on line is logged on its rising edge only
-    private float _closestToKnown;  // the nearest they have got to the spot they knew, for noticing they are held up
-    private float _stallTimer;
-    private bool _sawHer;           // they have had her in sight at some point in this fight
-    private Vector3 _stallSpot;
-    private const float StallProgress = 0.25f;   // closing less than this isn't getting anywhere
 
     // Their firing spot (see FiringSpots). The claim lives in the fight; these are their own side of it.
     private bool _hasSpot;
@@ -44,9 +37,15 @@ public class AggroState : EnemyStateBase
     private Vector3 _avoid;
     private float _avoidUntil;
 
+    // Looking round where they guessed she went (HuntGuess).
+    private bool _looking;
+    private Vector3 _lookAt;        // the guess they are looking round: one that moves by more than SpotReach sends them on
+    private float _lookBaseYaw;
+    private float _lookElapsed;
+
     // A provoked enemy's run at where they were told Ruby is (see OnProvokedRun).
-    private bool _chaseMoving;       // the last FixedTick's chase of what they know was under way: set there, read by Tick
-    private float _provokedRun;      // how long Aggro Time has waited on that run
+    private bool _chaseMoving;       // the last FixedTick's walk to the guess was under way: set there, read by Tick
+    private float _provokedRun;      // how long Lose Sight Time has waited on that run
     private bool _loggedRunLimit;
 
     public AggroState(EnemyController enemy) : base(enemy) { }
@@ -59,19 +58,14 @@ public class AggroState : EnemyStateBase
         get
         {
             if (Enemy.Vision.InContactWithPlayer()) return false;
-            // A fight mate with her in contact keeps the whole fight going: they stay in, chasing what
-            // they are told, instead of a member behind a wall giving up while another has her.
+            // A fight mate with her in contact keeps the whole fight going: they stay in, hunting what they
+            // are told, instead of a member behind a wall giving up while another has her.
             if (MateInContact()) return false;
-            if (_lostTimer >= Enemy.AggroTime) return true;
+            if (_lostTimer >= Enemy.LoseSightTime) return true;
             if (Enemy.Vision.CanTrackPlayer()) return false;
-            return NothingToGoOn || (_holdingAtKnown && _dwellTimer >= HoldTime);
+            return NothingToGoOn;
         }
     }
-
-    // How long they stand at the spot they knew. If they have seen her in this fight she may well be just past
-    // it. If they haven't (they got up from a throw, or something hit them), there is nothing they are waiting on:
-    // they stood for Aggro Time while the team that came to check finished and left without them.
-    private float HoldTime => _sawHer ? Enemy.AggroTime : Enemy.UnseenHoldTime;
 
     // A fight mate with her in contact: the fight goes on for them too.
     private bool MateInContact() => Enemy.Fight != null && Enemy.Intel.AnyInContact(Enemy.Fight, Enemy);
@@ -86,13 +80,8 @@ public class AggroState : EnemyStateBase
     {
         Firing = false;
         _lostTimer = 0f;
-        _holdingAtKnown = false;
-        _dwellTimer = 0f;
         _loggedNothing = false;
-        _closestToKnown = float.PositiveInfinity;
-        _stallTimer = 0f;
         _hadSight = Enemy.Vision.CanTrackPlayer();
-        _sawHer = _hadSight;
         _chaseMoving = false;
         _provokedRun = 0f;
         _loggedRunLimit = false;
@@ -101,6 +90,7 @@ public class AggroState : EnemyStateBase
         _pickNow = false;
         _lastPick = float.NegativeInfinity;
         _avoidUntil = 0f;
+        _looking = false;
         // Rearm hands back through here, so a re-join is a no-op that keeps their place. With no Intel
         // they fight alone, as already reported at Start.
         if (Enemy.Intel != null) Enemy.Intel.Join(Enemy);
@@ -124,6 +114,9 @@ public class AggroState : EnemyStateBase
         ReleaseSpot();
         if (LostPlayer)
         {
+            DebugLog.Info(_lostTimer >= Enemy.LoseSightTime
+                ? $"{Enemy.name} has lost Ruby: nobody in their fight has seen her for {Enemy.LoseSightTime:0.#}s (Lose Sight Time)."
+                : $"{Enemy.name} has lost Ruby: they know nothing of where she is.", Enemy);
             // They have been after her, whether or not they ever got a clear look. One who joined by word of
             // mouth and never saw her would otherwise lose the fight and go back to a Normal patrol.
             Enemy.Reactions.BecomeWary();
@@ -147,7 +140,6 @@ public class AggroState : EnemyStateBase
         if (_hadSight && !hasSight)
             DebugLog.Info($"{Enemy.name} lost sight of {Enemy.PlayerTransform.name} — blocked by {(Enemy.Vision.SightBlocker != null ? Enemy.Vision.SightBlocker.name : "something")}.", Enemy);
         _hadSight = hasSight;
-        if (hasSight) _sawHer = true;
 
         bool nothing = NothingToGoOn;
         // With a mate in contact they don't search yet: they stay in, and the pool tells them where she is within an Intel Interval.
@@ -157,40 +149,18 @@ public class AggroState : EnemyStateBase
                 : $"{Enemy.name} has nothing to go on: they can't see Ruby and know nothing of where she is, so they search where they stand.", Enemy);
         _loggedNothing = nothing;
 
-        // Sight coming back means the fight carries on: the dwell starts over. So does following her
-        // through: where she is keeps changing, so they aren't holding anywhere.
-        // A mate's contact counts like their own: the fight ends when every member has been out of
-        // contact for Aggro Time, so both timers start over while someone has her.
-        bool mateContact = MateInContact();
-        if (hasSight || Enemy.Awareness.FollowingThrough)
-        {
-            _holdingAtKnown = false;
-            _dwellTimer = 0f;
-        }
-        // Only the dwell: clearing the hold flag here and setting it again in FixedTick logged "reached
-        // the spot" every frame.
-        else if (mateContact)
-        {
-            _dwellTimer = 0f;
-        }
-        else if (_holdingAtKnown)
-        {
-            _dwellTimer += Time.deltaTime;
-        }
-
-        // Suspended while they hold at the known spot: this timer only ends a hunt on its way there, and
-        // counting the walk toward the hold cut it short. A newer point resumes it where it was.
-        // A provoked enemy's run to what they were told is suspended the same way (OnProvokedRun).
-        if (Enemy.Vision.InContactWithPlayer() || mateContact) _lostTimer = 0f;
-        else if (!_holdingAtKnown && !OnProvokedRun()) _lostTimer += Time.deltaTime;
+        // One timer: time since anyone in the fight had her in contact. The glimpse grace sits inside it, not on top,
+        // and nothing pauses it but a provoked enemy's run to what they were told (OnProvokedRun). Aggro Time and
+        // Sight Follow Through used to be two clocks, and the first ended the hunt while the second still had her.
+        if (Enemy.Vision.InContactWithPlayer() || MateInContact()) _lostTimer = 0f;
+        else if (!OnProvokedRun()) _lostTimer += Time.deltaTime;
     }
 
     // They don't give up on the way (spec: "They don't give up on the way"): while a provoked enemy who hasn't
-    // laid eyes on her runs at where they were told she is, their Aggro Time waits; reaching it, the normal hold
-    // applies, for Unseen Hold Time since they haven't seen her. Only while the walk is under way: with no way
-    // there at all (Unreachable, already warned) they count down as anyone does. Bounded by Search Travel Limit,
-    // as a walk to a search spot is, so someone standing in their way for good can't keep them in Aggro for good:
-    // past it Aggro Time counts again, which is a rule and says so.
+    // laid eyes on her runs at where they were told she is, their Lose Sight Time waits; once they get there it
+    // counts as for anyone. Only while the walk is under way: with no way there at all they count down as anyone
+    // does. Bounded by Search Travel Limit, as a walk to a search spot is, so someone standing in their way for good
+    // can't keep them in Aggro for good: past it Lose Sight Time counts again, which is a rule and says so.
     private bool OnProvokedRun()
     {
         if (!Enemy.ProvokedUnseen || !_chaseMoving) return false;
@@ -199,14 +169,14 @@ public class AggroState : EnemyStateBase
         if (!_loggedRunLimit)
         {
             _loggedRunLimit = true;
-            DebugLog.Info($"{Enemy.name} has run at where they were told Ruby is for {Enemy.SearchTravelLimit:0.#}s (Search Travel Limit) without getting there: their Aggro Time counts down again.", Enemy);
+            DebugLog.Info($"{Enemy.name} has run at where they were told Ruby is for {Enemy.SearchTravelLimit:0.#}s (Search Travel Limit) without getting there: their Lose Sight Time counts down again.", Enemy);
         }
         return false;
     }
 
     public override void FixedTick()
     {
-        _chaseMoving = false;   // only a chase of what they know, this step, sets it
+        _chaseMoving = false;   // only a walk to the guess, this step, sets it
         if (Enemy.PlayerTransform == null)
         {
             Enemy.Stop();
@@ -216,11 +186,24 @@ public class AggroState : EnemyStateBase
         bool armed = Enemy.IsArmed;
         float minDistance = armed ? Enemy.Arms.HeldGun.MinDistance : 0f;
         bool inSight = Enemy.Vision.CanTrackPlayer();
-        // Spots are for an armed fighter who knows where she is: in sight, or just gone from it. Past that they
-        // chase what they know, as ever, and hold none.
-        bool knowsHer = inSight || Enemy.Awareness.FollowingThrough;
+        bool grace = !inSight && Enemy.Awareness.InGlimpseGrace;
+        if (inSight) _looking = false;
+        // Spots are for an armed fighter who knows where she is: in sight, or in the grace, which holds what they had.
+        bool knowsHer = inSight || grace;
         if (!armed || !knowsHer || Enemy.Fight == null) ReleaseSpot();
-        Move move = Engage(armed, inSight, Enemy.Vision.DistanceToPlayer(), minDistance);
+        if (!knowsHer)
+        {
+            HuntGuess();
+            Shoot();
+            return;
+        }
+
+        // In the grace, where they last saw her, never where she is now: from behind a wall that turned them to
+        // track her, and with the camera straight down it read as seeing through walls.
+        Vector3 her = inSight ? Enemy.PlayerTransform.position : Enemy.Awareness.LastSeenPosition;
+        Move move = Engage(armed, PathGrid.FlatDistance(Enemy.transform.position, her), minDistance);
+        // Backing away is for someone they can see closing on them; in the grace they hold.
+        if (move == Move.BackAway && grace) move = Move.Hold;
         // Backing away inside the gun's Min Distance stays as it is; everywhere else a spot of their own decides.
         // Backed away while still walking to a spot: that route cuts inside Min Distance, and walking in again
         // next step would loop. The spot is dropped and left alone for a while, and they pick another.
@@ -234,23 +217,20 @@ public class AggroState : EnemyStateBase
             _pickNow = true;
         }
         // True while they have a spot, walking to it or standing on it: the spot decides their move, not the band.
-        bool spotDecides = move != Move.BackAway && armed && knowsHer && Enemy.Fight != null && MoveToSpot(inSight);
+        bool spotDecides = move != Move.BackAway && armed && Enemy.Fight != null && MoveToSpot(inSight, her);
         switch (spotDecides ? Move.None : move)
         {
             case Move.None:
                 break;
 
             case Move.Chase:
-                // With her in sight, or just gone from it, they know where she is; otherwise only what they
-                // have learned. The shared field while following through: the known spot moves every step
-                // then, and a field of their own would re-flood each quarter metre she ran.
-                if (inSight || Enemy.Awareness.FollowingThrough) Enemy.Movement.PathToPlayer(Enemy.ChaseSpeed);
-                else ChaseMemory();
+                if (inSight) Enemy.Movement.PathToPlayer(Enemy.ChaseSpeed);
+                else WalkToLastSeen(her);
                 break;
 
             case Move.Hold:
                 Enemy.Stop();
-                Enemy.Movement.FaceTarget();
+                FaceHer(inSight, her);
                 break;
 
             case Move.BackAway:
@@ -270,80 +250,70 @@ public class AggroState : EnemyStateBase
         Shoot();
     }
 
-    // Reaching the spot doesn't end the hunt: giving up the instant they got there dropped fights while
-    // Ruby was a metre past it. They stand there for Aggro Time first. A look-around animation comes later.
-    private void ChaseMemory()
+    // In the grace a chaser keeps on toward where they last saw her, so a flicker doesn't stop them dead. Its end is
+    // a quarter second away, so a walk that can't go on just stands facing the spot.
+    private void WalkToLastSeen(Vector3 lastSeen)
     {
-        NavResult result = Enemy.Movement.ChaseKnown(Enemy.ChaseSpeed);
-        bool arrived = result == NavResult.Arrived;
-        if (!arrived && StalledBehindSomeone())
-        {
-            Enemy.Stop();
-            arrived = true;
-        }
-        _chaseMoving = !arrived && result == NavResult.Moving;
-        // Held with a mate in contact nothing else ends the hold, so they face where they know she is rather than
-        // nothing. Never her true position: from behind a wall that turned them to track her every step, and with
-        // the camera looking straight down, it read as seeing through walls.
-        if (arrived && MateInContact() && Enemy.Awareness.TryGetNewestRed(out Vector3 known)) Enemy.Movement.FaceToward(known);
-        if (arrived && !_holdingAtKnown)
-        {
-            _dwellTimer = 0f;
-            DebugLog.Info($"{Enemy.name} reached where they last knew Ruby was and hold there for {HoldTime:0.#}s.", Enemy);
-        }
-        // A newer fact that moves the point sends them off again, and the dwell starts over.
-        else if (!arrived)
-        {
-            _dwellTimer = 0f;
-        }
-        _holdingAtKnown = arrived;
+        NavResult result = Enemy.Movement.WalkTo(lastSeen, Enemy.SearchReach, Enemy.ChaseSpeed);
+        if (result == NavResult.Moving) return;
+        Enemy.Stop();
+        Enemy.Movement.FaceToward(lastSeen);
     }
 
-    // Hunters lined up in a corridor: the first stops at the edge of the known spot's radius and the next
-    // is held up just outside it, pushing at their back. Close to the edge and no closer for Stuck Time, they
-    // count as there. Farther out it is someone else's problem to clear, and Aggro Time bounds it.
-    private bool StalledBehindSomeone()
+    // Past the grace they know her path, not her position: they walk to where they guess she went and look round
+    // there until Lose Sight Time ends the hunt or sight comes back. A newer fact (a mate's call-out, the pool) moves
+    // the guess and sends them on. Everyone told the same thing gets the same guess, so one held up short of it for
+    // Stuck Time (the navigator's Blocked) looks round where they stand rather than pushing at a mate's back, and
+    // one with no way there at all does the same; both say so.
+    private void HuntGuess()
     {
-        if (!Enemy.Awareness.TryGetNewestRed(out Vector3 known)) return false;
+        if (!Enemy.Awareness.TryGetGuess(out Vector3 guess))
+        {
+            Enemy.Stop();   // nothing to go on: LostPlayer ends the hunt and says so
+            return;
+        }
+        if (_looking && PathGrid.FlatDistance(guess, _lookAt) > SpotReach) _looking = false;
+        if (!_looking)
+        {
+            NavResult result = Enemy.Movement.WalkTo(guess, Enemy.SearchReach, Enemy.ChaseSpeed);
+            if (result == NavResult.Moving)
+            {
+                _chaseMoving = true;
+                return;
+            }
+            DebugLog.Info(result == NavResult.Arrived
+                ? $"{Enemy.name} reached where they guessed Ruby went ({guess}) and look round."
+                : $"{Enemy.name} can't get to where they guessed Ruby went ({result}: {Enemy.Navigator.FailureReason}): they look round where they stand.", Enemy);
+            _looking = true;
+            _lookAt = guess;
+            _lookBaseYaw = Enemy.transform.eulerAngles.y;
+            _lookElapsed = 0f;
+        }
+        _lookElapsed += Time.fixedDeltaTime;
+        Enemy.Movement.LookAround(_lookBaseYaw, _lookElapsed, Enemy.LoseSightTime);
+    }
 
-        // A newer fact is a new walk: how close they got to the old spot says nothing about this one.
-        if (PathGrid.FlatDistance(known, _stallSpot) > StallProgress)
-        {
-            _stallSpot = known;
-            _closestToKnown = float.PositiveInfinity;
-        }
-
-        float distance = PathGrid.FlatDistance(Enemy.transform.position, known);
-        if (distance < _closestToKnown - StallProgress)
-        {
-            _closestToKnown = distance;
-            _stallTimer = 0f;
-            return false;
-        }
-        _stallTimer += Time.fixedDeltaTime;
-        // Held for Stuck Time and then let go, so they try the walk again: the man ahead may have moved,
-        // and a stall that never reset left them standing for good.
-        if (_stallTimer >= Enemy.StuckTime * 2f)
-        {
-            _stallTimer = 0f;
-            return false;
-        }
-        return _stallTimer >= Enemy.StuckTime && distance <= Enemy.KnownSpotRadius * 2f;
+    // Faces her in sight, and where they last saw her in the grace.
+    private void FaceHer(bool inSight, Vector3 her)
+    {
+        if (inSight) Enemy.Movement.FaceTarget();
+        else Enemy.Movement.FaceToward(her);
     }
 
     // Walks to their firing spot and holds there facing her, picking a new one when it is due. False when they have
     // none (the pick found nothing, or the walk could not get there), and the band behaviour applies this step.
-    private bool MoveToSpot(bool inSight)
+    // `her` is where she is in sight and where they last saw her in the grace. A blocked shot no longer re-picks at
+    // once: losing the shot is the grace, which holds the spot, and past it they hold none.
+    private bool MoveToSpot(bool inSight, Vector3 her)
     {
         Fight fight = Enemy.Fight;
-        Vector3 ruby = Enemy.PlayerTransform.position;   // they know where she is: in sight, or following through
 
         if (Time.time >= _lastPick + RepickGap)
         {
-            // At once: asked for, Ruby has moved so their spot is past half a spacing outside their band, or their shot
-            // is blocked (holding at the spot and no longer seeing her). Otherwise about once a second.
-            bool due = _pickNow || Time.time >= _nextPick || (_hasSpot && (OutsideBand(ruby) || (_atSpot && !inSight)));
-            if (due) PickSpot(fight, ruby);
+            // At once: asked for, or Ruby has moved so their spot is past half a spacing outside their band.
+            // Otherwise about once a second.
+            bool due = _pickNow || Time.time >= _nextPick || (_hasSpot && OutsideBand(her));
+            if (due) PickSpot(fight, her);
         }
         if (!_hasSpot) return false;
 
@@ -366,7 +336,7 @@ public class AggroState : EnemyStateBase
         if (_atSpot)
         {
             Enemy.Stop();
-            Enemy.Movement.FaceTarget();
+            FaceHer(inSight, her);
         }
         return true;
     }
@@ -416,10 +386,11 @@ public class AggroState : EnemyStateBase
 
     private enum Move { None, Chase, Hold, BackAway }
 
-    // Unarmed, or blind to her, the hunt has to find her. Armed with her in sight, the gun's band decides.
-    private static Move Engage(bool armed, bool inSight, float distance, float minDistance)
+    // Called in sight or in the grace only. Unarmed, or out of the gun's band, they close in; armed and in it, the
+    // band decides.
+    private static Move Engage(bool armed, float distance, float minDistance)
     {
-        if (!armed || !inSight || distance > minDistance + HoldBand) return Move.Chase;
+        if (!armed || distance > minDistance + HoldBand) return Move.Chase;
         return distance < minDistance ? Move.BackAway : Move.Hold;
     }
 

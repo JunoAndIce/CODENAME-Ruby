@@ -40,16 +40,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _draggedDistance = 0.5f;
 
     [Header("Fighting")]
-    [Tooltip("Aggro keeps contact inside this radius, if in sight. Sits outside View Range.")]
-    [SerializeField] private float _giveUpRadius = 18f;
-    [Tooltip("Seconds out of contact (out of sight, or beyond Give Up Radius) before aggro turns to searching.")]
-    [SerializeField] private float _aggroTime = 1.5f;
-    [Tooltip("For this long after they lose sight of Ruby in a fight, in seconds, they still know where she is, because they watched where she went. So running round a crate in plain view doesn't lose them at once. Higher is harder to shake. 0: they only ever know where they last saw her.")]
-    [SerializeField, Min(0f)] private float _sightFollowThrough = 1f;
-    [Tooltip("How long they hold at the spot they knew if they haven't seen Ruby at all in this fight, in seconds, before they start searching. Getting up, or hurt by something thrown, they are hunting nothing they saw. Once they have seen her in the fight they hold for Aggro Time instead.")]
-    [SerializeField, Min(0f)] private float _unseenHoldTime = 1f;
-    [Tooltip("How close they must get to where they last knew Ruby was, in metres measured flat and with a clear line to it, to count as there and hold. A place and not a point, so several hunters don't push at each other to stand on one spot.")]
-    [SerializeField, Min(0f)] private float _knownSpotRadius = 3f;
+    [Tooltip("Seconds without seeing Ruby, theirs or a fight mate's, before the hunt turns to a search. Out of sight they hunt where she was heading meanwhile, and look round there. Any glimpse starts it over.")]
+    [SerializeField, Min(0.5f)] private float _loseSightTime = 4f;
     [Tooltip("While they see Ruby, they call out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
     [Tooltip("How far ahead of where they lost Ruby they guess she has gone, in path metres along her heading: through the doorway she ran at, behind the side of the crate she was making for. Kept short on purpose: Ruby runs fast, and a guess derived from her speed landed rooms away.")]
@@ -71,7 +63,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _searchDuration = 5f;
     [Tooltip("How close they get to a search spot, in metres. If something blocks the way once they're this near (another enemy already standing on the spot, say), they look from where they stand instead of pushing at it.")]
     [SerializeField, Min(0.5f)] private float _searchReach = 1.5f;
-    [Tooltip("The longest they walk to a search spot before searching wherever they have got to, in seconds. Keeps one they can't reach (blocked, or a crowded doorway) from walking forever. Also how long a provoked enemy runs at where they were told Ruby is before Aggro Time counts down again.")]
+    [Tooltip("The longest they walk to a search spot before searching wherever they have got to, in seconds. Keeps one they can't reach (blocked, or a crowded doorway) from walking forever. Also how long a provoked enemy runs at where they were told Ruby is before Lose Sight Time counts down again.")]
     [SerializeField, Min(1f)] private float _searchTravelLimit = 20f;
     [Tooltip("How far, in degrees, their body sweeps to each side of their way while they clear a Search's area. They keep walking their way, and their view goes with their body.")]
     [SerializeField, Range(0f, 90f)] private float _walkSweepAngle = 45f;
@@ -144,7 +136,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     public float MotionRadius => _motionRadius;
     public float DraggedDistance => _draggedDistance;
-    public float KnownSpotRadius => _knownSpotRadius;
     public float PersonalSpace => _personalSpace;
     public float BodyNoticeRange => _bodyNoticeRange;
     public float ScanInterval => ScanIntervalSeconds;
@@ -157,9 +148,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float SearchSpeed => _searchSpeed;
     public float SearchCreepSpeed => _searchSpeed * _searchCreepFactor;
     internal float WalkSweepAngle => _walkSweepAngle;
-    public float AggroTime => _aggroTime;
-    public float SightFollowThrough => _sightFollowThrough;
-    public float UnseenHoldTime => _unseenHoldTime;
+    public float LoseSightTime => _loseSightTime;
     public float SearchDuration => _searchDuration;
     public float SearchTravelLimit => _searchTravelLimit;
     public float SearchReach => _searchReach;
@@ -223,7 +212,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float ViewRange => _viewRange;
     internal float ViewAngle => _viewAngle;
     internal float CloseRadius => _closeRadius;
-    internal float GiveUpRadius => _giveUpRadius;
     // Start fills it after Awake builds the Vision, so the parts that read Ruby (EnemyMovement, EnemyAwareness, EnemyVision, EnemyGizmos) go through here on every call, never a copy taken in Awake.
     internal PlayerController Player => _player;
 
@@ -349,9 +337,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
 
     private void OnValidate()
     {
-        // Give-up must sit outside both view range and the close circle, or the enemy aggros and
-        // de-aggros in the same frame.
-        _giveUpRadius = Mathf.Max(_giveUpRadius, Mathf.Max(_viewRange, _closeRadius) + 1f);
         _pauseRoamMax = Mathf.Max(_pauseRoamMax, _pauseRoamMin);
         if (_postSpot != null && _safeRoute != null && _safeRoute.Count > 0)
             Debug.LogWarning($"{name}: has a Post Spot and a Safe route with points. They walk the route (ActiveRoute falls back to the Safe route), so they idle at the spot, and practises, only when they have no Safe route.", this);

@@ -91,11 +91,8 @@ public class EnemyAwareness
 
     /// <summary>
     /// Whether they have Ruby in their eyes this frame: noticed, or already hunting her with a clear line
-    /// to her, at any distance. Not only within Give Up Radius: Aggro chases her whenever she's in
-    /// sight, so past the radius they followed her without learning where she was, and when she dropped
-    /// out of sight they turned round and walked back to the old spot. The radius only decides when the
-    /// hunt ends (InContactWithPlayer). Alive and on their feet only: a corpse, a held or a tumbling
-    /// enemy sees and says nothing. Cached per frame, like CanSeePlayer. A provoked enemy who hasn't laid
+    /// to her, at any distance, which is also Aggro's contact (InContactWithPlayer). Alive and on their feet
+    /// only: a corpse, a held or a tumbling enemy sees and says nothing. Cached per frame, like CanSeePlayer. A provoked enemy who hasn't laid
     /// eyes on her (EnemyController.ProvokedUnseen) counts only their view: no Seen fact, no call-out and no
     /// live tracking on hearsay. CanTrackPlayer is asked first so that her coming into their view clears the
     /// flag here too, and the call-out on first sight follows at once.
@@ -117,16 +114,6 @@ public class EnemyAwareness
             return _seesPlayer;
         }
     }
-
-    /// <summary>
-    /// They lost sight of her only a moment ago, hunting her: for Sight Follow Through they still know where
-    /// she is, because they watched where she went. All they ever knew otherwise was the corner she vanished
-    /// at, so ducking round a crate in plain view lost them at once: it stood in for a real look at which
-    /// way she ran, and needs no guess at her heading. Over quickly, so breaking sight and staying gone
-    /// still drops a fight. Never for a provoked enemy who hasn't laid eyes on her: a sighting from before
-    /// they were provoked isn't one in this hunt. SeesPlayer runs first, so the flag is current when read.
-    /// </summary>
-    public bool FollowingThrough => !SeesPlayer && !_enemy.ProvokedUnseen && _enemy.CurrentState == _enemy.Aggro && Time.time - _lastSawAt <= _enemy.SightFollowThrough;
 
     /// <summary>
     /// They lost sight of her in a fight no more than Glimpse Grace ago: she hasn't counted as gone yet. Aggro keeps
@@ -253,9 +240,7 @@ public class EnemyAwareness
                 _sampleTimes.Clear();
                 _vanishPending = _enemy.CurrentState == _enemy.Aggro && !_enemy.ProvokedUnseen;
             }
-            // Not called out: nobody else watched where she went, and they have their own eyes to follow through with.
-            if (FollowingThrough)
-                _enemy.Memory.Learn(new RubyFact(_enemy.Player.transform.position, Time.time, Knowledge.Seen));
+            // Nothing is learned out of sight: they know her path up to where she vanished, never where she is now.
         }
         CallOutVanish(sees);
         _wasSeeing = sees;

@@ -122,7 +122,7 @@ public class FightBoard
         }
     }
 
-    /// <summary>Whether anyone in the fight other than them has Ruby in contact (in sight within Give Up Radius). Contact is cached per frame, so this is cheap to ask.</summary>
+    /// <summary>Whether anyone in the fight other than them has Ruby in contact (in sight, at any distance). Contact is cached per frame, so this is cheap to ask.</summary>
     public bool AnyInContact(Fight fight, EnemyController except)
     {
         foreach (EnemyController member in fight.MemberList)

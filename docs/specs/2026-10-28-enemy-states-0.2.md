@@ -1042,7 +1042,9 @@ order.
   user's tuning is raising Aggro Time on the prefab to about 4 s. If that isn't enough, the
   change is to have him **follow where she was heading** after losing sight, not only run to
   where she was last seen. Recorded as decision 11 of
-  `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`.
+  `docs/plans/2026-11-02-enemy-group-jobs-part-2.md`. **Settled 2026-11-18:** built to
+  `docs/specs/2026-11-18-enemy-path-tracking.md`: they hunt where she was heading (her path, not her
+  position), and one Lose Sight Time replaces Aggro Time and Sight Follow Through.
 
 Everything else is decided. The *(my call)* and *(my reading)* marks show where the decision was
 mine rather than the user's.

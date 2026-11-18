@@ -219,8 +219,8 @@ a { color: var(--accent); }
     <tr><td>Weight</td><td class="where">WeightTable · Enemy</td><td class="num">50 kg</td></tr>
     <tr><td>Health</td><td class="where">Enemy prefab · Health</td><td class="num">20</td></tr>
     <tr><td>Chase / Patrol / Search Speed</td><td class="where">EnemyController</td><td class="num">10 / 7 / 6 m/s</td></tr>
-    <tr><td>View Range / View Angle / Close Radius / Give Up Radius</td><td class="where">EnemyController</td><td class="num">12.5 m / 135° / 3 m / 18.5 m</td></tr>
-    <tr><td>Aggro Time (also how long he holds at the last spot he knew)</td><td class="where">EnemyController</td><td class="num">1.5 s</td></tr>
+    <tr><td>View Range / View Angle / Close Radius</td><td class="where">EnemyController</td><td class="num">12.5 m / 135° / 3 m</td></tr>
+    <tr><td>Lose Sight Time (how long without seeing Ruby before he gives up the hunt)</td><td class="where">EnemyController</td><td class="num">4 s</td></tr>
     <tr><td>Search Duration (counted from arrival) / Search Travel Limit</td><td class="where">EnemyController</td><td class="num">10 s / 20 s</td></tr>
     <tr><td>Search Reach (how close he gets to a search spot)</td><td class="where">EnemyController</td><td class="num">1.5 m</td></tr>
     <tr><td>Look Time / Stand Down Time (checking a problem)</td><td class="where">EnemyController</td><td class="num">1.5 s / 1 s</td></tr>
@@ -825,7 +825,7 @@ a { color: var(--accent); }
 <ul>
   <li>Entered on seeing Ruby, on taking damage, or on getting up after being knocked down.</li>
   <li>Chases Ruby at 10 m/s along the floor's shared chase paths. Armed, with her in sight, it keeps the pistol's 5–6 m band instead, and fires as it moves (see <strong>Pistol</strong>).</li>
-  <li>Stays in contact while Ruby is in sight within the 18.5 m Give Up Radius. Out of sight it chases <strong>what it knows</strong> of her, not where she really is, so breaking sight can end a fight.</li>
+  <li>Stays in contact while Ruby is in sight, at any distance. Out of sight it never knows where she really is, so staying out of sight for Lose Sight Time ends a fight.</li>
   <li>Farther away than that he still sees her, so he keeps learning where she is and calling it out. The radius only decides when the hunt ends: past it, the timer below runs even with her in sight, and then he searches where he last saw her.</li>
   <li>It starts Searching after <strong>1.5 seconds</strong> of walking without contact. If it reaches the spot it knew first, it <strong>holds there for 1.5 seconds</strong> before giving up, because Ruby may be just past it. It never gives up while it is in contact with her, and seeing her again restarts the hold.</li>
   <li>If it can't see Ruby and knows nothing of where she is, it searches where it stands.</li>

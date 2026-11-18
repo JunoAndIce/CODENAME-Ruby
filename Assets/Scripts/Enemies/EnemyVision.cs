@@ -3,7 +3,7 @@ using UnityEngine;
 /// <summary>
 /// One enemy's sight: the view cone and close circle, and the line to a point. Kept out of
 /// EnemyController so the controller doesn't carry the geometry. The tuning (View Range, View
-/// Angle, Close Radius, Give Up Radius, Eye Height) and the player stay on the controller and are
+/// Angle, Close Radius, Eye Height) and the player stay on the controller and are
 /// read on every call: Start fills the player after Awake builds this, and retuning in the
 /// Inspector during Play must keep working.
 /// </summary>
@@ -62,11 +62,12 @@ public class EnemyVision
     }
 
     /// <summary>
-    /// Aggro's contact test: still within the give-up radius, and in sight. Never for a provoked enemy who
-    /// hasn't laid eyes on her (StillProvokedUnseen), which also keeps them from giving their fight mates
-    /// contact (FightBoard.AnyInContact) that they haven't got.
+    /// Aggro's contact test: she is in sight, at any distance. Lose Sight Time ends the hunt, not a radius: a
+    /// give-up radius used to make two rules of one idea, sight past it still teaching them where she was while
+    /// counting as no contact. Never for a provoked enemy who hasn't laid eyes on her (StillProvokedUnseen), which
+    /// also keeps them from giving their fight mates contact (FightBoard.AnyInContact) that they haven't got.
     /// </summary>
-    public bool InContactWithPlayer() => !StillProvokedUnseen() && DistanceToPlayer() <= _enemy.GiveUpRadius && CanSeePlayer();
+    public bool InContactWithPlayer() => !StillProvokedUnseen() && CanSeePlayer();
 
     /// <summary>
     /// Whether the hunt may use where Ruby really is: a clear line to her, at any distance, the all-round

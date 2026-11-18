@@ -25,9 +25,6 @@ internal static class EnemyGizmos
         // rather than invent a direction.
         if (EnemyVision.TryFlatForward(enemy.transform, out Vector3 flatForward)) DrawFlatArc(eye, flatForward, enemy.ViewAngle, enemy.ViewRange);
 
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(enemy.transform.position, enemy.GiveUpRadius);
-
         // What the senses sweep: loose bodies moving out to Motion Radius, corpses within Body Notice Range.
         Gizmos.color = new Color(0.6f, 0.2f, 1f);
         Gizmos.DrawWireSphere(enemy.transform.position, enemy.MotionRadius);

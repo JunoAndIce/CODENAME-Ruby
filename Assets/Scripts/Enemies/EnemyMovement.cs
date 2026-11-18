@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// One enemy's body movement: walking a heading, turning, facing and the walks the states ask for.
 /// Kept out of EnemyController so the controller doesn't carry the steering. The tuning (Turn Speed,
-/// the look sweep, Known Spot Radius) and the player stay on the controller and are read on every
+/// the look sweep) and the player stay on the controller and are read on every
 /// call: Start fills the player after Awake builds this, and retuning in the Inspector during Play
 /// must keep working.
 /// </summary>
@@ -307,28 +307,6 @@ public class EnemyMovement
 
     /// <summary>Walk until within reach of a point, along an A* route.</summary>
     public NavResult WalkTo(Vector3 point, float reach, float speed) => _enemy.Navigator.MoveToArea(GridArea.Circle(point, reach), speed);
-
-    /// <summary>
-    /// Chase the newest thing they know of Ruby, not Ruby herself, so breaking sight can drop a fight.
-    /// Arrived when they are on the spot; Unreachable (and stopped) when they have nothing to go on.
-    /// </summary>
-    public NavResult ChaseKnown(float speed)
-    {
-        if (!_enemy.Awareness.TryGetNewestRed(out Vector3 point))
-        {
-            Stop();
-            return NavResult.Unreachable;
-        }
-        // A place and not a point: enemies of equal weight block each other, so several sent to one
-        // point pushed at each other to get onto it. The line stops them counting as there from the far
-        // side of a wall.
-        if (PathGrid.FlatDistance(_enemy.transform.position, point) <= _enemy.KnownSpotRadius && _enemy.CanSeeSpot(point))
-        {
-            Stop();
-            return NavResult.Arrived;
-        }
-        return _enemy.Navigator.MoveTo(point, speed, getClose: true);
-    }
 
     /// <summary>Chase the player along this floor's shared flow field, or as near as they can get when she stands where the grid has no way in.</summary>
     public void PathToPlayer(float speed)
