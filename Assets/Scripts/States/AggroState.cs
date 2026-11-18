@@ -403,7 +403,7 @@ public class AggroState : EnemyStateBase
     {
         if (!FiringSpots.TryGetBand(Enemy, out float near, out float far)) return false;
         float ring = PathGrid.FlatDistance(_spot, ruby);
-        return !FiringSpots.InKeepBand(ring, near, far, Enemy.SquadSpacing * 0.5f);
+        return !FiringSpots.InKeepBand(ring, near, far, Enemy.SpotSpacing * 0.5f);
     }
 
     private void ReleaseSpot()

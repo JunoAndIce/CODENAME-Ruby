@@ -118,7 +118,7 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   Range less the hold band). A candidate must be walkable and on the floor's shared chase field
   (`FieldToward`, read with `TryGetDistance`: "ground they can reach", out to the field's own bound; it
   refreshes only when read as a route, so the pick asks it to with `FlowField.Refresh`), with them on that
-  field too, not within Squad Spacing (2 m, on `EnemyController`) of another member's claim, and not
+  field too, not within Spot Spacing (2 m, on `EnemyController`) of another member's claim, and not
   reached by a straight line that cuts the gun's Min Distance circle round her. Of those the score
   favours a different angle from their fight mates' (the heaviest weight, which is what spreads them round
   her), near where they stand, the middle of the band, and not on a mate's line to her; the best few (a
@@ -146,7 +146,7 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   the next, so it can never stand beside a gun for good. A gun it gave up on gets another try once
   it has moved 0.5 m or after 10 s; retrying sooner would send an enemy near a truly unreachable
   gun back into Rearm, and from there back to Aggro, every few seconds. It always hands back to
-  Aggro. Having given up on every gun in reach, it waits Route Retry Time before trying again, so
+  Aggro. Having given up on every gun in reach, it waits Route Retry Time (3 s, a fixed constant on `EnemyController`) before trying again, so
   it doesn't flicker.
 - **Patrol** walks a route of **area nodes** stored on the enemy (`PatrolRoute`). Each area is a
   circle or a rectangle lined up with X and Z (`GridArea`), so it can fill a room or run along a
@@ -187,7 +187,7 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   would be searched whole and carry speech across that area, so it should hold the offices inside it. Gizmos draw each outline (faint unselected) with the name and map, and an orange outline at the map's Mask Radius; `RoomEditor` gives move and edge
   handles with Undo.
 - **Idle** (`IdleState`). Where an officer starts is their **post** (`PostPosition`, `PostYaw`,
-  recorded in `Start`). After a search, a fall or a shove, farther than Post Tolerance (1 m) from it,
+  recorded in `Start`). After a search, a fall or a shove, farther than Post Tolerance (1 m, fixed) from it,
   they walk back at the current patrol speed and turn the way they started, so an idle officer is
   never left wherever their last job ended. The walk gives up after Search Travel Limit with a log
   line and starts again the next time they're at their post, so a post another officer stands on can't
@@ -305,7 +305,7 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   place in `Severity` logs an error (and is ranked by its enum number meanwhile). What a row
   produced travels as an **`Incident`** (point, reason, priority, whether it makes a Search and whether it says nothing of
   Ruby, built once where the stimulus is judged and passed on whole, so a new value can't be added to one call and missed in another).
-- **Senses** (`EnemySenses`, one per officer, scanned from `FixedUpdate` every Scan Interval at a
+- **Senses** (`EnemySenses`, one per officer, scanned from `FixedUpdate` every Scan Interval (0.2 s, fixed) at a
   staggered phase). They notice **bodies in motion** within Motion Radius that they can see clearly:
   at Notice Speed a MovingObject, at Alarm Speed a FastObject, once per Origin Lifetime for each
   body, and only a *taken* reaction counts as one. **A moving thing is judged by what it is as well as

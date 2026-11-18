@@ -51,7 +51,7 @@ snaps her arm onto the cursor first, so the muzzle is on the line when the bulle
     it to follow the hand again.
 - **Drops:** `KnockDown` and `DeadState.Enter` drop the gun with the body's velocity, so a knockdown
   sends it off at the hit's speed. `EnterGrabbed` pops it out instead: a small hop, Grab Pop Up and
-  Grab Pop Out away from their body, to sell the grab.
+  Grab Pop Out (3 and 2 m/s, fixed constants on `EnemyController`) away from their body, to sell the grab.
   - The holder lowers it first, and the gun restores its true world scale (read at Awake) once it
     leaves the hand, so a drop mid-aim can't keep a shear as a stretched scale.
   - It's dropped from about a metre in front of the officer, so `Gun.KeepOutOfWalls` casts from the

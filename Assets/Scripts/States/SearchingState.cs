@@ -54,7 +54,7 @@ public class SearchingState : EnemyStateBase
     private RoamPhase _roamPhase;
     private Vector3 _roamSpot;
     private float _roamLookTimer;
-    private float _roamLookLength; // rolled for each look: a shared length had a team setting off on the same frame
+    private float _roamLookLength; // Look Time: the per-look variation that staggered a team was removed (it was 0 on the prefab, so it already did nothing)
     private float _roamBaseYaw;
     private float _coverageTimer;  // until their next look at what the team hasn't seen: each scan, not each step
     private float _roamWalkTimer;  // the walk to this spot. The search ending doesn't end a walk, so this has to.
@@ -604,7 +604,7 @@ public class SearchingState : EnemyStateBase
                     _roamPhase = RoamPhase.Pick;
                     return;
                 }
-                NavResult result = Enemy.Movement.SweepTo(_roamSpot, Enemy.ClearingSpeed);
+                NavResult result = Enemy.Movement.SweepTo(_roamSpot, Enemy.SearchCreepSpeed);
                 if (result == NavResult.Moving) return;
                 if (result == NavResult.Arrived)
                 {
@@ -655,7 +655,7 @@ public class SearchingState : EnemyStateBase
             return;
         }
         _roamWalkTimer += Time.fixedDeltaTime;
-        NavResult result = _roamWalkTimer >= Enemy.SearchTravelLimit ? NavResult.Blocked : Enemy.Movement.SweepTo(_roamSpot, Enemy.ClearingSpeed);
+        NavResult result = _roamWalkTimer >= Enemy.SearchTravelLimit ? NavResult.Blocked : Enemy.Movement.SweepTo(_roamSpot, Enemy.SearchCreepSpeed);
         if (result == NavResult.Moving) return;
         _rechecking = false;
         if (result == NavResult.Arrived)
@@ -672,8 +672,7 @@ public class SearchingState : EnemyStateBase
         _roamPhase = RoamPhase.Look;
         _roamLookTimer = 0f;
         _roamBaseYaw = Enemy.transform.eulerAngles.y;
-        float variation = Enemy.RoamLookVariation;
-        _roamLookLength = Enemy.LookTime * (1f + Random.Range(-variation, variation));
+        _roamLookLength = Enemy.LookTime;
     }
 
     // A follower trails the checker slowly and never closer than Follow Distance: they stop there and
@@ -696,7 +695,7 @@ public class SearchingState : EnemyStateBase
 
         // A checker on another floor or off every grid is the navigator's one warning, and they stand:
         // no walk to somewhere else.
-        Enemy.Movement.ChaseTo(checker.transform, Enemy.SearchSpeed * Enemy.FollowSpeedFactor);
+        Enemy.Movement.ChaseTo(checker.transform, Enemy.SearchCreepSpeed);
     }
 
     // True once they have arrived this step, false while they are still walking, and false when they have been

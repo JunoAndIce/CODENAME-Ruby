@@ -229,18 +229,18 @@ a { color: var(--accent); }
     <tr><td>Aggressive Speed Factor (patrol speed once he's aggressive: below 1 slows him, above 1 hurries him)</td><td class="where">EnemyController</td><td class="num">1.25× (0.1–3×)</td></tr>
     <tr><td>Distraction Time / Gap (how long a lesser disturbance has his eye, and how close two count as one)</td><td class="where">EnemyController</td><td class="num">1 s / 2 s</td></tr>
     <tr><td>Distraction Threshold / Memory (distractions inside the memory before he aggros)</td><td class="where">EnemyController</td><td class="num">3 / 12 s</td></tr>
-    <tr><td>Post Tolerance (how near his post counts as at it)</td><td class="where">EnemyController</td><td class="num">1 m</td></tr>
+    <tr><td>Post Tolerance (how near his post counts as at it)</td><td class="where">EnemyController (fixed)</td><td class="num">1 m</td></tr>
     <tr><td>Motion Radius / Body Notice Range (how far he notices moving bodies and corpses)</td><td class="where">EnemyController</td><td class="num">12.5 m / 12.5 m</td></tr>
-    <tr><td>Scan Interval (how often he looks)</td><td class="where">EnemyController</td><td class="num">0.2 s</td></tr>
+    <tr><td>Scan Interval (how often he looks)</td><td class="where">EnemyController (fixed)</td><td class="num">0.2 s</td></tr>
     <tr><td>Speak Interval (calling out Ruby while he sees her)</td><td class="where">EnemyController</td><td class="num">1 s</td></tr>
     <tr><td>Eye Height</td><td class="where">EnemyController</td><td class="num">0.5 m</td></tr>
     <tr><td>Rearm Radius</td><td class="where">EnemyController</td><td class="num">10 m</td></tr>
-    <tr><td>Node Pause Time / Route Retry Time</td><td class="where">EnemyController</td><td class="num">2.5 s / 3 s</td></tr>
+    <tr><td>Node Pause Time / Route Retry Time</td><td class="where">EnemyController (Route Retry Time fixed)</td><td class="num">2.5 s / 3 s</td></tr>
     <tr><td>Wander Span (a lone stop this far across is wandered)</td><td class="where">PatrolRoute (fixed)</td><td class="num">4 m</td></tr>
     <tr><td>Corner Margin / Wall Cost (paths keep off walls)</td><td class="where">PathGrid</td><td class="num">0.5 m / 20</td></tr>
     <tr><td>Turn Speed (how fast he turns while walking)</td><td class="where">EnemyController</td><td class="num">720°/s</td></tr>
     <tr><td>Corpse Brightness</td><td class="where">EnemyController</td><td class="num">0.35</td></tr>
-    <tr><td>Grab Pop Up / Grab Pop Out (the gun hops out of his hand)</td><td class="where">EnemyController</td><td class="num">3 / 2 m/s</td></tr>
+    <tr><td>Grab Pop Up / Grab Pop Out (the gun hops out of his hand)</td><td class="where">EnemyController (fixed)</td><td class="num">3 / 2 m/s</td></tr>
     <tr><td>Get Up Time (standing still after a fall)</td><td class="where">EnemyController</td><td class="num">1 s</td></tr>
     <tr><td>Twist Limit / Turn Speed (his legs follow his aim)</td><td class="where">officer model · CharacterAnimator</td><td class="num">70° / 360°/s</td></tr>
     <tr><td>Carry Point (gun held low, not aiming)</td><td class="where">officer model · CharacterAnimator</td><td class="num">0.2, 1, 0.35 m</td></tr>

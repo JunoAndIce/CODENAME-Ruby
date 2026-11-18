@@ -12,10 +12,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Tooltip("Patrol speed once they're aggressive, as a multiple of Patrol Speed: above 1 hurries them, below 1 slows them to a wary creep (0.5 is half speed). Applies to whichever route they walk, and to an idle enemy walking back to their post.")]
     [SerializeField, Range(0.1f, 3f)] private float _aggressiveSpeedFactor = 1.25f;
     [SerializeField] private float _searchSpeed = 1.5f;
-    [Tooltip("Their speed while they clear a Search's area, as a multiple of Search Speed: below 1, so they creep and look. Walking in to the area stays at full Search Speed.")]
-    [SerializeField, Range(0.1f, 1f)] private float _clearingSpeedFactor = 0.6f;
-    [Tooltip("A follower's walking speed behind the checker, as a multiple of Search Speed: below 1 so the team trails slowly behind them.")]
-    [SerializeField, Range(0.2f, 1f)] private float _followSpeedFactor = 0.8f;
+    [Tooltip("Their speed while they clear a Search's area or trail behind the checker, as a multiple of Search Speed: below 1, so they creep and look. Walking in to the area stays at full Search Speed. One factor for both, since both are a searcher slowed to look.")]
+    [FormerlySerializedAs("_clearingSpeedFactor")] [SerializeField, Range(0.1f, 1f)] private float _searchCreepFactor = 0.75f;
     [Tooltip("How fast the body turns while walking a path, in degrees a second: lower makes wider arcs round bends. The legs' own turn on the model (CharacterAnimator's Turn Speed) is separate.")]
     [SerializeField, Min(1f)] private float _turnSpeed = 720f;
     [Tooltip("The room they keep round other enemies, in metres from centre to centre. Walking any path they curve away from anyone inside this, harder the closer they are, and they don't choose a roaming or wandering spot inside it. Capsules touch at about 0.7 m, so below that it does nothing. 0 turns it off.")]
@@ -34,8 +32,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField] private float _eyeHeight = 0.5f;
 
     [Header("Senses")]
-    [Tooltip("Seconds between their sweeps for moving bodies, corpses and loose guns. Each enemy starts at a random offset so a squad doesn't sweep on the same step.")]
-    [SerializeField, Min(0.05f)] private float _scanInterval = 0.2f;
     [Tooltip("How far they notice a loose body (thrown, tumbling or held) moving at Notice Speed or faster, with a clear line to it. Corpses and dropped guns aren't limited by this: see Body Notice Range and View Range.")]
     [SerializeField, Min(0f)] private float _motionRadius = 15f;
     [Tooltip("How close a corpse must be for them to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
@@ -58,7 +54,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
 
     [Tooltip("The least distance between two fighters' firing spots, in metres, measured flat. Each armed enemy in a fight claims a spot of their own round Ruby and nobody else takes one this close to it. Also how far past their band Ruby moves before they pick again (half of it).")]
-    [SerializeField, Min(0.5f)] private float _squadSpacing = 2f;
+    [FormerlySerializedAs("_squadSpacing")] [SerializeField, Min(0.5f)] private float _spotSpacing = 2f;
 
     [Header("Suspicion")]
     [Tooltip("A disturbance within this distance of where Ruby was last reported is searched for as an attack, not a problem, while that report is recent (Attack Near Time). Measured flat, in metres.")]
@@ -77,8 +73,6 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(1f)] private float _searchTravelLimit = 20f;
     [Tooltip("How far, in degrees, their body sweeps to each side of their way while they clear a Search's area. They keep walking their way, and their view goes with their body.")]
     [SerializeField, Range(0f, 90f)] private float _walkSweepAngle = 45f;
-    [Tooltip("How much each look varies while they wait in a search for somewhere free to go, as a share of Look Time: at 0.5 each lasts from half to one and a half times Look Time.")]
-    [SerializeField, Range(0f, 0.9f)] private float _roamLookVariation = 0.5f;
     [Tooltip("How close a follower keeps behind the enemy who goes to check, in metres. They stop here and hold, facing the spot, so the team trails the checker and never crowds them.")]
     [SerializeField, Min(1f)] private float _followDistance = 3f;
 
@@ -115,26 +109,18 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0.1f)] private float _pauseRoamMin = 3f;
     [Tooltip("In a long pause, the longest they stay at one spot before moving to another in the point's area, in seconds. Never below the shortest.")]
     [SerializeField, Min(0.1f)] private float _pauseRoamMax = 6f;
-    [Tooltip("An idle enemy this close to their post, in metres, counts as at it. Where they start is their post. Never below 0.6: the navigator reports arrival within 0.5 m, and a tighter tolerance would leave them 'away' from a post they have reached.")]
-    [SerializeField, Min(0.6f)] private float _postTolerance = 1f;
     [Tooltip("A firing-range spot to use as their post instead of where they stand. They walk there, face its target and practise when armed. Used only when they have no Safe route to walk: with one, the table sends them to Patrol and they never idle at the spot. Empty means their post is where they start.")]
     [SerializeField] private RangeSpot _postSpot;
     [Tooltip("At a range post, the shortest wait between practice shots, in seconds.")]
     [SerializeField, Min(0.1f)] private float _practiceIntervalMin = 1.2f;
     [Tooltip("At a range post, the longest wait between practice shots, in seconds. Never below the shortest.")]
     [SerializeField, Min(0.1f)] private float _practiceIntervalMax = 2.5f;
-    [Tooltip("When every patrol point fails in a row, wait this long before trying the route again.")]
-    [SerializeField, Min(0f)] private float _routeRetryTime = 3f;
 
     [Header("Body")]
     [Tooltip("Seconds a surviving enemy stands getting up after a fall, unable to move or shoot, before it hunts again.")]
     [SerializeField, Min(0f)] private float _getUpTime = 1f;
     [Tooltip("How bright a corpse's colours are, as a share of the living enemy's, so the dead read at a glance.")]
     [SerializeField, Range(0f, 1f)] private float _corpseBrightness = 0.35f;
-    [Tooltip("How fast the gun pops up out of the enemy's hand when the chain grabs them, in m/s: a small hop, to sell the grab.")]
-    [SerializeField, Min(0f)] private float _grabPopUp = 3f;
-    [Tooltip("How fast the popped gun moves away from their body, in m/s, so it clears their hands.")]
-    [SerializeField, Min(0f)] private float _grabPopOut = 2f;
 
     [Header("Gun")]
     [Tooltip("Unarmed, an enemy goes for a free dropped gun within this radius. 0 = never re-arms.")]
@@ -147,20 +133,27 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private CapsuleCollider _capsule;
     private float _nextRearm;   // after giving up on a gun, no new attempt before this time
 
+    // Plumbing, not design: none of these was ever tuned per enemy or per level, so they were taken off the Inspector.
+    private const float ScanIntervalSeconds = 0.2f;   // seconds between sweeps for moving bodies, corpses and guns: a cost knob, each enemy offset at random
+    private const float PostToleranceMetres = 1f;     // this close to their post counts as at it: above the navigator's 0.5 m arrival, or a reached post read as "away"
+    private const float RouteRetrySeconds = 3f;       // every patrol point failed in a row: wait this long before trying the route again
+    private const float GrabPopUpSpeed = 3f;          // m/s the gun hops up out of their hand when the chain grabs them, to sell the grab
+    private const float GrabPopOutSpeed = 2f;         // m/s the popped gun moves away from their body, so it clears their hands
+
     public float MotionRadius => _motionRadius;
     public float DraggedDistance => _draggedDistance;
     public float KnownSpotRadius => _knownSpotRadius;
     public float PersonalSpace => _personalSpace;
     public float BodyNoticeRange => _bodyNoticeRange;
-    public float ScanInterval => _scanInterval;
-    internal float GrabPopUp => _grabPopUp;
-    internal float GrabPopOut => _grabPopOut;
+    public float ScanInterval => ScanIntervalSeconds;
+    internal float GrabPopUp => GrabPopUpSpeed;
+    internal float GrabPopOut => GrabPopOutSpeed;
     internal float CorpseBrightness => _corpseBrightness;
 
     public float ChaseSpeed => _chaseSpeed;
     public float PatrolSpeed => _patrolSpeed;
     public float SearchSpeed => _searchSpeed;
-    public float ClearingSpeed => _searchSpeed * _clearingSpeedFactor;
+    public float SearchCreepSpeed => _searchSpeed * _searchCreepFactor;
     internal float WalkSweepAngle => _walkSweepAngle;
     public float AggroTime => _aggroTime;
     public float SightFollowThrough => _sightFollowThrough;
@@ -169,10 +162,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float SearchTravelLimit => _searchTravelLimit;
     public float SearchReach => _searchReach;
     public float LookTime => _lookTime;
-    public float RoamLookVariation => _roamLookVariation;
     public float StandDownTime => _standDownTime;
     public float FollowDistance => _followDistance;
-    public float FollowSpeedFactor => _followSpeedFactor;
     public float DistractionTime => _distractionTime;
     internal int DistractionThreshold => _distractionThreshold;
     internal float DistractionMemory => _distractionMemory;
@@ -204,7 +195,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>Where they started: where an idle enemy stands, and goes back to after a search or a fall.</summary>
     public Vector3 PostPosition { get; private set; }
     public float PostYaw { get; private set; }
-    public float PostTolerance => _postTolerance;
+    public float PostTolerance => PostToleranceMetres;
     public RangeSpot PostSpot => _postSpot;
     public float PracticeIntervalMin => _practiceIntervalMin;
     public float PracticeIntervalMax => Mathf.Max(_practiceIntervalMin, _practiceIntervalMax);
@@ -213,7 +204,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float PauseRoamMin => _pauseRoamMin;
     public float PauseRoamMax => _pauseRoamMax;
     public float StuckTime => _stuckTime;
-    public float RouteRetryTime => _routeRetryTime;
+    public float RouteRetryTime => RouteRetrySeconds;
     public float RearmRadius => _rearmRadius;
     public float GetUpTime => _getUpTime;
     /// <summary>The body capsule's radius in world units: how far its surface sits from its centre.</summary>
@@ -420,7 +411,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// After giving up on every gun in reach, wait Route Retry Time before looking again. Without
     /// it, an enemy with only unreachable guns around would flicker between hunting and re-arming.
     /// </summary>
-    public void WaitBeforeRearming() => _nextRearm = Time.time + _routeRetryTime;
+    public void WaitBeforeRearming() => _nextRearm = Time.time + RouteRetrySeconds;
 
     private bool WantsGun() => Arms != null && !Arms.IsArmed && _rearmRadius > 0f && Time.time >= _nextRearm && Rearm.CanFindGun();
 
@@ -485,7 +476,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// </summary>
     public Fight Fight { get; internal set; }
 
-    public float SquadSpacing => _squadSpacing;
+    public float SpotSpacing => _spotSpacing;
 
     /// <summary>
     /// Provoked to their limit and sent after Ruby (EnemyReactions.GoAfterRed), they have not yet had her in

@@ -84,7 +84,7 @@ public static class FiringSpots
             return false;
         }
 
-        float spacing = who.SquadSpacing;
+        float spacing = who.SpotSpacing;
         Vector3 here = who.transform.position;
         CollectMates(who, fight, ruby);
         Candidates.Clear();
