@@ -16,7 +16,9 @@ A\* for individual ones**:
   `GridObstacle` that rests on no grid (outside every grid's area or Height band)
   warns once, and again only if it gets back on a grid and later leaves one: it used to return
   silently, so a crate placed off the grid never blocked and nothing said why. A prop lying flat still blocks, however thin (`CollectFootprint` tests against the floor, not Floor Clearance): a table flipped onto its 6 cm top used to count as floor. Every change bumps
-  `Version`, and fields re-plan.
+  the changed rule's version (`VersionFor(rule)`), and that rule's fields and plans re-plan. Per rule,
+  because a light prop on the move re-marks Forceful's shove cost every half cell, and one shared
+  counter made every calm walker on the floor re-plan while a crate slid.
   **Agent Radius must match the enemy collider's radius**, and doorways need about 1.5 m or more.
   **Corner Margin and the clearance field.** A second field, baked after the cells and redone around
   a prop's cells when it comes or goes, holds each cell's **clearance**: its distance in cells to the
@@ -85,7 +87,9 @@ A\* for individual ones**:
   be walked straight to, but the relaxing is a **ramp** near the goal only: each cell needs the lesser of
   its `Best` and the goal cell's clearance plus its Chebyshev distance from the goal cell (never below
   1), so the rest of the line keeps its margin; a line that fails goes to the field or A\*, which keep
-  it. Lines read the rule's effective clearance, where skin reads 1.
+  it. Lines read the rule's effective clearance, where skin reads 1, and so does a light prop under
+  Forceful: otherwise a shortcut aimed straight through a crate the field had routed round, and the
+  hunter pushed it ahead of them the whole way.
   String pulling (`GridPathfinder`) and the flow field's look-ahead use the lowest clearance
   along the cells they skip, capped the same way: where the path had room the pulled line keeps the
   margin, and through a narrow gap it keeps only what the gap has, which is its middle.
