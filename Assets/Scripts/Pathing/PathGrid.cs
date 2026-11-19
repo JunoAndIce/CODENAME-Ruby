@@ -47,6 +47,7 @@ public class PathGrid : MonoBehaviour
 
     private static readonly Collider[] OverlapHits = new Collider[32];
     private const float BelowFloorTolerance = 0.5f;
+    private const float SolidProbeRadius = 0.01f;   // the solid test is a point test; a capsule needs some radius
 
     /// <summary>The 8 moves between neighbouring cells: straights first, then diagonals.</summary>
     public static readonly Vector2Int[] Steps =
@@ -74,6 +75,14 @@ public class PathGrid : MonoBehaviour
     private readonly List<int> _areaCells = new();
     private int[] _areaMark;
     private int _areaGeneration;
+
+    // NearestWalkable's search: its own marks, since a snap can run inside an area flood's caller.
+    private readonly List<int> _snapCells = new();
+    private int[] _snapMark;
+    private int _snapGeneration;
+
+    private bool[] _solid;      // a cell's centre is inside static geometry (a point test, no agent radius)
+    private int[] _propSolid;   // resting props whose colliders hold each cell's centre
 
     public bool IsBaked => _walkable != null;
     public float CellSize => _cellSize;
@@ -323,6 +332,8 @@ public class PathGrid : MonoBehaviour
         _depth = Mathf.Max(1, Mathf.CeilToInt(_size.y / _cellSize));
         _origin = transform.position - new Vector3(_width * _cellSize, 0f, _depth * _cellSize) * 0.5f;
         _walkable = new bool[_width * _depth];
+        _solid = new bool[_width * _depth];
+        _propSolid = new int[_width * _depth];
         _careful = new PropLayer(_walkable, _width, _depth);
         _forceful = new PropLayer(_walkable, _width, _depth);
         _marginCells = MarginCellsFor(_cornerMargin);
@@ -337,9 +348,13 @@ public class PathGrid : MonoBehaviour
         {
             for (int x = 0; x < _width; x++)
             {
-                bool open = IsOpenSpot(CellToWorld(x, z));
+                Vector3 centre = CellToWorld(x, z);
+                bool open = IsOpenSpot(centre);
                 _walkable[x + z * _width] = open;
-                if (!open) blocked++;
+                if (open) continue;
+                blocked++;
+                // Only a blocked cell can be solid: an open one has nothing static within the agent radius.
+                _solid[x + z * _width] = OverlapsStatic(centre, SolidProbeRadius);
             }
         }
 
@@ -358,18 +373,23 @@ public class PathGrid : MonoBehaviour
     /// overlaps nothing static. Only X/Z of position matter; the capsule stands on this grid's
     /// floor. Works in edit mode, so route authoring sees exactly what the bake will.
     /// </summary>
-    public bool IsOpenSpot(Vector3 position)
+    public bool IsOpenSpot(Vector3 position) => !OverlapsStatic(position, _agentRadius);
+
+    // A capsule of this radius standing across the agents' band overlaps anything static. The
+    // ends are inset by the radius, as an agent's are, so a thin probe still spans Floor
+    // Clearance to Agent Height.
+    private bool OverlapsStatic(Vector3 position, float radius)
     {
         float floor = transform.position.y;
-        float bottomY = floor + _floorClearance + _agentRadius;
-        float topY = Mathf.Max(bottomY, floor + _agentHeight - _agentRadius);
+        float bottomY = floor + _floorClearance + radius;
+        float topY = Mathf.Max(bottomY, floor + _agentHeight - radius);
         int count = Physics.OverlapCapsuleNonAlloc(
             new Vector3(position.x, bottomY, position.z), new Vector3(position.x, topY, position.z),
-            _agentRadius, OverlapHits, ~0, QueryTriggerInteraction.Ignore);
+            radius, OverlapHits, ~0, QueryTriggerInteraction.Ignore);
 
         for (int i = 0; i < count; i++)
-            if (IsStatic(OverlapHits[i])) return false;
-        return true;
+            if (IsStatic(OverlapHits[i])) return true;
+        return false;
     }
 
     // Same rule as GrappleNode.IsStaticWorld: no body, or a kinematic one, means it doesn't move.
@@ -448,6 +468,12 @@ public class PathGrid : MonoBehaviour
     }
 
     /// <summary>
+    /// The cells whose centre lies inside a collider (a zero-radius footprint): what a prop marks as
+    /// solid, so NearestWalkable never snaps through it.
+    /// </summary>
+    public void CollectInside(Collider collider, List<int> cells) => CollectFootprint(collider, -_agentRadius, cells);
+
+    /// <summary>
     /// Marks one prop into both rules' layers:
     /// - Careful: its core blocks and its skin ring costs Prop Skin Cost, whatever it weighs.
     /// - Forceful: a heavy prop's the same; a light one's core costs Shove Cost and blocks nothing.
@@ -477,6 +503,9 @@ public class PathGrid : MonoBehaviour
             }
             else Add(_forceful.Shove, marks.Core, sign);
         }
+
+        // Solid holds under both rules: snapping across even a light crate would put a start on its far side.
+        Add(_propSolid, marks.Solid, sign);
 
         RefreshClearance(marks.Core);
         Version++;
@@ -589,34 +618,63 @@ public class PathGrid : MonoBehaviour
             || (IsWalkable(new Vector2Int(from.x + step.x, from.y), rule) && IsWalkable(new Vector2Int(from.x, from.y + step.y), rule));
     }
 
-    /// <summary>
-    /// Closest walkable cell within maxRadius rings. Needed because anything hugging a wall
-    /// (the player, most often) stands in a cell the clearance margin marks blocked.
-    /// </summary>
+    /// <summary>Careful's NearestWalkable (see the rule overload).</summary>
     public bool NearestWalkable(Vector2Int cell, int maxRadius, out Vector2Int found)
+        => NearestWalkable(cell, maxRadius, PropRule.Careful, out found);
+
+    /// <summary>
+    /// The walkable cell under a rule nearest cell, within maxRadius rings, reached without crossing
+    /// anything solid. Needed because anything hugging a wall (Ruby, most often) stands in a cell the
+    /// clearance margin marks blocked. A breadth-first search from cell that never enters a solid
+    /// cell (a wall or prop holding the cell's centre), and a diagonal needs both side cells clear
+    /// too, so it can't slip between two corners. The old ring scan took the nearest walkable cell
+    /// whatever lay between, and snapped a point by a wall onto the next room's floor. Among the
+    /// walkable cells reached on the smallest ring, the one at the least squared distance wins.
+    /// cell itself may be solid (an agent's own cell can be inside a wall's edge); the search still
+    /// starts there. False when nothing walkable is reached.
+    /// </summary>
+    public bool NearestWalkable(Vector2Int cell, int maxRadius, PropRule rule, out Vector2Int found)
     {
         found = cell;
-        for (int r = 0; r <= maxRadius; r++)
+        if (!InBounds(cell)) return false;
+        if (IsWalkable(cell, rule)) return true;
+
+        if (_snapMark == null || _snapMark.Length != CellCount) _snapMark = new int[CellCount];
+        _snapGeneration++;
+        _snapCells.Clear();
+        _snapMark[Index(cell)] = _snapGeneration;
+        _snapCells.Add(Index(cell));
+
+        int bestRing = int.MaxValue, bestSqr = int.MaxValue;
+        for (int head = 0; head < _snapCells.Count; head++)
         {
-            int bestSqr = int.MaxValue;
-            for (int dz = -r; dz <= r; dz++)
+            Vector2Int current = CellOf(_snapCells[head]);
+            int dx = current.x - cell.x, dz = current.y - cell.y;
+            int ring = Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz));
+            int sqr = dx * dx + dz * dz;
+            if (head > 0 && IsWalkable(current, rule) && (ring < bestRing || (ring == bestRing && sqr < bestSqr)))
             {
-                for (int dx = -r; dx <= r; dx++)
-                {
-                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) != r) continue;   // this ring only
-
-                    var candidate = new Vector2Int(cell.x + dx, cell.y + dz);
-                    int sqr = dx * dx + dz * dz;
-                    if (sqr >= bestSqr || !IsWalkable(candidate)) continue;
-
-                    bestSqr = sqr;
-                    found = candidate;
-                }
+                bestRing = ring;
+                bestSqr = sqr;
+                found = current;
             }
-            if (bestSqr != int.MaxValue) return true;
+
+            foreach (Vector2Int step in Steps)
+            {
+                Vector2Int next = current + step;
+                if (!InBounds(next) || Mathf.Max(Mathf.Abs(next.x - cell.x), Mathf.Abs(next.y - cell.y)) > maxRadius) continue;
+                int index = Index(next);
+                if (_snapMark[index] == _snapGeneration || IsSolid(index)) continue;
+                if (step.x != 0 && step.y != 0
+                    && (IsSolid(Index(new Vector2Int(next.x, current.y))) || IsSolid(Index(new Vector2Int(current.x, next.y))))) continue;
+                _snapMark[index] = _snapGeneration;
+                _snapCells.Add(index);
+            }
         }
-        return false;
+        return bestRing != int.MaxValue;
     }
+
+    private bool IsSolid(int index) => _solid[index] || _propSolid[index] > 0;
 
     /// <summary>
     /// True when every cell the straight line from→to passes through is walkable. Exact grid

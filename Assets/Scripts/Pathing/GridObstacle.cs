@@ -123,6 +123,7 @@ public class GridObstacle : MonoBehaviour
             if (!collider.enabled || collider.isTrigger) continue;
             grid.CollectFootprint(collider, _marks.Core);
             grid.CollectFootprint(collider, grid.PropSkin, SkinScratch);
+            grid.CollectInside(collider, _marks.Solid);
         }
         CoreSet.Clear();
         foreach (int index in _marks.Core) CoreSet.Add(index);

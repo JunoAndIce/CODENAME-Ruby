@@ -79,7 +79,7 @@ public class FlowField
         _open.Clear();
 
         _grid.WorldToCell(goal, out _floodedFrom);
-        _hasGoal = _grid.NearestWalkable(_floodedFrom, SnapRadius, out _goalCell);
+        _hasGoal = _grid.NearestWalkable(_floodedFrom, SnapRadius, PropRule.Careful, out _goalCell);
         if (!_hasGoal) return;
 
         int maxCost = Mathf.RoundToInt(maxDistance / _grid.CellSize * StraightCost);
@@ -252,7 +252,7 @@ public class FlowField
     {
         cell = default;
         if (!_hasGoal || !_grid.WorldToCell(from, out Vector2Int raw)) return false;
-        return _grid.NearestWalkable(raw, SnapRadius, out cell) && IsReached(_grid.Index(cell));
+        return _grid.NearestWalkable(raw, SnapRadius, PropRule.Careful, out cell) && IsReached(_grid.Index(cell));
     }
 
     // Steepest descent: the reachable neighbour with the lowest cost, if it beats this cell's.

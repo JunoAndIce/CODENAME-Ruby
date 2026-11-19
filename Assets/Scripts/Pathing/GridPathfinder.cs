@@ -43,7 +43,7 @@ public class GridPathfinder
         path.Clear();
         clearances.Clear();
         if (!_grid.IsWalkable(goal)) return false;
-        if (!_grid.WorldToCell(from, out Vector2Int raw) || !_grid.NearestWalkable(raw, SnapRadius, out Vector2Int start))
+        if (!_grid.WorldToCell(from, out Vector2Int raw) || !_grid.NearestWalkable(raw, SnapRadius, PropRule.Careful, out Vector2Int start))
             return false;
 
         _generation++;   // invalidates every array entry from the last search without clearing

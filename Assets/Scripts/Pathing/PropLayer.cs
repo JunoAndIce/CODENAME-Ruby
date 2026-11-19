@@ -189,6 +189,8 @@ public class PropMarks
     public readonly List<int> Core = new();
     /// <summary>Cells within agent radius + Prop Skin that aren't core.</summary>
     public readonly List<int> Skin = new();
+    /// <summary>Cells whose centre lies inside the prop: the snap never crosses them, under either rule.</summary>
+    public readonly List<int> Solid = new();
     /// <summary>Marked as heavy (or jammed): blocks Forceful routes too.</summary>
     public bool Heavy;
     /// <summary>A light prop being shoved: marks only Forceful shove cost on its core, nothing else.</summary>
@@ -198,6 +200,7 @@ public class PropMarks
     {
         Core.Clear();
         Skin.Clear();
+        Solid.Clear();
         Heavy = false;
         Moving = false;
     }
