@@ -506,21 +506,33 @@ public class PathGrid : MonoBehaviour
         return layer.Skin[index] > 0 ? Mathf.Min(raw, 1) : raw;
     }
 
-    /// <summary>
-    /// Extra path cost for stepping onto a cell inside the margin: more the closer to a wall, none
-    /// from MarginCells + 1 out. It only raises costs, so the A* heuristic stays admissible. In a
-    /// narrow gap every cell is inside the margin, so the middle (the highest clearance) is the
-    /// cheapest line through, and the gap is never closed off.
-    /// </summary>
+    /// <summary>Careful's WallPenalty (see the rule overload).</summary>
     public int WallPenalty(Vector2Int cell) => WallPenalty(cell, PropRule.Careful);
 
-    /// <summary>WallPenalty over the rule's raw clearance: walls and the rule's prop cores. The skin is
-    /// charged on its own, in StepCost.</summary>
+    /// <summary>
+    /// The room a route at this cell could have had under the rule: the highest raw clearance within
+    /// MarginCells cells, capped at MarginCells + 1. 0 off the grid.
+    /// </summary>
+    public int Best(Vector2Int cell, PropRule rule) => InBounds(cell) ? Layer(rule).Best[cell.x + cell.y * _width] : 0;
+
+    /// <summary>
+    /// Extra path cost for stepping onto a cell that has less clearance than the best cell near it:
+    /// (Best − clearance) × Wall Cost, over the rule's raw clearance (walls and the rule's prop cores;
+    /// the skin is charged on its own, in StepCost).
+    /// - Open room: Best is the cap, MarginCells + 1, so a cell by a wall pays as before and routes
+    ///   keep off walls and corners.
+    /// - Corridor: its middle line has the best clearance there is, so it pays nothing, and the cells
+    ///   against the walls still pay. The old charge, (MarginCells − clearance + 1) × Wall Cost, made
+    ///   a one-cell corridor cost 3× its length at 0.5 m cells (10 + 20 a step) and 5× at 0.25 m
+    ///   (10 + 40, a two-cell margin), which is why smaller cells made enemies avoid corridors more.
+    /// It only raises costs, so the A* heuristic stays admissible, and it never closes a gap.
+    /// </summary>
     public int WallPenalty(Vector2Int cell, PropRule rule)
     {
         if (!InBounds(cell)) return 0;
-        int raw = Layer(rule).Clearance[cell.x + cell.y * _width];
-        return Mathf.Max(0, MarginCells - raw + 1) * _wallCost;
+        PropLayer layer = Layer(rule);
+        int index = cell.x + cell.y * _width;
+        return Mathf.Max(0, layer.Best[index] - layer.Clearance[index]) * _wallCost;
     }
 
     /// <summary>
@@ -610,37 +622,47 @@ public class PathGrid : MonoBehaviour
     /// True when every cell the straight line from→to passes through is walkable. Exact grid
     /// traversal (not sampling), so a line can't slip through the corner of a blocked cell.
     /// </summary>
-    public bool HasLineOfSight(Vector3 from, Vector3 to) => HasLineOfSight(from, to, 1);
+    public bool HasLineOfSight(Vector3 from, Vector3 to) => HasLineOfSight(from, to, 1, PropRule.Careful);
 
     /// <summary>
     /// A straight line that keeps the path margin, so a tidy path doesn't graze a corner on the
-    /// way. Each cell after the first needs the clearance WallPenalty doesn't charge for
-    /// (MarginCells + 1: a cell inside the margin is one at or below MarginCells), relaxed only
-    /// near the goal as a ramp: at most the goal cell's clearance plus the cell's Chebyshev
-    /// distance from the goal cell, and never below 1. So a goal by a wall can still be walked
-    /// straight to, but the rest of the line keeps its margin and can't graze a pillar or jamb on
-    /// the way; a line that fails goes to the field or A*, which keep the margin. A goal in a
-    /// blocked cell gets no straight line: the field steps there.
+    /// way. Careful's; see the rule overload.
     /// </summary>
-    public bool HasClearLine(Vector3 from, Vector3 to)
+    public bool HasClearLine(Vector3 from, Vector3 to) => HasClearLine(from, to, PropRule.Careful);
+
+    /// <summary>
+    /// A straight line that keeps the path margin under a rule. Each cell after the first needs the
+    /// clearance WallPenalty doesn't charge for, its Best: MarginCells + 1 in the open, and only what a
+    /// corridor allows inside one, so a line down a corridor's middle is taken whole instead of broken
+    /// into corners. Near the goal it relaxes as a ramp: at most the goal cell's clearance plus the
+    /// cell's Chebyshev distance from the goal cell, and never below 1. So a goal by a wall can still be
+    /// walked straight to, but the rest of the line keeps its margin and can't graze a pillar or jamb
+    /// on the way. A prop's skin reads clearance 1, so in the open no line cuts through it. A line that
+    /// fails goes to the field or A*, which keep the margin. A goal in a blocked cell gets no straight
+    /// line: the field steps there.
+    /// </summary>
+    public bool HasClearLine(Vector3 from, Vector3 to, PropRule rule)
     {
         WorldToCell(to, out Vector2Int goal);
-        return Walk(from, to, MarginCells + 1, true, goal, Clearance(goal));
+        return Walk(from, to, 0, true, goal, Clearance(goal, rule), rule);
     }
 
     /// <summary>
     /// HasLineOfSight where every cell after the first must also have at least minClearance.
     /// Never below 1, whatever is asked: a blocked cell is never crossed. Callers lower it to
-    /// what a narrow gap allows; that is the rule, not a fallback.
+    /// what a narrow gap allows; that is the rule, not a fallback. Careful's.
     /// </summary>
     public bool HasLineOfSight(Vector3 from, Vector3 to, int minClearance)
-        => Walk(from, to, minClearance, false, default, 0);
+        => HasLineOfSight(from, to, minClearance, PropRule.Careful);
 
-    // The line walk. With ramp, minClearance is the cap and each cell asks for
-    // min(cap, goalClearance + its Chebyshev distance from goalCell); otherwise every cell asks minClearance.
-    private bool Walk(Vector3 from, Vector3 to, int minClearance, bool ramp, Vector2Int goalCell, int goalClearance)
+    /// <summary>HasLineOfSight under a rule's walkability and effective clearance.</summary>
+    public bool HasLineOfSight(Vector3 from, Vector3 to, int minClearance, PropRule rule)
+        => Walk(from, to, minClearance, false, default, 0, rule);
+
+    // The line walk. With clearLine each cell asks for max(1, min(its Best, goalClearance + its
+    // Chebyshev distance from goalCell)); otherwise every cell asks max(1, minClearance).
+    private bool Walk(Vector3 from, Vector3 to, int minClearance, bool clearLine, Vector2Int goalCell, int goalClearance, PropRule rule)
     {
-        minClearance = Mathf.Max(1, minClearance);
         float fx = (from.x - _origin.x) / _cellSize, fz = (from.z - _origin.z) / _cellSize;
         float tx = (to.x - _origin.x) / _cellSize, tz = (to.z - _origin.z) / _cellSize;
         var cell = new Vector2Int(Mathf.FloorToInt(fx), Mathf.FloorToInt(fz));
@@ -659,15 +681,15 @@ public class PathGrid : MonoBehaviour
             // The starting cell is wherever the agent already stands, often one the clearance
             // margin marks blocked because it's brushing a wall, so only cells it would move
             // into count. A line back into the wall still fails on the next cell.
-            if (i > 0 && !Passable(cell, minClearance, ramp, goalCell, goalClearance)) return false;
+            if (i > 0 && !Passable(cell, minClearance, clearLine, goalCell, goalClearance, rule)) return false;
             if (cell == end) return true;
 
             if (Mathf.Approximately(nextX, nextZ))
             {
                 // Passing exactly through a corner: both side cells must be open, or the
                 // line squeezes diagonally between two blocked cells.
-                if (!Passable(new Vector2Int(cell.x + stepX, cell.y), minClearance, ramp, goalCell, goalClearance)
-                    || !Passable(new Vector2Int(cell.x, cell.y + stepZ), minClearance, ramp, goalCell, goalClearance)) return false;
+                if (!Passable(new Vector2Int(cell.x + stepX, cell.y), minClearance, clearLine, goalCell, goalClearance, rule)
+                    || !Passable(new Vector2Int(cell.x, cell.y + stepZ), minClearance, clearLine, goalCell, goalClearance, rule)) return false;
                 cell.x += stepX; cell.y += stepZ;
                 nextX += deltaX; nextZ += deltaZ;
             }
@@ -677,14 +699,16 @@ public class PathGrid : MonoBehaviour
         return false;
     }
 
-    private bool Passable(Vector2Int cell, int minClearance, bool ramp, Vector2Int goalCell, int goalClearance)
+    private bool Passable(Vector2Int cell, int minClearance, bool clearLine, Vector2Int goalCell, int goalClearance, PropRule rule)
     {
-        if (ramp)
+        if (!IsWalkable(cell, rule)) return false;
+        int needed = minClearance;
+        if (clearLine)
         {
             int distance = Mathf.Max(Mathf.Abs(cell.x - goalCell.x), Mathf.Abs(cell.y - goalCell.y));
-            minClearance = Mathf.Max(1, Mathf.Min(minClearance, goalClearance + distance));
+            needed = Mathf.Min(Best(cell, rule), goalClearance + distance);
         }
-        return IsWalkable(cell) && Clearance(cell) >= minClearance;
+        return Clearance(cell, rule) >= Mathf.Max(1, needed);
     }
 
     private void OnDrawGizmos()

@@ -21,8 +21,15 @@ public class PropLayer
     /// effective Clearance reads a skin cell as at most 1 on top of this.
     /// </summary>
     public readonly byte[] Clearance;
+    /// <summary>
+    /// The highest raw Clearance within MarginCells (Chebyshev) of each cell, capped at MarginCells + 1:
+    /// the room a route here could have had. The wall penalty charges only what a cell lacks against
+    /// it, so a corridor's middle line is free (see PathGrid.WallPenalty).
+    /// </summary>
+    public readonly byte[] Best;
 
     private readonly bool[] _walkable;   // the grid's static bake, shared
+    private readonly byte[] _rowMax;     // Best's separable bake: the row pass's result
     private readonly int _width;
     private readonly int _depth;
 
@@ -36,6 +43,8 @@ public class PropLayer
         Skin = new int[count];
         Shove = new int[count];
         Clearance = new byte[count];
+        Best = new byte[count];
+        _rowMax = new byte[count];
     }
 
     public bool Blocked(int index) => !_walkable[index] || Blocks[index] > 0;
@@ -87,19 +96,68 @@ public class PropLayer
                 queue[tail++] = n;
             }
         }
+
+        BakeBest(cap);
+    }
+
+    // A Chebyshev square's max is a row max followed by a column max, so the whole grid costs two
+    // passes of 2·MarginCells + 1 reads per cell instead of its square.
+    private void BakeBest(int cap)
+    {
+        int margin = cap - 1;
+        for (int z = 0; z < _depth; z++)
+        {
+            for (int x = 0; x < _width; x++)
+            {
+                int best = 0;
+                for (int dx = Mathf.Max(0, x - margin); dx <= Mathf.Min(_width - 1, x + margin); dx++)
+                    best = Mathf.Max(best, Clearance[dx + z * _width]);
+                _rowMax[x + z * _width] = (byte)best;
+            }
+        }
+        for (int z = 0; z < _depth; z++)
+        {
+            for (int x = 0; x < _width; x++)
+            {
+                int best = 0;
+                for (int dz = Mathf.Max(0, z - margin); dz <= Mathf.Min(_depth - 1, z + margin); dz++)
+                    best = Mathf.Max(best, _rowMax[x + dz * _width]);
+                Best[x + z * _width] = (byte)Mathf.Min(cap, best);
+            }
+        }
+    }
+
+    // Best for one cell, read straight from Clearance. With a margin of 0 the loop is the cell
+    // itself, so Best is min(1, its clearance).
+    private int MeasureBest(int x, int z, int cap)
+    {
+        int margin = cap - 1;
+        int best = 0;
+        for (int dz = Mathf.Max(0, z - margin); dz <= Mathf.Min(_depth - 1, z + margin); dz++)
+            for (int dx = Mathf.Max(0, x - margin); dx <= Mathf.Min(_width - 1, x + margin); dx++)
+                best = Mathf.Max(best, Clearance[dx + dz * _width]);
+        return Mathf.Min(cap, best);
     }
 
     /// <summary>
     /// A prop landing or leaving changes clearance only within the cap of the cells it touched, so
     /// redo that box instead of the grid. Each cell is measured directly (the same square distance
     /// the bake's fill produces), which needs no scratch memory. The box is the touched cells' own,
-    /// already grown by the caller's cap.
+    /// already grown by the caller's cap. Best then redoes that box grown by MarginCells, since a
+    /// changed clearance reaches that far into its neighbours' Best.
     /// </summary>
     public void RefreshClearance(int minX, int minZ, int maxX, int maxZ, int cap)
     {
         for (int z = minZ; z <= maxZ; z++)
             for (int x = minX; x <= maxX; x++)
                 Clearance[x + z * _width] = (byte)MeasureClearance(x, z, cap);
+
+        int margin = cap - 1;
+        minX = Mathf.Max(0, minX - margin); maxX = Mathf.Min(_width - 1, maxX + margin);
+        minZ = Mathf.Max(0, minZ - margin); maxZ = Mathf.Min(_depth - 1, maxZ + margin);
+        for (int z = minZ; z <= maxZ; z++)
+            for (int x = minX; x <= maxX; x++)
+                Best[x + z * _width] = (byte)MeasureBest(x, z, cap);
     }
 
     private int MeasureClearance(int x, int z, int cap)
