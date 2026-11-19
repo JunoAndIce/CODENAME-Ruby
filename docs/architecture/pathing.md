@@ -20,6 +20,27 @@ A\* for individual ones**:
   because a light prop on the move re-marks Forceful's shove cost every half cell, and one shared
   counter made every calm walker on the floor re-plan while a crate slid.
   **Agent Radius must match the enemy collider's radius**, and doorways need about 1.5 m or more.
+  **Tight cells.** A body fits through any gap over twice Agent Radius (0.7 m), but the centre test
+  only opens a gap that holds a cell centre at least Agent Radius from both sides: anything from 0.7 m
+  to 0.95 m at 0.25 m cells, by where the gap falls against the lattice. A corridor Ruby walked down,
+  hugging the wall past a row of crates, read as sealed, and hunters gave up the fight each time.
+  Halving the cells fixed it and lagged the game badly. Instead each cell is tested at
+  `PropLayer.SampleSide` squared points (5 x 5, 5 cm apart at 0.25 m cells, a lattice that runs on
+  evenly into the next cell), and a cell whose centre is blocked but which has a point where a body
+  touches nothing is **tight**: walkable, clearance 1, and it keeps its **fit point** (the open point
+  with the most open neighbours, nearest the centre on a tie, so a body stands in a lane's middle).
+  Any straight gap from about 0.75 m now opens. Routes steer at `StandPoint(cell, rule)` (a tight
+  cell's fit point, otherwise its centre) wherever they turn a cell into a point: the field's steps,
+  A\*'s corners, area spots. Clearance still counts from every blocked centre, tight ones included,
+  so the margin is no closer to walls where there's room; a tight cell is only taken where it is the
+  way through (its `Best` is low) or worth its wall penalty. Static points are measured with one box
+  and one capsule query for most cells (nothing near, or a wall within Agent Radius minus the points'
+  reach), and point by point only between, at bake for cells whose centre a wall blocks and lazily
+  when a prop first covers an open cell's centre. Props mark the points they cover
+  (`CollectSamples`, the same probe height and flat distance as their core, so the centre point
+  agrees with it) into per-point counts per rule (`PropLayer.Samples`), and each mark re-fits the
+  cells it touched. The gizmo draws a tight cell as a small teal square at its fit point. A gap under
+  0.7 m stays shut: Ruby doesn't fit it either.
   **Corner Margin and the clearance field.** A second field, baked after the cells and redone around
   a prop's cells when it comes or goes, holds each cell's **clearance**: its distance in cells to the
   nearest blocked cell or the grid's edge, capped at `MarginCells + 1`. A cell is *inside the margin*

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-//// <summary>
+/// <summary>
 /// A physics prop (crate, barrel, table) that marks the PathGrid. The grid's bake skips anything
 /// dynamic, so without this enemies path straight through props. A resting prop marks its core, its
 /// skin and its solid cells (see PathGrid.AddProp); marking happens only when it settles, shifts or
@@ -33,6 +33,7 @@ public class GridObstacle : MonoBehaviour
 
     private static readonly List<int> SkinScratch = new();
     private static readonly HashSet<int> CoreSet = new();
+    private static readonly Dictionary<int, uint> SampleScratch = new();
 
     private readonly PropMarks _marks = new();
     private Rigidbody _body;
@@ -208,14 +209,23 @@ public class GridObstacle : MonoBehaviour
 
         // Core: the agent radius round each collider, as the bake gives walls. Skin: the cells Prop
         // Skin further out that aren't core, so a calm route keeps a visible gap and never grazes it.
+        // Samples: the test points it covers, so a lane between it and a wall that misses every cell
+        // centre still opens as tight cells (PathGrid.CollectSamples).
         _marks.Clear();
         SkinScratch.Clear();
+        SampleScratch.Clear();
         foreach (Collider collider in _colliders)
         {
             if (!collider.enabled || collider.isTrigger) continue;
             grid.CollectFootprint(collider, _marks.Core);
             grid.CollectFootprint(collider, grid.PropSkin, SkinScratch);
             grid.CollectInside(collider, _marks.Solid);
+            grid.CollectSamples(collider, SampleScratch);
+        }
+        foreach (KeyValuePair<int, uint> pair in SampleScratch)
+        {
+            _marks.SampleCells.Add(pair.Key);
+            _marks.SampleMasks.Add(pair.Value);
         }
         CoreSet.Clear();
         foreach (int index in _marks.Core) CoreSet.Add(index);

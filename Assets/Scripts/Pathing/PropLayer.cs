@@ -9,8 +9,32 @@ using UnityEngine;
 /// </summary>
 public class PropLayer
 {
-    /// <summary>Props whose core blocks each cell under this rule.</summary>
+    /// <summary>Test points per cell side: a cell is tested at SampleSide x SampleSide points, not only its centre.</summary>
+    public const int SampleSide = 5;
+    /// <summary>Test points per cell. Index s sits at column s % SampleSide, row s / SampleSide.</summary>
+    public const int SampleCount = SampleSide * SampleSide;
+    /// <summary>The test point at the cell's centre.</summary>
+    public const int CentreSample = SampleCount / 2;
+    /// <summary>Every test point's bit.</summary>
+    public const uint AllSamples = (1u << SampleCount) - 1;
+    /// <summary>Fit of a cell that isn't tight: its centre is open, or no test point fits.</summary>
+    public const byte NoFit = 255;
+
+    /// <summary>Props whose core blocks each cell's centre under this rule.</summary>
     public readonly int[] Blocks;
+    /// <summary>
+    /// Props (that block under this rule) within the agent radius of each test point: SampleCount per
+    /// cell, at index * SampleCount + s. Counts, as Blocks are, so one prop leaving never frees a point
+    /// another still covers.
+    /// </summary>
+    public readonly byte[] Samples;
+    /// <summary>
+    /// For a tight cell, the test point a body fits at; NoFit otherwise. A cell is tight when its centre
+    /// is blocked (a wall or prop within the agent radius) but a body still fits at one of its other test
+    /// points: a lane narrower than a cell between a wall and a crate, which the centre test alone closed.
+    /// A tight cell is walkable, reads clearance 1, and routes steer at its fit point (PathGrid.StandPoint).
+    /// </summary>
+    public readonly byte[] Fit;
     /// <summary>Props whose skin ring covers each cell: walkable, at Prop Skin Cost, and clearance 1 for lines.</summary>
     public readonly int[] Skin;
     /// <summary>Light props whose core covers each cell: walkable at Shove Cost. Always 0 under Careful.</summary>
@@ -42,6 +66,9 @@ public class PropLayer
         _depth = depth;
         int count = width * depth;
         Blocks = new int[count];
+        Samples = new byte[count * SampleCount];
+        Fit = new byte[count];
+        System.Array.Fill(Fit, NoFit);
         Skin = new int[count];
         Shove = new int[count];
         Clearance = new byte[count];
@@ -49,14 +76,23 @@ public class PropLayer
         _rowMax = new byte[count];
     }
 
-    public bool Blocked(int index) => !_walkable[index] || Blocks[index] > 0;
+    /// <summary>A wall or a prop that blocks under this rule is within the agent radius of the cell's centre.</summary>
+    public bool CentreBlocked(int index) => !_walkable[index] || Blocks[index] > 0;
 
-    private bool BlockedAt(int x, int z) => x < 0 || z < 0 || x >= _width || z >= _depth || Blocked(x + z * _width);
+    /// <summary>A body can't stand anywhere in the cell: its centre is blocked and it isn't tight.</summary>
+    public bool Blocked(int index) => CentreBlocked(index) && Fit[index] == NoFit;
+
+    /// <summary>Its centre is blocked, but a body fits at its fit point.</summary>
+    public bool Tight(int index) => Fit[index] != NoFit;
+
+    // Clearance counts from cells whose centre is blocked, tight ones included, so a tight cell opening
+    // doesn't move the margin any closer to walls where there is room; the tight cell itself reads 1.
+    private bool CentreBlockedAt(int x, int z) => x < 0 || z < 0 || x >= _width || z >= _depth || CentreBlocked(x + z * _width);
 
     /// <summary>
-    /// Multi-source breadth-first fill from every blocked cell, and from the border cells as if the
-    /// void beyond them were blocked. Diagonals cost 1, so it measures in squares. queue is scratch,
-    /// at least CellCount long.
+    /// Multi-source breadth-first fill from every cell whose centre is blocked, and from the border cells
+    /// as if the void beyond them were blocked. Diagonals cost 1, so it measures in squares. Tight cells
+    /// are sources like any blocked centre, then read 1. queue is scratch, at least CellCount long.
     /// </summary>
     public void BakeClearance(int cap, int[] queue)
     {
@@ -65,7 +101,7 @@ public class PropLayer
         // every cell is set once.
         for (int index = 0; index < Clearance.Length; index++)
         {
-            bool blocked = Blocked(index);
+            bool blocked = CentreBlocked(index);
             Clearance[index] = (byte)(blocked ? 0 : cap);
             if (blocked) queue[tail++] = index;
         }
@@ -98,6 +134,9 @@ public class PropLayer
                 queue[tail++] = n;
             }
         }
+
+        for (int index = 0; index < Clearance.Length; index++)
+            if (Clearance[index] == 0 && Tight(index)) Clearance[index] = 1;
 
         BakeBest(cap);
     }
@@ -164,7 +203,7 @@ public class PropLayer
 
     private int MeasureClearance(int x, int z, int cap)
     {
-        if (BlockedAt(x, z)) return 0;
+        if (CentreBlockedAt(x, z)) return Tight(x + z * _width) ? 1 : 0;
         for (int r = 1; r < cap; r++)
         {
             for (int dz = -r; dz <= r; dz++)
@@ -172,7 +211,7 @@ public class PropLayer
                 for (int dx = -r; dx <= r; dx++)
                 {
                     if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) != r) continue;   // this ring only
-                    if (BlockedAt(x + dx, z + dz)) return r;   // off the grid counts as blocked
+                    if (CentreBlockedAt(x + dx, z + dz)) return r;   // off the grid counts as blocked
                 }
             }
         }
@@ -193,6 +232,10 @@ public class PropMarks
     public readonly List<int> Skin = new();
     /// <summary>Cells whose centre lies inside the prop: the snap never crosses them, under either rule.</summary>
     public readonly List<int> Solid = new();
+    /// <summary>Cells with at least one test point within the agent radius of the prop (a superset of Core).</summary>
+    public readonly List<int> SampleCells = new();
+    /// <summary>For each of SampleCells, the bits of the test points the prop covers.</summary>
+    public readonly List<uint> SampleMasks = new();
     /// <summary>Marked as heavy (or jammed): blocks Forceful routes too.</summary>
     public bool Heavy;
     /// <summary>A light prop being shoved: marks only Forceful shove cost on its core, nothing else.</summary>
@@ -203,6 +246,8 @@ public class PropMarks
         Core.Clear();
         Skin.Clear();
         Solid.Clear();
+        SampleCells.Clear();
+        SampleMasks.Clear();
         Heavy = false;
         Moving = false;
     }

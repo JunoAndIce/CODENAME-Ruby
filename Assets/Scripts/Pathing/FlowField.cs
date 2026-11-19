@@ -169,7 +169,7 @@ public class FlowField
                     if (sqr >= bestSqr || !_grid.InBounds(cell) || !IsReached(_grid.Index(cell))) continue;
 
                     bestSqr = sqr;
-                    spot = _grid.CellToWorld(cell);
+                    spot = _grid.StandPoint(cell, _rule);
                 }
             }
             if (bestSqr != int.MaxValue) return true;
@@ -187,7 +187,7 @@ public class FlowField
         for (int i = 0; i < _stamp.Length; i++)
         {
             if (!IsReached(i)) continue;
-            points.Add(_grid.CellToWorld(_grid.CellOf(i)));
+            points.Add(_grid.StandPoint(_grid.CellOf(i), _rule));
             metres.Add(_length[i] / (float)StraightCost * _grid.CellSize);
         }
     }
@@ -220,7 +220,8 @@ public class FlowField
         atGoal = false;
         if (!TryGetStartCell(from, out Vector2Int cell)) return false;
 
-        steer = _grid.CellToWorld(cell);
+        // Stand points, not centres: a tight cell's centre is in the wall beside its lane.
+        steer = _grid.StandPoint(cell, _rule);
         // The lowest clearance among the cells walked: where the descent had room the shortcut
         // keeps the margin, and through a narrow gap only the clearance the gap allows. The
         // start cell is left out, since an agent hugging a wall stands in a low one.
@@ -229,7 +230,7 @@ public class FlowField
         Vector2Int walked = cell;
         for (int i = 0; i < LookAhead && Descend(walked, out Vector2Int next); i++)
         {
-            Vector3 point = _grid.CellToWorld(next);
+            Vector3 point = _grid.StandPoint(next, _rule);
             lowest = Mathf.Min(lowest, _grid.Clearance(next, _rule));
             // The first step is always taken: the agent itself may stand in a blocked cell.
             if (i > 0 && !_grid.HasLineOfSight(from, point, Mathf.Min(_grid.MarginCells + 1, lowest), _rule)) break;
@@ -261,7 +262,7 @@ public class FlowField
         if (!TryGetStartCell(from, out Vector2Int cell)) return;
 
         for (int i = 0; i < TraceLimit && Descend(cell, out cell); i++)
-            points.Add(_grid.CellToWorld(cell));
+            points.Add(_grid.StandPoint(cell, _rule));
     }
 
     private void RefreshIfStale()

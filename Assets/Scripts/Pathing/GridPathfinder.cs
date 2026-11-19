@@ -136,7 +136,7 @@ public class GridPathfinder
             // prop. A*'s own single step from the anchor's cell is taken without the cast, as a field's first
             // step is: refusing it would add the same corner twice (a lane only a prop's skin leaves open fails
             // every cast).
-            Vector3 point = _grid.CellToWorld(_cells[i]);
+            Vector3 point = _grid.StandPoint(_cells[i], _rule);   // a tight cell's fit point, not its blocked centre
             if (_grid.HasLineOfSight(anchor, point, asked, _rule)
                 && (i - 1 == anchorCell || _grid.HasClearShape(anchor, point, _rule)))
             {
@@ -145,13 +145,13 @@ public class GridPathfinder
             }
 
             anchorCell = i - 1;
-            anchor = _grid.CellToWorld(_cells[i - 1]);
+            anchor = _grid.StandPoint(_cells[i - 1], _rule);
             path.Add(anchor);
             clearances.Add(accepted);   // the run that ends at this corner
             lowest = Mathf.Min(_grid.Clearance(_cells[i - 1], _rule), _grid.Clearance(_cells[i], _rule));   // the new run starts at the corner
             accepted = Mathf.Min(_grid.MarginCells + 1, lowest);
         }
-        path.Add(_grid.CellToWorld(_cells[_cells.Count - 1]));
+        path.Add(_grid.StandPoint(_cells[_cells.Count - 1], _rule));
         clearances.Add(accepted);
     }
 }

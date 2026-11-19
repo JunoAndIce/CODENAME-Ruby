@@ -3,9 +3,12 @@ using UnityEngine;
 
 /// <summary>
 /// Walkability grid for one floor, baked at Start from static geometry. Place it at floor height;
-/// it is axis-aligned around its position. A cell is blocked when an agent-sized capsule standing
-/// on it overlaps anything static, which keeps paths off walls. Dynamic bodies are skipped by the
-/// bake; props that should block carry a GridObstacle, which marks the grid while they rest.
+/// it is axis-aligned around its position. A cell is blocked when an agent-sized capsule overlaps
+/// something wherever it stands in the cell, which keeps paths off walls. Its centre is tested first;
+/// a cell whose centre is blocked but whose other test points (PropLayer.SampleSide squared of them)
+/// leave room is tight, and routes steer through it at the point that fits. Dynamic bodies are
+/// skipped by the bake; props that should block carry a GridObstacle, which marks the grid while they
+/// rest.
 /// </summary>
 public class PathGrid : MonoBehaviour
 {
@@ -85,6 +88,11 @@ public class PathGrid : MonoBehaviour
 
     private bool[] _solid;      // a cell's centre is inside static geometry (a point test, no agent radius)
     private int[] _propSolid;   // resting props whose colliders hold each cell's centre
+
+    // Each cell's test points blocked by static geometry, measured once per cell when first needed: at
+    // bake for cells whose centre walls block, and when a prop first covers an open cell's centre.
+    private uint[] _staticMask;
+    private bool[] _staticMaskKnown;
 
     public bool IsBaked => _walkable != null;
     public float CellSize => _cellSize;
@@ -188,7 +196,12 @@ public class PathGrid : MonoBehaviour
     {
         Vector3 centre = area.Centre;
         goalPoint = centre;
-        if (WorldToCell(centre, out goalCell) && IsWalkable(goalCell, rule)) return true;
+        if (WorldToCell(centre, out goalCell) && IsWalkable(goalCell, rule))
+        {
+            // An open centre is the answer itself; a tight one stands at its fit point.
+            if (IsTight(goalCell, rule)) goalPoint = StandPoint(goalCell, rule);
+            return true;
+        }
 
         // The cells under the area's bounding box; Contains trims a circle's corners.
         int minX = Mathf.Clamp(Mathf.FloorToInt((centre.x - area.HalfSize.x - _origin.x) / _cellSize), 0, _width - 1);
@@ -203,7 +216,7 @@ public class PathGrid : MonoBehaviour
             for (int x = minX; x <= maxX; x++)
             {
                 if (!IsWalkable(new Vector2Int(x, z), rule)) continue;
-                Vector3 world = CellToWorld(x, z);
+                Vector3 world = StandPoint(new Vector2Int(x, z), rule);
                 float distance = FlatDistance(world, centre);
                 if (distance < nearest && area.Contains(world)) nearest = distance;
             }
@@ -219,7 +232,7 @@ public class PathGrid : MonoBehaviour
             {
                 var cell = new Vector2Int(x, z);
                 if (!IsWalkable(cell, rule)) continue;
-                Vector3 world = CellToWorld(x, z);
+                Vector3 world = StandPoint(cell, rule);
                 if (FlatDistance(world, centre) > tieBand || !area.Contains(world)) continue;
 
                 float approach = FlatDistance(world, approachFrom);
@@ -254,7 +267,7 @@ public class PathGrid : MonoBehaviour
         for (int head = 0; head < _areaCells.Count; head++)
         {
             Vector2Int cell = CellOf(_areaCells[head]);
-            Vector3 world = CellToWorld(cell);
+            Vector3 world = StandPoint(cell);
             if (FlatDistance(world, from) >= minDistance && Random.Range(0, ++candidates) == 0) spot = world;
 
             foreach (Vector2Int step in Steps)
@@ -302,7 +315,7 @@ public class PathGrid : MonoBehaviour
         for (int head = 0; head < _areaCells.Count; head++)
         {
             Vector2Int cell = CellOf(_areaCells[head]);
-            if (cell.x % stride == 0 && cell.y % stride == 0) into.Add(CellToWorld(cell));
+            if (cell.x % stride == 0 && cell.y % stride == 0) into.Add(StandPoint(cell));
 
             foreach (Vector2Int step in Steps)
             {
@@ -349,6 +362,8 @@ public class PathGrid : MonoBehaviour
         _walkable = new bool[_width * _depth];
         _solid = new bool[_width * _depth];
         _propSolid = new int[_width * _depth];
+        _staticMask = new uint[_width * _depth];
+        _staticMaskKnown = new bool[_width * _depth];
         _careful = new PropLayer(_walkable, _width, _depth);
         _forceful = new PropLayer(_walkable, _width, _depth);
         _marginCells = MarginCellsFor(_cornerMargin);
@@ -358,7 +373,7 @@ public class PathGrid : MonoBehaviour
         // Transforms moved since the last physics step aren't in the physics scene yet.
         Physics.SyncTransforms();
 
-        int blocked = 0;
+        int blocked = 0, tight = 0;
         for (int z = 0; z < _depth; z++)
         {
             for (int x = 0; x < _width; x++)
@@ -370,6 +385,12 @@ public class PathGrid : MonoBehaviour
                 blocked++;
                 // Only a blocked cell can be solid: an open one has nothing static within the agent radius.
                 _solid[x + z * _width] = OverlapsStatic(centre, SolidProbeRadius);
+
+                // A blocked centre may still leave room elsewhere in the cell: a lane along a wall that
+                // misses every cell centre. No prop has marked yet, so both layers fit the same.
+                byte fit = ChooseFit(StaticMask(x + z * _width));
+                _careful.Fit[x + z * _width] = _forceful.Fit[x + z * _width] = fit;
+                if (fit != PropLayer.NoFit) tight++;
             }
         }
 
@@ -379,7 +400,7 @@ public class PathGrid : MonoBehaviour
 
         // The same playtest switch as Core's DebugLog, which Pathing can't reference.
 #if RUBY_DEBUG_LOGS
-        Debug.Log($"{name}: baked {_width}x{_depth} cells ({_cellSize}m), {blocked} blocked.", this);
+        Debug.Log($"{name}: baked {_width}x{_depth} cells ({_cellSize}m), {blocked} with a blocked centre, {tight} of them tight.", this);
 #endif
     }
 
@@ -406,6 +427,141 @@ public class PathGrid : MonoBehaviour
             if (IsStatic(OverlapHits[i])) return true;
         return false;
     }
+
+    // The capsule an agent's body fills standing at position: radius Agent Radius, spanning Floor
+    // Clearance to Agent Height. Its end centres, for OverlapsStatic's tests that keep these heights.
+    private float BodyBottomY => transform.position.y + _floorClearance + _agentRadius;
+    private float BodyTopY => Mathf.Max(BodyBottomY, transform.position.y + _agentHeight - _agentRadius);
+
+    // How far a cell's test points reach from its centre: the corner points' distance.
+    private float SampleReach => (PropLayer.SampleSide - 1) * 0.5f * SampleStep * 1.41421356f;
+
+    private float SampleStep => _cellSize / PropLayer.SampleSide;
+
+    // A test point's offset from its cell's centre, on a lattice SampleStep apart that runs on evenly
+    // into the next cell, so any lane at least SampleStep wide holds a row of test points.
+    private Vector3 SampleOffset(int sample)
+    {
+        int half = PropLayer.SampleSide / 2;
+        return new Vector3((sample % PropLayer.SampleSide - half) * SampleStep, 0f, (sample / PropLayer.SampleSide - half) * SampleStep);
+    }
+
+    // The cell's test points that an agent's body would overlap static geometry at, measured once.
+    private uint StaticMask(int index)
+    {
+        if (_staticMaskKnown[index]) return _staticMask[index];
+        _staticMask[index] = MeasureStaticMask(index);
+        _staticMaskKnown[index] = true;
+        return _staticMask[index];
+    }
+
+    // Two cheap tests settle most cells with one query: nothing static in a box that holds every test
+    // point's capsule means no point is blocked; static within Agent Radius − reach of the centre, over
+    // the body's own heights, is within Agent Radius of every point. Only the cells between pay a query
+    // per point. The centre point is tested exactly as the bake's IsOpenSpot, so the two always agree.
+    private uint MeasureStaticMask(int index)
+    {
+        Vector3 centre = CellToWorld(CellOf(index));
+        float reach = SampleReach;
+        float floor = transform.position.y;
+        var boxCentre = new Vector3(centre.x, floor + (_floorClearance + _agentHeight) * 0.5f, centre.z);
+        var halfExtents = new Vector3(_agentRadius + reach, Mathf.Max(0.01f, (_agentHeight - _floorClearance) * 0.5f), _agentRadius + reach);
+        if (!OverlapsStaticBox(boxCentre, halfExtents)) return 0u;
+        if (_agentRadius > reach && OverlapsStaticCapsule(centre, _agentRadius - reach, BodyBottomY, BodyTopY)) return PropLayer.AllSamples;
+
+        uint mask = 0u;
+        for (int sample = 0; sample < PropLayer.SampleCount; sample++)
+            if (OverlapsStatic(centre + SampleOffset(sample), _agentRadius)) mask |= 1u << sample;
+        return mask;
+    }
+
+    private bool OverlapsStaticBox(Vector3 centre, Vector3 halfExtents)
+    {
+        int count = Physics.OverlapBoxNonAlloc(centre, halfExtents, OverlapHits, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < count; i++)
+            if (IsStatic(OverlapHits[i])) return true;
+        return false;
+    }
+
+    private bool OverlapsStaticCapsule(Vector3 position, float radius, float bottomY, float topY)
+    {
+        int count = Physics.OverlapCapsuleNonAlloc(
+            new Vector3(position.x, bottomY, position.z), new Vector3(position.x, topY, position.z),
+            radius, OverlapHits, ~0, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < count; i++)
+            if (IsStatic(OverlapHits[i])) return true;
+        return false;
+    }
+
+    // The fit point among the test points not in blocked: the one with the most open neighbours (inside
+    // the cell), so a body stands in a lane's middle rather than on its edge; among those, the one
+    // nearest the centre. NoFit when every point is blocked.
+    private static byte ChooseFit(uint blocked)
+    {
+        if ((blocked & PropLayer.AllSamples) == PropLayer.AllSamples) return PropLayer.NoFit;
+        if ((blocked & (1u << PropLayer.CentreSample)) == 0) return PropLayer.CentreSample;
+
+        int side = PropLayer.SampleSide, half = side / 2;
+        int best = PropLayer.NoFit, bestOpen = -1, bestSqr = int.MaxValue;
+        for (int sample = 0; sample < PropLayer.SampleCount; sample++)
+        {
+            if ((blocked & (1u << sample)) != 0) continue;
+            int sx = sample % side, sz = sample / side;
+            int open = 0;
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int nx = sx + dx, nz = sz + dz;
+                    if ((dx == 0 && dz == 0) || nx < 0 || nz < 0 || nx >= side || nz >= side) continue;
+                    if ((blocked & (1u << (nx + nz * side))) == 0) open++;
+                }
+            }
+            int sqr = (sx - half) * (sx - half) + (sz - half) * (sz - half);
+            if (open < bestOpen || (open == bestOpen && sqr >= bestSqr)) continue;
+            best = sample;
+            bestOpen = open;
+            bestSqr = sqr;
+        }
+        return (byte)best;
+    }
+
+    // A cell's fit under a layer, from its static points and the layer's prop counts. Only a cell whose
+    // centre is blocked has one: an open centre is where a body stands.
+    private void RefreshFit(PropLayer layer, int index)
+    {
+        if (!layer.CentreBlocked(index))
+        {
+            layer.Fit[index] = PropLayer.NoFit;
+            return;
+        }
+        uint blocked = StaticMask(index);
+        int first = index * PropLayer.SampleCount;
+        for (int sample = 0; sample < PropLayer.SampleCount; sample++)
+            if (layer.Samples[first + sample] > 0) blocked |= 1u << sample;
+        layer.Fit[index] = ChooseFit(blocked);
+    }
+
+    /// <summary>
+    /// Where a body stands in a cell under Careful: its centre, or a tight cell's fit point.
+    /// </summary>
+    public Vector3 StandPoint(Vector2Int cell) => StandPoint(cell, PropRule.Careful);
+
+    /// <summary>
+    /// Where a body stands in a cell under a rule: its centre, or for a tight cell (centre blocked, room
+    /// elsewhere in it) the test point it fits at. Routes steer at this, not the centre, so a lane
+    /// narrower than a cell is walked down its open strip instead of into the wall beside it.
+    /// </summary>
+    public Vector3 StandPoint(Vector2Int cell, PropRule rule)
+    {
+        Vector3 centre = CellToWorld(cell);
+        if (!InBounds(cell)) return centre;
+        byte fit = Layer(rule).Fit[Index(cell)];
+        return fit == PropLayer.NoFit ? centre : centre + SampleOffset(fit);
+    }
+
+    /// <summary>Whether a cell under a rule is tight: centre blocked, but a body fits elsewhere in it.</summary>
+    public bool IsTight(Vector2Int cell, PropRule rule) => InBounds(cell) && Layer(rule).Tight(Index(cell));
 
     // Same rule as GrappleNode.IsStaticWorld: no body, or a kinematic one, means it doesn't move.
     private static bool IsStatic(Collider collider)
@@ -434,7 +590,10 @@ public class PathGrid : MonoBehaviour
     /// <summary>Whether a cell can be stood on under Careful: no wall, no resting prop.</summary>
     public bool IsWalkable(Vector2Int cell) => IsWalkable(cell, PropRule.Careful);
 
-    /// <summary>Whether a cell can be stood on under a rule: no wall, and no prop that blocks under it.</summary>
+    /// <summary>
+    /// Whether a cell can be stood on under a rule: somewhere in it (its centre, or a tight cell's fit
+    /// point), a body touches no wall and no prop that blocks under the rule.
+    /// </summary>
     public bool IsWalkable(Vector2Int cell, PropRule rule)
         => InBounds(cell) && !Layer(rule).Blocked(cell.x + cell.y * _width);
 
@@ -489,6 +648,62 @@ public class PathGrid : MonoBehaviour
     public void CollectInside(Collider collider, List<int> cells) => CollectFootprint(collider, -_agentRadius, cells);
 
     /// <summary>
+    /// ORs into masks, per cell, the bits of the test points within the agent radius of a collider:
+    /// what a resting prop takes from tight cells. Measured as CollectFootprint measures the centre (the
+    /// same probe height and flat distance), so a cell's centre point is covered exactly when the cell is
+    /// in the prop's core. Cells it covers no point of are left out.
+    /// </summary>
+    public void CollectSamples(Collider collider, Dictionary<int, uint> masks)
+    {
+        Bounds bounds = collider.bounds;
+        float bandBottom = _origin.y + _floorClearance;
+        float bandTop = _origin.y + _agentHeight;
+        if (bounds.max.y < _origin.y || bounds.min.y > bandTop) return;
+
+        float reach = SampleReach;
+        float outer = _agentRadius + reach;
+        float inner = _agentRadius - reach;
+        float outerSqr = outer * outer, innerSqr = inner > 0f ? inner * inner : -1f, radiusSqr = _agentRadius * _agentRadius;
+        int minX = Mathf.Clamp(Mathf.FloorToInt((bounds.min.x - outer - _origin.x) / _cellSize), 0, _width - 1);
+        int maxX = Mathf.Clamp(Mathf.FloorToInt((bounds.max.x + outer - _origin.x) / _cellSize), 0, _width - 1);
+        int minZ = Mathf.Clamp(Mathf.FloorToInt((bounds.min.z - outer - _origin.z) / _cellSize), 0, _depth - 1);
+        int maxZ = Mathf.Clamp(Mathf.FloorToInt((bounds.max.z + outer - _origin.z) / _cellSize), 0, _depth - 1);
+        float probeY = Mathf.Clamp(bounds.center.y, bandBottom, bandTop);
+
+        for (int z = minZ; z <= maxZ; z++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                Vector3 centre = CellToWorld(x, z);
+                centre.y = probeY;
+                float sqr = FlatSqrToCollider(collider, centre);
+                if (sqr > outerSqr) continue;
+
+                uint mask;
+                if (sqr <= innerSqr) mask = PropLayer.AllSamples;
+                else
+                {
+                    mask = sqr <= radiusSqr ? 1u << PropLayer.CentreSample : 0u;
+                    for (int sample = 0; sample < PropLayer.SampleCount; sample++)
+                        if (sample != PropLayer.CentreSample && FlatSqrToCollider(collider, centre + SampleOffset(sample)) <= radiusSqr)
+                            mask |= 1u << sample;
+                }
+                if (mask == 0u) continue;
+
+                int index = x + z * _width;
+                masks[index] = masks.TryGetValue(index, out uint had) ? had | mask : mask;
+            }
+        }
+    }
+
+    private static float FlatSqrToCollider(Collider collider, Vector3 point)
+    {
+        Vector3 closest = collider.ClosestPoint(point);
+        float dx = closest.x - point.x, dz = closest.z - point.z;
+        return dx * dx + dz * dz;
+    }
+
+    /// <summary>
     /// Marks one prop into both rules' layers:
     /// - Careful: its core blocks and its skin ring costs Prop Skin Cost, whatever it weighs.
     /// - Forceful: a heavy prop's the same; a light one's core costs Shove Cost and blocks nothing.
@@ -504,7 +719,7 @@ public class PathGrid : MonoBehaviour
     private void ApplyProp(PropMarks marks, int sign)
     {
         // A prop in the air (every collider above the band) marks nothing: no re-flood for nothing.
-        if (marks.Core.Count == 0 && marks.Skin.Count == 0 && marks.Solid.Count == 0) return;
+        if (marks.Core.Count == 0 && marks.Skin.Count == 0 && marks.Solid.Count == 0 && marks.SampleCells.Count == 0) return;
 
         if (marks.Moving)
         {
@@ -514,10 +729,12 @@ public class PathGrid : MonoBehaviour
         {
             Add(_careful.Blocks, marks.Core, sign);
             Add(_careful.Skin, marks.Skin, sign);
+            AddSamples(_careful, marks, sign);
             if (marks.Heavy)
             {
                 Add(_forceful.Blocks, marks.Core, sign);
                 Add(_forceful.Skin, marks.Skin, sign);
+                AddSamples(_forceful, marks, sign);
             }
             else Add(_forceful.Shove, marks.Core, sign);
         }
@@ -525,7 +742,14 @@ public class PathGrid : MonoBehaviour
         // Solid holds under both rules: snapping across even a light crate would put a start on its far side.
         Add(_propSolid, marks.Solid, sign);
 
-        RefreshClearance(marks.Core);
+        // Fits before clearance: a tight cell reads clearance 1, and only the layers whose blocks changed
+        // can have a fit change. Both lists bound the box, as a fit can change outside the core.
+        if (!marks.Moving)
+        {
+            RefreshFits(_careful, marks.SampleCells);
+            if (marks.Heavy) RefreshFits(_forceful, marks.SampleCells);
+        }
+        RefreshClearance(marks.Core, marks.SampleCells);
         if (marks.Moving) _forceful.Version = ++_versionCounter;
         else _careful.Version = _forceful.Version = ++_versionCounter;
     }
@@ -535,13 +759,30 @@ public class PathGrid : MonoBehaviour
         foreach (int index in cells) counts[index] += sign;
     }
 
+    private static void AddSamples(PropLayer layer, PropMarks marks, int sign)
+    {
+        for (int i = 0; i < marks.SampleCells.Count; i++)
+        {
+            int first = marks.SampleCells[i] * PropLayer.SampleCount;
+            uint mask = marks.SampleMasks[i];
+            for (int sample = 0; sample < PropLayer.SampleCount; sample++)
+                if ((mask & (1u << sample)) != 0) layer.Samples[first + sample] = (byte)(layer.Samples[first + sample] + sign);
+        }
+    }
+
+    private void RefreshFits(PropLayer layer, List<int> cells)
+    {
+        foreach (int index in cells) RefreshFit(layer, index);
+    }
+
     /// <summary>Careful's effective clearance (see the rule overload): what every caller that names no
     /// rule means.</summary>
     public int Clearance(Vector2Int cell) => Clearance(cell, PropRule.Careful);
 
     /// <summary>
     /// 0 for a cell blocked under the rule, otherwise the distance in cells (diagonals count 1) to the
-    /// nearest blocked cell or the grid's edge, capped at MarginCells + 1. A cell by a wall reads 1.
+    /// nearest cell whose centre is blocked or the grid's edge, capped at MarginCells + 1. A cell by a
+    /// wall reads 1, and so does a tight cell.
     /// A cell in a prop's skin, or on a light prop a hunter would shove, reads at most 1 under the rule.
     /// So a straight line or a pulled corner asking for room never cuts through skin, and never through a
     /// crate on a hunter's way: the field or A* decides that by cost, and a shortcut doesn't skip the
@@ -603,12 +844,18 @@ public class PathGrid : MonoBehaviour
 
     // A prop landing or leaving changes clearance only within the cap of the cells it touched, so
     // both layers redo that box instead of the grid.
-    private void RefreshClearance(List<int> changed)
+    private void RefreshClearance(List<int> changed, List<int> alsoChanged)
     {
-        if (changed.Count == 0) return;
+        if (changed.Count == 0 && alsoChanged.Count == 0) return;
         int cap = MarginCells + 1;
         int minX = int.MaxValue, minZ = int.MaxValue, maxX = int.MinValue, maxZ = int.MinValue;
         foreach (int index in changed)
+        {
+            Vector2Int cell = CellOf(index);
+            minX = Mathf.Min(minX, cell.x); maxX = Mathf.Max(maxX, cell.x);
+            minZ = Mathf.Min(minZ, cell.y); maxZ = Mathf.Max(maxZ, cell.y);
+        }
+        foreach (int index in alsoChanged)
         {
             Vector2Int cell = CellOf(index);
             minX = Mathf.Min(minX, cell.x); maxX = Mathf.Max(maxX, cell.x);
@@ -865,15 +1112,18 @@ public class PathGrid : MonoBehaviour
     {
         if (!IsBaked) return;
 
-        // Gizmo Rule's layer. Red: static geometry. Orange: a prop that blocks under the rule. Pale
-        // orange: a prop's skin. Blue: a light prop a hunter would shove (Forceful only). Yellow: open
-        // cells inside the path margin. Green: open, with Show Open Cells.
+        // Gizmo Rule's layer. Red: static geometry. Orange: a prop that blocks under the rule. Teal: a
+        // tight cell, drawn small at its fit point. Pale orange: a prop's skin. Blue: a light prop a
+        // hunter would shove (Forceful only). Yellow: open cells inside the path margin. Green: open,
+        // with Show Open Cells.
         var staticColour = new Color(1f, 0.15f, 0.1f, 0.5f);
         var propColour = new Color(1f, 0.6f, 0.1f, 0.5f);
         var skinColour = new Color(1f, 0.8f, 0.5f, 0.35f);
         var shoveColour = new Color(0.3f, 0.6f, 1f, 0.45f);
         var marginColour = new Color(1f, 0.9f, 0.2f, 0.25f);
         var openColour = new Color(0.3f, 1f, 0.5f, 0.07f);
+        var tightColour = new Color(0.1f, 0.9f, 0.8f, 0.8f);
+        var tightSize = new Vector3(_cellSize * 0.4f, 0.03f, _cellSize * 0.4f);
         PropLayer layer = Layer(_gizmoRule);
         int marginCells = MarginCells;
         var cellSize = new Vector3(_cellSize * 0.9f, 0.02f, _cellSize * 0.9f);
@@ -882,6 +1132,13 @@ public class PathGrid : MonoBehaviour
             for (int x = 0; x < _width; x++)
             {
                 int index = x + z * _width;
+                if (layer.Tight(index))
+                {
+                    Gizmos.color = tightColour;
+                    Gizmos.DrawCube(StandPoint(new Vector2Int(x, z), _gizmoRule), tightSize);
+                    continue;
+                }
+
                 Color colour;
                 if (!_walkable[index]) colour = staticColour;
                 else if (layer.Blocks[index] > 0) colour = propColour;

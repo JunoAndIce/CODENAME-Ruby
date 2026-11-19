@@ -64,6 +64,8 @@ approved on its own:
    Aggro and Rearm shove, and only props under 20 kg), a skin round props that never closes a lane, a corridor
    cost that doesn't punish narrow corridors, shortcuts checked against real shapes, a snap that can't cross walls.
    **Built** 2026-11-19 from `docs/plans/2026-11-19-prop-aware-pathing.md`; awaiting the user's play-test.
+   The first play-test found a corridor half-blocked by crates sealed to the grid though Ruby walked it: the
+   centre-only cell test closed gaps up to 0.95 m. Tight cells (pathing.md) now open any gap from about 0.75 m.
 2. **Sight through the cone only**: Motion Radius and Body Notice Range go, and every visual notice (corpses,
    loose guns, moving bodies) uses the cone out to View Range. Close Radius stays (user's call).
 3. **Smooth transitions**: settle and wind-up pauses between states, with room for end and transition animations.
