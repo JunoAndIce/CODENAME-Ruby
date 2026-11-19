@@ -53,7 +53,30 @@ going, hunt a guess at where she went (one bounded flood per fact), and lose her
 (4 s), which replaced Aggro Time, Sight Follow Through and Unseen Hold Time; a 0.25 s glimpse grace keeps a
 flickering line of sight from twitching them, they call out the vanish, and a lost fight's search grows to
 where she was heading. The same plan trimmed the enemy's Inspector from 57 fields to 47 (an audit with the
-user). **Next:** the pathing clean-up, smarter routes to Ruby without being blocked off, designed separately.
+user).
+
+**The enemy AI engine roadmap** (user, 2026-11-19). The rest of the game is done, and the enemies are its heart:
+the aim is tactical officers that feel like GTA crossed with Hitman, careful and positional, and that roll into
+every change of state rather than snapping. It is built as separate projects, in this order, each designed and
+approved on its own:
+
+1. **Prop-aware pathing**, `docs/specs/2026-11-18-prop-aware-pathing.md`: Careful and Forceful route rules (only
+   Aggro and Rearm shove, and only props under 20 kg), a skin round props that never closes a lane, a corridor
+   cost that doesn't punish narrow corridors, shortcuts checked against real shapes, a snap that can't cross walls.
+2. **Sight through the cone only**: Motion Radius and Body Notice Range go, and every visual notice (corpses,
+   loose guns, moving bodies) uses the cone out to View Range. Close Radius stays (user's call).
+3. **Smooth transitions**: settle and wind-up pauses between states, with room for end and transition animations.
+4. **Finding cover**: spots hidden from Ruby behind crates, tables and wall corners; firing spots use them.
+5. **Using cover**: hide, peek, fire blind over cover, edge closer while Ruby stays put.
+6. **Squad tactics by headcount**: pairs, threes, fours and the whole floor. Settled so far: a fight ends only
+   once Ruby is outside a radius round where she was last seen (Fight Area Radius, about 10 m) and unseen for
+   Lose Sight Time; inside it they know she is around but not where, and hunt her heading. A table only covers
+   when it stops bullets (on its side; upright it is a thin top on legs). When she takes cover the fight holds
+   and keeps firing, and after Cover Time may send one flanker to a spot that sees round it; a lone officer never
+   flanks or rushes; a three never rushes; one or two rush when a flanker is downed or grabbed in a bigger fight.
+   Open: what a pair does.
+7. **Reading Ruby**: her grabbing, holding someone or hiding behind a wall changes their aggression.
+
 Much later, breakables.
 
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
