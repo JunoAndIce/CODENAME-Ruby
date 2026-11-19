@@ -112,6 +112,11 @@ public class GridNavigator
 
         bool newField = _pointField == null || _pointField.Grid != grid;
         if (newField) _pointField = new FlowField(grid, _rule);
+        else if (_pointField.Rule != _rule)
+        {
+            _pointField.SetRule(_rule);
+            newField = true;
+        }
         if (newField || FlatDistance(point, _pointGoal) > RefloodShift)
         {
             _pointGoal = point;
@@ -220,7 +225,7 @@ public class GridNavigator
         bool resumed = Time.fixedTime - _lastAreaMove > Time.fixedDeltaTime * 1.5f;
         _lastAreaMove = Time.fixedTime;
         bool newArea = resumed || grid != _routeGrid || FlatDistance(area.Centre, _areaCentre) > 0.01f;
-        bool gridChanged = grid.Version != _planVersion && Time.fixedTime >= _nextReplan;
+        bool gridChanged = grid.VersionFor(_rule) != _planVersion && Time.fixedTime >= _nextReplan;
         if (newArea || gridChanged)
         {
             Plan(grid, area, position, resetWatchdog: true);
@@ -326,7 +331,7 @@ public class GridNavigator
     {
         _routeGrid = grid;
         _areaCentre = area.Centre;
-        _planVersion = grid.Version;
+        _planVersion = grid.VersionFor(_rule);
         // Jittered, so a crowd doesn't all re-plan on the same step when a crate lands.
         _nextReplan = Time.fixedTime + ReplanInterval * Random.Range(0.75f, 1.25f);
         if (resetWatchdog)
@@ -466,12 +471,17 @@ public class GridNavigator
     {
         bool first = _approachField == null || _approachField.Grid != grid;
         if (first) _approachField = new FlowField(grid, _rule);
-        bool stale = FlatDistance(goal, _approachGoal) > RefloodShift || grid.Version != _approachVersion;
+        else if (_approachField.Rule != _rule)
+        {
+            _approachField.SetRule(_rule);
+            first = true;
+        }
+        bool stale = FlatDistance(goal, _approachGoal) > RefloodShift || grid.VersionFor(_rule) != _approachVersion;
         if (!force && !first && (!stale || Time.fixedTime < _nextApproach)) return;
 
         _nextApproach = Time.fixedTime + ReplanInterval;
         _approachGoal = goal;
-        _approachVersion = grid.Version;
+        _approachVersion = grid.VersionFor(_rule);
         _approachField.Flood(_agent.Body.position);
         if (_approachField.TryGetDistance(goal, out _))
         {
@@ -495,17 +505,16 @@ public class GridNavigator
         return _shapeOk;
     }
 
-    // The agent's rule, read at the top of every public move or decision. A change drops every field and
-    // route planned under the old rule (the next call re-floods or re-plans), so a hunter who turns
-    // searcher never takes one more step along a route through a crate.
+    // The agent's rule, read at the top of every public move or decision. A change drops the route and the
+    // shape cache, and the point and approach fields, which notice their rule differs, re-aim and re-flood
+    // on their next use (reusing their arrays). So a hunter who turns searcher never takes one more step
+    // along a route through a crate.
     private void SyncRule()
     {
         PropRule rule = _agent.PropRule;
         if (_ruleKnown && rule == _rule) return;
         if (_ruleKnown)
         {
-            _pointField = null;
-            _approachField = null;
             _routeGrid = null;   // MoveToArea sees a new area and plans afresh
             _shapeUntil = float.NegativeInfinity;
 #if RUBY_DEBUG_LOGS

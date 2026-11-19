@@ -63,6 +63,7 @@ public class PathGrid : MonoBehaviour
     private bool[] _walkable;   // static geometry, from the bake. x + z * _width
     private PropLayer _careful;     // every resting prop blocks, with its skin
     private PropLayer _forceful;    // heavy props block with their skin; light props cost a shove
+    private int _versionCounter;    // the source of both layers' Version, so every bump is a new number
     private int _marginCells;   // Corner Margin in cells, fixed at bake with the clearance cap it sizes; a live edit waits for the next bake
     private int[] _clearanceQueue;   // the bake's breadth-first fill, allocated once with the grid
     private int _width;         // cells along X
@@ -97,8 +98,15 @@ public class PathGrid : MonoBehaviour
     public float ShoveLimitKg => _shoveLimitKg;
     /// <summary>Extra gap (m) kept round props beyond the agent radius.</summary>
     public float PropSkin => _propSkin;
-    /// <summary>Bumped whenever walkability changes, so flow fields know to re-flood.</summary>
-    public int Version { get; private set; }
+    /// <summary>Bumped whenever either rule's layer changes. Fields and plans read VersionFor their own rule.</summary>
+    public int Version => _versionCounter;
+
+    /// <summary>
+    /// Bumped whenever this rule's walkability or costs change, so its fields and plans know to re-flood.
+    /// Per rule because a light prop on the move changes only Forceful's shove cost, and it re-marks every
+    /// half cell: a shared counter made every calm walker on the floor re-plan while a crate slid.
+    /// </summary>
+    public int VersionFor(PropRule rule) => Layer(rule).Version;
 
     private void OnEnable() => All.Add(this);
     private void OnDisable() => All.Remove(this);
@@ -345,7 +353,7 @@ public class PathGrid : MonoBehaviour
         _forceful = new PropLayer(_walkable, _width, _depth);
         _marginCells = MarginCellsFor(_cornerMargin);
         _clearanceQueue = new int[_width * _depth];
-        Version++;
+        _careful.Version = _forceful.Version = ++_versionCounter;
 
         // Transforms moved since the last physics step aren't in the physics scene yet.
         Physics.SyncTransforms();
@@ -495,6 +503,9 @@ public class PathGrid : MonoBehaviour
 
     private void ApplyProp(PropMarks marks, int sign)
     {
+        // A prop in the air (every collider above the band) marks nothing: no re-flood for nothing.
+        if (marks.Core.Count == 0 && marks.Skin.Count == 0 && marks.Solid.Count == 0) return;
+
         if (marks.Moving)
         {
             Add(_forceful.Shove, marks.Core, sign);
@@ -515,7 +526,8 @@ public class PathGrid : MonoBehaviour
         Add(_propSolid, marks.Solid, sign);
 
         RefreshClearance(marks.Core);
-        Version++;
+        if (marks.Moving) _forceful.Version = ++_versionCounter;
+        else _careful.Version = _forceful.Version = ++_versionCounter;
     }
 
     private static void Add(int[] counts, List<int> cells, int sign)
@@ -530,8 +542,10 @@ public class PathGrid : MonoBehaviour
     /// <summary>
     /// 0 for a cell blocked under the rule, otherwise the distance in cells (diagonals count 1) to the
     /// nearest blocked cell or the grid's edge, capped at MarginCells + 1. A cell by a wall reads 1.
-    /// A cell in a prop's skin under the rule reads at most 1, so a straight line or a pulled corner
-    /// asking for room never cuts through skin, while a lane only skin leaves open still passes at 1.
+    /// A cell in a prop's skin, or on a light prop a hunter would shove, reads at most 1 under the rule.
+    /// So a straight line or a pulled corner asking for room never cuts through skin, and never through a
+    /// crate on a hunter's way: the field or A* decides that by cost, and a shortcut doesn't skip the
+    /// comparison. A lane only skin or a crate leaves open (Best 1) still passes at 1.
     /// </summary>
     public int Clearance(Vector2Int cell, PropRule rule)
     {
@@ -539,7 +553,7 @@ public class PathGrid : MonoBehaviour
         PropLayer layer = Layer(rule);
         int index = cell.x + cell.y * _width;
         int raw = layer.Clearance[index];
-        return layer.Skin[index] > 0 ? Mathf.Min(raw, 1) : raw;
+        return layer.Skin[index] > 0 || layer.Shove[index] > 0 ? Mathf.Min(raw, 1) : raw;
     }
 
     /// <summary>Careful's WallPenalty (see the rule overload).</summary>
@@ -773,9 +787,10 @@ public class PathGrid : MonoBehaviour
     ///   Forceful), at the skinned radius, so calm routes keep their gap;
     /// - static, and a second cast at plain Agent Radius hits static geometry too: walls don't get the
     ///   skin, so a doorway the grid opens isn't refused for being narrower than agent plus skin.
-    /// Characters, moving bodies and light props under Forceful are ignored. So is anything the capsule
-    /// already overlaps where it starts, as the line walks exempt their first cell: an agent brushing a
-    /// wall can still walk away from it.
+    /// Characters, moving bodies and light props under Forceful are ignored. So is a prop the capsule already
+    /// overlaps where it starts, as the line walks exempt their first cell. A wall the skinned capsule
+    /// starts inside still goes to the plain-radius cast, which skips only what it starts inside itself:
+    /// a door frame is often one collider, and skipping it whole near the jamb let lines clip its far edge.
     /// </summary>
     public bool HasClearShape(Vector3 from, Vector3 to, PropRule rule)
     {
@@ -789,11 +804,10 @@ public class PathGrid : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             RaycastHit hit = ShapeHits[i];
-            if (hit.distance <= 0f) continue;   // overlapping where it starts
             GridObstacle prop = hit.collider.GetComponentInParent<GridObstacle>();
             if (prop != null)
             {
-                if (prop.BlocksRoutes(rule)) return false;
+                if (hit.distance > 0f && prop.BlocksRoutes(rule)) return false;   // not one it starts inside
                 continue;
             }
             if (IsStatic(hit.collider)) hitStatic = true;

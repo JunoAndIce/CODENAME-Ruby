@@ -18,7 +18,7 @@ public class FlowField
     private const float RefreshInterval = 0.2f;
 
     private readonly PathGrid _grid;
-    private readonly PropRule _rule;
+    private PropRule _rule;
     private readonly Transform _target;
     private readonly int[] _cost;
     private readonly int[] _length;           // plain path length (no wall costs) along the cheapest route found; this is what maxDistance bounds
@@ -53,6 +53,19 @@ public class FlowField
     /// <summary>The prop rule every flood and step of this field reads.</summary>
     public PropRule Rule => _rule;
 
+    /// <summary>
+    /// Re-aims an agent's own field at another rule, keeping its arrays: a new field per rule change cost
+    /// about 2 MB on a large grid, every time a hunt began or ended. Forgets the last flood, so flood again
+    /// before reading. Never for a shared field (PathGrid.FieldToward), which is one per rule.
+    /// </summary>
+    public void SetRule(PropRule rule)
+    {
+        _rule = rule;
+        _flooded = false;
+        _hasGoal = false;
+        _generation++;   // every cost from the old rule's flood is stale
+    }
+
     /// <summary>Bumped by every flood. A reader of a shared field (FloodFrom's) notes it and checks it again to know nothing overwrote the field meanwhile.</summary>
     public int Generation => _generation;
 
@@ -82,7 +95,7 @@ public class FlowField
         _floodedGoal = goal;
         _floodedMax = maxDistance;
         _floodedAvoidWalls = avoidWalls;
-        _floodedVersion = _grid.Version;
+        _floodedVersion = _grid.VersionFor(_rule);
         _generation++;   // invalidates every cost from the last flood without clearing arrays
         _open.Clear();
 
@@ -261,7 +274,7 @@ public class FlowField
 
         bool targetMoved = _target != null
             && _grid.WorldToCell(_target.position, out Vector2Int cell) && cell != _floodedFrom;
-        bool gridChanged = _floodedVersion != _grid.Version;
+        bool gridChanged = _floodedVersion != _grid.VersionFor(_rule);
         // Throttled, so a sprinting target or a shower of settling props can't flood every step.
         if ((!targetMoved && !gridChanged) || Time.time < _nextRefresh) return;
 

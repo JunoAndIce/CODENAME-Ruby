@@ -27,6 +27,8 @@ public class PropLayer
     /// it, so a corridor's middle line is free (see PathGrid.WallPenalty).
     /// </summary>
     public readonly byte[] Best;
+    /// <summary>Bumped (from the grid's one counter) whenever this layer changes. See PathGrid.VersionFor.</summary>
+    public int Version;
 
     private readonly bool[] _walkable;   // the grid's static bake, shared
     private readonly byte[] _rowMax;     // Best's separable bake: the row pass's result

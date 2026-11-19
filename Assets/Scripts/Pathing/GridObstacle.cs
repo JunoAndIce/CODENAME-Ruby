@@ -109,8 +109,9 @@ public class GridObstacle : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // Resting, marked as it rests and nothing to re-mark: nothing to do.
-        if (IsMarked && !_marks.Moving && !IsJammed && !_remark && _body.IsSleeping()) return;
+        // Resting, marked as it rests and nothing to re-mark: nothing to do. A jam, live or just run out,
+        // keeps it awake here, or a crate that fell asleep jammed would stay marked heavy for good.
+        if (IsMarked && !_marks.Moving && _jammedUntil <= 0f && !_remark && _body.IsSleeping()) return;
 
         if (_jammedUntil > 0f && !IsJammed)
         {
