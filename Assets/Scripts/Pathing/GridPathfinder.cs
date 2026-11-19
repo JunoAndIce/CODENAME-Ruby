@@ -125,18 +125,26 @@ public class GridPathfinder
         // what the gap allows (the rule, not a fallback). The start cell is left out, as sight
         // exempts it: the agent may be brushing a wall and can't do anything about it.
         Vector3 anchor = from;
+        int anchorCell = 0;                     // the cell the anchor stands in: from stands in the start cell
         int lowest = int.MaxValue;
         int accepted = _grid.MarginCells + 1;   // the clearance the current run's last accepted pull used
         for (int i = 1; i < _cells.Count; i++)
         {
             lowest = Mathf.Min(lowest, _grid.Clearance(_cells[i], _rule));
             int asked = Mathf.Min(_grid.MarginCells + 1, lowest);
-            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]), asked, _rule))
+            // Cells first, then the real shape: a pull the cells allow can still clip a wall's corner or brush a
+            // prop. A*'s own single step from the anchor's cell is taken without the cast, as a field's first
+            // step is: refusing it would add the same corner twice (a lane only a prop's skin leaves open fails
+            // every cast).
+            Vector3 point = _grid.CellToWorld(_cells[i]);
+            if (_grid.HasLineOfSight(anchor, point, asked, _rule)
+                && (i - 1 == anchorCell || _grid.HasClearShape(anchor, point, _rule)))
             {
                 accepted = asked;
                 continue;
             }
 
+            anchorCell = i - 1;
             anchor = _grid.CellToWorld(_cells[i - 1]);
             path.Add(anchor);
             clearances.Add(accepted);   // the run that ends at this corner

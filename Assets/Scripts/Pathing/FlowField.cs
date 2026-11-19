@@ -24,6 +24,8 @@ public class FlowField
     private readonly int[] _length;           // plain path length (no wall costs) along the cheapest route found; this is what maxDistance bounds
     private readonly int[] _stamp;             // a cell's cost is valid only when its stamp is this flood's
     private readonly CellHeap _open = new(256);
+    private readonly Vector3[] _stepPoints = new Vector3[LookAhead];       // TryGetStep's accepted points, in order
+    private readonly Vector2Int[] _stepCells = new Vector2Int[LookAhead];
     private int _generation;
     private bool _flooded;
     private bool _hasGoal;
@@ -210,14 +212,28 @@ public class FlowField
         // keeps the margin, and through a narrow gap only the clearance the gap allows. The
         // start cell is left out, since an agent hugging a wall stands in a low one.
         int lowest = int.MaxValue;
-        for (int i = 0; i < LookAhead && Descend(cell, out Vector2Int next); i++)
+        int accepted = 0;
+        Vector2Int walked = cell;
+        for (int i = 0; i < LookAhead && Descend(walked, out Vector2Int next); i++)
         {
             Vector3 point = _grid.CellToWorld(next);
             lowest = Mathf.Min(lowest, _grid.Clearance(next, _rule));
             // The first step is always taken: the agent itself may stand in a blocked cell.
             if (i > 0 && !_grid.HasLineOfSight(from, point, Mathf.Min(_grid.MarginCells + 1, lowest), _rule)) break;
-            steer = point;
-            cell = next;
+            _stepPoints[accepted] = point;
+            _stepCells[accepted] = next;
+            accepted++;
+            walked = next;
+        }
+
+        // Only the point about to be steered at is checked against real shapes, not every candidate: one
+        // cast while it holds. One that clips a corner or brushes a prop steps back along the accepted
+        // points, down to the first, which is always taken.
+        while (accepted > 1 && !_grid.HasClearShape(from, _stepPoints[accepted - 1], _rule)) accepted--;
+        if (accepted > 0)
+        {
+            steer = _stepPoints[accepted - 1];
+            cell = _stepCells[accepted - 1];
         }
         atGoal = cell == _goalCell;
         return true;

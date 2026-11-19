@@ -61,6 +61,12 @@ public class GridObstacle : MonoBehaviour
     /// </summary>
     public bool IsLight => _grid != null && !IsJammed && _body.mass < _grid.ShoveLimitKg;
 
+    /// <summary>
+    /// Whether it stands in a route's way under a rule: resting (marked, not on the move) and, under
+    /// Forceful, heavy or jammed. A shape check (PathGrid.HasClearShape) refuses a line through it.
+    /// </summary>
+    public bool BlocksRoutes(PropRule rule) => IsMarked && !_marks.Moving && (rule == PropRule.Careful || !IsLight);
+
     private void Awake()
     {
         _body = GetComponent<Rigidbody>();

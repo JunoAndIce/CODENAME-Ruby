@@ -46,6 +46,7 @@ public class PathGrid : MonoBehaviour
     [SerializeField] private PropRule _gizmoRule = PropRule.Careful;
 
     private static readonly Collider[] OverlapHits = new Collider[32];
+    private static readonly RaycastHit[] ShapeHits = new RaycastHit[32];
     private const float BelowFloorTolerance = 0.5f;
     private const float SolidProbeRadius = 0.01f;   // the solid test is a point test; a capsule needs some radius
 
@@ -761,6 +762,64 @@ public class PathGrid : MonoBehaviour
             else { cell.y += stepZ; nextZ += deltaZ; }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Whether an agent's real shape can travel the straight line from→to: one capsule cast across the
+    /// agents' band, radius Agent Radius + Prop Skin. Cells only approximate shapes, so a line the grid
+    /// accepts can still clip a wall's real corner or brush a table and nudge it. Confirm a shortcut with
+    /// this before taking it, after the grid's own check has passed. A hit refuses the line when it is:
+    /// - a resting prop that blocks under the rule (any under Careful, a heavy or jammed one under
+    ///   Forceful), at the skinned radius, so calm routes keep their gap;
+    /// - static, and a second cast at plain Agent Radius hits static geometry too: walls don't get the
+    ///   skin, so a doorway the grid opens isn't refused for being narrower than agent plus skin.
+    /// Characters, moving bodies and light props under Forceful are ignored. So is anything the capsule
+    /// already overlaps where it starts, as the line walks exempt their first cell: an agent brushing a
+    /// wall can still walk away from it.
+    /// </summary>
+    public bool HasClearShape(Vector3 from, Vector3 to, PropRule rule)
+    {
+        Vector3 flat = new(to.x - from.x, 0f, to.z - from.z);
+        float distance = flat.magnitude;
+        if (distance < 0.001f) return true;
+        Vector3 direction = flat / distance;
+
+        int count = CastBand(from, direction, distance, _agentRadius + _propSkin);
+        bool hitStatic = false;
+        for (int i = 0; i < count; i++)
+        {
+            RaycastHit hit = ShapeHits[i];
+            if (hit.distance <= 0f) continue;   // overlapping where it starts
+            GridObstacle prop = hit.collider.GetComponentInParent<GridObstacle>();
+            if (prop != null)
+            {
+                if (prop.BlocksRoutes(rule)) return false;
+                continue;
+            }
+            if (IsStatic(hit.collider)) hitStatic = true;
+        }
+        if (!hitStatic) return true;
+
+        count = CastBand(from, direction, distance, _agentRadius);
+        for (int i = 0; i < count; i++)
+        {
+            RaycastHit hit = ShapeHits[i];
+            if (hit.distance <= 0f || !IsStatic(hit.collider)) continue;
+            if (hit.collider.GetComponentInParent<GridObstacle>() == null) return false;
+        }
+        return true;
+    }
+
+    // A capsule of this radius standing across the agents' band at from, swept along direction. Ends
+    // inset by the radius, as OverlapsStatic's are.
+    private int CastBand(Vector3 from, Vector3 direction, float distance, float radius)
+    {
+        float floor = transform.position.y;
+        float bottomY = floor + _floorClearance + radius;
+        float topY = Mathf.Max(bottomY, floor + _agentHeight - radius);
+        return Physics.CapsuleCastNonAlloc(
+            new Vector3(from.x, bottomY, from.z), new Vector3(from.x, topY, from.z), radius,
+            direction, ShapeHits, distance, ~0, QueryTriggerInteraction.Ignore);
     }
 
     private bool Passable(Vector2Int cell, int minClearance, bool clearLine, Vector2Int goalCell, int goalClearance, PropRule rule)

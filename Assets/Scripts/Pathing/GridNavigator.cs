@@ -50,6 +50,14 @@ public class GridNavigator
 
     private Followed _followed;
     private Vector3 _lineEnd;
+
+    // Follow's shape check of its clear line, cached: a chase asks every physics step, and a cast each step
+    // per chaser buys nothing while neither end has moved. Good for Replan Interval while the goal moves
+    // less than Reflood Shift and the body less than Progress Step.
+    private bool _shapeOk;
+    private float _shapeUntil = float.NegativeInfinity;
+    private Vector3 _shapeFrom;
+    private Vector3 _shapeTo;
     private FlowField _field;
     private readonly List<Vector3> _trace = new();
 
@@ -247,7 +255,8 @@ public class GridNavigator
         // walked onto the corner before turning.
         while (_routeIndex < _route.Count - 1
                && (FlatDistance(position, _route[_routeIndex]) <= CornerReach
-                   || grid.HasLineOfSight(position, _route[_routeIndex + 1], _routeClearance[_routeIndex + 1], _rule)))
+                   || (grid.HasLineOfSight(position, _route[_routeIndex + 1], _routeClearance[_routeIndex + 1], _rule)
+                       && grid.HasClearShape(position, _route[_routeIndex + 1], _rule))))
             _routeIndex++;
         Steer(Followed.Route, _route[_routeIndex], speed, mustReach: true);
 
@@ -337,7 +346,7 @@ public class GridNavigator
         }
 
         // Clear line: the straight segment is the shortest path, so skip the search.
-        if (grid.HasClearLine(position, _goalPoint, _rule))
+        if (grid.HasClearLine(position, _goalPoint, _rule) && grid.HasClearShape(position, _goalPoint, _rule))
         {
             _route.Add(_goalPoint);
             // What HasClearLine asked at the goal. Cells on the way asked their own Best, which can be lower
@@ -390,8 +399,9 @@ public class GridNavigator
             return NavResult.Arrived;
         }
 
-        // Clear line: the straight segment is the shortest path, so skip the field.
-        if (grid.HasClearLine(position, goal, _rule))
+        // Clear line: the straight segment is the shortest path, so skip the field. Its cells first, then its
+        // real shape, so it can't clip a corner or brush a prop the cells let through.
+        if (grid.HasClearLine(position, goal, _rule) && ClearShape(grid, position, goal))
         {
             _lineEnd = goal;
             Steer(Followed.Line, goal, speed, mustReach: true);
@@ -472,6 +482,19 @@ public class GridNavigator
         _approachFound = _approachField.TryGetNearestReached(goal, Mathf.CeilToInt(ApproachRadius / grid.CellSize), out _approachSpot);
     }
 
+    private bool ClearShape(PathGrid grid, Vector3 from, Vector3 to)
+    {
+        bool fresh = Time.fixedTime < _shapeUntil
+            && FlatDistance(to, _shapeTo) < RefloodShift && FlatDistance(from, _shapeFrom) < ProgressStep;
+        if (fresh) return _shapeOk;
+
+        _shapeOk = grid.HasClearShape(from, to, _rule);
+        _shapeUntil = Time.fixedTime + ReplanInterval;
+        _shapeFrom = from;
+        _shapeTo = to;
+        return _shapeOk;
+    }
+
     // The agent's rule, read at the top of every public move or decision. A change drops every field and
     // route planned under the old rule (the next call re-floods or re-plans), so a hunter who turns
     // searcher never takes one more step along a route through a crate.
@@ -484,6 +507,7 @@ public class GridNavigator
             _pointField = null;
             _approachField = null;
             _routeGrid = null;   // MoveToArea sees a new area and plans afresh
+            _shapeUntil = float.NegativeInfinity;
 #if RUBY_DEBUG_LOGS
             Object context = _agent as Object;
             Debug.Log($"{(context != null ? context.name : "agent")}: routes now {rule}", context);
