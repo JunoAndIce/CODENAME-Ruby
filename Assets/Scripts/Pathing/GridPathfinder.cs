@@ -77,8 +77,8 @@ public class GridPathfinder
                 int next = _grid.Index(nextCell);
                 if (_closed[next] == _generation) continue;
 
-                // The wall penalty only adds to a step, so the heuristic below never overestimates.
-                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost) + _grid.WallPenalty(nextCell);
+                // Step costs (walls, skin, shove) only add to a step, so the heuristic below never overestimates.
+                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost) + _grid.StepCost(nextCell, PropRule.Careful);
                 if (_seen[next] == _generation && _cost[next] <= nextCost) continue;
 
                 Record(next, nextCost, index);

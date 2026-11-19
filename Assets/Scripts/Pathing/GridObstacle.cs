@@ -15,7 +15,10 @@ public class GridObstacle : MonoBehaviour
     [Tooltip("How long it must stay below Rest Speed before it blocks the grid.")]
     [SerializeField, Min(0f)] private float _settleTime = 0.01f;
 
-    private readonly List<int> _cells = new();
+    private static readonly List<int> SkinScratch = new();
+    private static readonly HashSet<int> CoreSet = new();
+
+    private readonly PropMarks _marks = new();
     private Rigidbody _body;
     private Collider[] _colliders;
     private PathGrid _grid;          // the grid currently marked, so clearing hits the same one
@@ -24,6 +27,13 @@ public class GridObstacle : MonoBehaviour
     private bool _warnedOffGrid;
 
     private bool IsMarked => _grid != null;
+
+    /// <summary>
+    /// True when it rests on a grid and weighs under that grid's Shove Limit: hunters (Forceful) may
+    /// route through it and shove it. False off every grid, so a prop no grid knows is never pushed
+    /// on purpose.
+    /// </summary>
+    public bool IsLight => _grid != null && _body.mass < _grid.ShoveLimitKg;
 
     private void Awake()
     {
@@ -104,11 +114,24 @@ public class GridObstacle : MonoBehaviour
         }
         _warnedOffGrid = false;
 
-        _cells.Clear();
+        // Core: the agent radius round each collider, as the bake gives walls. Skin: the cells Prop
+        // Skin further out that aren't core, so a calm route keeps a visible gap and never grazes it.
+        _marks.Clear();
+        SkinScratch.Clear();
         foreach (Collider collider in _colliders)
-            if (collider.enabled && !collider.isTrigger) grid.CollectFootprint(collider, _cells);
+        {
+            if (!collider.enabled || collider.isTrigger) continue;
+            grid.CollectFootprint(collider, _marks.Core);
+            grid.CollectFootprint(collider, grid.PropSkin, SkinScratch);
+        }
+        CoreSet.Clear();
+        foreach (int index in _marks.Core) CoreSet.Add(index);
+        foreach (int index in SkinScratch)
+            if (CoreSet.Add(index)) _marks.Skin.Add(index);   // Add also drops a second collider's repeat
 
-        grid.AddPropBlocks(_cells);
+        // Weighed on each mark, not watched: a prop re-weighed while resting changes class at its next mark.
+        _marks.Heavy = !(_body.mass < grid.ShoveLimitKg);
+        grid.AddProp(_marks);
         _grid = grid;
         _markedBounds = bounds;
     }
@@ -117,7 +140,7 @@ public class GridObstacle : MonoBehaviour
     {
         if (!IsMarked) return;
 
-        _grid.RemovePropBlocks(_cells);
+        _grid.RemoveProp(_marks);
         _grid = null;
     }
 }

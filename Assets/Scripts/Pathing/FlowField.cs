@@ -101,7 +101,7 @@ public class FlowField
                 int stepCost = step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost;
                 int nextLength = _length[index] + stepCost;
                 int nextCost = cost + stepCost;
-                if (avoidWalls) nextCost += _grid.WallPenalty(cell + step);
+                if (avoidWalls) nextCost += _grid.StepCost(cell + step, PropRule.Careful);
                 if (nextLength > maxCost || (IsReached(next) && _cost[next] <= nextCost)) continue;
 
                 SetCost(next, nextCost);
