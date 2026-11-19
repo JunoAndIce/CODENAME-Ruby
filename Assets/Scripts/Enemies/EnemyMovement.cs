@@ -46,13 +46,17 @@ public class EnemyMovement
     //   round it.
     // - Forceful: only a heavy prop (at or over the grid's Shove Limit) stops them: "certain weight objects
     //   they should not even try". A light one is shoved with PushLimit's mass ratio (a 10 kg crate in front
-    //   of a 50 kg enemy moves at 80% of their speed).
+    //   of a 50 kg enemy moves at 80% of their speed), and told it is being pressed: PushLimit asks only about
+    //   a body the move heads into, so this call is exactly "being pushed". One that won't move jams and
+    //   counts as heavy for a while (GridObstacle.NotePressed), so a shove into a wall always ends.
     // Anything without a GridObstacle, such as a loose gun, stays pushable: nothing plans round it, so
     // treating it as a wall would leave them stuck on it.
     private bool PropStopsThem(Rigidbody body)
     {
         if (!body.TryGetComponent(out GridObstacle obstacle)) return false;
-        return _enemy.PropRule == PropRule.Careful || !obstacle.IsLight;
+        if (_enemy.PropRule == PropRule.Careful || !obstacle.IsLight) return true;
+        obstacle.NotePressed();
+        return false;
     }
 
     /// <summary>The speed of the last move it was told to make, 0 once stopped: how fast it's trying to go.</summary>
