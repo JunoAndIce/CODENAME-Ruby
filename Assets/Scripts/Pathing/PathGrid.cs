@@ -67,7 +67,7 @@ public class PathGrid : MonoBehaviour
     private int _width;         // cells along X
     private int _depth;         // cells along Z (Vector2Int.y throughout)
     private Vector3 _origin;    // min corner of cell (0,0), at floor height
-    private readonly Dictionary<Transform, FlowField> _targetFields = new();
+    private readonly Dictionary<(Transform, PropRule), FlowField> _targetFields = new();
     private FlowField _scratchField;     // FloodFrom's, one per grid so a query allocates nothing after the first
     private GridPathfinder _pathfinder;   // one per grid: searches run one at a time, so all agents share its scratch arrays
 
@@ -124,16 +124,17 @@ public class PathGrid : MonoBehaviour
     }
 
     /// <summary>
-    /// The field toward a moving target on this floor, shared by every agent that follows it.
-    /// It re-floods itself when the target changes cell, so chase cost doesn't grow with the
-    /// number of chasers.
+    /// The field toward a moving target on this floor under a prop rule, shared by every agent that
+    /// follows it under that rule. It re-floods itself when the target changes cell, so chase cost
+    /// doesn't grow with the number of chasers. One per (target, rule): only hunters chase today, so
+    /// in practice one per target.
     /// </summary>
-    public FlowField FieldToward(Transform target)
+    public FlowField FieldToward(Transform target, PropRule rule)
     {
-        if (!_targetFields.TryGetValue(target, out FlowField field))
+        if (!_targetFields.TryGetValue((target, rule), out FlowField field))
         {
-            field = new FlowField(this, target);
-            _targetFields.Add(target, field);
+            field = new FlowField(this, rule, target);
+            _targetFields.Add((target, rule), field);
         }
         return field;
     }
@@ -145,7 +146,8 @@ public class PathGrid : MonoBehaviour
     /// </summary>
     public FlowField FloodFrom(Vector3 source, float maxDistance)
     {
-        _scratchField ??= new FlowField(this);
+        // Careful: hearing and speech ask where sound goes, and sound doesn't shove crates.
+        _scratchField ??= new FlowField(this, PropRule.Careful);
         // Unpenalised: hearing and speech measure how far sound travels, and a corridor must not
         // sound farther than it is just because paths keep off its walls.
         _scratchField.Flood(source, maxDistance, avoidWalls: false);
@@ -154,12 +156,12 @@ public class PathGrid : MonoBehaviour
 
     /// <summary>
     /// A* from a point to a goal cell, as straight-line corners, with the clearance each corner's
-    /// run was pulled at in clearances (one per corner). See GridPathfinder.
+    /// run was pulled at in clearances (one per corner), under a prop rule. See GridPathfinder.
     /// </summary>
-    public bool FindPath(Vector3 from, Vector2Int goal, List<Vector3> path, List<int> clearances)
+    public bool FindPath(Vector3 from, Vector2Int goal, PropRule rule, List<Vector3> path, List<int> clearances)
     {
         _pathfinder ??= new GridPathfinder(this);
-        return _pathfinder.FindPath(from, goal, path, clearances);
+        return _pathfinder.FindPath(from, goal, rule, path, clearances);
     }
 
     /// <summary>
@@ -170,10 +172,14 @@ public class PathGrid : MonoBehaviour
     /// is open.
     /// </summary>
     public bool ResolveArea(GridArea area, Vector3 approachFrom, out Vector2Int goalCell, out Vector3 goalPoint)
+        => ResolveArea(area, approachFrom, PropRule.Careful, out goalCell, out goalPoint);
+
+    /// <summary>ResolveArea under a rule's walkability.</summary>
+    public bool ResolveArea(GridArea area, Vector3 approachFrom, PropRule rule, out Vector2Int goalCell, out Vector3 goalPoint)
     {
         Vector3 centre = area.Centre;
         goalPoint = centre;
-        if (WorldToCell(centre, out goalCell) && IsWalkable(goalCell)) return true;
+        if (WorldToCell(centre, out goalCell) && IsWalkable(goalCell, rule)) return true;
 
         // The cells under the area's bounding box; Contains trims a circle's corners.
         int minX = Mathf.Clamp(Mathf.FloorToInt((centre.x - area.HalfSize.x - _origin.x) / _cellSize), 0, _width - 1);
@@ -187,7 +193,7 @@ public class PathGrid : MonoBehaviour
         {
             for (int x = minX; x <= maxX; x++)
             {
-                if (!IsWalkable(new Vector2Int(x, z))) continue;
+                if (!IsWalkable(new Vector2Int(x, z), rule)) continue;
                 Vector3 world = CellToWorld(x, z);
                 float distance = FlatDistance(world, centre);
                 if (distance < nearest && area.Contains(world)) nearest = distance;
@@ -203,7 +209,7 @@ public class PathGrid : MonoBehaviour
             for (int x = minX; x <= maxX; x++)
             {
                 var cell = new Vector2Int(x, z);
-                if (!IsWalkable(cell)) continue;
+                if (!IsWalkable(cell, rule)) continue;
                 Vector3 world = CellToWorld(x, z);
                 if (FlatDistance(world, centre) > tieBand || !area.Contains(world)) continue;
 

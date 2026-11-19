@@ -22,6 +22,7 @@ public class GridPathfinder
     private readonly CellHeap _open = new(256);
     private readonly List<Vector2Int> _cells = new();
     private int _generation;
+    private PropRule _rule;                     // the search under way's: searches run one at a time
 
     public GridPathfinder(PathGrid grid)
     {
@@ -36,14 +37,16 @@ public class GridPathfinder
     /// Shortest path from from to the goal cell, as straight-line corners ending at the goal
     /// cell's centre. clearances gets, beside each corner, the clearance the pull accepted the run
     /// ending there at, so a follower can check sight at the clearance the route was pulled at.
-    /// False when the goal is blocked, unreachable, or too far for one search.
+    /// False when the goal is blocked, unreachable, or too far for one search. Steps, costs, the start
+    /// snap and the pull all read rule's prop layer.
     /// </summary>
-    public bool FindPath(Vector3 from, Vector2Int goal, List<Vector3> path, List<int> clearances)
+    public bool FindPath(Vector3 from, Vector2Int goal, PropRule rule, List<Vector3> path, List<int> clearances)
     {
         path.Clear();
         clearances.Clear();
-        if (!_grid.IsWalkable(goal)) return false;
-        if (!_grid.WorldToCell(from, out Vector2Int raw) || !_grid.NearestWalkable(raw, SnapRadius, PropRule.Careful, out Vector2Int start))
+        _rule = rule;
+        if (!_grid.IsWalkable(goal, rule)) return false;
+        if (!_grid.WorldToCell(from, out Vector2Int raw) || !_grid.NearestWalkable(raw, SnapRadius, rule, out Vector2Int start))
             return false;
 
         _generation++;   // invalidates every array entry from the last search without clearing
@@ -71,14 +74,14 @@ public class GridPathfinder
             int cost = _cost[index];
             foreach (Vector2Int step in PathGrid.Steps)
             {
-                if (!_grid.CanStep(cell, step)) continue;
+                if (!_grid.CanStep(cell, step, rule)) continue;
 
                 Vector2Int nextCell = cell + step;
                 int next = _grid.Index(nextCell);
                 if (_closed[next] == _generation) continue;
 
                 // Step costs (walls, skin, shove) only add to a step, so the heuristic below never overestimates.
-                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost) + _grid.StepCost(nextCell, PropRule.Careful);
+                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost) + _grid.StepCost(nextCell, rule);
                 if (_seen[next] == _generation && _cost[next] <= nextCost) continue;
 
                 Record(next, nextCost, index);
@@ -126,9 +129,9 @@ public class GridPathfinder
         int accepted = _grid.MarginCells + 1;   // the clearance the current run's last accepted pull used
         for (int i = 1; i < _cells.Count; i++)
         {
-            lowest = Mathf.Min(lowest, _grid.Clearance(_cells[i]));
+            lowest = Mathf.Min(lowest, _grid.Clearance(_cells[i], _rule));
             int asked = Mathf.Min(_grid.MarginCells + 1, lowest);
-            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]), asked))
+            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]), asked, _rule))
             {
                 accepted = asked;
                 continue;
@@ -137,7 +140,7 @@ public class GridPathfinder
             anchor = _grid.CellToWorld(_cells[i - 1]);
             path.Add(anchor);
             clearances.Add(accepted);   // the run that ends at this corner
-            lowest = Mathf.Min(_grid.Clearance(_cells[i - 1]), _grid.Clearance(_cells[i]));   // the new run starts at the corner
+            lowest = Mathf.Min(_grid.Clearance(_cells[i - 1], _rule), _grid.Clearance(_cells[i], _rule));   // the new run starts at the corner
             accepted = Mathf.Min(_grid.MarginCells + 1, lowest);
         }
         path.Add(_grid.CellToWorld(_cells[_cells.Count - 1]));

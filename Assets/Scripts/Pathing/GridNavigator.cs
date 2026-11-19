@@ -27,6 +27,8 @@ public class GridNavigator
 
     private readonly IPathAgent _agent;
     private string _lastWarning;
+    private PropRule _rule;          // the agent's, as of the last public call
+    private bool _ruleKnown;
 
     // A walk to a point: this enemy's own field, flooded from it.
     private FlowField _pointField;
@@ -97,10 +99,11 @@ public class GridNavigator
     /// </summary>
     public NavResult MoveTo(Vector3 point, float speed, bool getClose = false)
     {
+        SyncRule();
         if (!TryGetGrid(out PathGrid grid)) return NavResult.Unreachable;
 
         bool newField = _pointField == null || _pointField.Grid != grid;
-        if (newField) _pointField = new FlowField(grid);
+        if (newField) _pointField = new FlowField(grid, _rule);
         if (newField || FlatDistance(point, _pointGoal) > RefloodShift)
         {
             _pointGoal = point;
@@ -117,6 +120,7 @@ public class GridNavigator
     /// </summary>
     public bool TryGetNearestReachable(Vector3 point, out Vector3 spot)
     {
+        SyncRule();
         spot = point;
         PathGrid grid = PathGrid.At(_agent.Body.position);
         if (grid == null) return false;
@@ -138,6 +142,7 @@ public class GridNavigator
     /// </summary>
     public GroundFound FindGroundNear(Vector3 point, IReadOnlyList<Vector3> preferred, out Vector3 spot)
     {
+        SyncRule();
         spot = point;
         PathGrid grid = PathGrid.At(_agent.Body.position);
         if (grid == null) return GroundFound.None;
@@ -172,6 +177,7 @@ public class GridNavigator
     /// </summary>
     public void ChaseTo(Transform target, float speed, bool getClose = false)
     {
+        SyncRule();
         if (!TryGetGrid(out PathGrid grid)) return;
 
         // Floors are independent: a target on another floor can't be reached from this one.
@@ -181,7 +187,7 @@ public class GridNavigator
             return;
         }
 
-        Follow(grid, grid.FieldToward(target), target.position, speed, getClose);
+        Follow(grid, grid.FieldToward(target, _rule), target.position, speed, getClose);
     }
 
     /// <summary>
@@ -192,6 +198,7 @@ public class GridNavigator
     /// </summary>
     public NavResult MoveToArea(GridArea area, float speed)
     {
+        SyncRule();
         if (!TryGetGrid(out PathGrid grid))
         {
             FailureReason = "not on any PathGrid";
@@ -211,7 +218,7 @@ public class GridNavigator
             Plan(grid, area, position, resetWatchdog: true);
         }
         else if (_routeOk && Time.fixedTime >= _nextReplan
-                 && !grid.HasLineOfSight(position, _route[_routeIndex], _routeClearance[_routeIndex]))
+                 && !grid.HasLineOfSight(position, _route[_routeIndex], _routeClearance[_routeIndex], _rule))
         {
             // Knocked off the route (a collision, an overshoot, a slide along a wall): its next
             // corner is out of sight, and steering straight at it walks into the wall. Re-plan
@@ -240,7 +247,7 @@ public class GridNavigator
         // walked onto the corner before turning.
         while (_routeIndex < _route.Count - 1
                && (FlatDistance(position, _route[_routeIndex]) <= CornerReach
-                   || grid.HasLineOfSight(position, _route[_routeIndex + 1], _routeClearance[_routeIndex + 1])))
+                   || grid.HasLineOfSight(position, _route[_routeIndex + 1], _routeClearance[_routeIndex + 1], _rule)))
             _routeIndex++;
         Steer(Followed.Route, _route[_routeIndex], speed, mustReach: true);
 
@@ -263,6 +270,7 @@ public class GridNavigator
     /// </summary>
     public bool PickSpotInArea(GridArea area, float minDistance, out Vector3 spot)
     {
+        SyncRule();   // the spot itself is Careful: it's ground to stand on, never inside a crate
         spot = area.Centre;
         PathGrid grid = PathGrid.At(area.Centre);
         if (grid == null)
@@ -283,6 +291,7 @@ public class GridNavigator
     /// </summary>
     public bool TryFindSpotAway(Vector3 awayFrom, float step, out Vector3 spot)
     {
+        SyncRule();
         Vector3 position = _agent.Body.position;
         spot = position;
         PathGrid grid = PathGrid.At(position);
@@ -293,7 +302,7 @@ public class GridNavigator
         foreach (Vector2Int direction in PathGrid.Steps)
         {
             Vector3 candidate = position + new Vector3(direction.x, 0f, direction.y).normalized * step;
-            if (!grid.HasLineOfSight(position, candidate)) continue;
+            if (!grid.HasLineOfSight(position, candidate, 1, _rule)) continue;
 
             float distance = FlatDistance(candidate, awayFrom);
             if (distance <= farthest) continue;
@@ -320,7 +329,7 @@ public class GridNavigator
         _routeClearance.Clear();
         _routeIndex = 0;
 
-        if (!grid.ResolveArea(area, position, out Vector2Int goalCell, out _goalPoint))
+        if (!grid.ResolveArea(area, position, _rule, out Vector2Int goalCell, out _goalPoint))
         {
             _routeOk = false;
             FailureReason = "no open ground inside the area";
@@ -328,15 +337,18 @@ public class GridNavigator
         }
 
         // Clear line: the straight segment is the shortest path, so skip the search.
-        if (grid.HasClearLine(position, _goalPoint))
+        if (grid.HasClearLine(position, _goalPoint, _rule))
         {
             _route.Add(_goalPoint);
-            _routeClearance.Add(Mathf.Min(grid.MarginCells + 1, grid.Clearance(goalCell)));   // the least HasClearLine asked, at the goal
+            // What HasClearLine asked at the goal. Cells on the way asked their own Best, which can be lower
+            // (a doorway): then the off-route check refuses this line and re-plans the same one, at most
+            // every Replan Interval. A few spare plans, never a wrong route.
+            _routeClearance.Add(Mathf.Max(1, Mathf.Min(grid.Best(goalCell, _rule), grid.Clearance(goalCell, _rule))));
             _routeOk = true;
             return;
         }
 
-        _routeOk = grid.FindPath(position, goalCell, _route, _routeClearance);
+        _routeOk = grid.FindPath(position, goalCell, _rule, _route, _routeClearance);
         if (!_routeOk)
         {
             FailureReason = "no path to the area (walled off, or too far for one search)";
@@ -379,7 +391,7 @@ public class GridNavigator
         }
 
         // Clear line: the straight segment is the shortest path, so skip the field.
-        if (grid.HasClearLine(position, goal))
+        if (grid.HasClearLine(position, goal, _rule))
         {
             _lineEnd = goal;
             Steer(Followed.Line, goal, speed, mustReach: true);
@@ -443,7 +455,7 @@ public class GridNavigator
     private void FindApproach(PathGrid grid, Vector3 goal, bool force = false)
     {
         bool first = _approachField == null || _approachField.Grid != grid;
-        if (first) _approachField = new FlowField(grid);
+        if (first) _approachField = new FlowField(grid, _rule);
         bool stale = FlatDistance(goal, _approachGoal) > RefloodShift || grid.Version != _approachVersion;
         if (!force && !first && (!stale || Time.fixedTime < _nextApproach)) return;
 
@@ -458,6 +470,27 @@ public class GridNavigator
             return;
         }
         _approachFound = _approachField.TryGetNearestReached(goal, Mathf.CeilToInt(ApproachRadius / grid.CellSize), out _approachSpot);
+    }
+
+    // The agent's rule, read at the top of every public move or decision. A change drops every field and
+    // route planned under the old rule (the next call re-floods or re-plans), so a hunter who turns
+    // searcher never takes one more step along a route through a crate.
+    private void SyncRule()
+    {
+        PropRule rule = _agent.PropRule;
+        if (_ruleKnown && rule == _rule) return;
+        if (_ruleKnown)
+        {
+            _pointField = null;
+            _approachField = null;
+            _routeGrid = null;   // MoveToArea sees a new area and plans afresh
+#if RUBY_DEBUG_LOGS
+            Object context = _agent as Object;
+            Debug.Log($"{(context != null ? context.name : "agent")}: routes now {rule}", context);
+#endif
+        }
+        _rule = rule;
+        _ruleKnown = true;
     }
 
     // A successful move ends any failure episode, so the next failure warns again.

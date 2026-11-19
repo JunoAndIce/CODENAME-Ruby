@@ -196,6 +196,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float PauseRoamMin => _pauseRoamMin;
     public float PauseRoamMax => _pauseRoamMax;
     public float StuckTime => _stuckTime;
+
+    /// <summary>
+    /// How their routes and legs treat props: their state's rule (Forceful in Aggro and Rearm). Careful
+    /// before the machine has a state, as at a fresh spawn.
+    /// </summary>
+    public PropRule PropRule => _state.Current is EnemyStateBase state ? state.PropRule : PropRule.Careful;
     public float RouteRetryTime => RouteRetrySeconds;
     public float RearmRadius => _rearmRadius;
     public float GetUpTime => _getUpTime;
@@ -348,8 +354,10 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Vector3[] corners = Navigator.Corners;
         if (corners == null) return;
 
+        // Cyan: a Careful route, round every prop. Orange: a Forceful one, which may shove through light props.
+        Color colour = PropRule == PropRule.Forceful ? new Color(1f, 0.55f, 0.1f) : Color.cyan;
         for (int i = 1; i < corners.Length; i++)
-            Debug.DrawLine(corners[i - 1], corners[i], Color.yellow);
+            Debug.DrawLine(corners[i - 1], corners[i], colour);
     }
 
     private void OnDrawGizmosSelected() => EnemyGizmos.DrawSelected(this);

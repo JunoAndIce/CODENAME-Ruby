@@ -70,9 +70,10 @@ public static class FiringSpots
             return false;
         }
 
-        // The floor's shared chase field, the same one the hunt walks: "ground they can reach" is what it reached,
-        // out to its own bound. It only refreshes when read as a route, so ask it to.
-        FlowField reach = grid.FieldToward(who.PlayerTransform);
+        // The floor's shared chase field, the same one the hunt walks (Forceful, as Aggro's rule is): "ground
+        // they can reach" is what it reached, out to its own bound. It only refreshes when read as a route, so
+        // ask it to.
+        FlowField reach = grid.FieldToward(who.PlayerTransform, PropRule.Forceful);
         reach.Refresh();
 
         // They must be on the field too: ground joined to her says nothing of whether they can walk to it. A body

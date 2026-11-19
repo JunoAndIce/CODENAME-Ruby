@@ -18,6 +18,7 @@ public class FlowField
     private const float RefreshInterval = 0.2f;
 
     private readonly PathGrid _grid;
+    private readonly PropRule _rule;
     private readonly Transform _target;
     private readonly int[] _cost;
     private readonly int[] _length;           // plain path length (no wall costs) along the cheapest route found; this is what maxDistance bounds
@@ -34,9 +35,11 @@ public class FlowField
     private int _floodedVersion;
     private float _nextRefresh;
 
-    public FlowField(PathGrid grid, Transform target = null)
+    /// <summary>A field over grid whose steps, costs, snaps and shortcuts read rule's prop layer.</summary>
+    public FlowField(PathGrid grid, PropRule rule, Transform target = null)
     {
         _grid = grid;
+        _rule = rule;
         _target = target;
         _cost = new int[grid.CellCount];
         _stamp = new int[grid.CellCount];
@@ -44,6 +47,9 @@ public class FlowField
     }
 
     public PathGrid Grid => _grid;
+
+    /// <summary>The prop rule every flood and step of this field reads.</summary>
+    public PropRule Rule => _rule;
 
     /// <summary>Bumped by every flood. A reader of a shared field (FloodFrom's) notes it and checks it again to know nothing overwrote the field meanwhile.</summary>
     public int Generation => _generation;
@@ -79,7 +85,7 @@ public class FlowField
         _open.Clear();
 
         _grid.WorldToCell(goal, out _floodedFrom);
-        _hasGoal = _grid.NearestWalkable(_floodedFrom, SnapRadius, PropRule.Careful, out _goalCell);
+        _hasGoal = _grid.NearestWalkable(_floodedFrom, SnapRadius, _rule, out _goalCell);
         if (!_hasGoal) return;
 
         int maxCost = Mathf.RoundToInt(maxDistance / _grid.CellSize * StraightCost);
@@ -95,13 +101,13 @@ public class FlowField
             Vector2Int cell = _grid.CellOf(index);
             foreach (Vector2Int step in PathGrid.Steps)
             {
-                if (!_grid.CanStep(cell, step)) continue;
+                if (!_grid.CanStep(cell, step, _rule)) continue;
 
                 int next = _grid.Index(cell + step);
                 int stepCost = step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost;
                 int nextLength = _length[index] + stepCost;
                 int nextCost = cost + stepCost;
-                if (avoidWalls) nextCost += _grid.StepCost(cell + step, PropRule.Careful);
+                if (avoidWalls) nextCost += _grid.StepCost(cell + step, _rule);
                 if (nextLength > maxCost || (IsReached(next) && _cost[next] <= nextCost)) continue;
 
                 SetCost(next, nextCost);
@@ -207,9 +213,9 @@ public class FlowField
         for (int i = 0; i < LookAhead && Descend(cell, out Vector2Int next); i++)
         {
             Vector3 point = _grid.CellToWorld(next);
-            lowest = Mathf.Min(lowest, _grid.Clearance(next));
+            lowest = Mathf.Min(lowest, _grid.Clearance(next, _rule));
             // The first step is always taken: the agent itself may stand in a blocked cell.
-            if (i > 0 && !_grid.HasLineOfSight(from, point, Mathf.Min(_grid.MarginCells + 1, lowest))) break;
+            if (i > 0 && !_grid.HasLineOfSight(from, point, Mathf.Min(_grid.MarginCells + 1, lowest), _rule)) break;
             steer = point;
             cell = next;
         }
@@ -252,7 +258,7 @@ public class FlowField
     {
         cell = default;
         if (!_hasGoal || !_grid.WorldToCell(from, out Vector2Int raw)) return false;
-        return _grid.NearestWalkable(raw, SnapRadius, PropRule.Careful, out cell) && IsReached(_grid.Index(cell));
+        return _grid.NearestWalkable(raw, SnapRadius, _rule, out cell) && IsReached(_grid.Index(cell));
     }
 
     // Steepest descent: the reachable neighbour with the lowest cost, if it beats this cell's.
@@ -262,7 +268,7 @@ public class FlowField
         int best = _cost[_grid.Index(cell)];
         foreach (Vector2Int step in PathGrid.Steps)
         {
-            if (!_grid.CanStep(cell, step)) continue;
+            if (!_grid.CanStep(cell, step, _rule)) continue;
 
             int index = _grid.Index(cell + step);
             if (!IsReached(index) || _cost[index] >= best) continue;

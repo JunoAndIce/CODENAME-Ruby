@@ -11,6 +11,9 @@ using UnityEngine;
 /// </summary>
 public class RearmState : EnemyStateBase
 {
+    // "During aggro and rearm enemies should push objects out of the way if they can": light props only.
+    public override PropRule PropRule => PropRule.Forceful;
+
     // Reach is measured from the body's surface to the gun's, so the pickup lands before the
     // capsule touches the gun: walking into it would shove a 20 kg gun off at walking speed.
     private const float PickUpReach = 0.3f;

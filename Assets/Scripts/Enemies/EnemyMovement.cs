@@ -16,14 +16,9 @@ public class EnemyMovement
     private const float SameFloorHeight = 1f;   // farther apart than this in height, they aren't sharing a floor
     private const int FreeSpotTries = 4;
 
-    // They don't shove a prop that blocks the grid. A prop only blocks while it rests, and one they are pushing
-    // never rests, so the way through it stayed open and they kept pushing, however good the way round. Stopped,
-    // it settles, blocks the grid, and they path round it. Anything else, such as a loose gun, stays pushable:
-    // nothing plans round it, so treating it as a wall would leave them stuck on it.
-    private static readonly System.Func<Rigidbody, bool> PropsStopHim = body => body.TryGetComponent(out GridObstacle _);
-
     private readonly EnemyController _enemy;
     private readonly CapsuleCollider _capsule;
+    private readonly System.Func<Rigidbody, bool> _propStopsThem;   // PropStopsThem, cached so PushLimit's calls don't allocate
 
     // The sweeping walk: they walk along _sweepWay while their body, and so their view, swings across it. The way
     // has to be held apart from their facing, which every other walk reads it from. Each enemy has their own
@@ -41,6 +36,23 @@ public class EnemyMovement
     {
         _enemy = enemy;
         _capsule = capsule;
+        _propStopsThem = PropStopsThem;
+    }
+
+    // Their legs follow their routes' rule (EnemyController.PropRule):
+    // - Careful: any prop that blocks the grid stops their legs, as it always did. Before props had rules a
+    //   prop only blocked while it rested, and one they pushed never rested, so the way through it stayed
+    //   open and they kept pushing however good the way round. Stopped, it settles, blocks, and they path
+    //   round it.
+    // - Forceful: only a heavy prop (at or over the grid's Shove Limit) stops them: "certain weight objects
+    //   they should not even try". A light one is shoved with PushLimit's mass ratio (a 10 kg crate in front
+    //   of a 50 kg enemy moves at 80% of their speed).
+    // Anything without a GridObstacle, such as a loose gun, stays pushable: nothing plans round it, so
+    // treating it as a wall would leave them stuck on it.
+    private bool PropStopsThem(Rigidbody body)
+    {
+        if (!body.TryGetComponent(out GridObstacle obstacle)) return false;
+        return _enemy.PropRule == PropRule.Careful || !obstacle.IsLight;
     }
 
     /// <summary>The speed of the last move it was told to make, 0 once stopped: how fast it's trying to go.</summary>
@@ -100,7 +112,7 @@ public class EnemyMovement
 
         // The fitted speed, so the animation sees them slow in a tight turn.
         IntendedSpeed = fitted;
-        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, heading * fitted, PropsStopHim));
+        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, heading * fitted, _propStopsThem));
     }
 
     // Bends a walk away from any enemy inside Personal Space, harder the closer they are, so they curve round
@@ -213,7 +225,7 @@ public class EnemyMovement
             Stop();
             return;
         }
-        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, MakeRoom(direction).normalized * speed, PropsStopHim));
+        VelocityUtil.SetFlatVelocity(_enemy.Body, PushLimit.Limit(_capsule, MakeRoom(direction).normalized * speed, _propStopsThem));
     }
 
     /// <summary>

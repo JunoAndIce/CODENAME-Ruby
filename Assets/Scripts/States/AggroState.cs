@@ -15,6 +15,9 @@ using UnityEngine;
 /// </summary>
 public class AggroState : EnemyStateBase
 {
+    // "During aggro and rearm enemies should push objects out of the way if they can": light props only.
+    public override PropRule PropRule => PropRule.Forceful;
+
     private const float HoldBand = 1f;       // metres above Min Distance where an armed enemy stands still: without it, it jitters between advancing and backing off
     private const float BackAwayStep = 2f;   // how far ahead a backing-away enemy looks for open floor
     private const float SpotReach = 0.5f;    // how close to their firing spot counts as there; also how far a guess must move to be a new one
