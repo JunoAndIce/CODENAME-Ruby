@@ -1,7 +1,10 @@
 # Prop-aware pathing
 
-**Status:** approved by the user 2026-11-19; not built yet. Step 1 of the enemy AI engine roadmap (see
-`docs/architecture/project-history.md`).
+**Status:** approved by the user 2026-11-19; built 2026-11-19 from `docs/plans/2026-11-19-prop-aware-pathing.md`,
+awaiting the user's play-test. Step 1 of the enemy AI engine roadmap (see `docs/architecture/project-history.md`).
+Where the build differs from this text: the rule reaches the navigator through `IPathAgent.PropRule`, not a
+property `EnemyMovement` sets, and the navigator's rule-change line is a `RUBY_DEBUG_LOGS` log (Pathing can't
+reach `DebugLog`).
 
 ## Intent
 

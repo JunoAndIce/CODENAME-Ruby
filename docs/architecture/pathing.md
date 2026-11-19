@@ -11,9 +11,9 @@ A\* for individual ones**:
   Start: a cell is blocked when an agent-sized capsule standing on it overlaps anything static, which
   gives walls clearance and never counts the floor. `IsOpenSpot` is that test, shared with the
   editor. Dynamic bodies are skipped by the bake; props that should block carry **`GridObstacle`**,
-  which adds one to a per-cell counter (`_propBlocks`) under each cell it covers while it rests
-  (a counter and not a flag, because props overlap and one leaving mustn't unblock a cell another
-  still covers). A `GridObstacle` that rests on no grid (outside every grid's area or Height band)
+  which marks per-cell counters while it rests (counters and not flags, because props overlap and one
+  leaving mustn't unblock a cell another still covers; see **Prop rules** below for what it marks). A
+  `GridObstacle` that rests on no grid (outside every grid's area or Height band)
   warns once, and again only if it gets back on a grid and later leaves one: it used to return
   silently, so a crate placed off the grid never blocked and nothing said why. A prop lying flat still blocks, however thin (`CollectFootprint` tests against the floor, not Floor Clearance): a table flipped onto its 6 cm top used to count as floor. Every change bumps
   `Version`, and fields re-plan.
@@ -21,15 +21,46 @@ A\* for individual ones**:
   **Corner Margin and the clearance field.** A second field, baked after the cells and redone around
   a prop's cells when it comes or goes, holds each cell's **clearance**: its distance in cells to the
   nearest blocked cell or the grid's edge, capped at `MarginCells + 1`. A cell is *inside the margin*
-  when its clearance is at most `MarginCells` (Corner Margin 0.5 m, rounded up to whole cells). Paths
-  charge `WallPenalty` there, `(MarginCells - clearance + 1) x Wall Cost` (20, against 10 for a
-  straight step), so routes keep half a metre off corners and run down the middle of doorways instead
-  of hugging a jamb. It is a cost, not a block: a gap too narrow for the margin is still walked,
-  down its middle, and never reported blocked. `MarginCells` is read once at bake, so a Corner
+  when its clearance is at most `MarginCells` (Corner Margin 0.5 m, rounded up to whole cells). A third,
+  **`Best`**, holds the highest clearance within `MarginCells` of each cell (capped the same): the room
+  a route there could have had. Paths charge `WallPenalty`, `(Best - clearance) x Wall Cost` (20,
+  against 10 for a straight step). In an open room `Best` is the cap, so routes keep half a metre off
+  corners and run down the middle of doorways instead of hugging a jamb. In a corridor the middle line
+  has the best clearance there is and pays nothing, so **a corridor costs its length**. The old charge,
+  `(MarginCells - clearance + 1) x Wall Cost`, made a one-cell corridor cost 3x its length at 0.5 m
+  cells and 5x at 0.25 m (a two-cell margin), which is why smaller cells made enemies avoid corridors
+  more. It is a cost, not a block: a gap too narrow for the margin is still walked, down its middle,
+  and never reported blocked. `Best` is baked as a separable max and refreshed over the clearance box
+  grown by `MarginCells`. `MarginCells` is read once at bake, so a Corner
   Margin change takes effect on the next play, not live; editing it while playing logs a warning
   saying so (`PathGrid.OnValidate`), never a silent no-op.
+- **Prop rules** (`PropRule`, `PropLayer`; spec `docs/specs/2026-11-18-prop-aware-pathing.md`). Calm
+  walks must leave a room's props where they are, and hunters may shove light ones aside, so every
+  walkability, cost and line query names a rule, and the grid keeps a `PropLayer` per rule (its own
+  counts, clearance and `Best`). The overloads that name none mean **Careful**.
+  - **Careful** (every state but Aggro and Rearm): every resting prop's core blocks, and its **skin**
+    costs Prop Skin Cost (60).
+  - **Forceful** (Aggro and Rearm, `EnemyStateBase.PropRule`): a heavy prop (Rigidbody mass at or over
+    the grid's **Shove Limit**, 20 kg) is the same; a light one's core costs **Shove Cost** (30) and
+    blocks nothing, so a hunter goes through a crate only when going round costs more.
+  - A prop marks its **core** (the agent radius round each collider, as walls get), a **skin** ring
+    Prop Skin (0.15 m) further out, and its **solid** cells (centre inside a collider), into a
+    `PropMarks` it hands back unchanged to unmark. **The skin is a cost, not a wall**: stepping on it
+    costs extra, and lines read it as clearance 1, so a route with any other way keeps its gap, while a
+    lane only skin leaves open stays open (the user's "keep the lane open"). Adding skin only where the
+    core clearance was 2 or more was tried on paper and can't work: a skin cell always neighbours core.
+  - **A shove always ends.** A light prop on the move keeps marking its core as Forceful shove cost,
+    re-marking each half cell, so a hunter keeps weighing pushing on against going round (a pushed
+    prop used to unmark, and the route ran through it forever). One pushed into a wall or another crate
+    **jams**: `EnemyMovement.PropStopsThem` reports each press (`GridObstacle.NotePressed`), and pressed
+    for Jam Window (0.5 s) while moving under Jam Distance (0.1 m) it counts as heavy for Jam Time (3 s).
+    A heavy prop on the move marks nothing.
+  - The **limit is per floor**, because every enemy on a floor shares the chase field.
+  - **Gizmo Rule** picks which layer the cells draw: red static, orange a blocking prop, pale orange
+    skin, blue shove (Forceful), yellow margin. An enemy's play-mode route line is cyan under Careful,
+    orange under Forceful.
 - **`FlowField`** (Dijkstra): one flood from a goal, read by any number of agents. The chase field is
-  **shared per floor** (`PathGrid.FieldToward(player)`), so chase cost doesn't grow with enemy count;
+  **shared per floor and rule** (`PathGrid.FieldToward(player, rule)`), so chase cost doesn't grow with enemy count;
   a walk to a fixed point (a chase of what they know, the walk back to their post) floods its own field once. Floods bound the **plain path length** (metres), never the
   penalised cost, so wall costs can't shorten how far a chase reaches or drop a far doorway off the
   field; `TryGetDistance` returns plain metres too, but of the route the field leads, which on a
@@ -41,17 +72,20 @@ A\* for individual ones**:
 - **`GridPathfinder`** (A\*, octile heuristic, integer costs 10/14, no corner cutting): patrol legs,
   cached and re-planned when the grid changes or the enemy is knocked off its route.
 - **`GridNavigator`** ties them together and moves any `IPathAgent`: it plans, and the agent steers
-  (facing, velocity scheme). There are **no silent fallbacks**: chases and point walks stop
+  (facing, velocity scheme). It reads `IPathAgent.PropRule` at the top of every move and decision, and a
+  change drops its point field, approach field and route, so a hunter who turns searcher never takes
+  another step along a route through a crate. There are **no silent fallbacks**: chases and point walks stop
   and log a warning saying why (once per message, so a goal that keeps moving repeats it); area moves report Blocked/Unreachable, and patrol skips that point
   with a warning. **The one rule beside that is a hunt** (`getClose`, Aggro's chase of Ruby or of what they know): with no path, they walk to the ground they can reach nearest her, within 5 m, and warns once. A body can stand where the grid has no way in, tight behind a crate, and an enemy who stood still lost her when their timer ran out though she hadn't moved. Grid line of sight ignores the cell the agent already stands in, which near a wall
   is clearance-blocked.
 - **Lines keep the margin too.** `HasLineOfSight(from, to, minClearance)` needs every cell after the
-  first to have that clearance. The navigator's shortcut and beeline (`HasClearLine`) ask for
-  `MarginCells + 1`, the clearance `WallPenalty` doesn't charge for, so a pulled line can't graze a
-  corner the flood routed round. A goal beside a wall can still be walked straight to, but the
-  relaxing is a **ramp** near the goal only: each cell needs the lesser of `MarginCells + 1` and the
-  goal cell's clearance plus its Chebyshev distance from the goal cell (never below 1), so the rest
-  of the line keeps its margin; a line that fails goes to the field or A\*, which keep it.
+  first to have that clearance. The navigator's shortcut and beeline (`HasClearLine`) ask each cell for
+  its `Best`, the clearance `WallPenalty` doesn't charge for, so a pulled line can't graze a corner the
+  flood routed round, and a line down a corridor's middle is taken whole. A goal beside a wall can still
+  be walked straight to, but the relaxing is a **ramp** near the goal only: each cell needs the lesser of
+  its `Best` and the goal cell's clearance plus its Chebyshev distance from the goal cell (never below
+  1), so the rest of the line keeps its margin; a line that fails goes to the field or A\*, which keep
+  it. Lines read the rule's effective clearance, where skin reads 1.
   String pulling (`GridPathfinder`) and the flow field's look-ahead use the lowest clearance
   along the cells they skip, capped the same way: where the path had room the pulled line keeps the
   margin, and through a narrow gap it keeps only what the gap has, which is its middle.
@@ -62,6 +96,21 @@ A\* for individual ones**:
   turned only after reaching the corner.
   `TryFindSpotAway`, Aggro's backing off, keeps the plain test: a short step, and a margin would
   leave a cornered enemy nowhere to go.
+- **Shortcuts are checked against real shapes** (`PathGrid.HasClearShape`). Cells only approximate
+  shapes, and a line the grid accepted clipped real corners and brushed tables, nudging them a little
+  each pass. After the grid's check, every straight shortcut (Follow's line, Plan's direct line, the
+  corner advance, a field step's look-ahead point, A\*'s pull) sweeps one capsule across the agents'
+  band at Agent Radius + Prop Skin. A prop that blocks under the rule refuses it there; a static hit
+  refuses it only if a second cast at plain Agent Radius hits too, since walls get no skin. Characters,
+  moving bodies, light props under Forceful and whatever the capsule starts inside are ignored. Only
+  the point about to be steered at is cast; a field step that fails steps back to its first, always
+  taken, step, and Follow caches its answer for Replan Interval.
+- **The snap can't cross walls** (`NearestWalkable`). Anything hugging a wall stands in a
+  clearance-blocked cell, so starts and goals snap to the nearest walkable cell within a couple of
+  rings. It used to take that cell whatever lay between, and a guess once came back 107 m away by path,
+  snapped through a wall. It is now a breadth-first search that never enters a **solid** cell (its
+  centre inside static geometry, baked with a 0.01 m probe, or inside a resting prop), so Ruby pressed
+  against a table snaps to her own side.
 - **Personal space** (`EnemyMovement.MakeRoom`, Personal Space 1.5 m on the enemy). Walking any path, they curve away from any enemy on their
   feet inside the radius, harder the closer they are, and one dead ahead adds a step to their own right, so two met head-on pass rather than
   stop. It bends the walk and never the plan: routes don't cost extra near others, because they move. A bend into a wall isn't taken, so a
