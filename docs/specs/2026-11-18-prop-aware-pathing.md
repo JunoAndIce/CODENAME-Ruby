@@ -102,11 +102,11 @@ marks two footprints:
 
 The grid keeps three counts per cell instead of today's `_propBlocks`:
 
-| Count | What adds to it | Read by |
-| --- | --- | --- |
-| `_carefulBlocks` | every prop's skinned footprint | Careful walkability |
-| `_forcefulBlocks` | heavy props' skinned footprint | Forceful walkability |
-| `_shoveCells` | light props' core footprint | Forceful cost (Shove Cost per step onto it) |
+| Count (per rule) | Careful: what adds to it | Forceful: what adds to it | Read as |
+| --- | --- | --- | --- |
+| blocks | every prop's core | heavy (or jammed) props' core | not walkable |
+| skin | every prop's skin ring | heavy props' skin ring | Prop Skin Cost, and clearance 1 for lines |
+| shove | none | light props' core | Shove Cost |
 
 Walkable under a rule means `_walkable[i] && blocks(rule)[i] == 0`. A prop that crosses the limit
 (re-weighed while resting) unmarks and re-marks the next time it marks. Mass isn't watched every frame.
@@ -118,12 +118,15 @@ open with core footprints alone, the skin gives way there and those cells keep t
 In such a lane a calm enemy passes close to the prop. Their legs still treat it as a wall, so at worst
 it's a light brush. The user chose that over a crate cutting a room off from patrol and search.
 
-The check is local, not a whole-floor reachability test. A skin cell is added only where the cell's
-clearance under core footprints (static geometry and every prop's core) is at least 2. A cell with
-clearance 1 is the middle of a one-cell lane, so skin there would close the lane. This is recomputed
-in the box `RefreshClearance` already redoes when a prop marks or unmarks, plus the skin's reach. That
-needs one more clearance array, the core one. The Gizmo shows the cells where skin gave way, so it
-doesn't read as a fallback.
+**How (changed while planning, 2026-11-19):** skin cells are walkable but expensive. The first idea,
+adding skin only where the core clearance is at least 2, can't work. A skin ring lies within one cell
+of the prop's own core cells, so its core clearance is always 1, and that rule would never add skin.
+
+So under the rule a skin cell applies to, stepping onto it adds Prop Skin Cost. For straight lines and
+string pulling it reads as clearance 1, so a shortcut can't cut through skin. A route that has another
+way never touches the skin. A lane whose only way through is skin stays open, and routes take it only
+when going round costs more than squeezing past. That's the user's choice, with no lane check to keep
+up to date.
 
 ### New grid settings (on `PathGrid`)
 
@@ -131,6 +134,7 @@ doesn't read as a fallback.
 | --- | --- | --- |
 | Shove Limit (kg) | 20 | A prop lighter than this is light: hunting enemies may walk through it. At or above it they never try. |
 | Prop Skin (m) | 0.15 | Extra gap kept round props, beyond the agent radius. Walls don't get it. |
+| Prop Skin Cost | 60 | Extra path cost, in tenths of a cell step, for stepping onto a skin cell. A lane through skin stays open; routes squeeze through it only when going round costs more. |
 | Shove Cost | 30 | Extra path cost, in tenths of a cell step, for each light-prop cell a Forceful route steps onto. Higher means hunters go round more often. |
 
 The limit lives on the grid because every enemy on a floor shares the chase field, so one floor has
