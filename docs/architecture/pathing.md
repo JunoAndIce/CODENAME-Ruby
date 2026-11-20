@@ -104,7 +104,11 @@ A\* for individual ones**:
   0.25 m cells (85 ms at 0.125 m), and the chase field re-floods several times a second as Ruby
   crosses cells; read lazily it costs what its farthest reader needs: 1.2 ms at 10 m by path,
   4.9 ms at 20 m, the full flood only when a hunter is across the map. A reader nothing can reach
-  still runs the flood out, once per flood.
+  still runs the flood out, once per flood. **Exact while the grid is unchanged since the flood:** a
+  prop that marks between the flood and a read is read by the cells settled after it (a full flood
+  read it at its next refresh, as `RefreshIfStale` still does, on the same 0.2 s throttle), and the
+  walled-off early exit (see **Connected areas**) waits for that re-flood, so a crate landing on the
+  goal can't turn away a reader the flood still reaches.
 - **`GridPathfinder`** (A\*, octile heuristic, integer costs 10/14, no corner cutting): patrol legs,
   cached and re-planned when the grid changes or the enemy is knocked off its route.
 - **Step caches** (`PropLayer.Moves`, `PropLayer.StepCosts`). Each layer keeps, per cell, a bit per

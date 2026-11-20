@@ -918,29 +918,38 @@ public class PathGrid : MonoBehaviour
         }
     }
 
-    // Both layers' Moves and StepCosts over a box, from the same CanStep and step cost the queries use.
+    // Both layers' Moves and StepCosts over a box.
     private void RefreshSteps(int minX, int minZ, int maxX, int maxZ)
     {
-        RefreshSteps(_careful, PropRule.Careful, minX, minZ, maxX, maxZ);
-        RefreshSteps(_forceful, PropRule.Forceful, minX, minZ, maxX, maxZ);
+        RefreshSteps(_careful, minX, minZ, maxX, maxZ);
+        RefreshSteps(_forceful, minX, minZ, maxX, maxZ);
     }
 
-    private void RefreshSteps(PropLayer layer, PropRule rule, int minX, int minZ, int maxX, int maxZ)
+    // CanStep's rule, read straight off the layer: the destination open, and for a diagonal both side
+    // cells too. Through CanStep (bounds, layer lookup and Vector2Int per test) it nearly doubled the
+    // bake, 91 to 162 ms at 0.25 m cells.
+    private void RefreshSteps(PropLayer layer, int minX, int minZ, int maxX, int maxZ)
     {
         for (int z = minZ; z <= maxZ; z++)
         {
             for (int x = minX; x <= maxX; x++)
             {
-                var cell = new Vector2Int(x, z);
                 int moves = 0;
                 for (int k = 0; k < Steps.Length; k++)
-                    if (CanStep(cell, Steps[k], rule)) moves |= 1 << k;
+                {
+                    int nx = x + Steps[k].x, nz = z + Steps[k].y;
+                    if (!OpenAt(layer, nx, nz)) continue;
+                    if (k >= 4 && (!OpenAt(layer, nx, z) || !OpenAt(layer, x, nz))) continue;   // diagonals: Steps 4 to 7
+                    moves |= 1 << k;
+                }
                 int index = x + z * _width;
                 layer.Moves[index] = (byte)moves;
                 layer.StepCosts[index] = MeasureStepCost(index, layer);
             }
         }
     }
+
+    private bool OpenAt(PropLayer layer, int x, int z) => x >= 0 && z >= 0 && x < _width && z < _depth && !layer.Blocked(x + z * _width);
 
     public int Index(Vector2Int cell) => cell.x + cell.y * _width;
 
@@ -1185,7 +1194,8 @@ public class PathGrid : MonoBehaviour
     private void DrawCells(bool showOpen)
     {
 #if UNITY_EDITOR
-        if (!IsBaked) return;
+        // Disabled, it has already freed its overlay (OnDisable) and won't again: drawing now would make one that leaks.
+        if (!IsBaked || !isActiveAndEnabled) return;
 
         // One texture and one marker mesh, refilled only when the layer or the settings change (see
         // GridOverlay): a cube per cell lagged the Editor badly whenever the grid was selected.

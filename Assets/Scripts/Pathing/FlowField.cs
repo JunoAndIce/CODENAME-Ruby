@@ -131,7 +131,10 @@ public class FlowField
         {
             if (_settled[index] == _generation) return true;
             // Walled off from the goal: no flood reaches it, so don't run the frontier out to learn that.
-            if (!_grid.SameArea(index, _grid.Index(_goalCell), _rule)) return false;
+            // Only while the grid is as it was at the flood: the areas follow the grid now, and a crate
+            // landing on the goal before the throttled re-flood would otherwise turn away a reader the
+            // flood, planted before it landed, still reaches.
+            if (_floodedVersion == _grid.VersionFor(_rule) && !_grid.SameArea(index, _grid.Index(_goalCell), _rule)) return false;
         }
         bool avoidWalls = _floodedAvoidWalls;
         // The grid's cached moves and step costs (PropLayer.Moves): two reads per cell, not CanStep and
