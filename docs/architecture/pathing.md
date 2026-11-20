@@ -81,7 +81,11 @@ A\* for individual ones**:
   - The **limit is per floor**, because every enemy on a floor shares the chase field.
   - **Gizmo Rule** picks which layer the cells draw: red static, orange a blocking prop, pale orange
     skin, blue shove (Forceful), yellow margin. An enemy's play-mode route line is cyan under Careful,
-    orange under Forceful.
+    orange under Forceful. The cells draw as one texture on one quad, a texel per cell, with the tight
+    cells' markers as one mesh (`GridOverlay`, Editor-only), refilled only when the layer's version or
+    the draw settings change, at most five times a second. A cube per cell issued tens of thousands of
+    draws on every repaint, four times as many at half the cell size, and lagged the Editor whenever
+    the grid was selected. Builds never draw the grid.
 - **`FlowField`** (Dijkstra): one flood from a goal, read by any number of agents. The chase field is
   **shared per floor and rule** (`PathGrid.FieldToward(player, rule)`), so chase cost doesn't grow with enemy count;
   a walk to a fixed point (a chase of what they know, the walk back to their post) floods its own field once. Floods bound the **plain path length** (metres), never the

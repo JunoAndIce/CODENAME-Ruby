@@ -117,7 +117,14 @@ public class PathGrid : MonoBehaviour
     public int VersionFor(PropRule rule) => Layer(rule).Version;
 
     private void OnEnable() => All.Add(this);
-    private void OnDisable() => All.Remove(this);
+    private void OnDisable()
+    {
+        All.Remove(this);
+#if UNITY_EDITOR
+        _overlay?.Dispose();   // its texture, meshes and materials are native objects a domain reload would leak
+        _overlay = null;
+#endif
+    }
 
     // Start, not Awake: every collider is placed by then, and all Starts run before the first
     // physics step, so no enemy sees an unbaked grid.
@@ -1110,47 +1117,57 @@ public class PathGrid : MonoBehaviour
 
     private void DrawCells(bool showOpen)
     {
+#if UNITY_EDITOR
         if (!IsBaked) return;
 
-        // Gizmo Rule's layer. Red: static geometry. Orange: a prop that blocks under the rule. Teal: a
-        // tight cell, drawn small at its fit point. Pale orange: a prop's skin. Blue: a light prop a
-        // hunter would shove (Forceful only). Yellow: open cells inside the path margin. Green: open,
-        // with Show Open Cells.
-        var staticColour = new Color(1f, 0.15f, 0.1f, 0.5f);
-        var propColour = new Color(1f, 0.6f, 0.1f, 0.5f);
-        var skinColour = new Color(1f, 0.8f, 0.5f, 0.35f);
-        var shoveColour = new Color(0.3f, 0.6f, 1f, 0.45f);
-        var marginColour = new Color(1f, 0.9f, 0.2f, 0.25f);
-        var openColour = new Color(0.3f, 1f, 0.5f, 0.07f);
-        var tightColour = new Color(0.1f, 0.9f, 0.8f, 0.8f);
-        var tightSize = new Vector3(_cellSize * 0.4f, 0.03f, _cellSize * 0.4f);
+        // One texture and one marker mesh, refilled only when the layer or the settings change (see
+        // GridOverlay): a cube per cell lagged the Editor badly whenever the grid was selected.
+        _overlay ??= new GridOverlay();
         PropLayer layer = Layer(_gizmoRule);
-        int marginCells = MarginCells;
-        var cellSize = new Vector3(_cellSize * 0.9f, 0.02f, _cellSize * 0.9f);
-        for (int z = 0; z < _depth; z++)
-        {
-            for (int x = 0; x < _width; x++)
-            {
-                int index = x + z * _width;
-                if (layer.Tight(index))
-                {
-                    Gizmos.color = tightColour;
-                    Gizmos.DrawCube(StandPoint(new Vector2Int(x, z), _gizmoRule), tightSize);
-                    continue;
-                }
-
-                Color colour;
-                if (!_walkable[index]) colour = staticColour;
-                else if (layer.Blocks[index] > 0) colour = propColour;
-                else if (layer.Skin[index] > 0) colour = skinColour;
-                else if (layer.Shove[index] > 0) colour = shoveColour;
-                else if (layer.Clearance[index] <= marginCells) colour = marginColour;
-                else if (showOpen) colour = openColour;
-                else continue;
-
-                Gizmos.color = colour;
-                Gizmos.DrawCube(CellToWorld(x, z), cellSize);
-            }
-        }
+        long key = ((long)layer.Version << 8) | ((long)_gizmoRule << 1) | (showOpen ? 1L : 0L);
+        if (_overlay.NeedsRebuild(key, _width, _depth)) FillOverlay(layer, showOpen);
+        _overlay.Draw(_origin, new Vector2(_width * _cellSize, _depth * _cellSize));
+#endif
     }
+
+#if UNITY_EDITOR
+    private GridOverlay _overlay;
+
+    // Gizmo Rule's layer. Red: static geometry. Orange: a prop that blocks under the rule. Teal: a tight
+    // cell, a small square at its fit point over its cell. Pale orange: a prop's skin. Blue: a light prop
+    // a hunter would shove (Forceful only). Yellow: open cells inside the path margin. Green: open, with
+    // Show Open Cells. Clear: open, without it.
+    private void FillOverlay(PropLayer layer, bool showOpen)
+    {
+        var staticColour = (Color32)new Color(1f, 0.15f, 0.1f, 0.5f);
+        var propColour = (Color32)new Color(1f, 0.6f, 0.1f, 0.5f);
+        var skinColour = (Color32)new Color(1f, 0.8f, 0.5f, 0.35f);
+        var shoveColour = (Color32)new Color(0.3f, 0.6f, 1f, 0.45f);
+        var marginColour = (Color32)new Color(1f, 0.9f, 0.2f, 0.25f);
+        var openColour = (Color32)new Color(0.3f, 1f, 0.5f, 0.07f);
+        var tightColour = (Color32)new Color(0.1f, 0.9f, 0.8f, 0.8f);
+        var clear = new Color32(0, 0, 0, 0);
+        int marginCells = MarginCells;
+        Color32[] pixels = _overlay.Pixels;
+        _overlay.ClearMarkers();
+        for (int index = 0; index < pixels.Length; index++)
+        {
+            Color32 colour;
+            if (layer.Tight(index))
+            {
+                // The cell keeps its blocked colour underneath, so a lane reads as a lane through the wall.
+                _overlay.AddMarker(StandPoint(CellOf(index), _gizmoRule), _cellSize * 0.4f, tightColour);
+                colour = !_walkable[index] ? staticColour : propColour;
+            }
+            else if (!_walkable[index]) colour = staticColour;
+            else if (layer.Blocks[index] > 0) colour = propColour;
+            else if (layer.Skin[index] > 0) colour = skinColour;
+            else if (layer.Shove[index] > 0) colour = shoveColour;
+            else if (layer.Clearance[index] <= marginCells) colour = marginColour;
+            else colour = showOpen ? openColour : clear;
+            pixels[index] = colour;
+        }
+        _overlay.Upload();
+    }
+#endif
 }
