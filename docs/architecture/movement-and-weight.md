@@ -62,3 +62,14 @@ separate push-strength dial: it would drift out of step with the weight table. I
 ahead instead of reading collision callbacks, which arrive a step late, so the first step into a
 heavy crate would kick it. It skips pairs set to ignore each other, so a parked host spinning
 through the player never slows the walk. **Enemies shove props only while hunting, and only light ones** (`EnemyMovement.PropStopsThem`, by their state's `PropRule`; see **Prop rules** in [pathing.md](pathing.md)). Calm (Careful), any `GridObstacle` stops their legs, as before: a prop only blocked while it rested, and one being pushed never rested, so the way through it stayed open and they kept pushing; stopped, it settles, blocks the grid, and they path round it. Hunting (Forceful, Aggro and Rearm), only a prop at or over the grid's Shove Limit (20 kg) stops them, "so they don't waste time"; a light one is shoved with the mass ratio above. A shove always ends: a moving light prop keeps its shove cost on the grid, so their route switches the moment going round is cheaper, and one that won't move (against a wall or another crate) jams and counts as heavy for 3 s (`GridObstacle.NotePressed`). Ruby still shoves them, and loose guns stay pushable because nothing plans round them. A crate can therefore block a doorway to calm enemies.
+
+**Character capsules carry `No Friction`** (`Assets/Materials/`, zero friction, Minimum combine), on the
+root capsule of the officer prefab and Ruby's (`Red`). `PushLimit` only scales the part of a move heading
+*into* a body; friction acts along the contact, which it never sees. With Unity's default 0.6, a body
+rubbing a crate's side dragged it along: a searching officer walking a lane 3 cm wider than their body
+dragged a 50 kg crate 1.1 m (an Aggro pass at full speed, 0.3 m), so calm enemies pushed what they must
+never push, and a few passes opened a doorway the crates had shut. Frictionless, the same pass moved it
+8 cm (contact at the lane's mouth, the push `PushLimit` already rules on). It costs nothing: characters
+author their velocity every step, so floor friction never slowed them, and default friction also held an
+enemy steering into a corner there instead of letting them slide off it. Bones keep default friction:
+a ragdoll should drag on the floor. A new character prefab takes the material on its root capsule too.

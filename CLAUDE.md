@@ -203,7 +203,8 @@ belong here.
 - **The tether never moves Ruby.** Where the host can't follow, the rope limits her walk instead.
 - **Masses are real kilograms** from `Weight` and the shared `WeightTable`; a character's whole weight
   is `Weight.MassOf`, never `Rigidbody.mass` (a ragdolled root carries 2%).
-- **Characters collide with their root capsule only** (ragdolled: their bones, never both).
+- **Characters collide with their root capsule only** (ragdolled: their bones, never both), and that
+  capsule carries the `No Friction` material, or rubbing a heavy crate drags it along.
 - **`CameraFocus` owns the camera.** Don't bring Cinemachine back; the lead's reach stays derived.
 - **No serialized field moves** out of `EnemyController` or `Intel` into the plain classes:
   `FormerlySerializedAs` can't carry a value to another component.
