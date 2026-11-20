@@ -131,7 +131,14 @@ public class SearchingState : EnemyStateBase
     {
         if (afterLostFight)
         {
-            Enemy.Beat.Start(AnimBeat.Lose, Enemy.Awareness.LastSeenPosition, Enemy.LoseTime);
+            // The newest place they know of her, which is also where the search is centred (AggroState.Exit): where
+            // they last saw her, unless a mate's word is newer. One who knew nothing of her (an unarmed officer
+            // handed through Aggro by Rearm without a sighting) has no spot to hold on: their LastSeenPosition was
+            // stale or never set, and turned them to it.
+            if (Enemy.Awareness.TryGetNewestRed(out Vector3 known))
+                Enemy.Beat.Start(AnimBeat.Lose, known, Enemy.LoseTime);
+            else
+                DebugLog.Info($"{Enemy.name} lost a fight in which they knew nothing of Ruby: no spot to hold their gun on, so no Lose beat.", Enemy);
             return;
         }
         if (Enemy.PreviousState is IdleState or PatrolState)
