@@ -7,6 +7,13 @@ using UnityEngine;
 /// A field with a target follows it, re-flooding when the target changes cell; either kind
 /// re-floods when the grid changes. Re-floods are throttled and keep the bound of the last
 /// flood, so a short-range field (speech) stays short-range when the grid changes.
+/// Floods are lazy: Flood only plants the goal, and each read spreads the flood until the cell it
+/// asks about is settled, keeping the frontier for the next read. Dijkstra settles cells in cost
+/// order, so a settled cell's cost is final and every cell cheaper than it is settled too, which is
+/// all a descent reads: the answers are exactly a full flood's. A full flood to Max Flow Distance
+/// cost 21 ms at 0.25 m cells (85 ms at 0.125 m) and the chase field re-flooded several times a
+/// second, though its hunters were rarely more than 20 m from Ruby. Reads that need the whole
+/// field (CollectReached, TryGetNearestReached) finish the flood first.
 /// </summary>
 public class FlowField
 {
@@ -22,8 +29,10 @@ public class FlowField
     private readonly Transform _target;
     private readonly int[] _cost;
     private readonly int[] _length;           // plain path length (no wall costs) along the cheapest route found; this is what maxDistance bounds
-    private readonly int[] _stamp;             // a cell's cost is valid only when its stamp is this flood's
-    private readonly CellHeap _open = new(256);
+    private readonly int[] _stamp;             // a cell's cost is valid only when its stamp is this flood's (it may still drop)
+    private readonly int[] _settled;           // this flood's when the cell's cost is final: popped from the heap
+    private readonly CellHeap _open = new(256);   // the frontier, kept between reads so the next carries on
+    private int _maxCost;                      // this flood's bound, in tenths of a cell of plain length
     private readonly Vector3[] _stepPoints = new Vector3[LookAhead];       // TryGetStep's accepted points, in order
     private readonly Vector2Int[] _stepCells = new Vector2Int[LookAhead];
     private int _generation;
@@ -45,6 +54,7 @@ public class FlowField
         _target = target;
         _cost = new int[grid.CellCount];
         _stamp = new int[grid.CellCount];
+        _settled = new int[grid.CellCount];
         _length = new int[grid.CellCount];
     }
 
@@ -88,6 +98,7 @@ public class FlowField
     /// cheapest route: bounding the penalised cost cut a one-cell corridor's reach to a third and
     /// dropped far doorways off the chase field. Without avoidWalls the cost is plain length too:
     /// what hearing and speech need, so a corridor never sounds farther than it is.
+    /// Plants the goal only: the reads spread the flood as far as they ask (see the class summary).
     /// </summary>
     public void Flood(Vector3 goal, float maxDistance, bool avoidWalls)
     {
@@ -103,34 +114,50 @@ public class FlowField
         _hasGoal = _grid.NearestWalkable(_floodedFrom, SnapRadius, _rule, out _goalCell);
         if (!_hasGoal) return;
 
-        int maxCost = Mathf.RoundToInt(maxDistance / _grid.CellSize * StraightCost);
+        _maxCost = Mathf.RoundToInt(maxDistance / _grid.CellSize * StraightCost);
         int start = _grid.Index(_goalCell);
         SetCost(start, 0);
         _length[start] = 0;
         _open.Push(start, 0);
+    }
 
-        while (_open.TryPop(out int index, out int cost))
+    // Spreads the flood until index is settled, or the frontier runs out (index is beyond the bound or
+    // walled off). -1 runs it out. Each pop settles a cell for good: Dijkstra pops in cost order, and
+    // every step only adds cost. A grid change between reads is read by the cells settled after it, as a
+    // full flood would read it on its next refresh; RefreshIfStale re-floods on the same throttle as before.
+    private bool Settle(int index)
+    {
+        if (index >= 0 && _settled[index] == _generation) return true;
+        bool avoidWalls = _floodedAvoidWalls;
+        while (_open.TryPop(out int current, out int cost))
         {
-            if (cost > _cost[index]) continue;   // stale duplicate: a cheaper route was found later
+            // A stale duplicate (a cheaper route was found after it was pushed), or one already settled.
+            if (_settled[current] == _generation || cost > _cost[current]) continue;
+            _settled[current] = _generation;
 
-            Vector2Int cell = _grid.CellOf(index);
+            Vector2Int cell = _grid.CellOf(current);
             foreach (Vector2Int step in PathGrid.Steps)
             {
                 if (!_grid.CanStep(cell, step, _rule)) continue;
 
                 int next = _grid.Index(cell + step);
                 int stepCost = step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost;
-                int nextLength = _length[index] + stepCost;
+                int nextLength = _length[current] + stepCost;
                 int nextCost = cost + stepCost;
                 if (avoidWalls) nextCost += _grid.StepCost(cell + step, _rule);
-                if (nextLength > maxCost || (IsReached(next) && _cost[next] <= nextCost)) continue;
+                if (nextLength > _maxCost || (IsSeen(next) && _cost[next] <= nextCost)) continue;
 
                 SetCost(next, nextCost);
                 _length[next] = nextLength;
                 _open.Push(next, nextCost);
             }
+            if (current == index) return true;
         }
+        return index >= 0 && _settled[index] == _generation;
     }
+
+    // The whole flood, for reads that look at every cell it reaches.
+    private void Complete() => Settle(-1);
 
     /// <summary>
     /// Plain path metres (wall costs excluded) from the goal to point, snapping point to walkable ground like an agent's start
@@ -153,6 +180,7 @@ public class FlowField
     {
         spot = point;
         if (!_flooded || !_hasGoal) return false;
+        Complete();   // a cell near point may lie anywhere in the flood's order
 
         _grid.WorldToCell(point, out Vector2Int centre);
         for (int r = 0; r <= maxCells; r++)
@@ -166,7 +194,7 @@ public class FlowField
 
                     var cell = new Vector2Int(centre.x + dx, centre.y + dz);
                     int sqr = dx * dx + dz * dz;
-                    if (sqr >= bestSqr || !_grid.InBounds(cell) || !IsReached(_grid.Index(cell))) continue;
+                    if (sqr >= bestSqr || !_grid.InBounds(cell) || !IsSettled(_grid.Index(cell))) continue;
 
                     bestSqr = sqr;
                     spot = _grid.StandPoint(cell, _rule);
@@ -184,9 +212,10 @@ public class FlowField
     public void CollectReached(List<Vector3> points, List<float> metres)
     {
         if (!_flooded || !_hasGoal) return;
-        for (int i = 0; i < _stamp.Length; i++)
+        Complete();
+        for (int i = 0; i < _settled.Length; i++)
         {
-            if (!IsReached(i)) continue;
+            if (!IsSettled(i)) continue;
             points.Add(_grid.StandPoint(_grid.CellOf(i), _rule));
             metres.Add(_length[i] / (float)StraightCost * _grid.CellSize);
         }
@@ -288,7 +317,7 @@ public class FlowField
     {
         cell = default;
         if (!_hasGoal || !_grid.WorldToCell(from, out Vector2Int raw)) return false;
-        return _grid.NearestWalkable(raw, SnapRadius, _rule, out cell) && IsReached(_grid.Index(cell));
+        return _grid.NearestWalkable(raw, SnapRadius, _rule, out cell) && Settle(_grid.Index(cell));
     }
 
     // Steepest descent: the reachable neighbour with the lowest cost, if it beats this cell's.
@@ -301,7 +330,7 @@ public class FlowField
             if (!_grid.CanStep(cell, step, _rule)) continue;
 
             int index = _grid.Index(cell + step);
-            if (!IsReached(index) || _cost[index] >= best) continue;
+            if (!IsSettled(index) || _cost[index] >= best) continue;
 
             best = _cost[index];
             next = cell + step;
@@ -309,7 +338,9 @@ public class FlowField
         return next != cell;
     }
 
-    private bool IsReached(int index) => _stamp[index] == _generation;
+    // Seen: holds a cost from this flood, which may still drop. Settled: that cost is final.
+    private bool IsSeen(int index) => _stamp[index] == _generation;
+    private bool IsSettled(int index) => _settled[index] == _generation;
 
     private void SetCost(int index, int cost)
     {

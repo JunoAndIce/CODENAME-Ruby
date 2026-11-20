@@ -96,6 +96,15 @@ A\* for individual ones**:
   are the plain shortest: sound doesn't care how close to a wall the route runs. It hands back one
   scratch field per grid, which every flood overwrites; `FlowField.Generation` is bumped by each
   flood so a stale read can be caught (see **Stimuli and hearing**).
+  **Floods are lazy.** `Flood` plants the goal; each read (a step, a distance) spreads the flood until
+  the cell it asks about is settled, and keeps the frontier for the next read. Dijkstra settles cells
+  in cost order, so a settled cost is final and every cheaper cell is settled too, which is all a
+  descent reads: answers are exactly a full flood's. `CollectReached` and `TryGetNearestReached` look
+  at every cell, so they finish the flood first. A full flood to Max Flow Distance cost 21–28 ms at
+  0.25 m cells (85 ms at 0.125 m), and the chase field re-floods several times a second as Ruby
+  crosses cells; read lazily it costs what its farthest reader needs: 1.2 ms at 10 m by path,
+  4.9 ms at 20 m, the full flood only when a hunter is across the map. A reader nothing can reach
+  still runs the flood out, once per flood.
 - **`GridPathfinder`** (A\*, octile heuristic, integer costs 10/14, no corner cutting): patrol legs,
   cached and re-planned when the grid changes or the enemy is knocked off its route.
 - **`GridNavigator`** ties them together and moves any `IPathAgent`: it plans, and the agent steers
