@@ -46,6 +46,11 @@ public class HuntPlan
     private static readonly List<Vector3> ReachedPoints = new();
     private static readonly List<float> ReachedMetres = new();
     private static readonly List<int> RimOrder = new();
+    private static readonly Dictionary<Vector2Int, int> CellIndex = new();
+    private static readonly HashSet<Vector2Int> RimCells = new();
+    private static readonly HashSet<Vector2Int> Visited = new();
+    private static readonly Stack<Vector2Int> Frontier = new();
+    private static readonly List<List<int>> Pieces = new();
 
     private readonly List<HuntRoute> _routes = new();
     private readonly List<Vector3> _ground = new();
@@ -112,9 +117,13 @@ public class HuntPlan
     /// <summary>
     /// Floods once from the fact out to guessDistance path metres and works out the ways out. False, with nothing to
     /// hand out, when the fact is on no grid (a warning, once per context) or has no walkable ground round it (a log
-    /// line): the hunters then hunt their own guess.
+    /// line): the hunters then hunt their own guess. With the previous plan given, its ways out that still have rim
+    /// within a route's width are kept first, so a call-out that moves the vanish point a little doesn't swap which
+    /// six openings are covered (and send their holders across the room).
     /// </summary>
-    public static bool TryBuild(RubyFact fact, float guessDistance, Object logContext, out HuntPlan plan)
+    public static bool TryBuild(RubyFact fact, float guessDistance, Object logContext, out HuntPlan plan) => TryBuild(fact, guessDistance, null, logContext, out plan);
+
+    public static bool TryBuild(RubyFact fact, float guessDistance, HuntPlan previous, Object logContext, out HuntPlan plan)
     {
         plan = null;
         Vector3 from = fact.Position;
@@ -142,34 +151,62 @@ public class HuntPlan
         heading = heading.magnitude < 0.5f ? Vector3.zero : heading.normalized;
 
         plan = new HuntPlan(from, heading, fact.Time);
-        plan.FindRoutes(guessDistance);
+        plan.FindRoutes(PathGrid.At(from), guessDistance, previous);
         plan.ThinGround();
         plan.Log(guessDistance, logContext);
         return true;
     }
 
-    private void FindRoutes(float guessDistance)
+    private void FindRoutes(PathGrid grid, float guessDistance, HuntPlan previous)
     {
-        // The rim: where the flood ran out of length, so where paths carry on out of the area. Walls stop the flood
-        // short, so they leave no rim, and what is left falls into pieces at doorways and corridor ends.
-        RimOrder.Clear();
-        float rimFrom = guessDistance - RimBand;
-        for (int i = 0; i < ReachedPoints.Count; i++)
-            if (ReachedMetres[i] >= rimFrom) RimOrder.Add(i);
+        FindRim(grid, guessDistance);
         DeadEnd = RimOrder.Count == 0;
 
         if (Heading != Vector3.zero && TryPickAlongHeading(ReachedPoints, From, Heading, out Vector3 ahead))
             _routes.Add(new HuntRoute(ahead, OutwardTo(ahead), 0));
 
-        // Most likely first: along her heading, or with none the farthest from where she vanished (the open ways).
+        // The last plan's ways out that are still open, in their old order: the rim point nearest each old spot,
+        // within a route's width of it. The heading route is worked out afresh above.
+        if (previous != null)
+        {
+            foreach (HuntRoute old in previous.Routes)
+            {
+                if (_routes.Count >= MaxRoutes) break;
+                if (old.Rank == 0 && previous.Heading != Vector3.zero) continue;
+                int nearest = -1;
+                float best = RouteWidth;
+                foreach (int i in RimOrder)
+                {
+                    float d = PathGrid.FlatDistance(ReachedPoints[i], old.Spot);
+                    if (d >= best || NearRoute(ReachedPoints[i])) continue;
+                    best = d;
+                    nearest = i;
+                }
+                if (nearest >= 0) _routes.Add(new HuntRoute(ReachedPoints[nearest], OutwardTo(ReachedPoints[nearest]), _routes.Count));
+            }
+        }
+
+        // Every opening gets a way out before any gets a second: ranked one by one, the open ground ahead of her took
+        // all six and a room's other door got none. An opening's spot is its middle (the rim point nearest the
+        // piece's centre: for an arc, its midpoint), and the openings are ranked along her heading, or with none by
+        // size, the widest first. One already within a route's width of the heading route counts as covered.
+        Pieces.Sort((a, b) => PieceRank(b).CompareTo(PieceRank(a)));
+        foreach (List<int> piece in Pieces)
+        {
+            if (_routes.Count >= MaxRoutes) break;
+            if (PieceCovered(piece)) continue;
+            Vector3 middle = Middle(piece);
+            _routes.Add(new HuntRoute(middle, OutwardTo(middle), _routes.Count));
+        }
+
+        // Then wide openings (an open room's arc) are cut into directions, most likely first: the best rim point not
+        // within a route's width of one already taken becomes the next way out.
         Vector3 from = From;
         Vector3 heading = Heading;
         if (heading != Vector3.zero)
             RimOrder.Sort((a, b) => Vector3.Dot(Flat(ReachedPoints[b] - from).normalized, heading).CompareTo(Vector3.Dot(Flat(ReachedPoints[a] - from).normalized, heading)));
         else
             RimOrder.Sort((a, b) => PathGrid.FlatDistance(ReachedPoints[b], from).CompareTo(PathGrid.FlatDistance(ReachedPoints[a], from)));
-
-        // Greedy: the best rim point not within a route's width of one already taken becomes the next way out.
         foreach (int i in RimOrder)
         {
             if (_routes.Count >= MaxRoutes) break;
@@ -177,6 +214,92 @@ public class HuntPlan
             if (NearRoute(point)) continue;
             _routes.Add(new HuntRoute(point, OutwardTo(point), _routes.Count));
         }
+    }
+
+    // The rim: reached ground near the flood's edge with walkable ground beyond it that the flood didn't reach, so
+    // where it ran out of length and a path carries on out of the area. A room's far corner can lie as far along a
+    // path and still lead nowhere; its neighbours are all reached or walls, so it isn't rim. Walls leave no rim, so
+    // what's left falls into pieces at doorways and corridor ends, joined cell to cell into Pieces.
+    private void FindRim(PathGrid grid, float guessDistance)
+    {
+        RimOrder.Clear();
+        Pieces.Clear();
+        CellIndex.Clear();
+        for (int i = 0; i < ReachedPoints.Count; i++)
+            if (grid.WorldToCell(ReachedPoints[i], out Vector2Int cell)) CellIndex[cell] = i;
+
+        float rimFrom = guessDistance - RimBand;
+        RimCells.Clear();
+        foreach (KeyValuePair<Vector2Int, int> pair in CellIndex)
+        {
+            if (ReachedMetres[pair.Value] < rimFrom || !OpenBeyond(grid, pair.Key)) continue;
+            RimCells.Add(pair.Key);
+            RimOrder.Add(pair.Value);
+        }
+
+        // Pieces: rim cells joined through their eight neighbours.
+        Visited.Clear();
+        foreach (Vector2Int seed in RimCells)
+        {
+            if (!Visited.Add(seed)) continue;
+            var piece = new List<int>();
+            Frontier.Clear();
+            Frontier.Push(seed);
+            while (Frontier.Count > 0)
+            {
+                Vector2Int cell = Frontier.Pop();
+                piece.Add(CellIndex[cell]);
+                for (int dx = -1; dx <= 1; dx++)
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        var next = new Vector2Int(cell.x + dx, cell.y + dz);
+                        if (RimCells.Contains(next) && Visited.Add(next)) Frontier.Push(next);
+                    }
+            }
+            Pieces.Add(piece);
+        }
+    }
+
+    private static bool OpenBeyond(PathGrid grid, Vector2Int cell)
+    {
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dz == 0) continue;
+                var next = new Vector2Int(cell.x + dx, cell.y + dz);
+                if (!CellIndex.ContainsKey(next) && grid.IsWalkable(next)) return true;
+            }
+        return false;
+    }
+
+    private float PieceRank(List<int> piece)
+    {
+        if (Heading == Vector3.zero) return piece.Count;
+        return Vector3.Dot(Flat(Middle(piece) - From).normalized, Heading);
+    }
+
+    private bool PieceCovered(List<int> piece)
+    {
+        foreach (int i in piece)
+            if (NearRoute(ReachedPoints[i])) return true;
+        return false;
+    }
+
+    private static Vector3 Middle(List<int> piece)
+    {
+        Vector3 centre = Vector3.zero;
+        foreach (int i in piece) centre += ReachedPoints[i];
+        centre /= piece.Count;
+        Vector3 middle = ReachedPoints[piece[0]];
+        float best = float.MaxValue;
+        foreach (int i in piece)
+        {
+            float d = PathGrid.FlatDistance(ReachedPoints[i], centre);
+            if (d >= best) continue;
+            best = d;
+            middle = ReachedPoints[i];
+        }
+        return middle;
     }
 
     private bool NearRoute(Vector3 point)

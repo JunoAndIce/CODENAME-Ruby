@@ -139,7 +139,7 @@ public class FightBoard
 
         if (fight.Plan == null || !fight.Plan.IsFrom(newest))
         {
-            if (!HuntPlan.TryBuild(newest, _hunters[0].GuessDistance, _intel, out HuntPlan plan))
+            if (!HuntPlan.TryBuild(newest, _hunters[0].GuessDistance, fight.Plan, _intel, out HuntPlan plan))
             {
                 // Said by TryBuild. With no plan everyone hunts their own guess, as before.
                 fight.SetPlan(null);
