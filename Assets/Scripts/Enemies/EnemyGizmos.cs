@@ -15,7 +15,8 @@ internal static class EnemyGizmos
         }
 
         // The view, flat at eye height: green when the player is noticed, red when she's in the
-        // view but hidden, grey otherwise. Edit mode has no player to test, so it stays grey.
+        // view but hidden, grey otherwise. Edit mode has no player to test, so it stays grey. The arc is
+        // all they see things by; the close circle is for Ruby alone.
         bool tracking = Application.isPlaying && enemy.Player != null;
         bool inView = tracking && enemy.Vision.InView(enemy.Player.transform.position);
         Gizmos.color = inView ? (enemy.Vision.CanSeePlayer() ? Color.green : Color.red) : Color.grey;
@@ -24,12 +25,6 @@ internal static class EnemyGizmos
         // Pitched straight up or down they have no facing and no cone (see InView), so draw none
         // rather than invent a direction.
         if (EnemyVision.TryFlatForward(enemy.transform, out Vector3 flatForward)) DrawFlatArc(eye, flatForward, enemy.ViewAngle, enemy.ViewRange);
-
-        // What the senses sweep: loose bodies moving out to Motion Radius, corpses within Body Notice Range.
-        Gizmos.color = new Color(0.6f, 0.2f, 1f);
-        Gizmos.DrawWireSphere(enemy.transform.position, enemy.MotionRadius);
-        Gizmos.color = new Color(1f, 0.4f, 0.8f);
-        Gizmos.DrawWireSphere(enemy.transform.position, enemy.BodyNoticeRange);
 
         // The path they hunt once Ruby is out of sight: where they lost her, which way she was going, and their guess
         // at where she went. The cached guess only: drawing never floods.

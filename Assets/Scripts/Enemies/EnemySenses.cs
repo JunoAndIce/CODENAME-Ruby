@@ -55,9 +55,10 @@ public class EnemySenses
     }
 
     /// <summary>
-    /// Every Scan Interval: looks for enemies on the chain, for bodies moving within Motion Radius that
-    /// they can see clearly (a fast one is FastObject, a slower one MovingObject), for corpses and for loose
-    /// guns. The map decides what each is worth. A moving body is reacted to once per Origin Lifetime, so a
+    /// Every Scan Interval: looks for enemies on the chain, for bodies moving (a fast one is FastObject, a
+    /// slower one MovingObject), for corpses and for loose guns. Every one of them only in the cone out to View
+    /// Range with a clear line (EnemyVision.InCone): what's behind them they don't see, though they may hear it
+    /// land. The map decides what each is worth. A moving body is reacted to once per Origin Lifetime, so a
     /// settled thrown body doesn't keep them searching.
     /// </summary>
     public void Scan()
@@ -96,7 +97,7 @@ public class EnemySenses
             EnemyController other = enemies[i];
             if (other == null || other == _enemy || !other.Health.IsDead || _sawDie.Contains(other)) continue;
             if (!other.BodyState.WasKilledWithin(window, out Vector3 where)) continue;
-            if (!_enemy.Vision.InView(where) || !_enemy.Vision.HasClearSight(where, other.transform)) continue;
+            if (!_enemy.Vision.InCone(where) || !_enemy.Vision.HasClearSight(where, other.transform)) continue;
 
             _sawDie.Add(other);
             bool hasOrigin = Disturbance.TryGetOrigin(other.Body, out Vector3 source);
@@ -108,11 +109,10 @@ public class EnemySenses
         }
     }
 
-    // An enemy on the chain, in their view with a clear line. Standing where they were grabbed, they are walked
+    // An enemy on the chain, in the cone with a clear line. Standing where they were grabbed, they are walked
     // over to and searched around; dragged or thrown, someone is plainly on the other end, and that is
-    // the one thing short of seeing Ruby that sends them to Aggro. The view and not the all-round motion
-    // sense, because a body standing still has nothing to catch the eye from behind. Its own record
-    // rather than _reactedAt, or a grab they had taken would blind them to what follows for Origin Lifetime.
+    // the one thing short of seeing Ruby that sends them to Aggro. Its own record rather than _reactedAt,
+    // or a grab they had taken would blind them to what follows for Origin Lifetime.
     private void ScanHeld()
     {
         // One more physics step than the scan's interval, so a throw between two of their scans falls
@@ -129,7 +129,7 @@ public class EnemySenses
             {
                 _noticedHeld.Remove(other);
                 if (other.BodyState.WasThrownWithin(throwWindow, out Vector3 from)
-                    && _enemy.Vision.InView(from) && _enemy.Vision.HasClearSight(from, other.transform))
+                    && _enemy.Vision.InCone(from) && _enemy.Vision.HasClearSight(from, other.transform))
                 {
                     _enemy.Reactions.SeeAttack(other, "thrown off the chain");
                     return;
@@ -138,7 +138,7 @@ public class EnemySenses
             }
 
             Vector3 at = other.transform.position;
-            if (!_enemy.Vision.InView(at) || !_enemy.Vision.HasClearSight(other.Body.worldCenterOfMass, other.transform)) continue;
+            if (!_enemy.Vision.InCone(at) || !_enemy.Vision.HasClearSight(other.Body.worldCenterOfMass, other.transform)) continue;
 
             if (other.BodyState.HeldMovedBy > _enemy.DraggedDistance)
             {
@@ -161,11 +161,12 @@ public class EnemySenses
         float lifetime = Stimuli.Rules.OriginLifetime;
         Forget(now, lifetime);
 
-        // Walls and floors share the Default layer with the bodies, so no mask can leave them out and they
-        // fill the buffer too. A full buffer may have dropped the one body that matters, so it grows and
-        // sweeps again; it only allocates when it grows, and the size is kept for every enemy after.
+        // Out to View Range, the cone's reach: Consider keeps only what is in the cone. Walls and floors share
+        // the Default layer with the bodies, so no mask can leave them out and they fill the buffer too. A full
+        // buffer may have dropped the one body that matters, so it grows and sweeps again; it only allocates
+        // when it grows, and the size is kept for every enemy after.
         int count;
-        while ((count = Physics.OverlapSphereNonAlloc(_enemy.transform.position, _enemy.MotionRadius, Nearby, ~0, QueryTriggerInteraction.Ignore)) == Nearby.Length)
+        while ((count = Physics.OverlapSphereNonAlloc(_enemy.transform.position, _enemy.ViewRange, Nearby, ~0, QueryTriggerInteraction.Ignore)) == Nearby.Length)
             Nearby = new Collider[Nearby.Length * 2];
 
         _bodies.Clear();
@@ -194,7 +195,7 @@ public class EnemySenses
             if (_enemy.Memory.KnowsBody(enemy)) continue;
 
             Vector3 at = enemy.transform.position;
-            if (!_enemy.Vision.InView(at, _enemy.BodyNoticeRange) || !_enemy.Vision.HasClearSight(at, enemy.transform)) continue;
+            if (!_enemy.Vision.InCone(at) || !_enemy.Vision.HasClearSight(at, enemy.transform)) continue;
 
             // Known to the squad but not to them: they stop and look at it where they stand, and are wary
             // from then on, but doesn't go to it: someone has already been. Unknown to both: it goes
@@ -227,7 +228,7 @@ public class EnemySenses
             // be booked, or it would count as known once Ruby whips it out into a corridor and nobody
             // would react. It also saves the view and sight checks for it.
             if (_enemy.Intel.TryGetRow(at, StimulusKind.LooseGun, false, out BehaviourMap.Row gunRow) && gunRow.Response == StimulusResponse.Ignore) continue;
-            if (!_enemy.Vision.InView(at, _enemy.ViewRange) || !_enemy.Vision.HasClearSight(at, gun.transform)) continue;
+            if (!_enemy.Vision.InCone(at) || !_enemy.Vision.HasClearSight(at, gun.transform)) continue;
 
             bool squadKnows = _enemy.Intel.Published.KnowsGun(gun);
             _enemy.Intel.ReportGun(gun);
@@ -286,10 +287,13 @@ public class EnemySenses
         EnemyController enemy = body.GetComponentInParent<EnemyController>();
         if (enemy != null && !enemy.IsHeld && !IsTumbling(body)) return;
 
+        // Only what is in front of them: a body thrown past behind them is heard when it lands, not seen.
+        if (!_enemy.Vision.InCone(body.position)) return;
+
         // A body too slow to catch the eye still counts when it is an enemy down in front of them: one
         // knocked down or killed may hardly move. Held and slow is ScanHeld's, which walks them over.
         float speed = body.linearVelocity.magnitude;
-        if (speed < Stimuli.Rules.NoticeSpeed && (enemy == null || enemy.IsHeld || !_enemy.Vision.InView(body.position))) return;
+        if (speed < Stimuli.Rules.NoticeSpeed && (enemy == null || enemy.IsHeld)) return;
         if (!_enemy.Vision.HasClearSight(body.worldCenterOfMass, body.transform)) return;
         if (_reactedAt.TryGetValue(body, out float reactedAt) && now - reactedAt < lifetime) return;
 

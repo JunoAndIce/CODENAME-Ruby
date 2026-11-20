@@ -34,7 +34,8 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   (`EnemyVision.InView`, then `CanSeePlayer`). Their view is a cone (View Angle, 135° on the
   officer prefab) out to View Range (12.5 m) in front of them, plus a Close Radius circle (3 m)
   all round so she can't stand right behind them; with no horizontal facing there's no cone, only
-  the circle. An officer's root never pitches in play (its rotation is frozen and only ever turned
+  the circle. **The close circle is for Ruby alone** (`EnemyVision.InView`): everything else they
+  notice by sight uses the cone only (`InCone`, see **Senses**). An officer's root never pitches in play (its rotation is frozen and only ever turned
   about Y), so this only covers one placed pitched in the scene. Idle officers aggro on sight like
   the rest; an unarmed one also goes for a free gun in reach. Aggro keeps contact all round, at any
   distance, while they see her. Damage and getting up from a ragdoll (thrown or dropped) enter Aggro from
@@ -330,7 +331,13 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   produced travels as an **`Incident`** (point, reason, priority, whether it makes a Search and whether it says nothing of
   Ruby, built once where the stimulus is judged and passed on whole, so a new value can't be added to one call and missed in another).
 - **Senses** (`EnemySenses`, one per officer, scanned from `FixedUpdate` every Scan Interval (0.2 s, fixed) at a
-  staggered phase). They notice **bodies in motion** within Motion Radius that they can see clearly:
+  staggered phase). **Every sight notice is the cone only** (`EnemyVision.InCone`: View Angle, out to
+  View Range, with a clear line), spec `docs/specs/2026-11-19-sight-through-the-cone.md`. An all-round
+  Motion Radius (20 m on the prefab) and a corpse range of its own (15 m, in the cone or the close
+  circle) gave them eyes in the back of their head; a thing behind them is now unseen, though a body
+  thrown past still makes an Impact sound when it lands. Search coverage keeps the close circle
+  (`SearchCoverage`): ground right beside a searcher's path is passed by, and cone-only coverage had
+  them stop and turn to clear spots a step away. They notice **bodies in motion** in the cone that they can see clearly:
   at Notice Speed a MovingObject, at Alarm Speed a FastObject, once per Origin Lifetime for each
   body, and only a *taken* reaction counts as one. **A moving thing is judged by what it is as well as
   how fast it goes:** a flying pistol also reads as a LooseGun and a flying enemy as a Body, and the
@@ -341,14 +348,13 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   makes a **Search** there, and so does anything at Alarm Speed (something that fast could kill, and
   no ordinary person throws it); a slower gun or crate stays a Check. An officer on their feet is never
   a moving body, only one held on the chain or tumbling, and a **tumbling enemy in their view counts at
-  any speed**, since one knocked down or killed may hardly move. The sweep's buffer is shared and
+  any speed**, since one knocked down or killed may hardly move. The sweep reaches View Range, and its buffer is shared and
   **grows** when a sweep fills it (walls and bodies share the Default layer, so no mask can leave
   the walls out, and a full buffer used to drop bodies with a warning). The motion scan is skipped
   while they are in Aggro or Rearm: `Investigate` would refuse whatever it found, and a refused body
   isn't marked taken, so it was swept, judged and refused again every scan.
-  **Enemies on the chain** (`ScanHeld`, first in each scan): another enemy held on the chain, in their
-  view with a clear line (the view and not the all-round motion sense, because a body standing
-  still has nothing to catch the eye from behind). Standing where they were grabbed, they are walked over
+  **Enemies on the chain** (`ScanHeld`, first in each scan): another enemy held on the chain, in the
+  cone with a clear line. Standing where they were grabbed, they are walked over
   to and searched around, once per hold and only once the reaction was taken, kept apart from the
   motion scan's record or watching a grab would blind them to the throw for Origin Lifetime. Moved
   more than Dragged Distance (0.5 m, `HeldMovedBy`, so a charging throw's jiggle isn't it) from
@@ -356,8 +362,8 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   (`WasThrownWithin`), someone is plainly on the other end of the chain: `EnemyReactions.SeeAttack`
   teaches them where Ruby is right now, as Heard, and `Alert()`s them into Aggro. That, sight of her
   and `EnemyReactions.GoAfterRed` (a provoked searcher, see **Distraction**, who alone goes in blind to her until she is in their view) are the only ways to Aggro through the senses. **Seeing an enemy killed** (`ScanDeaths`, any enemy, in view with a clear line to the spot they died, within a scan of it) always sends them to check where what killed them came from, as a gunshot does (`Incident.Mobilises`), or where they died if nothing shows it. `ImpactDamage` stamps a body with its killer's origin, since a hit doesn't otherwise. One knocked down, or a flying enemy whose
-  throw they didn't see, is a Search at the throw's origin (or where they lie), with no Aggro. They notice **corpses** within Body Notice Range in their
-  view and clear sight, and **loose guns** in view and sight if they are armed. A body or gun they
+  throw they didn't see, is a Search at the throw's origin (or where they lie), with no Aggro. They notice **corpses** in the cone
+  with clear sight, and **loose guns** in the cone and sight if they are armed. A body or gun they
   haven't seen goes on the squad's books and they investigate it. A body the squad already knows they
   **glances** at: they face it and look from where they stand without walking to it, and are wary
   from then on. A gun the squad already knows gets a log line and nothing more. A booked body or gun counts as seen even when they're too busy to investigate it

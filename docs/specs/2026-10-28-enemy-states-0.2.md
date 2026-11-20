@@ -296,6 +296,10 @@ switch on the kind themselves.
 | A ripped-out light or a broken prop *(piece 9, much later)* | the cone, or being in the room | medium *(my call)* | Searching for Problem |
 | A loose gun, outside an armory room | the cone | medium *(my call)* | Searching for Problem (unarmed, he goes to Rearm instead, as today) |
 
+**Changed 2026-11-19** (`docs/specs/2026-11-19-sight-through-the-cone.md`): every row sensed by sight
+is now the cone out to View Range only. Body Notice Range, Motion Radius and the close circle's part in
+noticing things are gone; the close circle is for Ruby alone.
+
 A stimulus that's already known (a body in the pool, a disturbance an open job is handling)
 doesn't start a new job. If the job is recruiting and he's in Speech Range, he joins it. If it's
 full, a body or a fast object sends him to Patrol Aggressive, and a Problem-level stimulus is left

@@ -1,6 +1,6 @@
 # Sight through the cone only
 
-**Status:** design, awaiting the user's approval. Roadmap step 2 (`docs/architecture/project-history.md`).
+**Status:** approved and built 2026-11-19. Roadmap step 2 (`docs/architecture/project-history.md`).
 
 ## Intent
 

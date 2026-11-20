@@ -22,20 +22,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0.1f)] private float _stuckTime = 1.5f;
 
     [Header("Sight")]
-    [Tooltip("How far they see in front of them, within View Angle, if in sight.")]
+    [Tooltip("How far they see in front of them, within View Angle, if in sight: Ruby, and everything else they notice by sight (corpses, loose guns, moving bodies, someone on the chain). Only the cone: nothing behind them, except Ruby inside Close Radius.")]
     [FormerlySerializedAs("_alertRadius")] [SerializeField, Min(0f)] private float _viewRange = 12f;
     [Tooltip("How wide the view in front of them is, in degrees, centred on their facing.")]
     [SerializeField, Range(1f, 360f)] private float _viewAngle = 100f;
-    [Tooltip("Whichever way they face, they notice Ruby this close, if in sight, so she can't stand right behind them.")]
+    [Tooltip("Whichever way they face, they notice Ruby this close, if in sight, so she can't stand right behind them. Ruby only: a corpse or gun behind them goes unseen.")]
     [SerializeField, Min(0f)] private float _closeRadius = 2f;
     [Tooltip("Height above the enemy's centre that sight is cast from.")]
     [SerializeField] private float _eyeHeight = 0.5f;
 
     [Header("Senses")]
-    [Tooltip("How far they notice a loose body (thrown, tumbling or held) moving at Notice Speed or faster, with a clear line to it. Corpses and dropped guns aren't limited by this: see Body Notice Range and View Range.")]
-    [SerializeField, Min(0f)] private float _motionRadius = 15f;
-    [Tooltip("How close a corpse must be for them to notice it, in the same view as for Ruby (cone plus close circle). A corpse is looked at closer than Ruby is. A dropped gun is noticed out to View Range instead.")]
-    [SerializeField, Min(0f)] private float _bodyNoticeRange = 6f;
     [Tooltip("How far a body on the chain must be moved from where it was grabbed, in metres measured flat, before they take it as Ruby dragging it and go for her. Keep it above the charging throw's jiggle (0.1 m).")]
     [SerializeField, Min(0f)] private float _draggedDistance = 0.5f;
 
@@ -134,10 +130,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private const float GrabPopUpSpeed = 3f;          // m/s the gun hops up out of their hand when the chain grabs them, to sell the grab
     private const float GrabPopOutSpeed = 2f;         // m/s the popped gun moves away from their body, so it clears their hands
 
-    public float MotionRadius => _motionRadius;
     public float DraggedDistance => _draggedDistance;
     public float PersonalSpace => _personalSpace;
-    public float BodyNoticeRange => _bodyNoticeRange;
     public float ScanInterval => ScanIntervalSeconds;
     internal float GrabPopUp => GrabPopUpSpeed;
     internal float GrabPopOut => GrabPopOutSpeed;

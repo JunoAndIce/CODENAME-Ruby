@@ -25,27 +25,37 @@ public class EnemyVision
     public bool DetectsPlayer() => _enemy.Player != null && InView(_enemy.Player.transform.position) && CanSeePlayer();
 
     /// <summary>
-    /// Whether a point is in their view: the cone in front of them out to View Range, or the close
-    /// circle all round, which is there so nobody can stand right behind them unnoticed. Measured
-    /// flat, and only the shape: whether anything blocks the line is CanSeePlayer's business.
-    /// With no horizontal facing there's no cone: only the close circle counts. Their root never
-    /// pitches in play (its rotation is frozen and only turned about Y), so this only covers an
-    /// enemy placed pitched in the scene.
+    /// Whether Ruby, at point, is in their view: the cone (InCone), or the close circle all round, which is
+    /// there so she can't stand right behind them unnoticed. For Ruby only (and the ground a search counts
+    /// as covered, SearchCoverage): everything else they notice must be in the cone. Measured flat, and
+    /// only the shape: whether anything blocks the line is CanSeePlayer's business.
     /// </summary>
-    public bool InView(Vector3 point) => InView(point, _enemy.ViewRange);
+    public bool InView(Vector3 point) => FlatDistance(point) <= _enemy.CloseRadius || InCone(point);
 
-    /// <summary>The same cone and close circle, out to a range of the caller's choosing (a corpse is looked at closer than Ruby).</summary>
-    public bool InView(Vector3 point, float range)
+    /// <summary>
+    /// Whether a point is in the cone in front of them (View Angle, centred on their facing) out to View
+    /// Range. Every visual notice of a thing asks this: corpses, loose guns, moving bodies, an enemy on the
+    /// chain, seen killed or seen thrown (spec 2026-11-19-sight-through-the-cone). The all-round Motion Radius
+    /// and a separate corpse range gave them eyes in the back of their head. With no horizontal facing
+    /// there's no cone. Their root never pitches in play (its rotation is frozen and only turned about Y),
+    /// so that only covers an enemy placed pitched in the scene.
+    /// </summary>
+    public bool InCone(Vector3 point)
     {
         Vector3 offset = point - _enemy.transform.position;
         offset.y = 0f;
-        float distance = offset.magnitude;
-        if (distance <= _enemy.CloseRadius) return true;
-        if (distance > range) return false;
+        if (offset.magnitude > _enemy.ViewRange) return false;
 
         // No facing, no cone. Angle against a zero vector reads 0 and would put everything in range in front.
         if (!TryFlatForward(_enemy.transform, out Vector3 forward)) return false;
         return Vector3.Angle(forward, offset) <= _enemy.ViewAngle * 0.5f;
+    }
+
+    private float FlatDistance(Vector3 point)
+    {
+        Vector3 offset = point - _enemy.transform.position;
+        offset.y = 0f;
+        return offset.magnitude;
     }
 
     // Flattened so a tilted body can't skew the angle; the same reason FaceTarget flattens. False

@@ -122,6 +122,9 @@ public class SearchCoverage
         {
             if (_nextToTest >= _unseen.Count) _nextToTest = 0;
             Vector3 point = _unseen[_nextToTest];
+            // The view with the close circle, not the cone alone (spec 2026-11-19-sight-through-the-cone): ground
+            // right beside their path is passed by, not noticed, and cone-only had searchers stop and turn
+            // to clear spots a step away.
             if (!who.Vision.InView(point))
             {
                 _nextToTest++;
