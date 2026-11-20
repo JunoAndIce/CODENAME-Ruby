@@ -118,6 +118,30 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   death), caught in one place: the machine's `StateMachine.Changed` hook, which `EnemyController`
   handles. **Rearm keeps it:** an unarmed provoked enemy going for a gun hasn't seen her, and hands
   straight back to Aggro.
+- **Beats** (`EnemyBeat`, a plain class the controller owns; spec `docs/specs/2026-11-20-smooth-transitions.md`).
+  Officers roll into four moments instead of snapping between states: the **Draw** on first sight of Ruby,
+  a **Notice** before checking something, the **Lose** hold on where they last knew her before searching,
+  and the **Stand Down** at a search's end. One runs at a time: a kind, a length tuned on the controller
+  (Draw Time 0.5 s, Notice Time 0.6 s, Lose Time 0.5 s, Stand Down Time 1 s; a distraction's Notice runs
+  Distraction Time), a point to turn toward at Turn Speed, and the feet. Every beat but the draw plants
+  them; the draw lets the momentum they had run down inside it (`EnemyMovement.Coast`), so a walking officer
+  doesn't freeze mid-stride. The state that starts a beat waits while it runs, and `EnemyBeat.FixedTick`
+  runs after the state's in `FixedUpdate`, so it has the last word on facing and feet.
+  - **Cancelled on every change of state** (`OnStateChanged`, before the new state's Enter), so a beat never
+    outlives the state that started it, and the interrupts the user chose come from the table with no
+    rule of the beat's own: a hit, grab, knockdown or death cuts any beat, and Ruby seen during a Notice,
+    Lose or Stand Down cuts straight to Aggro. Nothing else does: a disturbance during a Lose or Stand
+    Down is counted toward their limit but doesn't turn them (a log line says so). The controller keeps
+    the state they came from (`PreviousState`) and the beat that change cut short (`BeatCutShort`).
+  - **The draw is Ruby's window to act first** (the user's pick): for Draw Time Aggro doesn't fire or move
+    them, while sight, Lose Sight Time and knowledge count on (`AggroState.Drawing`). Only from calm
+    (`CameFromCalm`: Idle, Patrol, Searching; word of mouth and a hit from calm included), never back from
+    Rearm or a fall or on a glimpse mid-fight, and not when she steps back in during the Lose beat, while
+    the gun is still on her spot. The Aggro-to-Rearm row waits for it, so an unarmed officer still
+    flinches and turns before going for a gun. Draw Time 0 is no window: the beat ends on its first step.
+  - **Lose** holds the gun on the newest place they know of her, the search's own centre (the controller's
+    `HoldingLastSpot` makes the stance Aim and the target that spot). One who knew nothing of her, handed
+    through Aggro by Rearm without a sighting, skips it.
 - **Fights** (`FightBoard` and `Fight`, in `Enemies/`). Everyone in Aggro belongs to one fight per floor,
   all equal. `FightBoard` is a plain class `Intel` owns and ticks beside the job board, forwarding `Join`
   and `AnyInContact`; it never moves anyone. `AggroState.Enter` calls `Join`: they take the fight

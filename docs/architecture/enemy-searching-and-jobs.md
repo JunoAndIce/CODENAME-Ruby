@@ -4,6 +4,14 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
 
 ## Searching, jobs and distraction
 
+- **Beats round a search** (spec `docs/specs/2026-11-20-smooth-transitions.md`, `EnemyBeat` under Beats in
+  `enemy-ai.md`). Entering from Idle or Patrol, they stop and turn to what they are going to check, seen or
+  heard, for Notice Time before the first step; after a lost fight they hold the gun on the newest place they
+  know of Ruby for Lose Time. The stand-down, alone (`SearchStep.StandDown`, which now ends as soon as the
+  beat has played) or on a job (once each time `JobStep.StandDown` comes; the job's clock times it with the
+  same Stand Down Time), is the Stand Down beat. The search's `Tick` and `FixedTick` wait behind any beat,
+  which replaced the old distraction pause. Anything else reaching Searching warns and starts no beat.
+
 - **Searching** (`SearchingState`). **One way in:** whoever sends them there asks first, with
   `EnemyController.RequestSearch(SearchRequest)` (an `Incident` plus whether they walk there), and
   `SearchingState.Enter` takes the request. `BeginSearch` is ask-then-`SetState`, for Idle and
@@ -205,8 +213,8 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   (`JobBoard.Noticed`, see **Sending one to check**): it grows the search there, and they, or whichever
   member noticed the same thing first, walks over to check it. **One who doesn't go** (another noticed it
   first, the job isn't under way, they are a Check's checker, a body or gun lying there) turns
-  toward it (`SearchingState.Distract`, `FaceToward`) and the search's timers and walk wait for
-  Distraction Time (1 s), then carry on where they were. So does anyone **off a job** (a glance, or a
+  toward it (`SearchingState.Distract`: the Notice beat, `EnemyBeat`) and the search's timers and walk wait
+  behind the beat for Distraction Time (1 s), then carry on where they were. So does anyone **off a job** (a glance, or a
   scene with no `Intel`: spec, "Off a job"), and one whose thing belongs to another job, who only turns
   so as not to walk onto that team's ground. A repeat of the last disturbance within Distraction Gap
   only turns them again while they've already looking, and never goes to the job. Each

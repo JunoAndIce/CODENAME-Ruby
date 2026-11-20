@@ -26,6 +26,17 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
   pass, and a Grip layer masked to the gun hand. Rebuilding refills the same asset (same GUID) and
   destroys its old sub-assets. Most slots hold stand-ins from Kevin Iglesias's pack until real
   animations exist; swapping one is an edit to the set and a rebuild, never code.
+- **Beats** (`AnimBeat`; the game side is `EnemyBeat`, see `enemy-ai.md`). Four slots, Draw, Notice, Lose and
+  Stand Down, and an Upper Body Mask. Build Controller puts Notice, Lose and Stand Down on a full-body
+  **Beat** layer (they plant the feet) and the Draw on a **Beat Upper** layer under the mask, so the legs
+  coast to a stop beneath it; a Draw with no mask is left out with a warning, as the grip is without its
+  mask. Both sit under the Grip layer, so the hand still closes round the gun. Each state is **scrubbed**
+  by the `BeatTime` parameter, the beat's progress from `IAnimatedCharacter.BeatProgress`, not played, so a
+  clip of any length fills the tuned time. `CharacterAnimator` opens a layer while the running beat has a
+  state on it. `IAnimatedCharacter.Beat` and `BeatProgress` have default bodies (none), so Ruby implements
+  nothing. **An empty slot is a rule, not a fault:** the stance holds while the officer turns; the set's
+  Inspector lists its empty slots and the officer's lists the beats their built controller lacks
+  (`BeatSlots`), and with `RUBY_DEBUG_LOGS` a beat with no clip says so once.
 - **The legs follow the body.** The body turns at once, as the game wants; the model keeps its own
   facing while upright. Standing, the head and chest twist toward the aim (Humanoid look-at, chest
   weight 0.8, eased over 0.1 s) up to Twist Limit. Past it the chest drags the legs along rather

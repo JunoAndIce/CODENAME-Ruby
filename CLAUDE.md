@@ -75,10 +75,10 @@ The scripts are split into assembly definitions so the systems can be lifted int
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |
 | `Ruby.Weapons` | `Weapons/` | Core | guns, bullets, gun hands |
-| `Ruby.Animation` | `Animation/` | none | `IAnimatedCharacter`, `CharacterAnimator`, `CharacterAnimationSet`, the stance and weapon enums |
-| `Ruby.Animation.Editor` | `Animation/Editor/` | Animation | `CharacterControllerBuilder` and the set's Build Controller button |
-| `Ruby.Game` | the root, `States/` and `Enemies/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state, and in `Enemies/` the squad's brain and the enemy's parts: `Intel` (the scene's one hub), the plain classes it owns (`KnowledgePool`, `JobBoard` with `GroupJob` and its `SearchArea`, `FloorReach`, `RoomIndex` with `Room`), `RangeSpot` (a firing-range post placed in the scene), each enemy's own parts (`EnemyMemory`, `EnemySenses`, `EnemyVision`, `EnemyReactions`, `EnemyMovement`, `EnemyAwareness`, `EnemyBodyState`, `EnemyGizmos`), the value types they pass (`Incident`, `SearchRequest`) and the behaviour map with its `Severity` |
-| `Ruby.Game.Editor` | `Editor/` | Game, Pathing | `EnemyControllerEditor`, `RoomEditor`, `AreaHandles` (the outline and edge dragging both share) |
+| `Ruby.Animation` | `Animation/` | none | `IAnimatedCharacter`, `CharacterAnimator`, `CharacterAnimationSet`, the stance, weapon and beat enums |
+| `Ruby.Animation.Editor` | `Animation/Editor/` | Animation | `CharacterControllerBuilder`, the set's Build Controller button, `BeatSlots` |
+| `Ruby.Game` | the root, `States/` and `Enemies/` | all of the above, Input System | player, enemy, Ruby's revolver and bullets, every state, and in `Enemies/` the squad's brain and the enemy's parts: `Intel` (the scene's one hub), the plain classes it owns (`KnowledgePool`, `JobBoard` with `GroupJob` and its `SearchArea`, `FloorReach`, `RoomIndex` with `Room`), `RangeSpot` (a firing-range post placed in the scene), each enemy's own parts (`EnemyMemory`, `EnemySenses`, `EnemyVision`, `EnemyReactions`, `EnemyMovement`, `EnemyAwareness`, `EnemyBodyState`, `EnemyBeat`, `EnemyGizmos`), the value types they pass (`Incident`, `SearchRequest`) and the behaviour map with its `Severity` |
+| `Ruby.Game.Editor` | `Editor/` | Game, Pathing, Animation, Animation.Editor | `EnemyControllerEditor`, `RoomEditor`, `AreaHandles` (the outline and edge dragging both share) |
 
 The systems reach the game only through interfaces declared in their own assembly, which the
 game implements:
@@ -90,7 +90,7 @@ game implements:
 | `IPathAgent` | Pathing | `EnemyController` | a body for `GridNavigator` to steer |
 | `ICameraTarget` | CameraRig | `PlayerController` | a position, an aim point, peek |
 | `IBulletTarget` | Weapons | `EnemyController` | whether a body stops bullets (only while held on the chain) |
-| `IAnimatedCharacter` | Animation | `PlayerController`, `EnemyController` | what the body is doing: velocity, the speed it's trying to move at, stance, weapon, target |
+| `IAnimatedCharacter` | Animation | `PlayerController`, `EnemyController` | what the body is doing: velocity, the speed it's trying to move at, stance, weapon, target, the beat it's rolling through |
 
 **Never make a system reference `Ruby.Game`.** Unity refuses the cycle anyway. When a system needs
 something from the game, add it to the system's interface and implement it in the game. A new script

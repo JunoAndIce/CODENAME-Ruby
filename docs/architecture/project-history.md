@@ -75,6 +75,10 @@ approved on its own:
    loose guns, moving bodies) uses the cone out to View Range. Close Radius stays, for Ruby only (user's call).
    Design: `docs/specs/2026-11-19-sight-through-the-cone.md`. **Built** 2026-11-19; awaiting the user's play-test.
 3. **Smooth transitions**: settle and wind-up pauses between states, with room for end and transition animations.
+   Design: `docs/specs/2026-11-20-smooth-transitions.md`; plan: `docs/plans/2026-11-20-smooth-transitions.md`.
+   Four beats (draw, notice, lose, stand down), each a tuned time with an animation slot scrubbed to fit; the draw
+   is Ruby's window before they may fire. **Built** 2026-11-20; scripted Play checks pass; awaiting the user's
+   play-test, and clips for the slots.
 4. **Finding cover**: spots hidden from Ruby behind crates, tables and wall corners; firing spots use them.
 5. **Using cover**: hide, peek, fire blind over cover, edge closer while Ruby stays put.
 6. **Squad tactics by headcount**: pairs, threes, fours and the whole floor. Settled so far: a fight ends only
