@@ -92,6 +92,14 @@ approved on its own:
 
 Much later, breakables.
 
+**Paused 2026-11-20** after step 3 (user: "We got a lot where we want it"). Steps 4 and 5 (cover) are skipped; if
+the work resumes, step 6 was the recommended next. Before the pause, one more change from the user's video of a
+chase's end (`docs/design/Aggro-Searching.mp4`, 34–39 s, officers circling one spot "like sharks"): **covering the
+ways out**, `docs/specs/2026-11-20-covering-the-ways-out.md` and `docs/plans/2026-11-20-covering-the-ways-out.md`.
+Out of sight the fight now floods once from where Ruby vanished, finds the openings out of it, sends the nearest
+hunter down each (two at most) and spreads the rest round it facing outward; and a searcher clears the nearest
+point by walking distance. **Built** 2026-11-20; scripted Play checks pass; awaiting the user's play-test.
+
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
 account of what is built, and its section on the Path Grid, colliders and navigation is written for
 new coders. It deliberately says nothing about enemy work still in progress, such as group jobs

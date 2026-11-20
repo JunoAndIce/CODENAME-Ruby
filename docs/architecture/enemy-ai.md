@@ -78,12 +78,42 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
     No heading (under 0.5 m/s, or a sound), no grid, or nothing reachable ahead guesses the fact's own spot, each
     logged. Guess Distance is a field and not her speed times the timer: she runs 15 m/s, which put the guess 60 m
     off. Selected in Play, an enemy draws the vanish point, her heading and the guess.
-  - **Hunting the guess** (`AggroState.HuntGuess`): past the grace they walk to the guess at Chase Speed and, within
-    Search Reach, look round it (`EnemyMovement.LookAround`, looped, so a hunt a mate keeps going doesn't leave
-    them frozen facing where they arrived) until sight comes back or the hunt ends. A newer fact
-    (a mate's call-out, the pool) moves the guess more than half a metre and sends them on. Everyone told the same
-    thing gets the same guess, so one whose walk reports Blocked (Stuck Time) looks round where they stand instead
-    of pushing at a mate's back, and one with no way there does the same; both log.
+  - **Covering the ways out** (`HuntPlan`, `HuntAssigner`, `FightBoard.PlanHunt`; spec
+    `docs/specs/2026-11-20-covering-the-ways-out.md`). Everyone told the same thing used to walk to the same guess,
+    so a floor's worth of officers piled onto one spot and circled it, and when she turned the guess was somewhere
+    she never went. Now the fight splits them up:
+    - **The plan.** From the newest fact any member hunting out of sight holds (`AggroState.HuntingOutOfSight`;
+      those in sight learn every frame, so only hunters' facts are read), `HuntPlan.TryBuild` floods once from the
+      vanish point V out to Guess Distance. Its **rim** is reached ground within 1.5 m of the flood's edge with
+      walkable ground beyond it the flood didn't reach: where a path carries on out of the area. A room's far corner
+      as far along a path leads nowhere, so isn't rim. The rim is joined cell to cell into openings (a doorway, a
+      corridor end, an open room's arc). Route 0 is the guess itself (the same scoring,
+      `HuntPlan.TryPickAlongHeading`), then **every opening gets a route at its middle** before any gets a second,
+      ranked along her heading (with none, widest first), then wide openings are cut into directions 3 m apart,
+      up to six routes. Ranked point by point, the open ground ahead took all six and a room's other door got none.
+      No rim at all is a **dead end**: it logs, and everyone spreads through the reached ground. A re-plan keeps the
+      last plan's ways out that still have rim within a route's width first, so a call-out that creeps V doesn't
+      swap which openings are covered.
+    - **Who goes where** (`HuntAssigner.AssignAll`, on each new plan). One flood per route measures every hunter's
+      walk to it, all read before anything is assigned. Holders whose old spot lies within a route's width of a new
+      route keep it, closest pairs first. Then each route in rank order takes the nearest hunter left, then a second
+      each, standing Spot Spacing to one side of the first and clear of every slot and other route's spot; with no
+      such spot the route takes no second (two is a most, not a must), and a second keeps the side they stood on.
+      The rest spread over the plan's reached ground (thinned to about 1 m), each on the spot nearest them Spot
+      Spacing from every slot. A hunter beyond every route's 30 m bound takes what's left last, with a log line. One
+      late to the plan (lost sight after it, or just told its fact) gets the best of what's left from one flood of
+      their own (`AssignOne`). Slots live on the `Fight` and go when their holder stops hunting or leaves.
+    - **Hunting** (`AggroState.HuntGuess`): past the grace, a hunter with a slot walks to it at Chase Speed and,
+      within Search Reach, looks round it (`EnemyMovement.LookAround`, looped, so a hunt a mate keeps going doesn't
+      leave them frozen) centred **outward**, from V to their spot, down the route rather than back at the middle.
+      Without a slot (they haven't heard the plan's fact, or fight alone on no grid) they hunt their own guess as
+      before, logged once per fact. A slot or guess that moves more than half a metre sends them on. One whose walk
+      reports Blocked (Stuck Time) looks round where they stand instead of pushing at a mate's back, and one with
+      no way there does the same; both log. Officers 70 m or more of path away can fail to plan a walk at all
+      (`GridPathfinder`'s 20,000-cell limit) and look round where they stand: that predates this, and in a real
+      chase they are already near.
+    - Selected, an enemy draws their slot and a ray down the route; with `Intel` selected each fight draws its plan
+      (a cross at V, the ranked routes, a line from each hunter to their spot).
   - **One timer, Lose Sight Time** (4 s, on the enemy), replaces Aggro Time, Sight Follow Through and Unseen Hold
     Time. It counts from the last time anyone in the fight had her in contact, the grace included, and when it
     runs out `LostPlayer` sends them to search. Any glimpse, theirs or a mate's, starts it over. Knowing nothing at
@@ -152,8 +182,8 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   them at once, and getting up rejoins them by the normal route). A fight nobody is in closes.
   `EnemyController.Fight` is set only by the board. On no grid they fight alone, with one warning.
   **Contact is shared:** `AggroState.LostPlayer` is false, and its timer starts over, while a
-  fight mate has Ruby in contact, so a member behind a wall doesn't give up while another has her. Out of sight meanwhile they hunt the guess of
-  the newest fact, which the contact holder's call-outs keep moving; never her true position.
+  fight mate has Ruby in contact, so a member behind a wall doesn't give up while another has her. Out of sight meanwhile they cover the ways out of
+  where the newest fact puts her (see **Covering the ways out**), which the contact holder's call-outs keep moving; never her true position.
   A provoked member who hasn't laid eyes on her gives their mates no contact (see **Aggro**).
   **No squads:** a main squad of up to four that closed in, and a standby squad that held back behind it
   and moved up when a main member fell, were built and taken out (user, 2026-11-07). Firing spots spread
