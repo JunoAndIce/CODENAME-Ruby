@@ -38,6 +38,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Header("Fighting")]
     [Tooltip("Seconds without seeing Ruby, theirs or a fight mate's, before the hunt turns to a search. Out of sight they hunt where she was heading meanwhile, and look round there. Any glimpse starts it over.")]
     [SerializeField, Min(0.5f)] private float _loseSightTime = 4f;
+    [Tooltip("Seconds they turn and draw on first seeing Ruby, coming in from calm, before they may fire: her window to act first. The Draw slot's clip is stretched to fit. 0 = they fire as soon as the gun allows.")]
+    [SerializeField, Min(0f)] private float _drawTime = 0.5f;
     [Tooltip("While they see Ruby, they call out her position this often, in seconds (and at once on first sight). Speech reaches others immediately; the shared pool takes longer.")]
     [SerializeField, Min(0.1f)] private float _speakInterval = 1f;
     [Tooltip("How far ahead of where they lost Ruby they guess she has gone, in path metres along her heading: through the doorway she ran at, behind the side of the crate she was making for. Kept short on purpose: Ruby runs fast, and a guess derived from her speed landed rooms away.")]
@@ -69,8 +71,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [Header("Looking")]
     [Tooltip("How long they look around a spot they went to check, in seconds, before standing down. A search for an attack looks for Search Duration instead.")]
     [SerializeField, Min(0.1f)] private float _lookTime = 1.5f;
-    [Tooltip("How long they hold still after finding nothing, in seconds: the gesture, until there is an animation for it.")]
+    [Tooltip("How long they hold the stand-down beat after finding nothing, in seconds. Its clip is stretched to fit.")]
     [SerializeField, Min(0f)] private float _standDownTime = 1f;
+    [Tooltip("Seconds they stop and turn toward something before going to check it, coming in from calm. The Notice slot's clip is stretched to fit.")]
+    [SerializeField, Min(0f)] private float _noticeTime = 0.6f;
+    [Tooltip("Seconds they hold their gun on where they last saw Ruby, after losing her, before the search starts. The Lose slot's clip is stretched to fit.")]
+    [SerializeField, Min(0f)] private float _loseTime = 0.5f;
     [Tooltip("How far, in degrees, their body turns to each side of where they were facing while they look around.")]
     [SerializeField, Range(0f, 180f)] private float _lookSweepAngle = 70f;
     [Tooltip("Seconds for one full sweep, left to right and back.")]
@@ -147,6 +153,9 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public float SearchTravelLimit => _searchTravelLimit;
     public float SearchReach => _searchReach;
     public float LookTime => _lookTime;
+    public float DrawTime => _drawTime;
+    public float NoticeTime => _noticeTime;
+    public float LoseTime => _loseTime;
     public float StandDownTime => _standDownTime;
     public float FollowDistance => _followDistance;
     public float DistractionTime => _distractionTime;
@@ -229,6 +238,17 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     public EnemyAwareness Awareness { get; private set; }
     /// <summary>Their record of the chain, and the gun and corpse handling that goes with it.</summary>
     public EnemyBodyState BodyState { get; private set; }
+    /// <summary>The beat they roll through between states (EnemyBeat): cancelled on every change of state.</summary>
+    public EnemyBeat Beat { get; private set; }
+
+    /// <summary>The state they were in before the last change: whether Aggro and Searching start a beat depends on it.</summary>
+    internal IState PreviousState { get; private set; }
+
+    /// <summary>The beat the last change of state cut short, None when none was running. Seeing Ruby during the Lose beat skips the draw.</summary>
+    internal AnimBeat BeatCutShort { get; private set; }
+
+    /// <summary>Coming in from calm: the draw only comes from here, never back from Rearm or a fall, nor on a glimpse mid-fight.</summary>
+    internal bool CameFromCalm => PreviousState is IdleState or PatrolState or SearchingState;
     /// <summary>The scene's shared pool, or null when there is none (an error was logged at Start).</summary>
     public Intel Intel { get; private set; }
     public Health Health { get; private set; }
@@ -262,6 +282,7 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         Movement = new EnemyMovement(this, _capsule);
         Awareness = new EnemyAwareness(this);
         BodyState = new EnemyBodyState(this);
+        Beat = new EnemyBeat(this);
 
         if (!TryGetComponent(out IRagdollBody ragdoll))
             Debug.LogError($"{name} has no IRagdollBody — it cannot be thrown.", this);
@@ -289,6 +310,12 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     // Aggro, where clearing it would have given them all-round sight on hearsay.
     private void OnStateChanged(IState from, IState to)
     {
+        // A beat belongs to the state that started it: any change ends it, which is what lets a hit, a grab or
+        // Ruby cut one short through the table with no rule of the beat's own. Before the new state's Enter, so
+        // that Enter can start its own and read what was cut.
+        PreviousState = from;
+        BeatCutShort = Beat.Cancel();
+
         if (!ProvokedUnseen || to is AggroState or RearmState) return;
         ProvokedUnseen = false;
         DebugLog.Info($"{name} leaves the hunt for {to.GetType().Name} without having laid eyes on Ruby: they are no longer provoked, and their next fight sees her as any does.", this);
@@ -332,7 +359,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     {
         _state.FixedTick();
         if (!Health.IsDead && !IsOverridden)
+        {
+            // After the state, which waits while a beat runs, so the beat has the last word on the feet and facing.
+            Beat.FixedTick();
             Senses.Scan();
+        }
     }
 
     private void OnValidate()

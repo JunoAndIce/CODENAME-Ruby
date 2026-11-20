@@ -249,6 +249,30 @@ public class EnemyMovement
         return false;
     }
 
+    /// <summary>
+    /// Turns their body toward a point at Turn Speed, flat, and says whether they're facing it. For a beat, which
+    /// turns them toward what caused it rather than snapping them round. A point on top of them leaves them as
+    /// they are.
+    /// </summary>
+    public bool TurnToward(Vector3 point)
+    {
+        Vector3 direction = point - _enemy.transform.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.0001f) return true;
+        return TurnToYaw(Quaternion.LookRotation(direction, Vector3.up).eulerAngles.y);
+    }
+
+    /// <summary>
+    /// Moves at a flat velocity they are letting run down, not one they are walking at: the draw's coast to a
+    /// stop. The speed it reads as is that velocity's, so the legs slow with it.
+    /// </summary>
+    public void Coast(Vector3 flatVelocity)
+    {
+        _lastWalkStep = float.NegativeInfinity;
+        IntendedSpeed = flatVelocity.magnitude;
+        VelocityUtil.SetFlatVelocity(_enemy.Body, flatVelocity);
+    }
+
     /// <summary>Face a point at once, ignoring height: forward must never tilt, or the body drives vertically.</summary>
     public void FaceToward(Vector3 point)
     {

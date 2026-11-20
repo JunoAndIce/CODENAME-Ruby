@@ -26,6 +26,17 @@ internal static class EnemyGizmos
         // rather than invent a direction.
         if (EnemyVision.TryFlatForward(enemy.transform, out Vector3 flatForward)) DrawFlatArc(eye, flatForward, enemy.ViewAngle, enemy.ViewRange);
 
+        // The beat they are rolling through, and what it turns them toward.
+        if (Application.isPlaying && enemy.Beat != null && enemy.Beat.Running)
+        {
+            Gizmos.color = new Color(1f, 0.5f, 1f, 0.9f);
+            Gizmos.DrawLine(eye, enemy.Beat.FacePoint);
+            Gizmos.DrawWireSphere(enemy.Beat.FacePoint, 0.2f);
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(eye + Vector3.up * 0.5f, $"{enemy.Beat.Kind} beat {enemy.Beat.Progress:P0}");
+#endif
+        }
+
         // The path they hunt once Ruby is out of sight: where they lost her, which way she was going, and their guess
         // at where she went. The cached guess only: drawing never floods.
         if (Application.isPlaying && enemy.Memory != null && enemy.Awareness.HasGuess)
