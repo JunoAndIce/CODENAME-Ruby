@@ -408,6 +408,9 @@ public class PathGrid : MonoBehaviour
         _stepOffsets = new int[Steps.Length];
         for (int k = 0; k < Steps.Length; k++) _stepOffsets[k] = Steps[k].x + Steps[k].y * _width;
         RefreshSteps(0, 0, _width - 1, _depth - 1);
+        // Areas are built at the first query (SameArea), so a burst of props settling builds them once.
+        _careful.WalkVersion = _forceful.WalkVersion = 0;
+        _careful.AreaVersion = _forceful.AreaVersion = -1;
 
         // The same playtest switch as Core's DebugLog, which Pathing can't reference.
 #if RUBY_DEBUG_LOGS
@@ -617,6 +620,21 @@ public class PathGrid : MonoBehaviour
     internal int[] StepOffsets => _stepOffsets;
 
     /// <summary>
+    /// False when two cells can't reach each other under a rule: different connected areas, or either
+    /// blocked. True means they may (a route can still be longer than a search's bound). A search toward
+    /// a cell nothing can reach used to explore the whole reachable floor before failing: 9.6 ms for an A*,
+    /// a full flood for a field. The areas are rebuilt here, at the first query after a resting prop
+    /// changed walkability, so a burst of props settling costs one rebuild.
+    /// </summary>
+    internal bool SameArea(int a, int b, PropRule rule)
+    {
+        PropLayer layer = Layer(rule);
+        if (layer.AreaVersion != layer.WalkVersion) layer.BuildAreas(_clearanceQueue, _stepOffsets);
+        int area = layer.Area[a];
+        return area != 0 && area == layer.Area[b];
+    }
+
+    /// <summary>
     /// Adds the cells a collider blocks for an agent: those where an agent-sized capsule would
     /// touch it, the same clearance the bake gives static geometry. A collider wholly above the agents'
     /// height or below the floor blocks nothing. Floor Clearance isn't used here: it keeps the floor
@@ -769,6 +787,13 @@ public class PathGrid : MonoBehaviour
         RefreshAround(marks);
         if (marks.Moving) _forceful.Version = ++_versionCounter;
         else _careful.Version = _forceful.Version = ++_versionCounter;
+        // Walkability changes only where a resting prop's core and test points block: under Careful always,
+        // under Forceful only for a heavy one. A moving prop only costs a shove.
+        if (!marks.Moving)
+        {
+            _careful.WalkVersion++;
+            if (marks.Heavy) _forceful.WalkVersion++;
+        }
     }
 
     private static void Add(int[] counts, List<int> cells, int sign)

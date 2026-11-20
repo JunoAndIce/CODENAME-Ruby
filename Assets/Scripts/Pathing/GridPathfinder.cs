@@ -49,11 +49,14 @@ public class GridPathfinder
         if (!_grid.WorldToCell(from, out Vector2Int raw) || !_grid.NearestWalkable(raw, SnapRadius, rule, out Vector2Int start))
             return false;
 
+        int startIndex = _grid.Index(start);
+        int goalIndex = _grid.Index(goal);
+        // Walled off: fail at once, not after searching all the floor the start can reach.
+        if (!_grid.SameArea(startIndex, goalIndex, rule)) return false;
+
         _generation++;   // invalidates every array entry from the last search without clearing
         _open.Clear();
 
-        int startIndex = _grid.Index(start);
-        int goalIndex = _grid.Index(goal);
         Record(startIndex, 0, -1);
         _open.Push(startIndex, Priority(0, Heuristic(start, goal)));
 

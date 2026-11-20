@@ -127,7 +127,12 @@ public class FlowField
     // full flood would read it on its next refresh; RefreshIfStale re-floods on the same throttle as before.
     private bool Settle(int index)
     {
-        if (index >= 0 && _settled[index] == _generation) return true;
+        if (index >= 0)
+        {
+            if (_settled[index] == _generation) return true;
+            // Walled off from the goal: no flood reaches it, so don't run the frontier out to learn that.
+            if (!_grid.SameArea(index, _grid.Index(_goalCell), _rule)) return false;
+        }
         bool avoidWalls = _floodedAvoidWalls;
         // The grid's cached moves and step costs (PropLayer.Moves): two reads per cell, not CanStep and
         // StepCost per neighbour. Read afresh each call, as the bake replaces the arrays.

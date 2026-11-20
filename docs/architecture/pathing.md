@@ -116,6 +116,16 @@ A\* for individual ones**:
   one cell more (a cell's moves read its neighbours). The skin is in that box, as it is a step cost.
   **Anything new that changes walkability or a step cost must refresh them there**, or floods and A\*
   read stale moves while `CanStep` answers the new ones. `StepCost` itself returns the cached value.
+- **Connected areas** (`PropLayer.Area`, `PathGrid.SameArea`). Each layer labels its walkable cells'
+  connected areas. A\* and a flood's reads ask `SameArea` first and fail at once between two areas,
+  where they used to explore everything the start could reach: an A\* from inside the building to the
+  open ground outside it searched to its 20,000-cell cap (9.6 ms), a flood read there ran 86,000 cells;
+  both now take about 0.0001 ms. Labels are rebuilt (0.9 ms) at the first query after a resting prop
+  marks or unmarks (`WalkVersion`), so a burst of props settling costs one rebuild; a fight re-marked
+  walkability about 7 times a second. They must never miss a join (a prop leaving can join two areas,
+  and stale labels would call a reachable cell unreachable), which is why they are rebuilt rather than
+  kept up. Same area doesn't mean in range: A\* still gives up past 20,000 cells (a goal 120 m away by
+  path does) and a flood past its bound.
 - **`GridNavigator`** ties them together and moves any `IPathAgent`: it plans, and the agent steers
   (facing, velocity scheme). It reads `IPathAgent.PropRule` at the top of every move and decision, and a
   change drops its point field, approach field and route, so a hunter who turns searcher never takes

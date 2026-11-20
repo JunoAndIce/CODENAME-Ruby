@@ -60,6 +60,17 @@ public class PropLayer
     public readonly byte[] Moves;
     /// <summary>See Moves.</summary>
     public readonly int[] StepCosts;
+    /// <summary>
+    /// Each walkable cell's connected area under this rule (1 and up; 0 when blocked): two cells with
+    /// different areas can't reach each other, so a search between them fails at once instead of running
+    /// the whole floor out. Rebuilt by the grid (PathGrid.SameArea) at the first query after WalkVersion
+    /// moves on.
+    /// </summary>
+    public readonly int[] Area;
+    /// <summary>Bumped whenever a cell's walkability under this rule may have changed (a resting prop marked or unmarked).</summary>
+    public int WalkVersion;
+    /// <summary>The WalkVersion Area was built for.</summary>
+    public int AreaVersion = -1;
     /// <summary>Bumped (from the grid's one counter) whenever this layer changes. See PathGrid.VersionFor.</summary>
     public int Version;
 
@@ -84,7 +95,41 @@ public class PropLayer
         Best = new byte[count];
         Moves = new byte[count];
         StepCosts = new int[count];
+        Area = new int[count];
         _rowMax = new byte[count];
+    }
+
+    /// <summary>
+    /// Labels every walkable cell's connected area, breadth first along Moves (which only ever lead into
+    /// walkable cells, and both ways between two of them). queue is scratch, at least CellCount long;
+    /// offsets are PathGrid.StepOffsets.
+    /// </summary>
+    public void BuildAreas(int[] queue, int[] offsets)
+    {
+        System.Array.Clear(Area, 0, Area.Length);
+        int area = 0;
+        for (int seed = 0; seed < Area.Length; seed++)
+        {
+            if (Area[seed] != 0 || Blocked(seed)) continue;
+            area++;
+            Area[seed] = area;
+            int head = 0, tail = 0;
+            queue[tail++] = seed;
+            while (head < tail)
+            {
+                int current = queue[head++];
+                int legal = Moves[current];
+                for (int k = 0; k < 4; k++)   // straights suffice: a legal diagonal has both its straights open
+                {
+                    if ((legal & (1 << k)) == 0) continue;
+                    int next = current + offsets[k];
+                    if (Area[next] != 0) continue;
+                    Area[next] = area;
+                    queue[tail++] = next;
+                }
+            }
+        }
+        AreaVersion = WalkVersion;
     }
 
     /// <summary>A wall or a prop that blocks under this rule is within the agent radius of the cell's centre.</summary>
