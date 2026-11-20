@@ -89,6 +89,12 @@ public class AggroState : EnemyStateBase
     /// <summary>The gun is up: firing, or held on where they last saw her through the glimpse grace. The stance reads this.</summary>
     public bool Aiming { get; private set; }
 
+    /// <summary>
+    /// True on a step they spent hunting out of sight (HuntGuess): past the glimpse grace, not drawing. What the
+    /// fight's hunt plan reads to know who to hand a way out to (FightBoard.PlanHunts); false on every other branch.
+    /// </summary>
+    public bool HuntingOutOfSight { get; private set; }
+
     /// <summary>Where the gun points while Aiming: Ruby in sight, where they last saw her in the grace.</summary>
     public Vector3 AimPoint { get; private set; }
 
@@ -96,6 +102,7 @@ public class AggroState : EnemyStateBase
     {
         Firing = false;
         Aiming = false;
+        HuntingOutOfSight = false;
         _lostTimer = 0f;
         _loggedNothing = false;
         _hadSight = Enemy.Vision.CanTrackPlayer();
@@ -156,6 +163,7 @@ public class AggroState : EnemyStateBase
     {
         Firing = false;
         Aiming = false;
+        HuntingOutOfSight = false;
         // Rearming, grabbed or searching, they hold no spot (the board drops it too, if they leave the fight).
         ReleaseSpot();
         if (LostPlayer)
@@ -226,6 +234,7 @@ public class AggroState : EnemyStateBase
     public override void FixedTick()
     {
         _chaseMoving = false;   // only a walk to the guess, this step, sets it
+        HuntingOutOfSight = false;   // only HuntGuess, this step, sets it
         if (Enemy.PlayerTransform == null)
         {
             Enemy.Stop();
@@ -329,6 +338,7 @@ public class AggroState : EnemyStateBase
     // one with no way there at all does the same; both say so.
     private void HuntGuess()
     {
+        HuntingOutOfSight = true;
         if (!Enemy.Awareness.TryGetGuess(out Vector3 guess))
         {
             Enemy.Stop();   // nothing to go on: LostPlayer ends the hunt and says so

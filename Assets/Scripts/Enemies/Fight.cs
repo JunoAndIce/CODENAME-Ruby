@@ -14,6 +14,9 @@ public class Fight
     // The firing spot each armed member has claimed. Cleared by the board when a member leaves, so a claim
     // can't outlive its owner.
     private readonly Dictionary<EnemyController, Vector3> _claims = new();
+    // The way out each member hunting out of sight was handed (HuntAssigner), from the plan below. Cleared by the
+    // board when a member leaves or stops hunting, so a slot can't outlive its holder.
+    private readonly Dictionary<EnemyController, HuntSlot> _slots = new();
     private bool _loggedNoSpot;
 
     public Fight(int id, PathGrid floor)
@@ -59,6 +62,21 @@ public class Fight
         }
         return false;
     }
+
+    /// <summary>The ways out of where Ruby was last known to vanish, made from the newest fact a hunter holds. Null when there is none.</summary>
+    public HuntPlan Plan { get; private set; }
+
+    /// <summary>Takes a new plan. The slots stay: HuntAssigner reads the old ones to keep holders on routes near them.</summary>
+    public void SetPlan(HuntPlan plan) => Plan = plan;
+
+    public IReadOnlyDictionary<EnemyController, HuntSlot> Slots => _slots;
+
+    public bool TryGetSlot(EnemyController who, out HuntSlot slot) => _slots.TryGetValue(who, out slot);
+
+    public void SetSlot(EnemyController who, HuntSlot slot) => _slots[who] = slot;
+
+    /// <summary>They give up their way out, if they held one. Safe on a destroyed member.</summary>
+    public void ReleaseSlot(EnemyController who) => _slots.Remove(who);
 
     public override string ToString() => $"fight #{Id}";
 }

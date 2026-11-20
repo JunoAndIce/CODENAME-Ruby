@@ -35,7 +35,7 @@ public readonly struct HuntRoute
 public class HuntPlan
 {
     private const float RimBand = 1.5f;       // reached ground this close to the flood's edge is where paths leave the area
-    private const float RouteWidth = 3f;      // rim within this of a route is the same way out
+    public const float RouteWidth = 3f;       // rim within this of a route is the same way out (HuntAssigner keeps holders by it too)
     private const int MaxRoutes = 6;
     private const float GroundSpacing = 1f;   // the reached ground kept for spreading out, thinned to about this apart
     private const float LateralWeight = 0.5f; // how much straying sideways from her heading costs, against distance along it
@@ -221,7 +221,7 @@ public class HuntPlan
 
     // From the vanish point to a spot, flat. A spot on the vanish point itself has no direction of its own: it looks
     // the way she was heading, or straight ahead with no heading.
-    private Vector3 OutwardTo(Vector3 spot)
+    public Vector3 OutwardTo(Vector3 spot)
     {
         Vector3 outward = Flat(spot - From);
         if (outward.sqrMagnitude > 0.0001f) return outward.normalized;

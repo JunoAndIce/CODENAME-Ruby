@@ -97,12 +97,71 @@ public class FightBoard
         {
             Fight fight = _fights[f];
             Prune(fight, fight.MemberList);
+            if (fight.Floor != null) PlanHunt(fight);
 
             if (fight.Count == 0)
             {
                 DebugLog.Info($"{fight} is over: nobody is left in it.", _intel);
                 _fights.RemoveAt(f);
             }
+        }
+    }
+
+    private readonly List<EnemyController> _hunters = new();
+    private readonly List<EnemyController> _planned = new();
+    private readonly List<EnemyController> _stopped = new();
+
+    // Covering the ways out (spec 2026-11-20-covering-the-ways-out): the members hunting out of sight share one plan,
+    // made from the newest fact any of them holds, and each who knows that fact holds a slot in it. Re-planned only
+    // when that fact changes, which out of sight is a call-out or the pool, about once a second: those in sight
+    // learn every frame, which is why only the hunters' facts are read. It never moves anyone; AggroState walks.
+    private void PlanHunt(Fight fight)
+    {
+        _hunters.Clear();
+        foreach (EnemyController member in fight.MemberList)
+            if (member != null && member.CurrentState is AggroState && member.Aggro.HuntingOutOfSight) _hunters.Add(member);
+
+        // In sight again, rearming or still drawing: they hunt nothing, and their way out is free for the next plan.
+        _stopped.Clear();
+        foreach (EnemyController holder in fight.Slots.Keys)
+            if (!_hunters.Contains(holder)) _stopped.Add(holder);
+        foreach (EnemyController holder in _stopped) fight.ReleaseSlot(holder);
+
+        bool any = false;
+        RubyFact newest = default;
+        foreach (EnemyController hunter in _hunters)
+        {
+            if (!hunter.Awareness.TryGetNewestRedFact(out RubyFact fact) || (any && fact.Time <= newest.Time)) continue;
+            newest = fact;
+            any = true;
+        }
+        if (!any) return;   // nobody hunting, or nobody knowing anything: the plan stands until someone does
+
+        if (fight.Plan == null || !fight.Plan.IsFrom(newest))
+        {
+            if (!HuntPlan.TryBuild(newest, _hunters[0].GuessDistance, _intel, out HuntPlan plan))
+            {
+                // Said by TryBuild. With no plan everyone hunts their own guess, as before.
+                fight.SetPlan(null);
+                _stopped.Clear();
+                _stopped.AddRange(fight.Slots.Keys);
+                foreach (EnemyController holder in _stopped) fight.ReleaseSlot(holder);
+                return;
+            }
+            fight.SetPlan(plan);
+            _planned.Clear();
+            foreach (EnemyController hunter in _hunters)
+                if (hunter.Awareness.TryGetNewestRedFact(out RubyFact fact) && plan.IsFrom(fact)) _planned.Add(hunter);
+            HuntAssigner.AssignAll(fight, plan, _planned, _intel);
+            return;
+        }
+
+        // Late to the plan: they lost sight after it was made, or have just been told its fact.
+        foreach (EnemyController hunter in _hunters)
+        {
+            if (fight.TryGetSlot(hunter, out _)) continue;
+            if (hunter.Awareness.TryGetNewestRedFact(out RubyFact fact) && fight.Plan.IsFrom(fact))
+                HuntAssigner.AssignOne(fight, fight.Plan, hunter, _intel);
         }
     }
 
@@ -116,6 +175,7 @@ public class FightBoard
             // The one place a claim is guaranteed to go with its owner, whichever way they left (dead, grabbed,
             // destroyed). A destroyed key is still the same dictionary key.
             fight.Release(member);
+            fight.ReleaseSlot(member);
             if (member == null) continue;   // destroyed: nothing more to clear
             member.Fight = null;
             DebugLog.Info($"{member.name} leaves {fight}.", _intel);
