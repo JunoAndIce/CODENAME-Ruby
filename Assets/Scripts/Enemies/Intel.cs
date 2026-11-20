@@ -614,6 +614,33 @@ public class Intel : MonoBehaviour
             if (members.Count > 0 && members[0] != null)
                 UnityEditor.Handles.Label(members[0].transform.position + Vector3.up * 2.2f, $"{fight}: {members.Count} in it");
 #endif
+            DrawHuntPlan(fight);
+        }
+    }
+
+    // The fight's hunt plan: a cross where she vanished, each way out ranked, and a line from each hunter to the
+    // spot they cover, so you can see the area being covered rather than one guess being swarmed.
+    private static void DrawHuntPlan(Fight fight)
+    {
+        HuntPlan plan = fight.Plan;
+        if (plan == null) return;
+        Gizmos.color = Color.cyan;
+        Vector3 v = plan.From + Vector3.up * 0.1f;
+        Gizmos.DrawLine(v - Vector3.right * 0.5f, v + Vector3.right * 0.5f);
+        Gizmos.DrawLine(v - Vector3.forward * 0.5f, v + Vector3.forward * 0.5f);
+        foreach (HuntRoute route in plan.Routes)
+        {
+            Gizmos.DrawSphere(route.Spot + Vector3.up * 0.1f, 0.2f);
+            Gizmos.DrawLine(v, route.Spot + Vector3.up * 0.1f);
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(route.Spot + Vector3.up * 0.6f, $"route {route.Rank}");
+#endif
+        }
+        foreach (KeyValuePair<EnemyController, HuntSlot> pair in fight.Slots)
+        {
+            if (pair.Key == null) continue;
+            Gizmos.DrawLine(pair.Key.transform.position + Vector3.up * 0.3f, pair.Value.Spot + Vector3.up * 0.1f);
+            Gizmos.DrawWireSphere(pair.Value.Spot, 0.3f);
         }
     }
 

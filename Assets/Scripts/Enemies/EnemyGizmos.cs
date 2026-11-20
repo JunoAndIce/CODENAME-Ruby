@@ -37,6 +37,15 @@ internal static class EnemyGizmos
 #endif
         }
 
+        // The way out they cover in the fight's hunt plan: where they stand, and which way they look from there.
+        if (Application.isPlaying && enemy.Fight != null && enemy.Fight.TryGetSlot(enemy, out HuntSlot slot))
+        {
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawLine(eye, slot.Spot);
+            Gizmos.DrawWireSphere(slot.Spot, 0.3f);
+            Gizmos.DrawLine(slot.Spot + Vector3.up * 0.1f, slot.Spot + Vector3.up * 0.1f + slot.Outward * 1.2f);
+        }
+
         // The path they hunt once Ruby is out of sight: where they lost her, which way she was going, and their guess
         // at where she went. The cached guess only: drawing never floods.
         if (Application.isPlaying && enemy.Memory != null && enemy.Awareness.HasGuess)

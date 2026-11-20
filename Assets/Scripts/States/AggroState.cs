@@ -42,6 +42,7 @@ public class AggroState : EnemyStateBase
 
     // Looking round where they guessed she went (HuntGuess).
     private bool _looking;
+    private float _noSlotLoggedFor = float.NaN;   // the fact they last said they hunt their own guess for (LogNoSlot)
     private Vector3 _lookAt;        // the guess they are looking round: one that moves by more than SpotReach sends them on
     private float _lookBaseYaw;
     private float _lookElapsed;
@@ -333,38 +334,62 @@ public class AggroState : EnemyStateBase
 
     // Past the grace they know her path, not her position: they walk to where they guess she went and look round
     // there until Lose Sight Time ends the hunt or sight comes back. A newer fact (a mate's call-out, the pool) moves
-    // the guess and sends them on. Everyone told the same thing gets the same guess, so one held up short of it for
-    // Stuck Time (the navigator's Blocked) looks round where they stand rather than pushing at a mate's back, and
-    // one with no way there at all does the same; both say so.
+    // the target and sends them on. The fight hands each hunter a way out of where she vanished (HuntAssigner, spec
+    // 2026-11-20-covering-the-ways-out), so they split up instead of all walking to the one guess everyone told the
+    // same thing shares, and look down the route they cover. Without a slot (they haven't heard the plan's fact yet,
+    // or they fight alone on no grid) they hunt their own guess, which says so. One held up short for Stuck Time (the
+    // navigator's Blocked) looks round where they stand rather than pushing at a mate's back, and one with no way
+    // there at all does the same; both say so.
     private void HuntGuess()
     {
         HuntingOutOfSight = true;
-        if (!Enemy.Awareness.TryGetGuess(out Vector3 guess))
+        Vector3 target;
+        HuntSlot slot = default;
+        bool slotted = Enemy.Fight != null && Enemy.Fight.TryGetSlot(Enemy, out slot);
+        if (slotted)
         {
-            Enemy.Stop();   // nothing to go on: LostPlayer ends the hunt and says so
-            return;
+            target = slot.Spot;
         }
-        if (_looking && PathGrid.FlatDistance(guess, _lookAt) > SpotReach) _looking = false;
+        else
+        {
+            if (!Enemy.Awareness.TryGetGuess(out target))
+            {
+                Enemy.Stop();   // nothing to go on: LostPlayer ends the hunt and says so
+                return;
+            }
+            LogNoSlot();
+        }
+        if (_looking && PathGrid.FlatDistance(target, _lookAt) > SpotReach) _looking = false;
         if (!_looking)
         {
-            NavResult result = Enemy.Movement.WalkTo(guess, Enemy.SearchReach, Enemy.ChaseSpeed);
+            NavResult result = Enemy.Movement.WalkTo(target, Enemy.SearchReach, Enemy.ChaseSpeed);
             if (result == NavResult.Moving)
             {
                 _chaseMoving = true;
                 return;
             }
+            string where = slotted ? $"{slot} in the hunt" : $"where they guessed Ruby went ({target})";
             DebugLog.Info(result == NavResult.Arrived
-                ? $"{Enemy.name} reached where they guessed Ruby went ({guess}) and look round."
-                : $"{Enemy.name} can't get to where they guessed Ruby went ({result}: {Enemy.Navigator.FailureReason}): they look round where they stand.", Enemy);
+                ? $"{Enemy.name} reached {where} and look{(slotted ? " outward" : "")} round."
+                : $"{Enemy.name} can't get to {where} ({result}: {Enemy.Navigator.FailureReason}): they look round where they stand.", Enemy);
             _looking = true;
-            _lookAt = guess;
-            _lookBaseYaw = Enemy.transform.eulerAngles.y;
+            _lookAt = target;
+            // Covering a way out they look down it, away from where she vanished, not back at the middle.
+            _lookBaseYaw = slotted ? Quaternion.LookRotation(slot.Outward).eulerAngles.y : Enemy.transform.eulerAngles.y;
             _lookElapsed = 0f;
         }
         _lookElapsed += Time.fixedDeltaTime;
         // Looped: a mate in contact keeps the hunt going past one sweep, and a sweep that ran out left them frozen
         // facing wherever they arrived. Each sweep ends where it began, so the wrap doesn't jump.
         Enemy.Movement.LookAround(_lookBaseYaw, _lookElapsed % Enemy.LoseSightTime, Enemy.LoseSightTime);
+    }
+
+    // Once per fact: hunting their own guess is a rule (no plan covers what they know), not a fallback, so it shows.
+    private void LogNoSlot()
+    {
+        if (!Enemy.Awareness.TryGetNewestRedFact(out RubyFact fact) || fact.Time == _noSlotLoggedFor) return;
+        _noSlotLoggedFor = fact.Time;
+        DebugLog.Info($"{Enemy.name} has no slot in {(Enemy.Fight != null ? $"{Enemy.Fight}'s plan" : "a fight (they fight alone)")}: they hunt their own guess.", Enemy);
     }
 
     // Faces her in sight, and where they last saw her in the grace.
