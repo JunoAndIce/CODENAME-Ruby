@@ -403,7 +403,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         At(Idle, Rearm, new FuncPredicate(WantsGun));
         At(Patrol, Rearm, new FuncPredicate(WantsGun));
         At(Searching, Rearm, new FuncPredicate(WantsGun));
-        At(Aggro, Rearm, new FuncPredicate(WantsGun));
+        // Not while drawing: an unarmed officer who has just seen Ruby flinches and turns first.
+        At(Aggro, Rearm, new FuncPredicate(() => WantsGun() && !Aggro.Drawing));
         // Always back to the hunt: an enemy only loses its gun to Ruby, so it knows she's around.
         At(Rearm, Aggro, new FuncPredicate(() => Rearm.Armed || Rearm.GaveUp));
 

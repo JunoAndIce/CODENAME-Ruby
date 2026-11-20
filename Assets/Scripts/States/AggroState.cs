@@ -79,6 +79,13 @@ public class AggroState : EnemyStateBase
     /// <summary>Armed, with Ruby in sight, in range and on her feet: it's shooting, so its body aims.</summary>
     public bool Firing { get; private set; }
 
+    /// <summary>
+    /// Turning and drawing on first sight of Ruby, coming in from calm (EnemyBeat): her window to act first. They
+    /// don't fire or move under their own steam meanwhile. The table's hand-off to Rearm waits for it, so an
+    /// unarmed officer still flinches and turns before going for a gun.
+    /// </summary>
+    public bool Drawing => Enemy.Beat.Running && Enemy.Beat.Kind == AnimBeat.Draw;
+
     /// <summary>The gun is up: firing, or held on where they last saw her through the glimpse grace. The stance reads this.</summary>
     public bool Aiming { get; private set; }
 
@@ -104,6 +111,34 @@ public class AggroState : EnemyStateBase
         // Rearm hands back through here, so a re-join is a no-op that keeps their place. With no Intel
         // they fight alone, as already reported at Start.
         if (Enemy.Intel != null) Enemy.Intel.Join(Enemy);
+        StartDraw();
+    }
+
+    // Only from calm (Idle, Patrol, Searching), word of mouth and a hit from calm included: back from Rearm or a fall,
+    // or on a glimpse mid-fight, the gun is already up. Nor when she steps back in during the Lose beat, while the
+    // gun is still held on her last spot (spec 2026-11-20-smooth-transitions).
+    private void StartDraw()
+    {
+        if (!Enemy.CameFromCalm)
+        {
+            DebugLog.Info($"{Enemy.name} comes into the hunt from {Enemy.PreviousState?.GetType().Name ?? "nothing"}: no draw, they are already up.", Enemy);
+            return;
+        }
+        if (Enemy.BeatCutShort == AnimBeat.Lose)
+        {
+            DebugLog.Info($"{Enemy.name} sees Ruby again while still holding on her last spot: no draw, straight back to the fight.", Enemy);
+            return;
+        }
+        Enemy.Beat.Start(AnimBeat.Draw, DrawFacePoint(), Enemy.DrawTime);
+    }
+
+    // Ruby where they can see her. One provoked and still blind to her faces the newest place they know of her;
+    // knowing nothing at all, they face the way they already were.
+    private Vector3 DrawFacePoint()
+    {
+        if (Enemy.PlayerTransform != null && Enemy.Vision.CanTrackPlayer()) return Enemy.PlayerTransform.position;
+        if (Enemy.Awareness.TryGetNewestRed(out Vector3 newest)) return newest;
+        return Enemy.transform.position + Enemy.transform.forward;
     }
 
     // The search starts from what they knew, or from where they stand when they knew nothing. Exit also runs
@@ -194,6 +229,19 @@ public class AggroState : EnemyStateBase
         if (Enemy.PlayerTransform == null)
         {
             Enemy.Stop();
+            return;
+        }
+
+        if (Drawing)
+        {
+            // The beat turns them and runs their momentum down (EnemyBeat.FixedTick, after this); the hunt only keeps
+            // it facing where they'd aim. Tick still counts sight, Lose Sight Time and knowledge meanwhile.
+            Firing = false;
+            Aiming = false;
+            if (Enemy.Arms != null) Enemy.Arms.Lower();
+            bool seen = Enemy.Vision.CanTrackPlayer();
+            if (seen) Enemy.Beat.Face(Enemy.PlayerTransform.position);
+            else if (Enemy.Awareness.InGlimpseGrace) Enemy.Beat.Face(Enemy.Awareness.LastSeenPosition);
             return;
         }
 
