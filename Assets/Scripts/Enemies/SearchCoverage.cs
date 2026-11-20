@@ -30,6 +30,7 @@ public class SearchCoverage
     // obstacle that blocked them is still there, and a run of instant blocks would drop it after one real one.
     private readonly Dictionary<EnemyController, Vector3> _lastBlocked = new();
     private float _span;
+    private readonly HashSet<EnemyController> _warnedNoGrid = new();
     private int _nextToTest;
 
     /// <summary>
@@ -153,6 +154,10 @@ public class SearchCoverage
     /// <summary>
     /// Gives them the nearest unseen point nobody else is heading for, among those blocked the fewest times, so
     /// after a blocked walk they move on to others and come back to it only when nothing less blocked is free.
+    /// Nearest by their walk, not the crow (spec 2026-11-20-covering-the-ways-out): a point through a wall used to
+    /// win, and they walked round the wall to it past the easy one beside them. A point their walk doesn't reach is
+    /// still a candidate, after every point it does: skipped, one nobody could reach would never be claimed, so never
+    /// dropped, and the search would never end. Its own walk clears, defers or drops it, and the pick says so.
     /// False when there is none free: the rest are claimed, or close to a claim, and they re-check
     /// (TryClaimRecheck) or wait for someone else to finish.
     /// </summary>
@@ -161,12 +166,16 @@ public class SearchCoverage
         // Their last claim is finished with now. Left in place, it would keep the others away from there for good.
         _claims.Remove(who);
         point = default;
+        Vector3 from = who.transform.position;
+        FlowField walk = FloodWalk(who, from, out float bound);
+        bool found = false;
+        bool nearestReached = false;
         float nearest = float.MaxValue;
         int fewestBlocks = int.MaxValue;
-        Vector3 from = who.transform.position;
         bool avoid = _lastBlocked.TryGetValue(who, out Vector3 justBlocked);
         _lastBlocked.Remove(who);
         bool justBlockedFree = false;
+        // Read straight off the scratch flood: nothing in here floods, so nothing can overwrite it before the pick.
         foreach (Vector3 candidate in _unseen)
         {
             // The point they were just blocked on waits for this pick, unless nothing else is free.
@@ -177,21 +186,46 @@ public class SearchCoverage
             }
             _blocks.TryGetValue(candidate, out int blocks);
             if (blocks > fewestBlocks) continue;
-            float distance = PathGrid.FlatDistance(from, candidate);
-            if ((blocks == fewestBlocks && distance >= nearest) || NearAnotherClaim(who, candidate)) continue;
+            // A walk is never shorter than the crow: a point already farther in a straight line than the best walk so
+            // far can't beat it, so it isn't read, and the flood never has to spread out to it.
+            float crow = PathGrid.FlatDistance(from, candidate);
+            if (blocks == fewestBlocks && nearestReached && crow >= nearest) continue;
+            float metres = 0f;
+            bool reached = walk != null && walk.TryGetDistance(candidate, out metres) && metres <= bound;
+            float distance = reached ? metres : crow;
+            bool closer = (reached && !nearestReached) || (reached == nearestReached && distance < nearest);
+            if ((blocks == fewestBlocks && !closer) || NearAnotherClaim(who, candidate)) continue;
             fewestBlocks = blocks;
             nearest = distance;
+            nearestReached = reached;
             point = candidate;
+            found = true;
         }
-        if (nearest == float.MaxValue)
+        if (!found)
         {
             if (!justBlockedFree) return false;
             point = justBlocked;
-            nearest = PathGrid.FlatDistance(from, point);
+        }
+        else if (!nearestReached && walk != null)
+        {
+            DebugLog.Info($"{who.name} claims {point}, beyond their walk of {bound:0} m: their walk will clear, defer or drop it.", who);
         }
 
         _claims[who] = point;
         return true;
+    }
+
+    // One flood from them over the whole area, to rank points by their walk. Paths wind, so it runs well past the
+    // area's span. Null on no grid, which warns once per member: they can't walk anyway, and the walk's own failure
+    // drops the point, so points are ranked by the crow as before.
+    private FlowField FloodWalk(EnemyController who, Vector3 from, out float bound)
+    {
+        bound = 3f * _span + 5f;
+        PathGrid grid = PathGrid.At(from);
+        if (grid != null) return grid.FloodFrom(from, bound);
+        if (_warnedNoGrid.Add(who))
+            Debug.LogWarning($"{who.name} is searching on no PathGrid, so their next point is the nearest in a straight line: they can't walk to it either, and the walk will say so.", who);
+        return null;
     }
 
     /// <summary>
