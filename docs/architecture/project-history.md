@@ -66,8 +66,14 @@ approved on its own:
    **Built** 2026-11-19 from `docs/plans/2026-11-19-prop-aware-pathing.md`; awaiting the user's play-test.
    The first play-test found a corridor half-blocked by crates sealed to the grid though Ruby walked it: the
    centre-only cell test closed gaps up to 0.95 m. Tight cells (pathing.md) now open any gap from about 0.75 m.
+   A scripted test then found officers dragging heavy crates by friction; character capsules now carry
+   No Friction (movement-and-weight.md). Then pathing was made about 5x cheaper without changing a route
+   (`f9029c8..50b4f39`: the gizmo as one texture, lazy floods, cached moves and step costs, connected
+   areas). The user's play-test after all of it: routes look clean and the game doesn't lag.
+   **Done** 2026-11-19.
 2. **Sight through the cone only**: Motion Radius and Body Notice Range go, and every visual notice (corpses,
-   loose guns, moving bodies) uses the cone out to View Range. Close Radius stays (user's call).
+   loose guns, moving bodies) uses the cone out to View Range. Close Radius stays, for Ruby only (user's call).
+   Design: `docs/specs/2026-11-19-sight-through-the-cone.md`.
 3. **Smooth transitions**: settle and wind-up pauses between states, with room for end and transition animations.
 4. **Finding cover**: spots hidden from Ruby behind crates, tables and wall corners; firing spots use them.
 5. **Using cover**: hide, peek, fire blind over cover, edge closer while Ruby stays put.
