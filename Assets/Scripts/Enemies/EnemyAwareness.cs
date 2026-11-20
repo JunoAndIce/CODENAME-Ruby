@@ -36,8 +36,7 @@ public class EnemyAwareness
     private bool _vanishPending;   // they lost her in a fight and haven't yet called out where she went
 
     // The guess at where she went (TryGetGuess). One flood per fact, never per frame: CollectReached walks the whole grid.
-    private const float MinHeadingSpeed = 0.5f;  // slower than this she was standing still: no heading to follow
-    private const float LateralWeight = 0.5f;    // how much straying sideways from her heading costs, against distance along it
+    private const float MinHeadingSpeed = 0.5f;  // slower than this she was standing still: no heading to follow (HuntPlan uses the same)
     private readonly FloorReach _reach = new();
     private readonly List<Vector3> _reachedPoints = new();
     private readonly List<float> _reachedMetres = new();
@@ -188,23 +187,8 @@ public class EnemyAwareness
         _reach.Field.CollectReached(_reachedPoints, _reachedMetres);
         _reach.End("the guess at where Ruby went", _enemy);
 
-        Vector3 direction = heading / speed;
-        bool found = false;
-        float bestScore = float.NegativeInfinity;
-        Vector3 best = fact.Position;
-        for (int i = 0; i < _reachedPoints.Count; i++)
-        {
-            Vector3 offset = _reachedPoints[i] - fact.Position;
-            offset.y = 0f;
-            float along = Vector3.Dot(offset, direction);
-            if (along <= 0f) continue;
-            float score = along - LateralWeight * (offset - direction * along).magnitude;
-            if (score <= bestScore) continue;
-            bestScore = score;
-            best = _reachedPoints[i];
-            found = true;
-        }
-        if (!found)
+        // Scored in one place with the hunt plan's first route, so the guess and the plan can't disagree.
+        if (!HuntPlan.TryPickAlongHeading(_reachedPoints, fact.Position, heading / speed, out Vector3 best))
         {
             DebugLog.Info($"{_enemy.name} finds no ground ahead of where they lost Ruby, {fact.Position}, along her heading: they hunt that spot itself.", _enemy);
             return fact.Position;
