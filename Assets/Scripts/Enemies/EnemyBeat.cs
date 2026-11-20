@@ -73,6 +73,8 @@ public class EnemyBeat
         if (!Running) return;
 
         _enemy.Movement.TurnToward(FacePoint);
+        // Having lost Ruby, the gun stays on where they last saw her (lowered on the beat's end).
+        if (_enemy.HoldingLastSpot) _enemy.Arms.AimAt(FacePoint);
         if (Kind == AnimBeat.Draw)
         {
             // The draw keeps the momentum they had and runs it down inside the beat, so a walking officer
@@ -92,6 +94,8 @@ public class EnemyBeat
 
     private void EndRunning()
     {
+        // The search lowers the gun to Rest; whoever comes next (Aggro, if she is back) raises it again.
+        if (Kind == AnimBeat.Lose && _enemy.Arms != null) _enemy.Arms.Lower();
         Running = false;
         Kind = AnimBeat.None;
         _elapsed = 0f;

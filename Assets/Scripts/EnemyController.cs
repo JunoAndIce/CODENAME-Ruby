@@ -643,8 +643,13 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         // Tied upright on the chain, a corpse is restrained like the living; off it, it keeps its pose.
         DeadState => IsHeld ? AnimStance.Restrained : AnimStance.Frozen,
         IdleState => Idle.Practising ? AnimStance.Aim : AnimStance.Rest,
+        // Having lost Ruby, they hold the gun on where they last saw her for the Lose beat, then lower it to search.
+        SearchingState => HoldingLastSpot ? AnimStance.Aim : AnimStance.Rest,
         _ => AnimStance.Rest,
     };
+
+    /// <summary>In the Lose beat with the gun in range of where they last saw Ruby: they hold it on that spot.</summary>
+    internal bool HoldingLastSpot => Beat.Kind == AnimBeat.Lose && Arms != null && Arms.InRange(Beat.FacePoint);
 
     /// <summary>
     /// Held, knocked down or dead: an override state (EnemyStateBase.IsOverride) is running, so the
@@ -673,6 +678,11 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
         {
             point = Aggro.AimPoint;
             return Aggro.Aiming;
+        }
+        if (HoldingLastSpot)
+        {
+            point = Beat.FacePoint;
+            return true;
         }
         point = _player != null ? _player.transform.position : default;
         return _player != null && Stance == AnimStance.Aim;

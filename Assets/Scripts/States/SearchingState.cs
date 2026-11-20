@@ -33,8 +33,8 @@ public class SearchingState : EnemyStateBase
     private float _stepTimer;      // seconds in the current step. The walk there isn't part of the search: the look is.
     private float _lookBaseYaw;    // where they faced when the look began; the sweep turns about it
     private bool _walk = true;     // false: look from where they stand (a glance at something already known)
-    private float _distractLeft;   // a lesser disturbance has their eye: the search waits this long, then carries on
-    private Vector3 _distractPoint;
+    // On a job, they have started the stand-down beat for the job's current StandDown step: once per time it comes.
+    private bool _standDownStarted;
     // On a job: they have reached the spot, been blocked short of it, or run out of time walking there.
     private bool _arrived;
     private float _walkTimer;
@@ -121,12 +121,30 @@ public class SearchingState : EnemyStateBase
         // they have just begun (a scene with no Intel is reported elsewhere).
         if (request.AfterLostFight && Enemy.Intel != null)
             Enemy.Intel.JoinFromAggro(Enemy, request.Incident.Point, request.Guess);
+        StartEntryBeat(request.AfterLostFight);
+    }
+
+    // They roll into the search (spec 2026-11-20-smooth-transitions). From calm they stop and take in what they are
+    // going to check, seen or heard: the Notice beat. Having lost Ruby they hold their gun on where they last saw
+    // her: the Lose beat. Nothing else reaches Searching (the table and BeginSearch), so anything else is a bug.
+    private void StartEntryBeat(bool afterLostFight)
+    {
+        if (afterLostFight)
+        {
+            Enemy.Beat.Start(AnimBeat.Lose, Enemy.Awareness.LastSeenPosition, Enemy.LoseTime);
+            return;
+        }
+        if (Enemy.PreviousState is IdleState or PatrolState)
+        {
+            Enemy.Beat.Start(AnimBeat.Notice, Job != null ? Job.Point : _target, Enemy.NoticeTime);
+            return;
+        }
+        Debug.LogWarning($"{Enemy.name} entered Searching from {Enemy.PreviousState?.GetType().Name ?? "nothing"}, which only Idle, Patrol and a lost fight should reach: they start with no beat.", Enemy);
     }
 
     public override void Exit()
     {
         _onJob = false;
-        _distractLeft = 0f;
         // A search's disturbances end with it: a count left over made the next, unrelated search
         // aggro on its first one or two. (Within one search the counting is unchanged.)
         Enemy.Memory.ClearDistractions();
@@ -145,8 +163,22 @@ public class SearchingState : EnemyStateBase
     /// </summary>
     public void Distract(Vector3 point, bool newDisturbance)
     {
-        if (newDisturbance) _distractLeft = Enemy.DistractionTime;
-        if (_distractLeft > 0f) _distractPoint = point;
+        EnemyBeat beat = Enemy.Beat;
+        // The turn is the Notice beat, for Distraction Time: the same moment as noticing on the way in.
+        if (!beat.Running)
+        {
+            if (newDisturbance) beat.Start(AnimBeat.Notice, point, Enemy.DistractionTime);
+            return;
+        }
+        if (beat.Kind == AnimBeat.Notice)
+        {
+            if (newDisturbance) beat.Start(AnimBeat.Notice, point, Enemy.DistractionTime);
+            else beat.Face(point);
+            return;
+        }
+        // Nothing but an override or Ruby cuts a beat (user, 2026-11-20). It has still been counted toward their
+        // limit by whoever called this; only the turn is skipped.
+        DebugLog.Info($"{Enemy.name} is in their {beat.Kind} beat: they don't turn to the disturbance at {point}, though it counts.", Enemy);
     }
 
     /// <summary>
@@ -171,7 +203,7 @@ public class SearchingState : EnemyStateBase
     private void Begin()
     {
         _stepTimer = 0f;
-        _distractLeft = 0f;
+        _standDownStarted = false;
         _arrived = false;
         _loggedBlocked = false;
         _hasOwnStart = false;   // found from where they stood then: a new search asks again
@@ -234,12 +266,9 @@ public class SearchingState : EnemyStateBase
     {
         SyncJob();
 
-        // The search waits while something has their eye, so they don't lose search time to it.
-        if (_distractLeft > 0f)
-        {
-            _distractLeft -= Time.deltaTime;
-            return;
-        }
+        // The search waits behind a beat (on the way in, a distraction, the stand-down), so they don't lose search
+        // time to it. The beat times itself (EnemyBeat).
+        if (Enemy.Beat.Running) return;
 
         if (Job != null)
         {
@@ -263,9 +292,10 @@ public class SearchingState : EnemyStateBase
                 else BeginStandDown();
                 break;
 
+            // The hold is the stand-down beat, Stand Down Time long, and this waits behind it above: reaching here,
+            // it has played out. Timing it again here doubled the hold.
             case SearchStep.StandDown:
-                _stepTimer += Time.deltaTime;
-                if (_stepTimer >= Enemy.StandDownTime) Finish("stands down");
+                Finish("stands down");
                 break;
         }
     }
@@ -304,6 +334,7 @@ public class SearchingState : EnemyStateBase
         _step = SearchStep.StandDown;
         _stepTimer = 0f;
         DebugLog.Info($"{Enemy.name} finds nothing and gestures: all clear.", Enemy);
+        Enemy.Beat.Start(AnimBeat.StandDown, _target, Enemy.StandDownTime);
     }
 
     private void Finish(string what)
@@ -321,12 +352,8 @@ public class SearchingState : EnemyStateBase
     {
         SyncJob();
 
-        if (_distractLeft > 0f)
-        {
-            Enemy.Stop();
-            Enemy.Movement.FaceToward(_distractPoint);
-            return;
-        }
+        // The beat turns them and plants them (EnemyBeat.FixedTick, after this).
+        if (Enemy.Beat.Running) return;
 
         if (Job != null)
         {
@@ -366,6 +393,8 @@ public class SearchingState : EnemyStateBase
     // everyone holds for the gesture.
     private void FixedTickJob(GroupJob job)
     {
+        if (job.Step != JobStep.StandDown) _standDownStarted = false;
+
         // A call a fill made while the team was already walking or looking (JobBoard.AdvanceFill): the
         // enemy just called in stops and faces the lead for the call's time, then takes their role for
         // whatever step the job is in. The lead doesn't stop, so a team never halts each time someone
@@ -422,8 +451,14 @@ public class SearchingState : EnemyStateBase
                 break;
 
             default:
-                // StandDown is the gesture, Done is waiting for the table to send them back.
+                // StandDown is the gesture, played as the beat once each time the step comes (the job's clock times
+                // the step with the same Stand Down Time); Done is waiting for the table to send them back.
                 Enemy.Stop();
+                if (job.Step == JobStep.StandDown && !_standDownStarted)
+                {
+                    _standDownStarted = true;
+                    Enemy.Beat.Start(AnimBeat.StandDown, job.Point, Enemy.StandDownTime);
+                }
                 return;
         }
 
