@@ -36,13 +36,15 @@ public static class HuntAssigner
 {
     private const float RouteFloodBound = 30f;   // path metres a route's flood measures hunters out to
     private const int PerRoute = 2;
-    private const float SecondSnap = 1f;         // a second holder's offset spot must have plan ground within this
+    private const float SecondSnap = 1.5f;       // a second holder's spot lies within this of a side-offset of the route's spot
 
     private static readonly FloorReach Reach = new();
     private static readonly List<EnemyController> Near = new();
     private static readonly List<EnemyController> Far = new();
     private static readonly Dictionary<EnemyController, HuntSlot> Assigned = new();
     private static readonly List<EnemyController> Stale = new();
+    private static readonly List<(float distance, int h, int r)> Keeps = new();
+    private static readonly Dictionary<EnemyController, HuntSlot> Before = new();   // the fight's slots as this round began
 
     /// <summary>
     /// A new plan: every hunter who knows its fact gets a slot, and any slot held by someone not among them goes.
@@ -68,23 +70,25 @@ public static class HuntAssigner
 
         var holders = new int[routeCount];
         Assigned.Clear();
+        Before.Clear();
+        foreach (KeyValuePair<EnemyController, HuntSlot> pair in fight.Slots) Before[pair.Key] = pair.Value;
 
-        // Steady: a holder whose old spot lies near a route of the new plan keeps that route.
+        // Steady: a holder whose old spot lies within a route's width of a route of the new plan keeps it, closest
+        // pairs first. In member order, a holder a little farther could take the route first and leave the nearest,
+        // refused a second place beside them, to be sent across the room.
+        Keeps.Clear();
         for (int h = 0; h < hunters.Count; h++)
         {
-            EnemyController hunter = hunters[h];
-            if (!fight.TryGetSlot(hunter, out HuntSlot old) || old.Route < 0) continue;
-            int keep = -1;
-            float best = HuntPlan.RouteWidth;
+            if (!fight.TryGetSlot(hunters[h], out HuntSlot old) || old.Route < 0) continue;
             for (int r = 0; r < routeCount; r++)
             {
                 float d = PathGrid.FlatDistance(old.Spot, plan.Routes[r].Spot);
-                if (d >= best || holders[r] >= PerRoute) continue;
-                best = d;
-                keep = r;
+                if (d < HuntPlan.RouteWidth) Keeps.Add((d, h, r));
             }
-            if (keep >= 0) Take(plan, keep, hunter, holders, spacing, logContext);
         }
+        Keeps.Sort((a, b) => a.distance.CompareTo(b.distance));
+        foreach ((float distance, int h, int r) keep in Keeps)
+            if (!Assigned.ContainsKey(hunters[keep.h]) && holders[keep.r] < PerRoute) Take(plan, keep.r, hunters[keep.h], holders, spacing, null, logContext);
 
         // Hunters some route's flood reached go first, nearest first; the rest after, in member order.
         Near.Clear();
@@ -111,7 +115,7 @@ public static class HuntAssigner
                     best = metres[r, h];
                     pick = i;
                 }
-                if (pick >= 0) Take(plan, r, Near[pick], holders, spacing, logContext);
+                if (pick >= 0) Take(plan, r, Near[pick], holders, spacing, null, logContext);   // a refused second leaves them for the next route
             }
         }
 
@@ -156,18 +160,25 @@ public static class HuntAssigner
             if (slot.Route >= 0 && slot.Route < routeCount) holders[slot.Route]++;
 
         Assigned.Clear();
+        Before.Clear();
+        foreach (KeyValuePair<EnemyController, HuntSlot> pair in fight.Slots) Before[pair.Key] = pair.Value;
         float spacing = hunter.SpotSpacing;
         for (int pass = 0; pass < PerRoute && !Assigned.ContainsKey(hunter); pass++)
         {
-            int pick = -1;
-            float best = float.PositiveInfinity;
-            for (int r = 0; r < routeCount; r++)
+            // Nearest route at this pass first; a refused second closes that route and the next nearest is tried.
+            while (!Assigned.ContainsKey(hunter))
             {
-                if (holders[r] != pass || metres[r] >= best) continue;
-                best = metres[r];
-                pick = r;
+                int pick = -1;
+                float best = float.PositiveInfinity;
+                for (int r = 0; r < routeCount; r++)
+                {
+                    if (holders[r] != pass || metres[r] >= best) continue;
+                    best = metres[r];
+                    pick = r;
+                }
+                if (pick < 0) break;
+                Take(plan, pick, hunter, holders, spacing, fight, logContext);
             }
-            if (pick >= 0) Take(plan, pick, hunter, holders, spacing, logContext);
         }
         if (!Assigned.ContainsKey(hunter)) Spread(plan, hunter, fight, true, spacing, logContext);
         Set(fight, hunter, Assigned[hunter], logContext);
@@ -185,50 +196,62 @@ public static class HuntAssigner
     {
         for (int pass = 0; pass < PerRoute; pass++)
             for (int r = 0; r < holders.Length; r++)
-                if (holders[r] == pass)
-                {
-                    Take(plan, r, hunter, holders, spacing, logContext);
-                    return;
-                }
+                if (holders[r] == pass && Take(plan, r, hunter, holders, spacing, null, logContext)) return;
         Spread(plan, hunter, fight, false, spacing, logContext);
     }
 
-    // The first holder stands on the route's spot. The second stands Spot Spacing to one side of it, across the
-    // way out, on ground the plan reached, so the pair covers the route side by side instead of one on the other.
-    private static void Take(HuntPlan plan, int r, EnemyController hunter, int[] holders, float spacing, Object logContext)
+    // The first holder stands on the route's spot. The second stands about Spot Spacing to one side of it, across
+    // the way out, on ground the plan reached and Spot Spacing clear of every other slot (a neighbouring route's
+    // spot or its second can lie that close), so the pair covers the route side by side instead of one on the other.
+    // Two is the most a route takes, not what it must: with no such spot (routes cut from one arc lie a route's width
+    // apart) it takes no second, it's closed to more (holders set to PerRoute) and false sends the hunter on, so
+    // nobody is put on top of the first.
+    private static bool Take(HuntPlan plan, int r, EnemyController hunter, int[] holders, float spacing, Fight standing, Object logContext)
     {
         HuntRoute route = plan.Routes[r];
         Vector3 spot = route.Spot;
-        if (holders[r] > 0 && !TrySecondSpot(plan, route, spacing, out spot))
+        if (holders[r] > 0 && !TrySecondSpot(plan, route, hunter, spacing, standing, out spot))
         {
-            spot = route.Spot;
-            DebugLog.Info($"{hunter.name} is second on route {r} but there is no plan ground {spacing:0.#} m to either side of it: they share its spot.", logContext);
+            DebugLog.Info($"Route {r} of the hunt has no plan ground beside its spot {spacing:0.#} m clear of the others: it takes no second, and {hunter.name} goes elsewhere.", logContext);
+            holders[r] = PerRoute;
+            return false;
         }
         holders[r]++;
         Assigned[hunter] = new HuntSlot(spot, route.Outward, r);
+        return true;
     }
 
-    private static bool TrySecondSpot(HuntPlan plan, HuntRoute route, float spacing, out Vector3 spot)
+    // A plan ground point within SecondSnap of either side-offset of the route's spot, clear of every other slot by
+    // spacing: the one nearest the offset, or for a second who held this route before, the one nearest where they
+    // stood, so a re-plan doesn't flip them to its other side.
+    private static bool TrySecondSpot(HuntPlan plan, HuntRoute route, EnemyController hunter, float spacing, Fight standing, out Vector3 spot)
     {
         Vector3 across = new Vector3(route.Outward.z, 0f, -route.Outward.x) * spacing;
-        if (TryNearestGround(plan, route.Spot + across, out spot)) return true;
-        return TryNearestGround(plan, route.Spot - across, out spot);
-    }
-
-    private static bool TryNearestGround(HuntPlan plan, Vector3 target, out Vector3 spot)
-    {
-        spot = target;
-        float best = SecondSnap;
+        Vector3 left = route.Spot + across;
+        Vector3 right = route.Spot - across;
+        bool wasHere = Before.TryGetValue(hunter, out HuntSlot old) && old.Route >= 0 && PathGrid.FlatDistance(old.Spot, route.Spot) < HuntPlan.RouteWidth + spacing;
+        spot = route.Spot;
+        float best = float.MaxValue;
         bool found = false;
         foreach (Vector3 point in plan.Ground)
         {
-            float d = PathGrid.FlatDistance(point, target);
-            if (d > best) continue;
-            best = d;
+            float offset = Mathf.Min(PathGrid.FlatDistance(point, left), PathGrid.FlatDistance(point, right));
+            if (offset > SecondSnap || GapToSlots(point, standing, hunter) < spacing || NearOtherRoute(plan, route, point, spacing)) continue;
+            float key = wasHere ? PathGrid.FlatDistance(point, old.Spot) : offset;
+            if (key >= best) continue;
+            best = key;
             spot = point;
             found = true;
         }
         return found;
+    }
+
+    // Another route's spot, whether or not its holder is assigned yet (the steady pass runs before the first pass).
+    private static bool NearOtherRoute(HuntPlan plan, HuntRoute own, Vector3 point, float spacing)
+    {
+        foreach (HuntRoute route in plan.Routes)
+            if (route.Rank != own.Rank && PathGrid.FlatDistance(route.Spot, point) < spacing) return true;
+        return false;
     }
 
     // The ground point nearest them that is Spot Spacing from every slot set so far. With none, the one farthest
