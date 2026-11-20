@@ -17,6 +17,11 @@ public class Fight
     // The way out each member hunting out of sight was handed (HuntAssigner), from the plan below. Cleared by the
     // board when a member leaves or stops hunting, so a slot can't outlive its holder.
     private readonly Dictionary<EnemyController, HuntSlot> _slots = new();
+    // Holders kept on a slot from an earlier plan because they haven't heard the current plan's fact yet.
+    private readonly HashSet<EnemyController> _heldOver = new();
+    private bool _hasFailedFact;
+    private float _failedFactTime;
+    private Vector3 _failedFactPosition;
     private bool _loggedNoSpot;
 
     public Fight(int id, PathGrid floor)
@@ -73,10 +78,37 @@ public class Fight
 
     public bool TryGetSlot(EnemyController who, out HuntSlot slot) => _slots.TryGetValue(who, out slot);
 
-    public void SetSlot(EnemyController who, HuntSlot slot) => _slots[who] = slot;
+    /// <summary>A slot from the current plan: it is no longer held over.</summary>
+    public void SetSlot(EnemyController who, HuntSlot slot)
+    {
+        _slots[who] = slot;
+        _heldOver.Remove(who);
+    }
+
+    /// <summary>
+    /// They keep the slot they hold from an earlier plan: they haven't heard this plan's fact, and standing where they
+    /// were beats walking back to the one guess everyone shared. Replaced by a real slot once they hear it.
+    /// </summary>
+    public void HoldOver(EnemyController who) => _heldOver.Add(who);
+
+    public bool IsHeldOver(EnemyController who) => _heldOver.Contains(who);
 
     /// <summary>They give up their way out, if they held one. Safe on a destroyed member.</summary>
-    public void ReleaseSlot(EnemyController who) => _slots.Remove(who);
+    public void ReleaseSlot(EnemyController who)
+    {
+        _slots.Remove(who);
+        _heldOver.Remove(who);
+    }
+
+    /// <summary>No plan could be made from this fact (said at the time): don't try again until the fact changes, or it floods and logs every frame.</summary>
+    public void NotePlanFailed(RubyFact fact)
+    {
+        _hasFailedFact = true;
+        _failedFactTime = fact.Time;
+        _failedFactPosition = fact.Position;
+    }
+
+    public bool PlanFailedFor(RubyFact fact) => _hasFailedFact && fact.Time == _failedFactTime && PathGrid.FlatDistance(fact.Position, _failedFactPosition) <= 0.01f;
 
     public override string ToString() => $"fight #{Id}";
 }

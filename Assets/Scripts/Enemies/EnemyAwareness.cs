@@ -35,6 +35,12 @@ public class EnemyAwareness
     public const float GlimpseGrace = 0.25f;
     private bool _vanishPending;   // they lost her in a fight and haven't yet called out where she went
 
+    /// <summary>
+    /// They lost her in a fight and the call-out of where she went is still to come (this frame's Update). The hunt
+    /// plan waits for it: made from a fact only they hold, it would cover no one else and release every mate's slot.
+    /// </summary>
+    public bool VanishPending => _vanishPending;
+
     // The guess at where she went (TryGetGuess). One flood per fact, never per frame: CollectReached walks the whole grid.
     private const float MinHeadingSpeed = 0.5f;  // slower than this she was standing still: no heading to follow (HuntPlan uses the same)
     private readonly FloorReach _reach = new();

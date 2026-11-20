@@ -109,6 +109,7 @@ public class FightBoard
 
     private readonly List<EnemyController> _hunters = new();
     private readonly List<EnemyController> _planned = new();
+    private readonly List<EnemyController> _behind = new();
     private readonly List<EnemyController> _stopped = new();
 
     // Covering the ways out (spec 2026-11-20-covering-the-ways-out): the members hunting out of sight share one plan,
@@ -131,6 +132,9 @@ public class FightBoard
         RubyFact newest = default;
         foreach (EnemyController hunter in _hunters)
         {
+            // One who has just lost her holds a fact nobody else has until their vanish call-out, later this frame
+            // (Intel runs first): planned from now, it would cover them alone and release every mate's slot.
+            if (hunter.Awareness.VanishPending) continue;
             if (!hunter.Awareness.TryGetNewestRedFact(out RubyFact fact) || (any && fact.Time <= newest.Time)) continue;
             newest = fact;
             any = true;
@@ -139,9 +143,11 @@ public class FightBoard
 
         if (fight.Plan == null || !fight.Plan.IsFrom(newest))
         {
+            if (fight.PlanFailedFor(newest)) return;   // tried and said; everyone hunts their own guess until news changes
             if (!HuntPlan.TryBuild(newest, _hunters[0].GuessDistance, fight.Plan, _intel, out HuntPlan plan))
             {
                 // Said by TryBuild. With no plan everyone hunts their own guess, as before.
+                fight.NotePlanFailed(newest);
                 fight.SetPlan(null);
                 _stopped.Clear();
                 _stopped.AddRange(fight.Slots.Keys);
@@ -149,17 +155,25 @@ public class FightBoard
                 return;
             }
             fight.SetPlan(plan);
+            // Those who know the new fact are planned. Holders who haven't heard it yet (beyond Speech Range, waiting
+            // for the pool) keep their place: a nearby route of the new plan through the steady pass, or the slot they
+            // hold. Releasing them sent them back to the one shared guess at every call-out.
             _planned.Clear();
+            _behind.Clear();
             foreach (EnemyController hunter in _hunters)
+            {
                 if (hunter.Awareness.TryGetNewestRedFact(out RubyFact fact) && plan.IsFrom(fact)) _planned.Add(hunter);
-            HuntAssigner.AssignAll(fight, plan, _planned, _intel);
+                else if (fight.TryGetSlot(hunter, out _)) _behind.Add(hunter);
+            }
+            HuntAssigner.AssignAll(fight, plan, _planned, _behind, _intel);
             return;
         }
 
-        // Late to the plan: they lost sight after it was made, or have just been told its fact.
+        // Late to the plan: they lost sight after it was made, or have just been told its fact (a held-over slot is
+        // replaced then).
         foreach (EnemyController hunter in _hunters)
         {
-            if (fight.TryGetSlot(hunter, out _)) continue;
+            if (fight.TryGetSlot(hunter, out _) && !fight.IsHeldOver(hunter)) continue;
             if (hunter.Awareness.TryGetNewestRedFact(out RubyFact fact) && fight.Plan.IsFrom(fact))
                 HuntAssigner.AssignOne(fight, fight.Plan, hunter, _intel);
         }

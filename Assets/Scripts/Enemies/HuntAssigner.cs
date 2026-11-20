@@ -45,14 +45,16 @@ public static class HuntAssigner
     private static readonly List<EnemyController> Stale = new();
     private static readonly List<(float distance, int h, int r)> Keeps = new();
     private static readonly Dictionary<EnemyController, HuntSlot> Before = new();   // the fight's slots as this round began
+    private static readonly HashSet<EnemyController> HeldOver = new();
 
     /// <summary>
-    /// A new plan: every hunter who knows its fact gets a slot, and any slot held by someone not among them goes.
+    /// A new plan: every hunter who knows its fact gets a slot. Behind are holders who haven't heard it yet: each keeps
+    /// a nearby route of the new plan through the steady pass, or else the slot they hold, held over. Any other slot goes.
     /// </summary>
-    public static void AssignAll(Fight fight, HuntPlan plan, List<EnemyController> hunters, Object logContext)
+    public static void AssignAll(Fight fight, HuntPlan plan, List<EnemyController> hunters, List<EnemyController> behind, Object logContext)
     {
-        if (hunters.Count == 0) return;
-        float spacing = hunters[0].SpotSpacing;
+        if (hunters.Count == 0 && behind.Count == 0) return;
+        float spacing = hunters.Count > 0 ? hunters[0].SpotSpacing : behind[0].SpotSpacing;
         int routeCount = plan.Routes.Count;
 
         // Collect: each hunter's walk to each route, every flood read before the next.
@@ -76,10 +78,14 @@ public static class HuntAssigner
         // Steady: a holder whose old spot lies within a route's width of a route of the new plan keeps it, closest
         // pairs first. In member order, a holder a little farther could take the route first and leave the nearest,
         // refused a second place beside them, to be sent across the room.
+        // Those behind are matched too (indices past hunters.Count), so a holder who hasn't heard yet keeps a route
+        // near theirs instead of losing it.
         Keeps.Clear();
-        for (int h = 0; h < hunters.Count; h++)
+        int keepers = hunters.Count + behind.Count;
+        for (int h = 0; h < keepers; h++)
         {
-            if (!fight.TryGetSlot(hunters[h], out HuntSlot old) || old.Route < 0) continue;
+            EnemyController keeper = h < hunters.Count ? hunters[h] : behind[h - hunters.Count];
+            if (!fight.TryGetSlot(keeper, out HuntSlot old) || old.Route < 0) continue;
             for (int r = 0; r < routeCount; r++)
             {
                 float d = PathGrid.FlatDistance(old.Spot, plan.Routes[r].Spot);
@@ -88,7 +94,18 @@ public static class HuntAssigner
         }
         Keeps.Sort((a, b) => a.distance.CompareTo(b.distance));
         foreach ((float distance, int h, int r) keep in Keeps)
-            if (!Assigned.ContainsKey(hunters[keep.h]) && holders[keep.r] < PerRoute) Take(plan, keep.r, hunters[keep.h], holders, spacing, null, logContext);
+        {
+            EnemyController keeper = keep.h < hunters.Count ? hunters[keep.h] : behind[keep.h - hunters.Count];
+            if (!Assigned.ContainsKey(keeper) && holders[keep.r] < PerRoute) Take(plan, keep.r, keeper, holders, spacing, null, logContext);
+        }
+        // The rest of those behind stand where they were told to before, until they hear (the late pass replaces it).
+        HeldOver.Clear();
+        foreach (EnemyController keeper in behind)
+        {
+            if (Assigned.ContainsKey(keeper) || !fight.TryGetSlot(keeper, out HuntSlot old)) continue;
+            Assigned[keeper] = old;
+            HeldOver.Add(keeper);
+        }
 
         // Hunters some route's flood reached go first, nearest first; the rest after, in member order.
         Near.Clear();
@@ -119,6 +136,27 @@ public static class HuntAssigner
             }
         }
 
+        // A way out no hunter left can walk to within the routes' bound still gets one before anyone spreads: the
+        // nearest by straight line, which says so. Left empty, every hunter coming from one side spread on that side
+        // and nobody covered the far exit, the one she may have taken.
+        for (int r = 0; r < routeCount; r++)
+        {
+            if (holders[r] != 0) continue;
+            EnemyController pick = null;
+            float best = float.MaxValue;
+            foreach (EnemyController hunter in Near)
+            {
+                if (Assigned.ContainsKey(hunter)) continue;
+                float d = PathGrid.FlatDistance(hunter.transform.position, plan.Routes[r].Spot);
+                if (d >= best) continue;
+                best = d;
+                pick = hunter;
+            }
+            if (pick == null) break;
+            DebugLog.Info($"Route {r} of {fight}'s hunt is beyond every free hunter's walk of {RouteFloodBound:0} m: {pick.name}, nearest in a straight line ({best:0.#} m), takes it.", logContext);
+            Take(plan, r, pick, holders, spacing, null, logContext);
+        }
+
         // The rest spread, nearest a route first, over the ground round the vanish point.
         Near.Sort((a, b) => Nearest(metres, hunters.IndexOf(a), routeCount).CompareTo(Nearest(metres, hunters.IndexOf(b), routeCount)));
         foreach (EnemyController hunter in Near)
@@ -132,7 +170,11 @@ public static class HuntAssigner
         }
 
         // Write the slots, and drop those held by anyone the plan doesn't cover (they hunt their own guess).
-        foreach (KeyValuePair<EnemyController, HuntSlot> pair in Assigned) Set(fight, pair.Key, pair.Value, logContext);
+        foreach (KeyValuePair<EnemyController, HuntSlot> pair in Assigned)
+        {
+            if (HeldOver.Contains(pair.Key)) fight.HoldOver(pair.Key);
+            else Set(fight, pair.Key, pair.Value, logContext);
+        }
         Stale.Clear();
         foreach (EnemyController holder in fight.Slots.Keys)
             if (!Assigned.ContainsKey(holder)) Stale.Add(holder);

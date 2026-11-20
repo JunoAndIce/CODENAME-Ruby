@@ -99,10 +99,19 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
       route keep it, closest pairs first. Then each route in rank order takes the nearest hunter left, then a second
       each, standing Spot Spacing to one side of the first and clear of every slot and other route's spot; with no
       such spot the route takes no second (two is a most, not a must), and a second keeps the side they stood on.
-      The rest spread over the plan's reached ground (thinned to about 1 m), each on the spot nearest them Spot
-      Spacing from every slot. A hunter beyond every route's 30 m bound takes what's left last, with a log line. One
-      late to the plan (lost sight after it, or just told its fact) gets the best of what's left from one flood of
-      their own (`AssignOne`). Slots live on the `Fight` and go when their holder stops hunting or leaves.
+      A route still empty once no free hunter can walk to it within the 30 m bound takes the nearest by straight line,
+      with a log line, before anyone spreads: left empty, hunters coming from one side all spread on that side and
+      nobody covered the far exit. The rest spread over the plan's reached ground (thinned to about 1 m), each on the
+      spot nearest them Spot Spacing from every slot. A hunter beyond every route's bound takes what's left last, with
+      a log line. One late to the plan (lost sight after it, or just told its fact) gets the best of what's left from
+      one flood of their own (`AssignOne`). Slots live on the `Fight` and go when their holder stops hunting or leaves.
+    - **News that hasn't reached everyone.** A holder who hasn't heard a re-plan's fact (beyond Speech Range, waiting
+      for the pool) keeps a nearby route of the new plan through the steady pass, or else the slot they hold, held
+      over (`Fight.HoldOver`) until they hear it; releasing them sent them back to the one shared guess at every
+      call-out. One who has just lost her (`EnemyAwareness.VanishPending`) isn't planned from until their vanish
+      call-out, later the same frame (Intel runs first): planned at once, the fact was theirs alone and every mate's
+      slot was released. A fact no plan could be made from is remembered on the fight (`NotePlanFailed`) and not
+      retried until news changes, or it flooded and logged every frame.
     - **Hunting** (`AggroState.HuntGuess`): past the grace, a hunter with a slot walks to it at Chase Speed and,
       within Search Reach, looks round it (`EnemyMovement.LookAround`, looped, so a hunt a mate keeps going doesn't
       leave them frozen) centred **outward**, from V to their spot, down the route rather than back at the middle.
