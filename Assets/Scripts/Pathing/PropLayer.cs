@@ -51,6 +51,15 @@ public class PropLayer
     /// it, so a corridor's middle line is free (see PathGrid.WallPenalty).
     /// </summary>
     public readonly byte[] Best;
+    /// <summary>
+    /// Bit k set when PathGrid.Steps[k] is a legal move out of the cell under this rule (PathGrid.CanStep),
+    /// and StepCosts, what a route pays beyond length for stepping onto it (PathGrid.StepCost). Cached by
+    /// the grid at bake and around every prop's marks, so a flood or A* reads two arrays per cell instead
+    /// of re-deciding walkability for three cells and the costs for each of eight neighbours.
+    /// </summary>
+    public readonly byte[] Moves;
+    /// <summary>See Moves.</summary>
+    public readonly int[] StepCosts;
     /// <summary>Bumped (from the grid's one counter) whenever this layer changes. See PathGrid.VersionFor.</summary>
     public int Version;
 
@@ -73,6 +82,8 @@ public class PropLayer
         Shove = new int[count];
         Clearance = new byte[count];
         Best = new byte[count];
+        Moves = new byte[count];
+        StepCosts = new int[count];
         _rowMax = new byte[count];
     }
 

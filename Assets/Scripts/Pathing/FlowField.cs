@@ -129,22 +129,29 @@ public class FlowField
     {
         if (index >= 0 && _settled[index] == _generation) return true;
         bool avoidWalls = _floodedAvoidWalls;
+        // The grid's cached moves and step costs (PropLayer.Moves): two reads per cell, not CanStep and
+        // StepCost per neighbour. Read afresh each call, as the bake replaces the arrays.
+        PropLayer layer = _grid.LayerFor(_rule);
+        byte[] moves = layer.Moves;
+        int[] stepCosts = layer.StepCosts;
+        int[] offsets = _grid.StepOffsets;
         while (_open.TryPop(out int current, out int cost))
         {
             // A stale duplicate (a cheaper route was found after it was pushed), or one already settled.
             if (_settled[current] == _generation || cost > _cost[current]) continue;
             _settled[current] = _generation;
 
-            Vector2Int cell = _grid.CellOf(current);
-            foreach (Vector2Int step in PathGrid.Steps)
+            int legal = moves[current];
+            int length = _length[current];
+            for (int k = 0; k < 8; k++)
             {
-                if (!_grid.CanStep(cell, step, _rule)) continue;
+                if ((legal & (1 << k)) == 0) continue;
 
-                int next = _grid.Index(cell + step);
-                int stepCost = step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost;
-                int nextLength = _length[current] + stepCost;
+                int next = current + offsets[k];
+                int stepCost = k < 4 ? StraightCost : DiagonalCost;   // PathGrid.Steps: straights first
+                int nextLength = length + stepCost;
                 int nextCost = cost + stepCost;
-                if (avoidWalls) nextCost += _grid.StepCost(cell + step, _rule);
+                if (avoidWalls) nextCost += stepCosts[next];
                 if (nextLength > _maxCost || (IsSeen(next) && _cost[next] <= nextCost)) continue;
 
                 SetCost(next, nextCost);
@@ -324,16 +331,19 @@ public class FlowField
     private bool Descend(Vector2Int cell, out Vector2Int next)
     {
         next = cell;
-        int best = _cost[_grid.Index(cell)];
-        foreach (Vector2Int step in PathGrid.Steps)
+        int from = _grid.Index(cell);
+        int best = _cost[from];
+        int legal = _grid.LayerFor(_rule).Moves[from];
+        int[] offsets = _grid.StepOffsets;
+        for (int k = 0; k < 8; k++)
         {
-            if (!_grid.CanStep(cell, step, _rule)) continue;
+            if ((legal & (1 << k)) == 0) continue;
 
-            int index = _grid.Index(cell + step);
+            int index = from + offsets[k];
             if (!IsSettled(index) || _cost[index] >= best) continue;
 
             best = _cost[index];
-            next = cell + step;
+            next = cell + PathGrid.Steps[k];
         }
         return next != cell;
     }

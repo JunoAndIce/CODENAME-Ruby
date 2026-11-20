@@ -107,6 +107,15 @@ A\* for individual ones**:
   still runs the flood out, once per flood.
 - **`GridPathfinder`** (A\*, octile heuristic, integer costs 10/14, no corner cutting): patrol legs,
   cached and re-planned when the grid changes or the enemy is knocked off its route.
+- **Step caches** (`PropLayer.Moves`, `PropLayer.StepCosts`). Each layer keeps, per cell, a bit per
+  `PathGrid.Steps` move that `CanStep` allows and the `StepCost` of stepping onto it. Floods, their
+  descent and A\* read those two arrays instead of deciding three cells' walkability and the costs for
+  each of eight neighbours, which made a whole flood 5x faster (28 ms to 5.7 ms) and a failed A\* 3x.
+  They are filled at bake and redone by `RefreshAround` over every prop's marks: the clearance box
+  grown by `MarginCells` (how far a clearance change reaches into `Best`, and so into step costs) and
+  one cell more (a cell's moves read its neighbours). The skin is in that box, as it is a step cost.
+  **Anything new that changes walkability or a step cost must refresh them there**, or floods and A\*
+  read stale moves while `CanStep` answers the new ones. `StepCost` itself returns the cached value.
 - **`GridNavigator`** ties them together and moves any `IPathAgent`: it plans, and the agent steers
   (facing, velocity scheme). It reads `IPathAgent.PropRule` at the top of every move and decision, and a
   change drops its point field, approach field and route, so a hunter who turns searcher never takes

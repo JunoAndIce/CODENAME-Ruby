@@ -69,6 +69,7 @@ public class PathGrid : MonoBehaviour
     private int _versionCounter;    // the source of both layers' Version, so every bump is a new number
     private int _marginCells;   // Corner Margin in cells, fixed at bake with the clearance cap it sizes; a live edit waits for the next bake
     private int[] _clearanceQueue;   // the bake's breadth-first fill, allocated once with the grid
+    private int[] _stepOffsets;      // the index offset of each of Steps, for the step caches' readers
     private int _width;         // cells along X
     private int _depth;         // cells along Z (Vector2Int.y throughout)
     private Vector3 _origin;    // min corner of cell (0,0), at floor height
@@ -404,6 +405,9 @@ public class PathGrid : MonoBehaviour
         // No prop has marked yet (they mark from FixedUpdate), so both layers bake the same walls.
         _careful.BakeClearance(MarginCells + 1, _clearanceQueue);
         _forceful.BakeClearance(MarginCells + 1, _clearanceQueue);
+        _stepOffsets = new int[Steps.Length];
+        for (int k = 0; k < Steps.Length; k++) _stepOffsets[k] = Steps[k].x + Steps[k].y * _width;
+        RefreshSteps(0, 0, _width - 1, _depth - 1);
 
         // The same playtest switch as Core's DebugLog, which Pathing can't reference.
 #if RUBY_DEBUG_LOGS
@@ -606,6 +610,12 @@ public class PathGrid : MonoBehaviour
 
     private PropLayer Layer(PropRule rule) => rule == PropRule.Forceful ? _forceful : _careful;
 
+    /// <summary>A rule's layer, for the floods and A* to read its step caches (Moves, StepCosts) directly.</summary>
+    internal PropLayer LayerFor(PropRule rule) => Layer(rule);
+
+    /// <summary>Index offset of each of Steps (x + z * width), in the same order as a cell's Moves bits.</summary>
+    internal int[] StepOffsets => _stepOffsets;
+
     /// <summary>
     /// Adds the cells a collider blocks for an agent: those where an agent-sized capsule would
     /// touch it, the same clearance the bake gives static geometry. A collider wholly above the agents'
@@ -756,7 +766,7 @@ public class PathGrid : MonoBehaviour
             RefreshFits(_careful, marks.SampleCells);
             if (marks.Heavy) RefreshFits(_forceful, marks.SampleCells);
         }
-        RefreshClearance(marks.Core, marks.SampleCells);
+        RefreshAround(marks);
         if (marks.Moving) _forceful.Version = ++_versionCounter;
         else _careful.Version = _forceful.Version = ++_versionCounter;
     }
@@ -838,41 +848,73 @@ public class PathGrid : MonoBehaviour
     /// penalty, Prop Skin Cost on a prop's skin, and Shove Cost on a light prop a hunter would push.
     /// All only raise costs, so A* stays admissible.
     /// </summary>
-    public int StepCost(Vector2Int cell, PropRule rule)
+    public int StepCost(Vector2Int cell, PropRule rule) => InBounds(cell) ? Layer(rule).StepCosts[cell.x + cell.y * _width] : 0;
+
+    // What StepCost caches (see PropLayer.Moves): measured at bake and around each prop's marks.
+    private int MeasureStepCost(int index, PropLayer layer)
     {
-        if (!InBounds(cell)) return 0;
-        PropLayer layer = Layer(rule);
-        int index = cell.x + cell.y * _width;
-        int cost = WallPenalty(cell, rule);
+        int cost = Mathf.Max(0, layer.Best[index] - layer.Clearance[index]) * _wallCost;
         if (layer.Skin[index] > 0) cost += _propSkinCost;
         if (layer.Shove[index] > 0) cost += _shoveCost;
         return cost;
     }
 
-    // A prop landing or leaving changes clearance only within the cap of the cells it touched, so
-    // both layers redo that box instead of the grid.
-    private void RefreshClearance(List<int> changed, List<int> alsoChanged)
+    // A prop landing or leaving changes clearance only within the cap of the cells it touched, so both
+    // layers redo that box instead of the grid. The step caches then redo it grown by MarginCells, as far
+    // as a changed clearance reaches into Best (and so into step costs), and one cell more, since a cell's
+    // moves read its neighbours' walkability. The skin is in the box: it is a step cost.
+    private void RefreshAround(PropMarks marks)
     {
-        if (changed.Count == 0 && alsoChanged.Count == 0) return;
+        if (marks.Core.Count == 0 && marks.SampleCells.Count == 0 && marks.Skin.Count == 0) return;
         int cap = MarginCells + 1;
         int minX = int.MaxValue, minZ = int.MaxValue, maxX = int.MinValue, maxZ = int.MinValue;
-        foreach (int index in changed)
-        {
-            Vector2Int cell = CellOf(index);
-            minX = Mathf.Min(minX, cell.x); maxX = Mathf.Max(maxX, cell.x);
-            minZ = Mathf.Min(minZ, cell.y); maxZ = Mathf.Max(maxZ, cell.y);
-        }
-        foreach (int index in alsoChanged)
-        {
-            Vector2Int cell = CellOf(index);
-            minX = Mathf.Min(minX, cell.x); maxX = Mathf.Max(maxX, cell.x);
-            minZ = Mathf.Min(minZ, cell.y); maxZ = Mathf.Max(maxZ, cell.y);
-        }
+        Encapsulate(marks.Core, ref minX, ref minZ, ref maxX, ref maxZ);
+        Encapsulate(marks.SampleCells, ref minX, ref minZ, ref maxX, ref maxZ);
+        Encapsulate(marks.Skin, ref minX, ref minZ, ref maxX, ref maxZ);
 
-        minX = Mathf.Max(0, minX - cap); maxX = Mathf.Min(_width - 1, maxX + cap);
-        minZ = Mathf.Max(0, minZ - cap); maxZ = Mathf.Min(_depth - 1, maxZ + cap);
-        _careful.RefreshClearance(minX, minZ, maxX, maxZ, cap);
-        _forceful.RefreshClearance(minX, minZ, maxX, maxZ, cap);
+        int clearMinX = Mathf.Max(0, minX - cap), clearMaxX = Mathf.Min(_width - 1, maxX + cap);
+        int clearMinZ = Mathf.Max(0, minZ - cap), clearMaxZ = Mathf.Min(_depth - 1, maxZ + cap);
+        _careful.RefreshClearance(clearMinX, clearMinZ, clearMaxX, clearMaxZ, cap);
+        _forceful.RefreshClearance(clearMinX, clearMinZ, clearMaxX, clearMaxZ, cap);
+
+        int reach = cap + MarginCells + 1;
+        RefreshSteps(Mathf.Max(0, minX - reach), Mathf.Max(0, minZ - reach), Mathf.Min(_width - 1, maxX + reach), Mathf.Min(_depth - 1, maxZ + reach));
+    }
+
+    private void Encapsulate(List<int> cells, ref int minX, ref int minZ, ref int maxX, ref int maxZ)
+    {
+        foreach (int index in cells)
+        {
+            int x = index % _width, z = index / _width;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (z < minZ) minZ = z;
+            if (z > maxZ) maxZ = z;
+        }
+    }
+
+    // Both layers' Moves and StepCosts over a box, from the same CanStep and step cost the queries use.
+    private void RefreshSteps(int minX, int minZ, int maxX, int maxZ)
+    {
+        RefreshSteps(_careful, PropRule.Careful, minX, minZ, maxX, maxZ);
+        RefreshSteps(_forceful, PropRule.Forceful, minX, minZ, maxX, maxZ);
+    }
+
+    private void RefreshSteps(PropLayer layer, PropRule rule, int minX, int minZ, int maxX, int maxZ)
+    {
+        for (int z = minZ; z <= maxZ; z++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                var cell = new Vector2Int(x, z);
+                int moves = 0;
+                for (int k = 0; k < Steps.Length; k++)
+                    if (CanStep(cell, Steps[k], rule)) moves |= 1 << k;
+                int index = x + z * _width;
+                layer.Moves[index] = (byte)moves;
+                layer.StepCosts[index] = MeasureStepCost(index, layer);
+            }
+        }
     }
 
     public int Index(Vector2Int cell) => cell.x + cell.y * _width;

@@ -57,6 +57,13 @@ public class GridPathfinder
         Record(startIndex, 0, -1);
         _open.Push(startIndex, Priority(0, Heuristic(start, goal)));
 
+        // The grid's cached moves and step costs (PropLayer.Moves): two reads per cell, not CanStep and
+        // StepCost per neighbour.
+        PropLayer layer = _grid.LayerFor(rule);
+        byte[] moves = layer.Moves;
+        int[] stepCosts = layer.StepCosts;
+        int[] offsets = _grid.StepOffsets;
+
         int expanded = 0;
         while (_open.TryPop(out int index, out _))
         {
@@ -72,16 +79,17 @@ public class GridPathfinder
 
             Vector2Int cell = _grid.CellOf(index);
             int cost = _cost[index];
-            foreach (Vector2Int step in PathGrid.Steps)
+            int legal = moves[index];
+            for (int k = 0; k < 8; k++)
             {
-                if (!_grid.CanStep(cell, step, rule)) continue;
+                if ((legal & (1 << k)) == 0) continue;
 
-                Vector2Int nextCell = cell + step;
-                int next = _grid.Index(nextCell);
+                int next = index + offsets[k];
                 if (_closed[next] == _generation) continue;
 
                 // Step costs (walls, skin, shove) only add to a step, so the heuristic below never overestimates.
-                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost) + _grid.StepCost(nextCell, rule);
+                Vector2Int nextCell = cell + PathGrid.Steps[k];
+                int nextCost = cost + (k < 4 ? StraightCost : DiagonalCost) + stepCosts[next];
                 if (_seen[next] == _generation && _cost[next] <= nextCost) continue;
 
                 Record(next, nextCost, index);
