@@ -25,6 +25,24 @@ public class CharacterAnimator : MonoBehaviour
     public const string StanceParameter = "Stance";
     public const string WeaponParameter = "Weapon";
     public const string GripLayer = "Grip";
+    public const string BeatParameter = "Beat";
+    public const string BeatTimeParameter = "BeatTime";
+    // Notice, Lose and Stand Down plant the feet, so they cover the whole body; the Draw plays over moving legs.
+    public const string BeatLayer = "Beat";
+    public const string BeatUpperLayer = "Beat Upper";
+
+    /// <summary>A beat's state name in the controller, the same on whichever beat layer holds it.</summary>
+    public static string BeatStateName(AnimBeat beat) => beat switch
+    {
+        AnimBeat.Draw => "Draw",
+        AnimBeat.Notice => "Notice",
+        AnimBeat.Lose => "Lose",
+        AnimBeat.StandDown => "Stand Down",
+        _ => null,
+    };
+
+    /// <summary>The layer a beat's state is built on.</summary>
+    public static string BeatLayerName(AnimBeat beat) => beat == AnimBeat.Draw ? BeatUpperLayer : BeatLayer;
 
     // A floor for the speed the blend divides by, so a character standing still reads as still.
     private const float MinMoveSpeed = 0.01f;
@@ -54,6 +72,8 @@ public class CharacterAnimator : MonoBehaviour
     private const float TurnAroundAngle = 150f;
 
     private static readonly int MoveXId = Animator.StringToHash(MoveXParameter);
+    private static readonly int BeatId = Animator.StringToHash(BeatParameter);
+    private static readonly int BeatTimeId = Animator.StringToHash(BeatTimeParameter);
     private static readonly int MoveZId = Animator.StringToHash(MoveZParameter);
     private static readonly int TurnId = Animator.StringToHash(TurnParameter);
     private static readonly int StanceId = Animator.StringToHash(StanceParameter);
@@ -83,6 +103,11 @@ public class CharacterAnimator : MonoBehaviour
     private Animator _animator;
     private IAnimatedCharacter _character;
     private int _gripLayer = -1;
+    private int _beatLayer = -1;
+    private int _beatUpperLayer = -1;
+#if RUBY_DEBUG_LOGS
+    private AnimBeat _lastBeat;   // the beat seen last frame, to say once per beat when its slot is empty
+#endif
 
     private bool _facing;      // the model's facing is its own (standing, aiming or running)
     private float _lowerYaw;   // the model's world yaw: where its legs point
@@ -118,6 +143,10 @@ public class CharacterAnimator : MonoBehaviour
         }
         // A set with no grip builds no grip layer; then there's nothing to close.
         _gripLayer = _animator.GetLayerIndex(GripLayer);
+        // A set with no beat clips (or a controller built before beats) has no beat layers: every beat then holds
+        // the stance, which the beat says when it starts (UpdateBeat).
+        _beatLayer = _animator.GetLayerIndex(BeatLayer);
+        _beatUpperLayer = _animator.GetLayerIndex(BeatUpperLayer);
     }
 
     // Start, not Awake: the Animator resolves its Avatar's bones in its own Awake.
@@ -167,6 +196,8 @@ public class CharacterAnimator : MonoBehaviour
             _animator.SetLayerWeight(_gripLayer, Mathf.MoveTowards(_animator.GetLayerWeight(_gripLayer), grip, Time.deltaTime / GripBlendTime));
         }
 
+        UpdateBeat();
+
         _hasTarget = _character.TryFindTarget(out _target);
         UpdateAimHeading();
         UpdateFacing(stance);
@@ -181,6 +212,34 @@ public class CharacterAnimator : MonoBehaviour
 
         _animator.SetFloat(MoveXId, local.x, _damping, Time.deltaTime);
         _animator.SetFloat(MoveZId, local.z, _damping, Time.deltaTime);
+    }
+
+    // The beat's slot plays on its layer, scrubbed by the beat's progress, and the layer opens while it runs. An empty
+    // slot has no state: the stance holds and the body still turns (the game does that), and it is said once.
+    private void UpdateBeat()
+    {
+        AnimBeat beat = _character.Beat;
+        // Ruby.Animation references nothing, so not DebugLog: the same define, checked here (as Pathing does).
+#if RUBY_DEBUG_LOGS
+        if (beat != AnimBeat.None && beat != _lastBeat && !HasBeatState(beat, _beatLayer) && !HasBeatState(beat, _beatUpperLayer))
+            Debug.Log($"{name}'s {beat} beat has no clip in its animation set (or the controller wasn't rebuilt since one was added): they hold their stance for it.", this);
+        _lastBeat = beat;
+#endif
+
+        if (_beatLayer < 0 && _beatUpperLayer < 0) return;
+        _animator.SetInteger(BeatId, (int)beat);
+        _animator.SetFloat(BeatTimeId, _character.BeatProgress);
+        BlendBeatLayer(_beatLayer, HasBeatState(beat, _beatLayer));
+        BlendBeatLayer(_beatUpperLayer, HasBeatState(beat, _beatUpperLayer));
+    }
+
+    private bool HasBeatState(AnimBeat beat, int layer) =>
+        beat != AnimBeat.None && layer >= 0 && _animator.HasState(layer, Animator.StringToHash(BeatStateName(beat)));
+
+    private void BlendBeatLayer(int layer, bool open)
+    {
+        if (layer < 0) return;
+        _animator.SetLayerWeight(layer, Mathf.MoveTowards(_animator.GetLayerWeight(layer), open ? 1f : 0f, Time.deltaTime / GripBlendTime));
     }
 
     // The level heading from the body to the target, steadied for the pose only: the body itself

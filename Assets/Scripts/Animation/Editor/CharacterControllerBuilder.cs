@@ -45,6 +45,8 @@ public static class CharacterControllerBuilder
         controller.AddParameter(CharacterAnimator.TurnParameter, AnimatorControllerParameterType.Float);
         controller.AddParameter(CharacterAnimator.StanceParameter, AnimatorControllerParameterType.Int);
         controller.AddParameter(CharacterAnimator.WeaponParameter, AnimatorControllerParameterType.Int);
+        controller.AddParameter(CharacterAnimator.BeatParameter, AnimatorControllerParameterType.Int);
+        controller.AddParameter(CharacterAnimator.BeatTimeParameter, AnimatorControllerParameterType.Float);
 
         AnimatorStateMachine machine = controller.layers[0].stateMachine;
         AnimatorState first = null;
@@ -81,6 +83,8 @@ public static class CharacterControllerBuilder
         layers[0].iKPass = true;
         controller.layers = layers;
 
+        // Before the grip, so the hand still closes round the gun over a beat.
+        AddBeats(controller, set);
         AddGrip(controller, set);
 
         EditorUtility.SetDirty(controller);
@@ -146,6 +150,59 @@ public static class CharacterControllerBuilder
         AnimatorState state = grip.stateMachine.AddState(CharacterAnimator.GripLayer);
         state.motion = set.Grip;
         grip.stateMachine.defaultState = state;
+    }
+
+    // Two layers over the base, each opened by CharacterAnimator while a beat with a state on it runs: Beat, full
+    // body, for the beats that plant the feet, and Beat Upper, under the set's upper-body mask, for the Draw, which
+    // plays over legs still coasting. Each state is scrubbed by BeatTime (the beat's progress), not played, so any
+    // clip fills the beat's tuned length. An empty slot is left out, like every other slot.
+    private static void AddBeats(AnimatorController controller, CharacterAnimationSet set)
+    {
+        AnimBeat[] full = { AnimBeat.Notice, AnimBeat.Lose, AnimBeat.StandDown };
+        AddBeatLayer(controller, set, CharacterAnimator.BeatLayer, null, full);
+
+        if (set.Draw == null) return;
+        if (set.UpperBodyMask == null)
+        {
+            Debug.LogWarning($"{set.name} has a Draw clip but no Upper Body Mask, so the draw would cover the legs and freeze them mid-stride. The Draw is left out: add the mask and build again.", set);
+            return;
+        }
+        AddBeatLayer(controller, set, CharacterAnimator.BeatUpperLayer, set.UpperBodyMask, new[] { AnimBeat.Draw });
+    }
+
+    private static void AddBeatLayer(AnimatorController controller, CharacterAnimationSet set, string layerName, AvatarMask mask, AnimBeat[] beats)
+    {
+        bool any = false;
+        foreach (AnimBeat beat in beats) any |= set.BeatClip(beat) != null;
+        if (!any) return;
+
+        controller.AddLayer(layerName);
+        AnimatorControllerLayer[] layers = controller.layers;
+        AnimatorControllerLayer layer = layers[layers.Length - 1];
+        layer.avatarMask = mask;
+        layer.blendingMode = AnimatorLayerBlendingMode.Override;
+        layer.defaultWeight = 0f;
+        controller.layers = layers;
+
+        AnimatorStateMachine machine = layer.stateMachine;
+        foreach (AnimBeat beat in beats)
+        {
+            AnimationClip clip = set.BeatClip(beat);
+            if (clip == null) continue;
+            AnimatorState state = machine.AddState(CharacterAnimator.BeatStateName(beat));
+            state.motion = clip;
+            state.timeParameterActive = true;
+            state.timeParameter = CharacterAnimator.BeatTimeParameter;
+            machine.defaultState ??= state;
+
+            AnimatorStateTransition transition = machine.AddAnyStateTransition(state);
+            transition.AddCondition(AnimatorConditionMode.Equals, (int)beat, CharacterAnimator.BeatParameter);
+            transition.hasExitTime = false;
+            transition.hasFixedDuration = true;
+            // The layer's weight fades it in; a cross-fade on top would scrub two clips at once.
+            transition.duration = 0f;
+            transition.canTransitionToSelf = false;
+        }
     }
 
     private static AnimatorState AddSingle(AnimatorStateMachine machine, string name, AnimationClip clip, AnimStance stance)

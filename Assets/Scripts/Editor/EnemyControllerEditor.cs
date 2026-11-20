@@ -75,6 +75,23 @@ public class EnemyControllerEditor : Editor
         }
 
         if (GUILayout.Button($"Add Patrol Point ({RouteNames[s_editing]} route)")) AddPoint();
+
+        DrawBeatSlots(enemy);
+    }
+
+    // The beats their controller has no clip for. A rule, not a fault: they hold their stance and turn for the tuned
+    // time, and saying so keeps it from passing for a bug.
+    private static void DrawBeatSlots(EnemyController enemy)
+    {
+        Animator animator = enemy.GetComponentInChildren<Animator>();
+        if (animator == null || animator.runtimeAnimatorController == null)
+        {
+            EditorGUILayout.HelpBox($"{(animator == null ? "No Animator under this enemy" : "Their Animator has no controller")}: their beats (draw, notice, lose, stand down) can't animate.", MessageType.Warning);
+            return;
+        }
+        var missing = BeatSlots.MissingIn(animator.runtimeAnimatorController);
+        if (missing.Count == 0) return;
+        EditorGUILayout.HelpBox($"No clip for these beats in {animator.runtimeAnimatorController.name}: {BeatSlots.Names(missing)}. They hold their stance and turn for the tuned time. Fill the slot in the animation set and press Build Controller.", MessageType.Info);
     }
 
     private void AddPoint()

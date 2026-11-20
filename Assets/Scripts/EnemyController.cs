@@ -632,6 +632,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// <summary>The speed of the last move it was told to make, 0 once stopped: how fast it's trying to go.</summary>
     public float MoveSpeed => Movement.IntendedSpeed;
     public WeaponHold Weapon => IsArmed ? WeaponHold.Pistol : WeaponHold.None;
+    AnimBeat IAnimatedCharacter.Beat => Beat.Kind;
+    public float BeatProgress => Beat.Progress;
 
     /// <summary>What its body is doing, for its animation. Firing, it aims; moving otherwise, it runs.</summary>
     public AnimStance Stance => _state.Current switch

@@ -43,6 +43,18 @@ public class CharacterAnimationSet : ScriptableObject
     [SerializeField] private AnimationClip _restrained;
     [SerializeField] private AnimationClip _getUp;
 
+    [Header("Beats")]
+    [Tooltip("Drawing on first sight of the target. Upper body only, under Upper Body Mask, so the legs coast to a stop beneath it. Scrubbed across the character's tuned Draw Time. Empty: they hold their stance while they turn.")]
+    [SerializeField] private AnimationClip _draw;
+    [Tooltip("Stopping to take in something before going to check it. Scrubbed across the tuned Notice Time (or Distraction Time mid-search). Empty: they hold their stance while they turn.")]
+    [SerializeField] private AnimationClip _notice;
+    [Tooltip("Holding the gun on where the target was last seen, before searching. Scrubbed across the tuned Lose Time. Empty: they hold their stance while they turn.")]
+    [SerializeField] private AnimationClip _lose;
+    [Tooltip("The gesture at the end of a search that found nothing. Scrubbed across the tuned Stand Down Time. Empty: they hold their stance.")]
+    [SerializeField] private AnimationClip _standDown;
+    [Tooltip("Limits the Draw to the upper body (spine up), so the legs keep moving under it. Without it a Draw clip is left out of the controller, with a warning.")]
+    [SerializeField] private AvatarMask _upperBodyMask;
+
     [Header("Holding a weapon")]
     [Tooltip("A hand pose closed around the weapon, laid over the gun hand while the character holds one.")]
     [SerializeField] private AnimationClip _grip;
@@ -60,4 +72,19 @@ public class CharacterAnimationSet : ScriptableObject
     public AnimationClip GetUp => _getUp;
     public AnimationClip Grip => _grip;
     public AvatarMask GripMask => _gripMask;
+    public AnimationClip Draw => _draw;
+    public AnimationClip Notice => _notice;
+    public AnimationClip Lose => _lose;
+    public AnimationClip StandDown => _standDown;
+    public AvatarMask UpperBodyMask => _upperBodyMask;
+
+    /// <summary>The slot for a beat, null when it is empty or the beat is None.</summary>
+    public AnimationClip BeatClip(AnimBeat beat) => beat switch
+    {
+        AnimBeat.Draw => _draw,
+        AnimBeat.Notice => _notice,
+        AnimBeat.Lose => _lose,
+        AnimBeat.StandDown => _standDown,
+        _ => null,
+    };
 }

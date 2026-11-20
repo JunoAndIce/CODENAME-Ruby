@@ -3,7 +3,9 @@
     "rootNamespace": "",
     "references": [
         "Ruby.Game",
-        "Ruby.Pathing"
+        "Ruby.Pathing",
+        "Ruby.Animation",
+        "Ruby.Animation.Editor"
     ],
     "includePlatforms": [
         "Editor"
