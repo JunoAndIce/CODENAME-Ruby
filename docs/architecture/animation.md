@@ -33,7 +33,9 @@ Ruby in its own `Update`, and placing the model first let that turn carry it off
   mask. Both sit under the Grip layer, so the hand still closes round the gun. Each state is **scrubbed**
   by the `BeatTime` parameter, the beat's progress from `IAnimatedCharacter.BeatProgress`, not played, so a
   clip of any length fills the tuned time. `CharacterAnimator` opens a layer while the running beat has a
-  state on it. `IAnimatedCharacter.Beat` and `BeatProgress` have default bodies (none), so Ruby implements
+  state on it, and writes `BeatTime` only while a beat runs, so a fading layer holds the end pose. The Beat layer
+  has an IK pass (the aimed arm and look are reapplied on it, eased once a frame) so a Lose clip can't drop
+  the arm; Beat Upper has none, so the draw clip owns the arm. `IAnimatedCharacter.Beat` and `BeatProgress` have default bodies (none), so Ruby implements
   nothing. **An empty slot is a rule, not a fault:** the stance holds while the officer turns; the set's
   Inspector lists its empty slots and the officer's lists the beats their built controller lacks
   (`BeatSlots`), and with `RUBY_DEBUG_LOGS` a beat with no clip says so once.

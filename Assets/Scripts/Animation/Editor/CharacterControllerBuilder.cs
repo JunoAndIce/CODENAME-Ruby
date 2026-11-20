@@ -159,7 +159,8 @@ public static class CharacterControllerBuilder
     private static void AddBeats(AnimatorController controller, CharacterAnimationSet set)
     {
         AnimBeat[] full = { AnimBeat.Notice, AnimBeat.Lose, AnimBeat.StandDown };
-        AddBeatLayer(controller, set, CharacterAnimator.BeatLayer, null, full);
+        // An IK pass, so the aimed arm and the look survive the override (CharacterAnimator.OnAnimatorIK).
+        AddBeatLayer(controller, set, CharacterAnimator.BeatLayer, null, full, true);
 
         if (set.Draw == null) return;
         if (set.UpperBodyMask == null)
@@ -167,10 +168,11 @@ public static class CharacterControllerBuilder
             Debug.LogWarning($"{set.name} has a Draw clip but no Upper Body Mask, so the draw would cover the legs and freeze them mid-stride. The Draw is left out: add the mask and build again.", set);
             return;
         }
-        AddBeatLayer(controller, set, CharacterAnimator.BeatUpperLayer, set.UpperBodyMask, new[] { AnimBeat.Draw });
+        // No IK pass: the draw clip owns the arm, which the carry pose would otherwise hold in place.
+        AddBeatLayer(controller, set, CharacterAnimator.BeatUpperLayer, set.UpperBodyMask, new[] { AnimBeat.Draw }, false);
     }
 
-    private static void AddBeatLayer(AnimatorController controller, CharacterAnimationSet set, string layerName, AvatarMask mask, AnimBeat[] beats)
+    private static void AddBeatLayer(AnimatorController controller, CharacterAnimationSet set, string layerName, AvatarMask mask, AnimBeat[] beats, bool ikPass)
     {
         bool any = false;
         foreach (AnimBeat beat in beats) any |= set.BeatClip(beat) != null;
@@ -182,6 +184,7 @@ public static class CharacterControllerBuilder
         layer.avatarMask = mask;
         layer.blendingMode = AnimatorLayerBlendingMode.Override;
         layer.defaultWeight = 0f;
+        layer.iKPass = ikPass;
         controller.layers = layers;
 
         AnimatorStateMachine machine = layer.stateMachine;

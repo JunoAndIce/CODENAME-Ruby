@@ -105,6 +105,7 @@ public class CharacterAnimator : MonoBehaviour
     private int _gripLayer = -1;
     private int _beatLayer = -1;
     private int _beatUpperLayer = -1;
+    private int _ikFrame = -1;    // the frame the IK easing last advanced: the Beat layer's pass reapplies, it doesn't ease twice
 #if RUBY_DEBUG_LOGS
     private AnimBeat _lastBeat;   // the beat seen last frame, to say once per beat when its slot is empty
 #endif
@@ -228,7 +229,9 @@ public class CharacterAnimator : MonoBehaviour
 
         if (_beatLayer < 0 && _beatUpperLayer < 0) return;
         _animator.SetInteger(BeatId, (int)beat);
-        _animator.SetFloat(BeatTimeId, _character.BeatProgress);
+        // Only while one runs: an ended beat's progress reads 0, and the layer, still open while it fades and still
+        // in that state, would scrub back to the clip's first frame, popping the end pose to the start pose.
+        if (beat != AnimBeat.None) _animator.SetFloat(BeatTimeId, _character.BeatProgress);
         BlendBeatLayer(_beatLayer, HasBeatState(beat, _beatLayer));
         BlendBeatLayer(_beatUpperLayer, HasBeatState(beat, _beatUpperLayer));
     }
@@ -360,7 +363,13 @@ public class CharacterAnimator : MonoBehaviour
 
     private void OnAnimatorIK(int layerIndex)
     {
-        if (layerIndex != 0) return;
+        // The base layer, and the full-body Beat layer while it is open: an Override layer replaces the base pose,
+        // IK and all, so a Lose clip would drop the aimed arm and the gun would twist off the hand. The Draw's
+        // layer gets no IK pass, so its clip owns the arm. The easing advances once a frame, however many passes run.
+        bool beatPass = layerIndex == _beatLayer && _beatLayer > 0 && _animator.GetLayerWeight(_beatLayer) > 0f;
+        if (layerIndex != 0 && !beatPass) return;
+        float dt = _ikFrame == Time.frameCount ? 0f : Time.deltaTime;
+        _ikFrame = Time.frameCount;
 
         bool upright = IsUpright(_character.Stance);
         bool looking = upright && _aiming && (_bodyLookWeight > 0f || _headLookWeight > 0f);
@@ -368,7 +377,7 @@ public class CharacterAnimator : MonoBehaviour
         // Eased like the gun arm, so the head and chest turn onto a target that appears, let go of
         // one that's lost, and swing across when the twist changes side, rather than snapping in a
         // frame. Rising from nothing, or snapping, the look goes straight where it's wanted.
-        float t = 1f - Mathf.Exp(-Time.deltaTime / LookBlendTime);
+        float t = 1f - Mathf.Exp(-dt / LookBlendTime);
         if (looking) _lookYaw = _lookWeight <= 0.001f || _snapping ? ClampedAimYaw() : Mathf.LerpAngle(_lookYaw, ClampedAimYaw(), t);
         _lookWeight = Mathf.Lerp(_lookWeight, looking ? 1f : 0f, t);
 
@@ -385,7 +394,7 @@ public class CharacterAnimator : MonoBehaviour
             _animator.SetLookAtWeight(0f);
         }
 
-        UpdateGunArm(upright);
+        UpdateGunArm(upright, dt);
     }
 
     // Aiming, the gun arm reaches toward the target; armed but not aiming, it holds the gun low in
@@ -395,7 +404,7 @@ public class CharacterAnimator : MonoBehaviour
     // between them, the weight and the arm's direction are eased. Easing a world position instead
     // left the hand trailing behind a running character, and moved it in a straight line that cut
     // through the chest whenever the aim swung across.
-    private void UpdateGunArm(bool upright)
+    private void UpdateGunArm(bool upright, float dt)
     {
         if (_gunShoulder == null) return;
         bool armed = upright && _character.Weapon != WeaponHold.None;
@@ -404,7 +413,7 @@ public class CharacterAnimator : MonoBehaviour
         float wantedBlend = aim ? 1f : 0f;
         float aimYaw = ClampedAimYaw();
 
-        float t = 1f - Mathf.Exp(-Time.deltaTime / ArmBlendTime);
+        float t = 1f - Mathf.Exp(-dt / ArmBlendTime);
         bool rising = _handWeight <= 0.001f;
         // Rising from nothing, the arm starts where it's wanted rather than sweeping from a stale pose.
         // Snapping, it's on the target in this frame's pose, which the shot leaves from.

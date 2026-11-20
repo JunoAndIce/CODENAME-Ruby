@@ -477,7 +477,16 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
             ProvokedUnseen = false;
             DebugLog.Info($"{name} is hit while provoked: they are no longer blind to Ruby and fights as any damaged enemy does.", this);
         }
+        IState before = _state.Current;
         Alert();
+        // A hit cuts any beat (spec 2026-11-20-smooth-transitions). A change of state has already cut it, and a draw
+        // the hit started from calm is the new state's own; only one still in the same state, shot mid-draw in
+        // Aggro, has a beat left running here, and it ends: they fight back at once.
+        if (_state.Current == before && Beat.Running)
+        {
+            DebugLog.Info($"{name} is hit during their {Beat.Kind} beat: it ends.", this);
+            Beat.Cancel();
+        }
     }
 
     // Corpses too: a dead enemy stays a body the chain can swing and throw.

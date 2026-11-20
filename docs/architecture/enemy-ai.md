@@ -12,7 +12,7 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
   `EnemyMovement` (their walking, turning and facing, and the walks the states ask for),
   `EnemyAwareness` (what they take in each frame: sight of Ruby, what they learn and say, and the
   newest thing they know), `EnemyBodyState` (their record of the chain, and the gun and corpse handling
-  that goes with it) and `EnemyGizmos` (what they draw in the Scene view, a static class the
+  that goes with it), `EnemyBeat` (the beat they roll through between states, see **Beats**) and `EnemyGizmos` (what they draw in the Scene view, a static class the
   controller's two gizmo messages forward to). `Intel` is the scene's one hub and owns
   `KnowledgePool` (the shared picture), `JobBoard` (group jobs, with the `FloorReach` calling uses)
   and the `FloorReach`es that speech and sound use. The plain classes read the controller's tuning
@@ -23,7 +23,8 @@ Split out of `CLAUDE.md` to keep the per-prompt context small. Read it before ch
 - **Order.** `Intel` runs at execution order -20, before the enemies (0): it advances every job's
   clock and publishes the pool first, so every member reads a job's new step on the same frame.
   Then each enemy's `Update` runs the machine (transitions, then the state's `Tick`) and
-  `EnemyAwareness.Update`; their `FixedUpdate` runs the state's `FixedTick` and then `EnemySenses.Scan`.
+  `EnemyAwareness.Update`; their `FixedUpdate` runs the state's `FixedTick`, then, alive and not overridden, `EnemyBeat.FixedTick` (after the
+  state, which waits while a beat runs, so the beat has the last word on facing and feet) and `EnemySenses.Scan`.
   Sounds arrive from the bus whenever a weapon or impact emits them, in any phase.
 - **Sight** (`EnemyVision.CanSeePlayer`): a ray from eye height to
   the player. **Anything solid blocks it except characters** (any body under the player or an enemy, so Ruby's own ragdoll bones

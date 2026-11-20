@@ -77,7 +77,9 @@ public class SearchingState : EnemyStateBase
 
     private GroupJob Job => Enemy.Job;
 
-    public bool Finished => Job != null ? Job.Step == JobStep.Done && !FinishingSearch(Job) : _step == SearchStep.Done;
+    // Never while a beat runs: the table would cut it and snap them straight to Patrol or Idle (one dismissed inside
+    // Enter, beside a full job, lost their Lose beat the next frame; a member's late Stand Down was cut at Done).
+    public bool Finished => !Enemy.Beat.Running && (Job != null ? Job.Step == JobStep.Done && !FinishingSearch(Job) : _step == SearchStep.Done);
 
     // On a Search, they haven't finished their own walk. Past the search's end they stay on the job for
     // it: a Done job takes no new member or sound (Recruiting, JobBoard.Covers), so a
