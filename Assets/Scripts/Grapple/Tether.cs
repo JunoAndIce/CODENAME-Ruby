@@ -90,6 +90,9 @@ public class Tether
     /// <summary>Whether the far end can move, and so can be thrown.</summary>
     public bool HasHost => _host != null;
 
+    /// <summary>The body on the far end, or null for the static world.</summary>
+    public Rigidbody Host => _host;
+
     /// <summary>The last solve had the host parked: held at min length, spinning around the player.</summary>
     public bool IsParked { get; private set; }
 
@@ -222,7 +225,7 @@ public class Tether
     internal void PassThroughAfterEnd(PassThrough passThrough, float seconds)
     {
         // Gathered now, not reused from the tether's start: an officer let go goes limp and collides
-        // through his bones, which were switched off while he was held.
+        // through their bones, which were switched off while they were held.
         if (_host != null) passThrough.Begin(_playerColliders, Footprint.BodyColliders(_host), seconds);
     }
 

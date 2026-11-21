@@ -3,15 +3,26 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Generic state machine, run by the enemy. Nodes are keyed by state Type, so each
-/// state class has one instance per machine, built once and reused across transitions.
+/// state class has one instance per machine, built once and reused across transitions. A table's
+/// order is its priority: transitions are tried in the order they were added, any-state ones first,
+/// and the first whose condition holds wins.
 /// </summary>
 public class StateMachine
 {
     readonly Dictionary<Type, StateNode> _nodes = new();
-    readonly HashSet<ITransition> _anyTransitions = new();
+    readonly List<ITransition> _anyTransitions = new();
     StateNode _current;
 
     public IState Current => _current?.State;
+
+    /// <summary>
+    /// Raised on every change of state, by the table or by SetState from outside, after the old state's
+    /// Exit and before the new one's Enter, with (from, to); from is null on the first. For state the
+    /// owner keeps across several states, which no single Exit can clear because it doesn't know where
+    /// it is going. Handlers must not change state: a SetState inside one would run its whole change
+    /// between this change's Exit and Enter, leaving the new state entered from a state already left.
+    /// </summary>
+    public event Action<IState, IState> Changed;
 
     public void Tick()
     {
@@ -27,8 +38,10 @@ public class StateMachine
     {
         if (_current?.State == state) return;
 
-        _current?.State.Exit();
+        IState from = _current?.State;
+        from?.Exit();
         _current = GetOrAddNode(state);
+        Changed?.Invoke(from, _current.State);
         _current.State.Enter();
     }
 
@@ -64,7 +77,7 @@ public class StateMachine
     class StateNode
     {
         public IState State { get; }
-        public HashSet<ITransition> Transitions { get; } = new();
+        public List<ITransition> Transitions { get; } = new();
 
         public StateNode(IState state) => State = state;
     }

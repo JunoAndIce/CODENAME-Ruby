@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -10,6 +11,9 @@ using UnityEngine;
 /// </summary>
 public class RearmState : EnemyStateBase
 {
+    // "During aggro and rearm enemies should push objects out of the way if they can": light props only.
+    public override PropRule PropRule => PropRule.Forceful;
+
     // Reach is measured from the body's surface to the gun's, so the pickup lands before the
     // capsule touches the gun: walking into it would shove a 20 kg gun off at walking speed.
     private const float PickUpReach = 0.3f;
@@ -29,10 +33,11 @@ public class RearmState : EnemyStateBase
 
     private readonly Dictionary<Gun, (Vector3 position, float time)> _unreachable = new();
     private Gun _target;
+    // Made once: a method group converts to a new delegate on every use, and the table asks every
+    // frame (WantsGun) while an unarmed enemy is in any AI state.
+    private readonly Predicate<Gun> _isFree;
 
-    public RearmState(EnemyController enemy) : base(enemy) { }
-
-    public override EnemyState Id => EnemyState.Rearm;
+    public RearmState(EnemyController enemy) : base(enemy) => _isFree = IsFree;
 
     public bool Armed => Enemy.IsArmed;
     public bool GaveUp { get; private set; }
@@ -76,7 +81,7 @@ public class RearmState : EnemyStateBase
 
         // Toward the pivot, a goal that holds still: the nearest point on the gun shifts as the enemy
         // moves, and a goal that shifts every step re-plans every step.
-        NavResult result = Enemy.WalkTo(_target.transform.position, Enemy.BodyRadius + StretchReach, Enemy.ChaseSpeed);
+        NavResult result = Enemy.Movement.WalkTo(_target.transform.position, Enemy.BodyRadius + StretchReach, Enemy.ChaseSpeed);
         if (result == NavResult.Arrived)
         {
             // Arrived means the grid can't bring it any nearer, so it stretches or moves on.
@@ -121,7 +126,7 @@ public class RearmState : EnemyStateBase
         Claims[_target] = this;
     }
 
-    private Gun FindFree() => Enemy.Arms == null ? null : Enemy.Arms.FindLooseGun(Enemy.RearmRadius, IsFree);
+    private Gun FindFree() => Enemy.Arms == null ? null : Enemy.Arms.FindLooseGun(Enemy.RearmRadius, _isFree);
 
     private bool IsFree(Gun gun)
     {

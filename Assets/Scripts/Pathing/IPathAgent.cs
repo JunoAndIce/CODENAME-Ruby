@@ -12,8 +12,19 @@ public interface IPathAgent
     /// <summary>Seconds without getting closer before a move counts as blocked.</summary>
     float StuckTime { get; }
 
-    /// <summary>Steer one physics step straight at target.</summary>
-    void MoveToward(Vector3 target, float speed);
+    /// <summary>
+    /// How their routes treat props right now. GridNavigator reads it at the top of every move and
+    /// decision, and drops whatever it planned under another rule.
+    /// </summary>
+    PropRule PropRule { get; }
+
+    /// <summary>
+    /// Steer one physics step toward target. mustReach is true when the target is a point they must
+    /// actually reach (a goal on a clear line, a route corner, a field's last step into the goal
+    /// cell) and false for any other flow-field step, which rolls ahead every step and can't be
+    /// orbited.
+    /// </summary>
+    void MoveToward(Vector3 target, float speed, bool mustReach);
 
     void Stop();
 }

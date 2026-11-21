@@ -22,6 +22,7 @@ public class GridPathfinder
     private readonly CellHeap _open = new(256);
     private readonly List<Vector2Int> _cells = new();
     private int _generation;
+    private PropRule _rule;                     // the search under way's: searches run one at a time
 
     public GridPathfinder(PathGrid grid)
     {
@@ -34,22 +35,37 @@ public class GridPathfinder
 
     /// <summary>
     /// Shortest path from from to the goal cell, as straight-line corners ending at the goal
-    /// cell's centre. False when the goal is blocked, unreachable, or too far for one search.
+    /// cell's centre. clearances gets, beside each corner, the clearance the pull accepted the run
+    /// ending there at, so a follower can check sight at the clearance the route was pulled at.
+    /// False when the goal is blocked, unreachable, or too far for one search. Steps, costs, the start
+    /// snap and the pull all read rule's prop layer.
     /// </summary>
-    public bool FindPath(Vector3 from, Vector2Int goal, List<Vector3> path)
+    public bool FindPath(Vector3 from, Vector2Int goal, PropRule rule, List<Vector3> path, List<int> clearances)
     {
         path.Clear();
-        if (!_grid.IsWalkable(goal)) return false;
-        if (!_grid.WorldToCell(from, out Vector2Int raw) || !_grid.NearestWalkable(raw, SnapRadius, out Vector2Int start))
+        clearances.Clear();
+        _rule = rule;
+        if (!_grid.IsWalkable(goal, rule)) return false;
+        if (!_grid.WorldToCell(from, out Vector2Int raw) || !_grid.NearestWalkable(raw, SnapRadius, rule, out Vector2Int start))
             return false;
+
+        int startIndex = _grid.Index(start);
+        int goalIndex = _grid.Index(goal);
+        // Walled off: fail at once, not after searching all the floor the start can reach.
+        if (!_grid.SameArea(startIndex, goalIndex, rule)) return false;
 
         _generation++;   // invalidates every array entry from the last search without clearing
         _open.Clear();
 
-        int startIndex = _grid.Index(start);
-        int goalIndex = _grid.Index(goal);
         Record(startIndex, 0, -1);
         _open.Push(startIndex, Priority(0, Heuristic(start, goal)));
+
+        // The grid's cached moves and step costs (PropLayer.Moves): two reads per cell, not CanStep and
+        // StepCost per neighbour.
+        PropLayer layer = _grid.LayerFor(rule);
+        byte[] moves = layer.Moves;
+        int[] stepCosts = layer.StepCosts;
+        int[] offsets = _grid.StepOffsets;
 
         int expanded = 0;
         while (_open.TryPop(out int index, out _))
@@ -59,22 +75,24 @@ public class GridPathfinder
 
             if (index == goalIndex)
             {
-                BuildPath(from, goalIndex, path);
+                BuildPath(from, goalIndex, path, clearances);
                 return true;
             }
             if (++expanded > MaxExpanded) return false;
 
             Vector2Int cell = _grid.CellOf(index);
             int cost = _cost[index];
-            foreach (Vector2Int step in PathGrid.Steps)
+            int legal = moves[index];
+            for (int k = 0; k < 8; k++)
             {
-                if (!_grid.CanStep(cell, step)) continue;
+                if ((legal & (1 << k)) == 0) continue;
 
-                Vector2Int nextCell = cell + step;
-                int next = _grid.Index(nextCell);
+                int next = index + offsets[k];
                 if (_closed[next] == _generation) continue;
 
-                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost);
+                // Step costs (walls, skin, shove) only add to a step, so the heuristic below never overestimates.
+                Vector2Int nextCell = cell + PathGrid.Steps[k];
+                int nextCost = cost + (k < 4 ? StraightCost : DiagonalCost) + stepCosts[next];
                 if (_seen[next] == _generation && _cost[next] <= nextCost) continue;
 
                 Record(next, nextCost, index);
@@ -105,21 +123,46 @@ public class GridPathfinder
 
     // String-pull the cell path into straight segments, adding a corner only where sight breaks,
     // so agents don't walk an 8-direction staircase.
-    private void BuildPath(Vector3 from, int goalIndex, List<Vector3> path)
+    private void BuildPath(Vector3 from, int goalIndex, List<Vector3> path, List<int> clearances)
     {
         _cells.Clear();
         for (int index = goalIndex; index != -1; index = _parent[index])
             _cells.Add(_grid.CellOf(index));
         _cells.Reverse();
 
+        // A pull must keep the lowest clearance among the cells it covers, up to the penalty-free
+        // clearance (MarginCells + 1, so it agrees with WallPenalty rather than accepting cells it charges for): where
+        // the A* path had room the pulled line keeps it, and through a narrow gap it keeps only
+        // what the gap allows (the rule, not a fallback). The start cell is left out, as sight
+        // exempts it: the agent may be brushing a wall and can't do anything about it.
         Vector3 anchor = from;
+        int anchorCell = 0;                     // the cell the anchor stands in: from stands in the start cell
+        int lowest = int.MaxValue;
+        int accepted = _grid.MarginCells + 1;   // the clearance the current run's last accepted pull used
         for (int i = 1; i < _cells.Count; i++)
         {
-            if (_grid.HasLineOfSight(anchor, _grid.CellToWorld(_cells[i]))) continue;
+            lowest = Mathf.Min(lowest, _grid.Clearance(_cells[i], _rule));
+            int asked = Mathf.Min(_grid.MarginCells + 1, lowest);
+            // Cells first, then the real shape: a pull the cells allow can still clip a wall's corner or brush a
+            // prop. A*'s own single step from the anchor's cell is taken without the cast, as a field's first
+            // step is: refusing it would add the same corner twice (a lane only a prop's skin leaves open fails
+            // every cast).
+            Vector3 point = _grid.StandPoint(_cells[i], _rule);   // a tight cell's fit point, not its blocked centre
+            if (_grid.HasLineOfSight(anchor, point, asked, _rule)
+                && (i - 1 == anchorCell || _grid.HasClearShape(anchor, point, _rule)))
+            {
+                accepted = asked;
+                continue;
+            }
 
-            anchor = _grid.CellToWorld(_cells[i - 1]);
+            anchorCell = i - 1;
+            anchor = _grid.StandPoint(_cells[i - 1], _rule);
             path.Add(anchor);
+            clearances.Add(accepted);   // the run that ends at this corner
+            lowest = Mathf.Min(_grid.Clearance(_cells[i - 1], _rule), _grid.Clearance(_cells[i], _rule));   // the new run starts at the corner
+            accepted = Mathf.Min(_grid.MarginCells + 1, lowest);
         }
-        path.Add(_grid.CellToWorld(_cells[_cells.Count - 1]));
+        path.Add(_grid.StandPoint(_cells[_cells.Count - 1], _rule));
+        clearances.Add(accepted);
     }
 }

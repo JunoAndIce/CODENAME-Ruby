@@ -13,10 +13,7 @@ public class RagdollState : EnemyStateBase
 
     public RagdollState(EnemyController enemy) : base(enemy) { }
 
-    public override EnemyState Id => EnemyState.Ragdoll;
-
-    /// <summary>Stood up after the fall and holding still until Get Up Time runs out.</summary>
-    public bool GettingUp => _recovered && !GotUp;
+    public override bool IsOverride => true;
 
     /// <summary>On its feet and done getting up. Read by the transition table.</summary>
     public bool GotUp => _recovered && _getUpLeft <= 0f;

@@ -5,7 +5,15 @@ using UnityEngine;
 /// Dijkstra distance field over a PathGrid: one flood from a goal, and any number of agents find
 /// their next step from neighbouring costs with no search of their own. That is why chase uses it.
 /// A field with a target follows it, re-flooding when the target changes cell; either kind
-/// re-floods when the grid changes. Re-floods are throttled.
+/// re-floods when the grid changes. Re-floods are throttled and keep the bound of the last
+/// flood, so a short-range field (speech) stays short-range when the grid changes.
+/// Floods are lazy: Flood only plants the goal, and each read spreads the flood until the cell it
+/// asks about is settled, keeping the frontier for the next read. Dijkstra settles cells in cost
+/// order, so a settled cell's cost is final and every cell cheaper than it is settled too, which is
+/// all a descent reads: the answers are exactly a full flood's. A full flood to Max Flow Distance
+/// cost 21 ms at 0.25 m cells (85 ms at 0.125 m) and the chase field re-flooded several times a
+/// second, though its hunters were rarely more than 20 m from Ruby. Reads that need the whole
+/// field (CollectReached, TryGetNearestReached) finish the flood first.
 /// </summary>
 public class FlowField
 {
@@ -17,65 +25,222 @@ public class FlowField
     private const float RefreshInterval = 0.2f;
 
     private readonly PathGrid _grid;
+    private PropRule _rule;
     private readonly Transform _target;
     private readonly int[] _cost;
-    private readonly int[] _stamp;             // a cell's cost is valid only when its stamp is this flood's
-    private readonly CellHeap _open = new(256);
+    private readonly int[] _length;           // plain path length (no wall costs) along the cheapest route found; this is what maxDistance bounds
+    private readonly int[] _stamp;             // a cell's cost is valid only when its stamp is this flood's (it may still drop)
+    private readonly int[] _settled;           // this flood's when the cell's cost is final: popped from the heap
+    private readonly CellHeap _open = new(256);   // the frontier, kept between reads so the next carries on
+    private int _maxCost;                      // this flood's bound, in tenths of a cell of plain length
+    private readonly Vector3[] _stepPoints = new Vector3[LookAhead];       // TryGetStep's accepted points, in order
+    private readonly Vector2Int[] _stepCells = new Vector2Int[LookAhead];
     private int _generation;
     private bool _flooded;
     private bool _hasGoal;
     private Vector2Int _goalCell;
     private Vector2Int _floodedFrom;
     private Vector3 _floodedGoal;
+    private float _floodedMax;
+    private bool _floodedAvoidWalls;
     private int _floodedVersion;
     private float _nextRefresh;
 
-    public FlowField(PathGrid grid, Transform target = null)
+    /// <summary>A field over grid whose steps, costs, snaps and shortcuts read rule's prop layer.</summary>
+    public FlowField(PathGrid grid, PropRule rule, Transform target = null)
     {
         _grid = grid;
+        _rule = rule;
         _target = target;
         _cost = new int[grid.CellCount];
         _stamp = new int[grid.CellCount];
+        _settled = new int[grid.CellCount];
+        _length = new int[grid.CellCount];
     }
 
     public PathGrid Grid => _grid;
 
-    /// <summary>Flood from goal: every cell within the grid's Max Flow Distance learns its cost.</summary>
-    public void Flood(Vector3 goal)
+    /// <summary>The prop rule every flood and step of this field reads.</summary>
+    public PropRule Rule => _rule;
+
+    /// <summary>
+    /// Re-aims an agent's own field at another rule, keeping its arrays: a new field per rule change cost
+    /// about 2 MB on a large grid, every time a hunt began or ended. Forgets the last flood, so flood again
+    /// before reading. Never for a shared field (PathGrid.FieldToward), which is one per rule.
+    /// </summary>
+    public void SetRule(PropRule rule)
+    {
+        _rule = rule;
+        _flooded = false;
+        _hasGoal = false;
+        _generation++;   // every cost from the old rule's flood is stale
+    }
+
+    /// <summary>Bumped by every flood. A reader of a shared field (FloodFrom's) notes it and checks it again to know nothing overwrote the field meanwhile.</summary>
+    public int Generation => _generation;
+
+    /// <summary>Whether the last flood found walkable ground at its goal. False means nothing was reached, so every distance query fails.</summary>
+    public bool HasGoal => _hasGoal;
+
+    /// <summary>Flood from goal out to the grid's Max Flow Distance, keeping off walls.</summary>
+    public void Flood(Vector3 goal) => Flood(goal, _grid.MaxFlowDistance);
+
+    /// <summary>
+    /// Flood from goal: every cell within maxDistance path metres learns its cost. A smaller bound
+    /// than the grid's makes a cheap local flood (how far a shout carries); re-floods reuse it.
+    /// Keeps off walls (see the other overload).
+    /// </summary>
+    public void Flood(Vector3 goal, float maxDistance) => Flood(goal, maxDistance, true);
+
+    /// <summary>
+    /// With avoidWalls, cells inside the grid's wall margin cost extra, so routes keep off walls
+    /// and corners where there is room. The bound stays on plain path length, carried along the
+    /// cheapest route: bounding the penalised cost cut a one-cell corridor's reach to a third and
+    /// dropped far doorways off the chase field. Without avoidWalls the cost is plain length too:
+    /// what hearing and speech need, so a corridor never sounds farther than it is.
+    /// Plants the goal only: the reads spread the flood as far as they ask (see the class summary).
+    /// </summary>
+    public void Flood(Vector3 goal, float maxDistance, bool avoidWalls)
     {
         _flooded = true;
         _floodedGoal = goal;
-        _floodedVersion = _grid.Version;
+        _floodedMax = maxDistance;
+        _floodedAvoidWalls = avoidWalls;
+        _floodedVersion = _grid.VersionFor(_rule);
         _generation++;   // invalidates every cost from the last flood without clearing arrays
         _open.Clear();
 
         _grid.WorldToCell(goal, out _floodedFrom);
-        _hasGoal = _grid.NearestWalkable(_floodedFrom, SnapRadius, out _goalCell);
+        _hasGoal = _grid.NearestWalkable(_floodedFrom, SnapRadius, _rule, out _goalCell);
         if (!_hasGoal) return;
 
-        int maxCost = Mathf.RoundToInt(_grid.MaxFlowDistance / _grid.CellSize * StraightCost);
+        _maxCost = Mathf.RoundToInt(maxDistance / _grid.CellSize * StraightCost);
         int start = _grid.Index(_goalCell);
         SetCost(start, 0);
+        _length[start] = 0;
         _open.Push(start, 0);
+    }
 
-        while (_open.TryPop(out int index, out int cost))
+    // Spreads the flood until index is settled, or the frontier runs out (index is beyond the bound or
+    // walled off). -1 runs it out. Each pop settles a cell for good: Dijkstra pops in cost order, and
+    // every step only adds cost. A grid change between reads is read by the cells settled after it, as a
+    // full flood would read it on its next refresh; RefreshIfStale re-floods on the same throttle as before.
+    private bool Settle(int index)
+    {
+        if (index >= 0)
         {
-            if (cost > _cost[index]) continue;   // stale duplicate: a cheaper route was found later
+            if (_settled[index] == _generation) return true;
+            // Walled off from the goal: no flood reaches it, so don't run the frontier out to learn that.
+            // Only while the grid is as it was at the flood: the areas follow the grid now, and a crate
+            // landing on the goal before the throttled re-flood would otherwise turn away a reader the
+            // flood, planted before it landed, still reaches.
+            if (_floodedVersion == _grid.VersionFor(_rule) && !_grid.SameArea(index, _grid.Index(_goalCell), _rule)) return false;
+        }
+        bool avoidWalls = _floodedAvoidWalls;
+        // The grid's cached moves and step costs (PropLayer.Moves): two reads per cell, not CanStep and
+        // StepCost per neighbour. Read afresh each call, as the bake replaces the arrays.
+        PropLayer layer = _grid.LayerFor(_rule);
+        byte[] moves = layer.Moves;
+        int[] stepCosts = layer.StepCosts;
+        int[] offsets = _grid.StepOffsets;
+        while (_open.TryPop(out int current, out int cost))
+        {
+            // A stale duplicate (a cheaper route was found after it was pushed), or one already settled.
+            if (_settled[current] == _generation || cost > _cost[current]) continue;
+            _settled[current] = _generation;
 
-            Vector2Int cell = _grid.CellOf(index);
-            foreach (Vector2Int step in PathGrid.Steps)
+            int legal = moves[current];
+            int length = _length[current];
+            for (int k = 0; k < 8; k++)
             {
-                if (!_grid.CanStep(cell, step)) continue;
+                if ((legal & (1 << k)) == 0) continue;
 
-                int next = _grid.Index(cell + step);
-                int nextCost = cost + (step.x != 0 && step.y != 0 ? DiagonalCost : StraightCost);
-                if (nextCost > maxCost || (IsReached(next) && _cost[next] <= nextCost)) continue;
+                int next = current + offsets[k];
+                int stepCost = k < 4 ? StraightCost : DiagonalCost;   // PathGrid.Steps: straights first
+                int nextLength = length + stepCost;
+                int nextCost = cost + stepCost;
+                if (avoidWalls) nextCost += stepCosts[next];
+                if (nextLength > _maxCost || (IsSeen(next) && _cost[next] <= nextCost)) continue;
 
                 SetCost(next, nextCost);
+                _length[next] = nextLength;
                 _open.Push(next, nextCost);
             }
+            if (current == index) return true;
+        }
+        return index >= 0 && _settled[index] == _generation;
+    }
+
+    // The whole flood, for reads that look at every cell it reaches.
+    private void Complete() => Settle(-1);
+
+    /// <summary>
+    /// Plain path metres (wall costs excluded) from the goal to point, snapping point to walkable ground like an agent's start
+    /// (anything hugging a wall stands in a blocked cell). Reads the last flood and never re-floods,
+    /// so a caller that wants a fresh answer floods first. False when the point wasn't reached.
+    /// </summary>
+    public bool TryGetDistance(Vector3 point, out float metres)
+    {
+        metres = 0f;
+        if (!_flooded || !TryGetStartCell(point, out Vector2Int cell)) return false;
+        metres = _length[_grid.Index(cell)] / (float)StraightCost * _grid.CellSize;
+        return true;
+    }
+
+    /// <summary>
+    /// The cell the last flood reached nearest a point, searching outward up to maxCells rings. False
+    /// when none is that close. Reads the last flood and never re-floods.
+    /// </summary>
+    public bool TryGetNearestReached(Vector3 point, int maxCells, out Vector3 spot)
+    {
+        spot = point;
+        if (!_flooded || !_hasGoal) return false;
+        Complete();   // a cell near point may lie anywhere in the flood's order
+
+        _grid.WorldToCell(point, out Vector2Int centre);
+        for (int r = 0; r <= maxCells; r++)
+        {
+            int bestSqr = int.MaxValue;
+            for (int dz = -r; dz <= r; dz++)
+            {
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) != r) continue;   // this ring only
+
+                    var cell = new Vector2Int(centre.x + dx, centre.y + dz);
+                    int sqr = dx * dx + dz * dz;
+                    if (sqr >= bestSqr || !_grid.InBounds(cell) || !IsSettled(_grid.Index(cell))) continue;
+
+                    bestSqr = sqr;
+                    spot = _grid.StandPoint(cell, _rule);
+                }
+            }
+            if (bestSqr != int.MaxValue) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Every cell the last flood reached, with its plain path metres from the goal. Appends to the
+    /// lists. For debug drawing: it walks the whole grid, so never call it per frame.
+    /// </summary>
+    public void CollectReached(List<Vector3> points, List<float> metres)
+    {
+        if (!_flooded || !_hasGoal) return;
+        Complete();
+        for (int i = 0; i < _settled.Length; i++)
+        {
+            if (!IsSettled(i)) continue;
+            points.Add(_grid.StandPoint(_grid.CellOf(i), _rule));
+            metres.Add(_length[i] / (float)StraightCost * _grid.CellSize);
         }
     }
+
+    /// <summary>
+    /// Re-floods if the target has changed cell or the grid has changed, throttled as the route readers are.
+    /// TryGetDistance never re-floods, so a caller that only measures (and walks by some other means) asks for this first.
+    /// </summary>
+    public void Refresh() => RefreshIfStale();
 
     /// <summary>True when position stands in the goal's cell: as close as the grid can get.</summary>
     public bool IsAtGoal(Vector3 position)
@@ -88,23 +253,47 @@ public class FlowField
     /// Where an agent at from should steer next. Follows the field downhill, then looks up to
     /// LookAhead cells further along and aims at the furthest one in straight sight, so agents
     /// walk straight lines instead of an 8-direction staircase. False when from is off the
-    /// field (walled off from the goal, or beyond Max Flow Distance).
+    /// field (walled off from the goal, or beyond Max Flow Distance). atGoal is true when the
+    /// steer cell is the goal cell: the descent ends there, so the point stops rolling ahead and a
+    /// fast agent could orbit it; the caller must treat it as a point to reach.
     /// </summary>
-    public bool TryGetStep(Vector3 from, out Vector3 steer)
+    public bool TryGetStep(Vector3 from, out Vector3 steer, out bool atGoal)
     {
         RefreshIfStale();
         steer = from;
+        atGoal = false;
         if (!TryGetStartCell(from, out Vector2Int cell)) return false;
 
-        steer = _grid.CellToWorld(cell);
-        for (int i = 0; i < LookAhead && Descend(cell, out Vector2Int next); i++)
+        // Stand points, not centres: a tight cell's centre is in the wall beside its lane.
+        steer = _grid.StandPoint(cell, _rule);
+        // The lowest clearance among the cells walked: where the descent had room the shortcut
+        // keeps the margin, and through a narrow gap only the clearance the gap allows. The
+        // start cell is left out, since an agent hugging a wall stands in a low one.
+        int lowest = int.MaxValue;
+        int accepted = 0;
+        Vector2Int walked = cell;
+        for (int i = 0; i < LookAhead && Descend(walked, out Vector2Int next); i++)
         {
-            Vector3 point = _grid.CellToWorld(next);
+            Vector3 point = _grid.StandPoint(next, _rule);
+            lowest = Mathf.Min(lowest, _grid.Clearance(next, _rule));
             // The first step is always taken: the agent itself may stand in a blocked cell.
-            if (i > 0 && !_grid.HasLineOfSight(from, point)) break;
-            steer = point;
-            cell = next;
+            if (i > 0 && !_grid.HasLineOfSight(from, point, Mathf.Min(_grid.MarginCells + 1, lowest), _rule)) break;
+            _stepPoints[accepted] = point;
+            _stepCells[accepted] = next;
+            accepted++;
+            walked = next;
         }
+
+        // Only the point about to be steered at is checked against real shapes, not every candidate: one
+        // cast while it holds. One that clips a corner or brushes a prop steps back along the accepted
+        // points, down to the first, which is always taken.
+        while (accepted > 1 && !_grid.HasClearShape(from, _stepPoints[accepted - 1], _rule)) accepted--;
+        if (accepted > 0)
+        {
+            steer = _stepPoints[accepted - 1];
+            cell = _stepCells[accepted - 1];
+        }
+        atGoal = cell == _goalCell;
         return true;
     }
 
@@ -117,53 +306,59 @@ public class FlowField
         if (!TryGetStartCell(from, out Vector2Int cell)) return;
 
         for (int i = 0; i < TraceLimit && Descend(cell, out cell); i++)
-            points.Add(_grid.CellToWorld(cell));
+            points.Add(_grid.StandPoint(cell, _rule));
     }
 
     private void RefreshIfStale()
     {
         if (!_flooded)
         {
-            if (_target != null) Flood(_target.position);
+            if (_target != null) Flood(_target.position, _grid.MaxFlowDistance);
             return;
         }
 
         bool targetMoved = _target != null
             && _grid.WorldToCell(_target.position, out Vector2Int cell) && cell != _floodedFrom;
-        bool gridChanged = _floodedVersion != _grid.Version;
+        bool gridChanged = _floodedVersion != _grid.VersionFor(_rule);
         // Throttled, so a sprinting target or a shower of settling props can't flood every step.
         if ((!targetMoved && !gridChanged) || Time.time < _nextRefresh) return;
 
         _nextRefresh = Time.time + RefreshInterval;
-        Flood(_target != null ? _target.position : _floodedGoal);
+        // The same bound and wall rule as the last flood: a chase field must not lose its wall costs.
+        Flood(_target != null ? _target.position : _floodedGoal, _floodedMax, _floodedAvoidWalls);
     }
 
     private bool TryGetStartCell(Vector3 from, out Vector2Int cell)
     {
         cell = default;
         if (!_hasGoal || !_grid.WorldToCell(from, out Vector2Int raw)) return false;
-        return _grid.NearestWalkable(raw, SnapRadius, out cell) && IsReached(_grid.Index(cell));
+        return _grid.NearestWalkable(raw, SnapRadius, _rule, out cell) && Settle(_grid.Index(cell));
     }
 
     // Steepest descent: the reachable neighbour with the lowest cost, if it beats this cell's.
     private bool Descend(Vector2Int cell, out Vector2Int next)
     {
         next = cell;
-        int best = _cost[_grid.Index(cell)];
-        foreach (Vector2Int step in PathGrid.Steps)
+        int from = _grid.Index(cell);
+        int best = _cost[from];
+        int legal = _grid.LayerFor(_rule).Moves[from];
+        int[] offsets = _grid.StepOffsets;
+        for (int k = 0; k < 8; k++)
         {
-            if (!_grid.CanStep(cell, step)) continue;
+            if ((legal & (1 << k)) == 0) continue;
 
-            int index = _grid.Index(cell + step);
-            if (!IsReached(index) || _cost[index] >= best) continue;
+            int index = from + offsets[k];
+            if (!IsSettled(index) || _cost[index] >= best) continue;
 
             best = _cost[index];
-            next = cell + step;
+            next = cell + PathGrid.Steps[k];
         }
         return next != cell;
     }
 
-    private bool IsReached(int index) => _stamp[index] == _generation;
+    // Seen: holds a cost from this flood, which may still drop. Settled: that cost is final.
+    private bool IsSeen(int index) => _stamp[index] == _generation;
+    private bool IsSettled(int index) => _settled[index] == _generation;
 
     private void SetCost(int index, int cost)
     {

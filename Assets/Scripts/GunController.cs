@@ -72,6 +72,7 @@ public class GunController : MonoBehaviour
             bullet.InitializeBullet(_bulletSpeed, _bulletLifeTime);
 
         _player._bulletCount--;
+        Stimuli.Gunshot(_firePoint.position, _player.transform);
     }
 
     // Flat, from the muzzle to her aim point. The muzzle rides an animated hand, so its own facing

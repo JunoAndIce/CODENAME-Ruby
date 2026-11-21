@@ -3,10 +3,12 @@ using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 
 /// <summary>
-/// Patrol route authoring. With an enemy selected, each area of its Safe route gets a move
+/// Patrol route authoring. With an enemy selected, each area of the route being edited (the Safe
+/// route or the Aggressive one, picked with the toggle in the Inspector) gets a move
 /// handle in the Scene view, plus a rim dot for a circle's radius or edge handles for a
 /// rectangle, coloured by the same clearance test the PathGrid bake uses — so a point that
-/// would trap the enemy shows up while it's placed, not at runtime.
+/// would trap the enemy shows up while it's placed, not at runtime. Aggressive points are
+/// labelled "A0", "A1" and so on, so a warning about a point maps back to the right route.
 ///   Green: the centre is open.
 ///   Yellow: the centre is blocked, but part of the area is open; the enemy stops at the
 ///           nearest open spot.
@@ -23,29 +25,31 @@ public class EnemyControllerEditor : Editor
     private const int LatticeSamples = 5;   // per side, for the clearance colour
 
     private static readonly Vector2 DefaultSize = new(2f, 2f);
-    private static readonly Vector3[] RectangleOutline = new Vector3[5];
 
     private static readonly Color OpenColour = new(0.25f, 0.9f, 0.35f);
     private static readonly Color PartialColour = new(1f, 0.7f, 0.1f);
     private static readonly Color ClosedColour = new(1f, 0.2f, 0.15f);
     private static readonly Color NoGridColour = new(0.6f, 0.6f, 0.6f);
 
-    private SerializedProperty _points;
+    private static readonly string[] RouteNames = { "Safe", "Aggressive" };
+    private static readonly string[] RoutePaths = { "_safeRoute", "_aggressiveRoute" };
+
+    // Which route the handles and Add Patrol Point work on: 0 Safe, 1 Aggressive. Editor state only,
+    // never saved on the enemy, and static so it holds when another enemy is selected.
+    private static int s_editing;
+
+    // The chosen route's points, looked up at each use. The choice is static, so every Editor
+    // instance (a locked Inspector, a second window) sees a toggle made in another, and a cached
+    // property would go on editing the route that was chosen when it was built.
+    private SerializedProperty Points => serializedObject.FindProperty(RoutePaths[s_editing] + "._points");
+
     private PathGrid[] _grids;
     private BoxBoundsHandle _box;
 
     private void OnEnable()
     {
-        _points = serializedObject.FindProperty("_safeRoute._points");
-        // Edges only: an area has no height. Its outline is drawn in the clearance colour, so the
-        // handle draws no wireframe of its own. One handle serves every rectangle: it takes fresh
-        // control IDs on each draw.
-        _box = new BoxBoundsHandle
-        {
-            axes = PrimitiveBoundsHandle.Axes.X | PrimitiveBoundsHandle.Axes.Z,
-            handleColor = Color.white,
-            wireframeColor = Color.clear,
-        };
+        // Its outline is drawn in the clearance colour, so the handle draws no wireframe of its own.
+        _box = AreaHandles.NewEdgeHandle();
     }
 
     public override void OnInspectorGUI()
@@ -53,7 +57,41 @@ public class EnemyControllerEditor : Editor
         DrawDefaultInspector();
 
         EditorGUILayout.Space();
-        if (GUILayout.Button("Add Patrol Point")) AddPoint();
+        EditorGUI.BeginChangeCheck();
+        int chosen = GUILayout.Toolbar(s_editing, RouteNames);
+        if (EditorGUI.EndChangeCheck())
+        {
+            s_editing = chosen;
+            SceneView.RepaintAll();
+        }
+
+        // Without an Aggressive route there is a rule, not a fallback: say which one applies.
+        var enemy = (EnemyController)target;
+        if (!enemy.HasAggressiveRoute)
+        {
+            EditorGUILayout.HelpBox(enemy.SafeRoute.Count > 0
+                ? "No Aggressive route: once aggressive, this enemy keeps walking their Safe route."
+                : "No Aggressive route: once aggressive, this enemy stays at their post, alert.", MessageType.Info);
+        }
+
+        if (GUILayout.Button($"Add Patrol Point ({RouteNames[s_editing]} route)")) AddPoint();
+
+        DrawBeatSlots(enemy);
+    }
+
+    // The beats their controller has no clip for. A rule, not a fault: they hold their stance and turn for the tuned
+    // time, and saying so keeps it from passing for a bug.
+    private static void DrawBeatSlots(EnemyController enemy)
+    {
+        Animator animator = enemy.GetComponentInChildren<Animator>();
+        if (animator == null || animator.runtimeAnimatorController == null)
+        {
+            EditorGUILayout.HelpBox($"{(animator == null ? "No Animator under this enemy" : "Their Animator has no controller")}: their beats (draw, notice, lose, stand down) can't animate.", MessageType.Warning);
+            return;
+        }
+        var missing = BeatSlots.MissingIn(animator.runtimeAnimatorController);
+        if (missing.Count == 0) return;
+        EditorGUILayout.HelpBox($"No clip for these beats in {animator.runtimeAnimatorController.name}: {BeatSlots.Names(missing)}. They hold their stance and turn for the tuned time. Fill the slot in the animation set and press Build Controller.", MessageType.Info);
     }
 
     private void AddPoint()
@@ -62,7 +100,8 @@ public class EnemyControllerEditor : Editor
         _grids = FindObjectsByType<PathGrid>();
 
         var enemy = (EnemyController)target;
-        int count = _points.arraySize;
+        SerializedProperty points = Points;
+        int count = points.arraySize;
         Vector3 position;
         if (count == 0)
         {
@@ -71,13 +110,13 @@ public class EnemyControllerEditor : Editor
         else
         {
             // Continue the route's last heading, so a quick run of clicks lays out a line.
-            Vector3 last = PositionOf(count - 1).vector3Value;
-            Vector3 heading = count >= 2 ? Flat(last - PositionOf(count - 2).vector3Value) : Flat(enemy.transform.forward);
+            Vector3 last = PositionOf(points, count - 1).vector3Value;
+            Vector3 heading = count >= 2 ? Flat(last - PositionOf(points, count - 2).vector3Value) : Flat(enemy.transform.forward);
             position = last + heading * NewPointSpacing;
         }
 
-        _points.InsertArrayElementAtIndex(count);
-        SerializedProperty point = _points.GetArrayElementAtIndex(count);
+        points.InsertArrayElementAtIndex(count);
+        SerializedProperty point = points.GetArrayElementAtIndex(count);
         point.FindPropertyRelative("_position").vector3Value = OnFloor(position, position.y);
         // A new element copies the previous one; the first one gets zeros, not field defaults.
         if (count == 0)
@@ -95,9 +134,10 @@ public class EnemyControllerEditor : Editor
         serializedObject.Update();
         _grids = FindObjectsByType<PathGrid>();
 
-        for (int i = 0; i < _points.arraySize; i++)
+        SerializedProperty points = Points;
+        for (int i = 0; i < points.arraySize; i++)
         {
-            SerializedProperty point = _points.GetArrayElementAtIndex(i);
+            SerializedProperty point = points.GetArrayElementAtIndex(i);
             SerializedProperty position = point.FindPropertyRelative("_position");
             Vector3 centre = position.vector3Value;
             GridArea area = AreaOf(point);
@@ -106,10 +146,13 @@ public class EnemyControllerEditor : Editor
             if (Event.current.type == EventType.Repaint)
             {
                 Handles.color = AreaColour(GridUnder(centre), area);
-                DrawOutline(area);
+                AreaHandles.DrawOutline(area);
                 // The index is how runtime warnings ("point 3 skipped") map back to the scene.
                 // Read from the route itself, so the label can't disagree with what runs.
-                string label = ((EnemyController)target).SafeRoute.Wanders ? $"{i} · wander" : i.ToString();
+                var enemy = (EnemyController)target;
+                PatrolRoute route = s_editing == 0 ? enemy.SafeRoute : enemy.AggressiveRoute;
+                string number = s_editing == 0 ? i.ToString() : $"A{i}";
+                string label = route.Wanders ? $"{number} · wander" : number;
                 Handles.Label(centre + Vector3.up * 0.6f, label, EditorStyles.boldLabel);
             }
 
@@ -139,15 +182,10 @@ public class EnemyControllerEditor : Editor
     // rectangle can be fitted to a room wall by wall.
     private void EdgeHandles(SerializedProperty point, GridArea area)
     {
-        _box.center = area.Centre;
-        _box.size = new Vector3(area.HalfSize.x * 2f, 0f, area.HalfSize.y * 2f);
-        EditorGUI.BeginChangeCheck();
-        _box.DrawHandle();
-        if (!EditorGUI.EndChangeCheck()) return;
+        if (!AreaHandles.EdgeHandles(_box, area, out Vector3 centre, out Vector2 size)) return;
 
-        point.FindPropertyRelative("_position").vector3Value = OnFloor(_box.center, area.Centre.y);
-        point.FindPropertyRelative("_size").vector2Value =
-            new Vector2(Mathf.Max(MinSize, _box.size.x), Mathf.Max(MinSize, _box.size.z));
+        point.FindPropertyRelative("_position").vector3Value = OnFloor(centre, area.Centre.y);
+        point.FindPropertyRelative("_size").vector2Value = new Vector2(Mathf.Max(MinSize, size.x), Mathf.Max(MinSize, size.y));
     }
 
     // The area as the runtime will build it (PatrolPoint.Area), from the fields being edited.
@@ -157,23 +195,6 @@ public class EnemyControllerEditor : Editor
         if (point.FindPropertyRelative("_shape").intValue == (int)AreaShape.Rectangle)
             return GridArea.Rectangle(centre, point.FindPropertyRelative("_size").vector2Value);
         return GridArea.Circle(centre, Mathf.Max(MinRadius, point.FindPropertyRelative("_radius").floatValue));
-    }
-
-    private static void DrawOutline(GridArea area)
-    {
-        if (area.Shape == AreaShape.Circle)
-        {
-            Handles.DrawWireDisc(area.Centre, Vector3.up, area.HalfSize.x, 2f);
-            return;
-        }
-
-        float x = area.HalfSize.x, z = area.HalfSize.y;
-        RectangleOutline[0] = area.Centre + new Vector3(-x, 0f, -z);
-        RectangleOutline[1] = area.Centre + new Vector3(-x, 0f, z);
-        RectangleOutline[2] = area.Centre + new Vector3(x, 0f, z);
-        RectangleOutline[3] = area.Centre + new Vector3(x, 0f, -z);
-        RectangleOutline[4] = RectangleOutline[0];
-        Handles.DrawAAPolyLine(2f, RectangleOutline);
     }
 
     private Color AreaColour(PathGrid grid, GridArea area)
@@ -213,8 +234,8 @@ public class EnemyControllerEditor : Editor
         return point;
     }
 
-    private SerializedProperty PositionOf(int index)
-        => _points.GetArrayElementAtIndex(index).FindPropertyRelative("_position");
+    private static SerializedProperty PositionOf(SerializedProperty points, int index)
+        => points.GetArrayElementAtIndex(index).FindPropertyRelative("_position");
 
     private static Vector3 Flat(Vector3 v)
     {

@@ -334,6 +334,7 @@ public class GrappleController : MonoBehaviour
         _phase = Phase.Attached;
 
         TetherLog.Event($"ATTACH  whip landed {_tether.Describe()} dist={_tether.AttachDistance:F1}");
+        Stimuli.WhipLanding(node.AnchorPoint, transform);
 
         // Right click held through the flight: charge from the moment of the grab, so a throw can
         // follow it at once.
@@ -359,6 +360,8 @@ public class GrappleController : MonoBehaviour
         _wraps.Update(_tether.Anchor, _tether.Node.Host);
         _whip.Step(_body.worldCenterOfMass, _tether.Anchor, _tether.Length, _wraps.Points);
         _tether.Solve(_wraps.Points);
+        // A held body always leads back to her, so whatever it knocks into does too.
+        if (_tether.HasHost) Disturbance.Stamp(_tether.Host, _body.position);
         UpdateJiggle();
         // This runs before the user writes its move this step (execution order), so the limit lands in time.
         if (_tether.TryGetMoveLimit(out Vector3 outward, out float slackSpeed, out float dragFraction))
@@ -422,6 +425,8 @@ public class GrappleController : MonoBehaviour
 
     void Detach(string reason, bool trail = false, bool thrown = false)
     {
+        // Once more as it leaves, so a throw's origin is where she stood at the release.
+        if (_tether.HasHost) Disturbance.Stamp(_tether.Host, _body.position);
         _tether.End();
         bool parked = _tether.IsParked;
         // Letting go of a spin sends the host along the aim, as a throw would, and like a throw
@@ -441,9 +446,9 @@ public class GrappleController : MonoBehaviour
             else _grabbed.EndGrab(parked);
             _grabbed = null;
         }
-        // Only now, once the host has been let go: an officer goes limp there, and his bones only
+        // Only now, once the host has been let go: an officer goes limp there, and their bones only
         // switch on then. Unity drops an ignore pair set while a collider was off, so a window
-        // started before the let-go missed his limbs, and her own throw could knock her down.
+        // started before the let-go missed their limbs, and her own throw could knock her down.
         // Knocked down, she's about to lie on her limbs, not the capsule a pass-through would cover.
         if (_user.CanAct && (thrown || parked)) _tether.PassThroughAfterEnd(_thrownPassThrough, _throwPassThrough);
         if (_tether.Node != null) _tether.Node.IsOccupied = false;

@@ -3,10 +3,13 @@ using UnityEngine;
 
 public enum NavResult { Moving, Arrived, Blocked, Unreachable }
 
+/// <summary>How GridNavigator.FindGroundNear found its spot, so the caller knows how far to trust it.</summary>
+public enum GroundFound { None, Point, Preferred, Nearest }
+
 /// <summary>
-/// Moves an IPathAgent over its floor's PathGrid: flow fields for chase and search, cached A* for
-/// patrol areas, and a straight line when one is clear. It only plans; the agent steers. No silent
-/// fallbacks: chase and search stop with a warning, area moves report Blocked or Unreachable.
+/// Moves an IPathAgent over its floor's PathGrid: flow fields for chases and walks to a point, cached
+/// A* for areas (patrols and searches), and a straight line when one is clear. It only plans; the agent steers. No silent
+/// fallbacks: chases and point walks stop with a warning, area moves report Blocked or Unreachable.
 /// </summary>
 public class GridNavigator
 {
@@ -15,19 +18,25 @@ public class GridNavigator
     private const float CornerReach = 0.1f;     // fallback only: corners are normally passed by sight of the next
     private const float ReplanInterval = 0.2f;
     private const float ProgressStep = 0.25f;   // closing less than this doesn't count as progress
+    private const float ApproachRadius = 5f;    // how far from an unreachable point the nearest ground may be and still count as near it
+    private const float ApproachSameSpot = 0.5f;   // an approach spot this near the goal is the goal: nothing to warn about
+    private const float ApproachReach = 1.5f;   // two sent to one spot block each other: close enough counts, as with a search's area
 
     // What the last move followed, for the debug line.
     private enum Followed { Nothing, Line, Field, Route }
 
     private readonly IPathAgent _agent;
     private string _lastWarning;
+    private PropRule _rule;          // the agent's, as of the last public call
+    private bool _ruleKnown;
 
-    // Search: this enemy's own field, flooded from its point.
+    // A walk to a point: this enemy's own field, flooded from it.
     private FlowField _pointField;
     private Vector3 _pointGoal;
 
     // Patrol: an A* route to the area's resolved goal, cached per area.
     private readonly List<Vector3> _route = new();
+    private readonly List<int> _routeClearance = new();   // the clearance each corner's run was accepted at, beside _route
     private int _routeIndex;
     private bool _routeOk;
     private PathGrid _routeGrid;
@@ -41,8 +50,26 @@ public class GridNavigator
 
     private Followed _followed;
     private Vector3 _lineEnd;
+
+    // Follow's shape check of its clear line, cached: a chase asks every physics step, and a cast each step
+    // per chaser buys nothing while neither end has moved. Good for Replan Interval while the goal moves
+    // less than Reflood Shift and the body less than Progress Step.
+    private bool _shapeOk;
+    private float _shapeUntil = float.NegativeInfinity;
+    private Vector3 _shapeFrom;
+    private Vector3 _shapeTo;
     private FlowField _field;
     private readonly List<Vector3> _trace = new();
+
+    // Getting as near as they can to a point they have no path to: a flood from where they stand, so what
+    // it reaches is what they can get to, and the reached spot nearest the point.
+    private FlowField _approachField;
+    private Vector3 _approachGoal;
+    private Vector3 _approachSpot;
+    private bool _approachFound;
+    private int _approachVersion;
+    private float _nextApproach;
+    private bool _approachWarned;
 
     public GridNavigator(IPathAgent agent) => _agent = agent;
 
@@ -73,25 +100,97 @@ public class GridNavigator
         }
     }
 
-    /// <summary>Path to a fixed point (search) along this enemy's own field. Stops on arrival.</summary>
-    public void MoveTo(Vector3 point, float speed)
+    /// <summary>
+    /// Path to a fixed point (the walk back to their post, or a chase of what they know) along this enemy's own field.
+    /// Stops on arrival and says so; Unreachable when no step can be taken (already warned). With getClose,
+    /// a point they have no path to is approached instead (see Approach).
+    /// </summary>
+    public NavResult MoveTo(Vector3 point, float speed, bool getClose = false)
     {
-        if (!TryGetGrid(out PathGrid grid)) return;
+        SyncRule();
+        if (!TryGetGrid(out PathGrid grid)) return NavResult.Unreachable;
 
         bool newField = _pointField == null || _pointField.Grid != grid;
-        if (newField) _pointField = new FlowField(grid);
+        if (newField) _pointField = new FlowField(grid, _rule);
+        else if (_pointField.Rule != _rule)
+        {
+            _pointField.SetRule(_rule);
+            newField = true;
+        }
         if (newField || FlatDistance(point, _pointGoal) > RefloodShift)
         {
             _pointGoal = point;
             _pointField.Flood(point);
         }
 
-        Follow(grid, _pointField, point, speed);
+        return Follow(grid, _pointField, point, speed, getClose);
     }
 
-    /// <summary>Chase a moving target along its floor's shared field. Stops on top of it.</summary>
-    public void ChaseTo(Transform target, float speed)
+    /// <summary>
+    /// Where to go for a point: the point itself when they can get to it, else the ground they can reach
+    /// nearest it, within Approach Radius. False when there is none, or they are on no grid. Floods from
+    /// where they stand, so ask it for a decision and not every step.
+    /// </summary>
+    public bool TryGetNearestReachable(Vector3 point, out Vector3 spot)
     {
+        SyncRule();
+        spot = point;
+        PathGrid grid = PathGrid.At(_agent.Body.position);
+        if (grid == null) return false;
+
+        // A one-off decision, so it floods from where they stand now: the throttle would hand back the last
+        // goal's spot, and AggroState.Exit would start the search there while logging the new one.
+        FindApproach(grid, point, force: true);
+        spot = _approachSpot;
+        return _approachFound;
+    }
+
+    /// <summary>
+    /// Ground they can reach for a point, from one flood from where they stand, best first: the point itself;
+    /// else, of `preferred` (ground the caller trusts to be on the point's side, such as cells a flood from
+    /// the point reached), the one nearest the point that they can reach; else the reached ground nearest it
+    /// within Approach Radius, as the crow flies, which can lie on the far side of a wall from the point:
+    /// the caller should check that one. None on no grid or with nothing in reach. The flood reads cells
+    /// by X and Z only, so the caller must have them on the point's floor. A decision, not a step.
+    /// </summary>
+    public GroundFound FindGroundNear(Vector3 point, IReadOnlyList<Vector3> preferred, out Vector3 spot)
+    {
+        SyncRule();
+        spot = point;
+        PathGrid grid = PathGrid.At(_agent.Body.position);
+        if (grid == null) return GroundFound.None;
+
+        FindApproach(grid, point, force: true);
+        if (_approachField.TryGetDistance(point, out _)) return GroundFound.Point;
+
+        bool found = false;
+        float best = float.MaxValue;
+        if (preferred != null)
+        {
+            for (int i = 0; i < preferred.Count; i++)
+            {
+                Vector3 candidate = preferred[i];
+                float distance = FlatDistance(candidate, point);
+                if (distance >= best || !_approachField.TryGetDistance(candidate, out _)) continue;
+                best = distance;
+                spot = candidate;
+                found = true;
+            }
+        }
+        if (found) return GroundFound.Preferred;
+
+        if (!_approachFound) return GroundFound.None;
+        spot = _approachSpot;
+        return GroundFound.Nearest;
+    }
+
+    /// <summary>
+    /// Chase a moving target along its floor's shared field. Stops on top of it. With getClose, a target
+    /// they have no path to is approached instead (see Approach).
+    /// </summary>
+    public void ChaseTo(Transform target, float speed, bool getClose = false)
+    {
+        SyncRule();
         if (!TryGetGrid(out PathGrid grid)) return;
 
         // Floors are independent: a target on another floor can't be reached from this one.
@@ -101,7 +200,7 @@ public class GridNavigator
             return;
         }
 
-        Follow(grid, grid.FieldToward(target), target.position, speed);
+        Follow(grid, grid.FieldToward(target, _rule), target.position, speed, getClose);
     }
 
     /// <summary>
@@ -112,6 +211,7 @@ public class GridNavigator
     /// </summary>
     public NavResult MoveToArea(GridArea area, float speed)
     {
+        SyncRule();
         if (!TryGetGrid(out PathGrid grid))
         {
             FailureReason = "not on any PathGrid";
@@ -125,12 +225,13 @@ public class GridNavigator
         bool resumed = Time.fixedTime - _lastAreaMove > Time.fixedDeltaTime * 1.5f;
         _lastAreaMove = Time.fixedTime;
         bool newArea = resumed || grid != _routeGrid || FlatDistance(area.Centre, _areaCentre) > 0.01f;
-        bool gridChanged = grid.Version != _planVersion && Time.fixedTime >= _nextReplan;
+        bool gridChanged = grid.VersionFor(_rule) != _planVersion && Time.fixedTime >= _nextReplan;
         if (newArea || gridChanged)
         {
             Plan(grid, area, position, resetWatchdog: true);
         }
-        else if (_routeOk && Time.fixedTime >= _nextReplan && !grid.HasLineOfSight(position, _route[_routeIndex]))
+        else if (_routeOk && Time.fixedTime >= _nextReplan
+                 && !grid.HasLineOfSight(position, _route[_routeIndex], _routeClearance[_routeIndex], _rule))
         {
             // Knocked off the route (a collision, an overshoot, a slide along a wall): its next
             // corner is out of sight, and steering straight at it walks into the wall. Re-plan
@@ -153,11 +254,16 @@ public class GridNavigator
         }
 
         // Move on once the next corner is in straight sight, not on getting near this one:
-        // around the end of a thin wall, switching early aims the enemy straight into it.
+        // around the end of a thin wall, switching early aims the enemy straight into it. Sight at
+        // the clearance the pull accepted that corner at, as the off-route check above: asking for
+        // the corner's own clearance rejected a run through a doorway to a roomy corner, so they
+        // walked onto the corner before turning.
         while (_routeIndex < _route.Count - 1
-               && (FlatDistance(position, _route[_routeIndex]) <= CornerReach || grid.HasLineOfSight(position, _route[_routeIndex + 1])))
+               && (FlatDistance(position, _route[_routeIndex]) <= CornerReach
+                   || (grid.HasLineOfSight(position, _route[_routeIndex + 1], _routeClearance[_routeIndex + 1], _rule)
+                       && grid.HasClearShape(position, _route[_routeIndex + 1], _rule))))
             _routeIndex++;
-        Steer(Followed.Route, _route[_routeIndex], speed);
+        Steer(Followed.Route, _route[_routeIndex], speed, mustReach: true);
 
         float remaining = RemainingRoute(position);
         if (!MadeNoProgress(remaining)) return NavResult.Moving;
@@ -178,6 +284,7 @@ public class GridNavigator
     /// </summary>
     public bool PickSpotInArea(GridArea area, float minDistance, out Vector3 spot)
     {
+        SyncRule();   // the spot itself is Careful: it's ground to stand on, never inside a crate
         spot = area.Centre;
         PathGrid grid = PathGrid.At(area.Centre);
         if (grid == null)
@@ -198,6 +305,7 @@ public class GridNavigator
     /// </summary>
     public bool TryFindSpotAway(Vector3 awayFrom, float step, out Vector3 spot)
     {
+        SyncRule();
         Vector3 position = _agent.Body.position;
         spot = position;
         PathGrid grid = PathGrid.At(position);
@@ -208,7 +316,7 @@ public class GridNavigator
         foreach (Vector2Int direction in PathGrid.Steps)
         {
             Vector3 candidate = position + new Vector3(direction.x, 0f, direction.y).normalized * step;
-            if (!grid.HasLineOfSight(position, candidate)) continue;
+            if (!grid.HasLineOfSight(position, candidate, 1, _rule)) continue;
 
             float distance = FlatDistance(candidate, awayFrom);
             if (distance <= farthest) continue;
@@ -223,7 +331,7 @@ public class GridNavigator
     {
         _routeGrid = grid;
         _areaCentre = area.Centre;
-        _planVersion = grid.Version;
+        _planVersion = grid.VersionFor(_rule);
         // Jittered, so a crowd doesn't all re-plan on the same step when a crate lands.
         _nextReplan = Time.fixedTime + ReplanInterval * Random.Range(0.75f, 1.25f);
         if (resetWatchdog)
@@ -232,9 +340,10 @@ public class GridNavigator
             _stuckTimer = 0f;
         }
         _route.Clear();
+        _routeClearance.Clear();
         _routeIndex = 0;
 
-        if (!grid.ResolveArea(area, position, out Vector2Int goalCell, out _goalPoint))
+        if (!grid.ResolveArea(area, position, _rule, out Vector2Int goalCell, out _goalPoint))
         {
             _routeOk = false;
             FailureReason = "no open ground inside the area";
@@ -242,14 +351,18 @@ public class GridNavigator
         }
 
         // Clear line: the straight segment is the shortest path, so skip the search.
-        if (grid.HasLineOfSight(position, _goalPoint))
+        if (grid.HasClearLine(position, _goalPoint, _rule) && grid.HasClearShape(position, _goalPoint, _rule))
         {
             _route.Add(_goalPoint);
+            // What HasClearLine asked at the goal. Cells on the way asked their own Best, which can be lower
+            // (a doorway): then the off-route check refuses this line and re-plans the same one, at most
+            // every Replan Interval. A few spare plans, never a wrong route.
+            _routeClearance.Add(Mathf.Max(1, Mathf.Min(grid.Best(goalCell, _rule), grid.Clearance(goalCell, _rule))));
             _routeOk = true;
             return;
         }
 
-        _routeOk = grid.FindPath(position, goalCell, _route);
+        _routeOk = grid.FindPath(position, goalCell, _rule, _route, _routeClearance);
         if (!_routeOk)
         {
             FailureReason = "no path to the area (walled off, or too far for one search)";
@@ -281,40 +394,144 @@ public class GridNavigator
         return _stuckTimer >= _agent.StuckTime;
     }
 
-    private void Follow(PathGrid grid, FlowField field, Vector3 goal, float speed)
+    private NavResult Follow(PathGrid grid, FlowField field, Vector3 goal, float speed, bool getClose)
     {
         Vector3 position = _agent.Body.position;
         if (FlatDistance(position, goal) <= ArriveDistance || field.IsAtGoal(position))
         {
             _followed = Followed.Nothing;
             _agent.Stop();
-            return;
+            return NavResult.Arrived;
         }
 
-        // Clear line: the straight segment is the shortest path, so skip the field.
-        if (grid.HasLineOfSight(position, goal))
+        // Clear line: the straight segment is the shortest path, so skip the field. Its cells first, then its
+        // real shape, so it can't clip a corner or brush a prop the cells let through.
+        if (grid.HasClearLine(position, goal, _rule) && ClearShape(grid, position, goal))
         {
             _lineEnd = goal;
-            Steer(Followed.Line, goal, speed);
-            return;
+            Steer(Followed.Line, goal, speed, mustReach: true);
+            return NavResult.Moving;
         }
 
-        if (!field.TryGetStep(position, out Vector3 steer))
+        if (!field.TryGetStep(position, out Vector3 steer, out bool atGoal))
         {
+            if (getClose) return Approach(grid, goal, speed);
             Fail($"no path to {goal} on {grid.name} (walled off, or beyond Max Flow Distance) — standing still.");
-            return;
+            return NavResult.Unreachable;
         }
 
+        _approachWarned = false;
         _field = field;
-        Steer(Followed.Field, steer, speed);
+        // A step rolls ahead and can't be orbited, except the last, the goal cell: the descent
+        // ends there, so the point holds still and a fast body could circle it for good.
+        Steer(Followed.Field, steer, speed, mustReach: atGoal);
+        return NavResult.Moving;
+    }
+
+    // A rule and not a silent fallback, so it warns: someone hunting a target they have no path to walks to
+    // the ground they can reach nearest it. A body can stand where the grid has no way in, such as tight
+    // behind a crate, and standing still until their timer ran out lost her while she hadn't moved. Only
+    // for a hunt: a walk to a post or a follower's walk still stops and says so.
+    private NavResult Approach(PathGrid grid, Vector3 goal, float speed)
+    {
+        FindApproach(grid, goal);
+        if (!_approachFound)
+        {
+            Fail($"no path to {goal} on {grid.name}, and no ground they can reach within {ApproachRadius:0.#} m of it — standing still.");
+            return NavResult.Unreachable;
+        }
+
+        // Their own flood can reach the goal although the goal's field gave no step (the field's last cell,
+        // a goal on clearance-blocked ground): the walk still happens, and a warning that says "0 m from
+        // it" would claim a detour that isn't one.
+        bool atGoal = FlatDistance(goal, _approachSpot) < ApproachSameSpot
+            || (grid.WorldToCell(goal, out Vector2Int goalCell) && grid.WorldToCell(_approachSpot, out Vector2Int spotCell) && goalCell == spotCell);
+        if (!_approachWarned && !atGoal)
+        {
+            Object context = _agent as Object;
+            Debug.LogWarning($"{(context != null ? context.name : "agent")}: no path to {goal} on {grid.name} (too tight for the grid, or walled off), so they go as near as they can get: {_approachSpot}, {FlatDistance(goal, _approachSpot):0.#} m from it.", context);
+            _approachWarned = true;
+        }
+
+        NavResult result = MoveToArea(GridArea.Circle(_approachSpot, ApproachReach), speed);
+        if (result is NavResult.Moving or NavResult.Arrived) return result;
+
+        // Blocked is someone standing in the way: MoveToArea has already steered, and Fail would zero their
+        // velocity and warn every step, leaving them frozen even after the blocker moved. Keep going, as
+        // SearchingState.WalkToSpot does; Aggro's timers bound it. Only Unreachable fails.
+        if (result == NavResult.Blocked) return NavResult.Moving;
+
+        Fail($"can't get near {goal} on {grid.name}: {FailureReason} — standing still.");
+        return NavResult.Unreachable;
+    }
+
+    // Re-flooded when the point moves or the grid changes, throttled, so a target shifting inside a pocket
+    // can't flood every step.
+    private void FindApproach(PathGrid grid, Vector3 goal, bool force = false)
+    {
+        bool first = _approachField == null || _approachField.Grid != grid;
+        if (first) _approachField = new FlowField(grid, _rule);
+        else if (_approachField.Rule != _rule)
+        {
+            _approachField.SetRule(_rule);
+            first = true;
+        }
+        bool stale = FlatDistance(goal, _approachGoal) > RefloodShift || grid.VersionFor(_rule) != _approachVersion;
+        if (!force && !first && (!stale || Time.fixedTime < _nextApproach)) return;
+
+        _nextApproach = Time.fixedTime + ReplanInterval;
+        _approachGoal = goal;
+        _approachVersion = grid.VersionFor(_rule);
+        _approachField.Flood(_agent.Body.position);
+        if (_approachField.TryGetDistance(goal, out _))
+        {
+            _approachSpot = goal;
+            _approachFound = true;
+            return;
+        }
+        _approachFound = _approachField.TryGetNearestReached(goal, Mathf.CeilToInt(ApproachRadius / grid.CellSize), out _approachSpot);
+    }
+
+    private bool ClearShape(PathGrid grid, Vector3 from, Vector3 to)
+    {
+        bool fresh = Time.fixedTime < _shapeUntil
+            && FlatDistance(to, _shapeTo) < RefloodShift && FlatDistance(from, _shapeFrom) < ProgressStep;
+        if (fresh) return _shapeOk;
+
+        _shapeOk = grid.HasClearShape(from, to, _rule);
+        _shapeUntil = Time.fixedTime + ReplanInterval;
+        _shapeFrom = from;
+        _shapeTo = to;
+        return _shapeOk;
+    }
+
+    // The agent's rule, read at the top of every public move or decision. A change drops the route and the
+    // shape cache, and the point and approach fields, which notice their rule differs, re-aim and re-flood
+    // on their next use (reusing their arrays). So a hunter who turns searcher never takes one more step
+    // along a route through a crate.
+    private void SyncRule()
+    {
+        PropRule rule = _agent.PropRule;
+        if (_ruleKnown && rule == _rule) return;
+        if (_ruleKnown)
+        {
+            _routeGrid = null;   // MoveToArea sees a new area and plans afresh
+            _shapeUntil = float.NegativeInfinity;
+#if RUBY_DEBUG_LOGS
+            Object context = _agent as Object;
+            Debug.Log($"{(context != null ? context.name : "agent")}: routes now {rule}", context);
+#endif
+        }
+        _rule = rule;
+        _ruleKnown = true;
     }
 
     // A successful move ends any failure episode, so the next failure warns again.
-    private void Steer(Followed followed, Vector3 target, float speed)
+    private void Steer(Followed followed, Vector3 target, float speed, bool mustReach)
     {
         _followed = followed;
         _lastWarning = null;
-        _agent.MoveToward(target, speed);
+        _agent.MoveToward(target, speed, mustReach);
     }
 
     private bool TryGetGrid(out PathGrid grid)

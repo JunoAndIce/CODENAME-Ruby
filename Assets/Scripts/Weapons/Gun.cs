@@ -187,6 +187,7 @@ public class Gun : MonoBehaviour
         Vector3 direction = Quaternion.AngleAxis(Random.Range(-_spread, _spread), Vector3.up) * aim.normalized;
         Bullet bullet = ObjectPoolManager.SpawnObject(_bulletPrefab, _muzzle.position, Quaternion.LookRotation(direction));
         bullet.Launch(direction, _bulletSpeed, _damage, _knockback, _bulletLifetime, shooter);
+        Stimuli.Gunshot(_muzzle.position, shooter);
         return true;
     }
 

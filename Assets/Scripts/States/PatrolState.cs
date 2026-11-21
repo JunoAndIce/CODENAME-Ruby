@@ -2,18 +2,22 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Walking the Safe route, unaware. Each point is an area (PatrolPoint): reached at its
+/// Walking a route, unaware, or wary. Which route is the enemy's business: the Aggressive one
+/// once they're aggressive and have one, else the Safe one (EnemyController.ActiveRoute). Each point
+/// is an area (PatrolPoint): reached at its
 /// centre, or at the nearest open spot inside it when the centre is occupied. A point that
 /// can't be reached at all is skipped with a warning, so one bad point never freezes the
 /// route; if every point fails in a row the enemy holds and retries instead of spinning.
 /// A route of one wide point is wandered instead: random open spots inside it, one after
-/// another (PatrolRoute.Wanders). Owns its own progress, so nothing outside can corrupt it.
+/// another (PatrolRoute.Wanders). Aggressive, they walk at Aggressive Speed Factor times Patrol Speed and look around at each point
+/// instead of standing. Owns its own progress, so nothing outside can corrupt it.
 /// </summary>
 public class PatrolState : EnemyStateBase
 {
     private const int WanderAttempts = 3;   // failed wander spots in a row before holding
 
     private readonly HashSet<int> _reported = new();   // points already warned about, until they next succeed
+    private PatrolRoute _route;   // the route the progress below belongs to; another one means start over
     private int _index;
     private Vector3 _spot;   // the wander spot being walked to, while _hasSpot
     private bool _hasSpot;
@@ -21,30 +25,49 @@ public class PatrolState : EnemyStateBase
     private int _direction = 1;
     private float _pauseTimer;
     private bool _paused;
+    private float _lookBaseYaw;   // where they faced on arriving: an aggressive pause sweeps about it
+    private float _lookElapsed;
+    private float _pauseDuration;   // how long this pause lasts, so the sweep fits it
+    // A long pause, spent moving about inside the point's area (Long Pause Time) rather than standing.
+    private bool _pauseRoams;
+    private bool _pauseWalking;
+    private Vector3 _pauseSpot;
+    private float _pauseRoamTimer;  // until they next move
+    private bool _pauseRoamWarned;  // the point's area has nowhere to go, or a spot in it no way to: said once per pause
     private int _failStreak;
     private float _holdTimer;
     private bool _holdReported;
 
     public PatrolState(EnemyController enemy) : base(enemy) { }
 
-    public override EnemyState Id => EnemyState.Patrol;
+    private PatrolRoute Route => Enemy.ActiveRoute;
 
-    private PatrolRoute Route => Enemy.SafeRoute;
+    public override void Enter() => Restart();
 
-    public override void Enter()
+    // Rejoin where we are, not at point 0, after a chase or search pulled us away. The walk
+    // there starts a fresh history: any point may follow it. Also what a change of route does, so
+    // becoming aggressive puts them on the nearest point of the new route.
+    private void Restart()
     {
+        _route = Route;
         _paused = false;
         _failStreak = 0;
         _holdTimer = 0f;
         _hasSpot = false;
-        // Rejoin where we are, not at point 0, after a chase or search pulled us away. The walk
-        // there starts a fresh history: any point may follow it.
         _cameFrom = -1;
-        if (Enemy.HasPatrolRoute) _index = Route.NearestIndex(Enemy.transform.position);
+        _direction = 1;
+        _holdReported = false;
+        _reported.Clear();
+        if (Enemy.HasActiveRoute) _index = Route.NearestIndex(Enemy.transform.position);
+
+        if (Enemy.IsAggressive && Enemy.HasActiveRoute)
+            DebugLog.Info($"{Enemy.name} starts their aggressive patrol on {(ReferenceEquals(Route, Enemy.AggressiveRoute) ? "their Aggressive route" : "their Safe route")}, at {PointName(_index)}, speed {Enemy.CurrentPatrolSpeed:0.##}.", Enemy);
     }
 
     public override void Tick()
     {
+        if (!ReferenceEquals(Route, _route)) Restart();
+
         if (_holdTimer > 0f)
         {
             _holdTimer -= Time.deltaTime;
@@ -57,6 +80,7 @@ public class PatrolState : EnemyStateBase
 
         if (!_paused) return;
 
+        _lookElapsed += Time.deltaTime;
         _pauseTimer -= Time.deltaTime;
         if (_pauseTimer > 0f) return;
 
@@ -69,9 +93,19 @@ public class PatrolState : EnemyStateBase
     public override void FixedTick()
     {
         // Alert transition is declared in EnemyController.BuildTransitions, not here.
-        if (!Enemy.HasPatrolRoute || _paused || _holdTimer > 0f)
+        if (!Enemy.HasActiveRoute || _holdTimer > 0f)
         {
             Enemy.Stop();
+            return;
+        }
+        if (_paused)
+        {
+            // A long pause, walking to their next spot in the area.
+            if (_pauseRoams && _index < Route.Count && PauseRoam(Route[_index])) return;
+
+            // Aggressive, they look about at each point instead of standing.
+            if (Enemy.IsAggressive) Enemy.Movement.LookAround(_lookBaseYaw, _lookElapsed, _pauseDuration);
+            else Enemy.Stop();
             return;
         }
         if (_index >= Route.Count) _index = 0;   // the route was edited shorter during play
@@ -85,7 +119,7 @@ public class PatrolState : EnemyStateBase
 
         // Patrol speed is intentionally separate from chase speed — a patrolling enemy
         // that moves at chase speed reads as already alerted.
-        switch (Enemy.PatrolTo(point, Enemy.PatrolSpeed))
+        switch (Enemy.Movement.PatrolTo(point, Enemy.CurrentPatrolSpeed))
         {
             case NavResult.Arrived:
                 Arrive(point);
@@ -102,14 +136,14 @@ public class PatrolState : EnemyStateBase
     // Advance lands back on the only point, and no spot is held, so a fresh one is picked here.
     private void Wander(PatrolPoint point)
     {
-        if (!_hasSpot && !Enemy.TryPickWanderSpot(point, out _spot))
+        if (!_hasSpot && !Enemy.Movement.TryPickWanderSpot(point, out _spot))
         {
             WanderFailed();
             return;
         }
         _hasSpot = true;
 
-        switch (Enemy.WanderTo(_spot, Enemy.PatrolSpeed))
+        switch (Enemy.Movement.WanderTo(_spot, Enemy.CurrentPatrolSpeed))
         {
             case NavResult.Arrived:
                 _hasSpot = false;
@@ -122,6 +156,46 @@ public class PatrolState : EnemyStateBase
                 WanderFailed();
                 break;
         }
+    }
+
+    // A long pause reads as a man waiting about, not a statue: every so often they walk to another spot in
+    // the point's area, for as long as the pause lasts. True while they're walking. A spot they can't get to just
+    // starts the next wait. The pause's own timer runs throughout, so it ends on time even mid-walk.
+    private bool PauseRoam(PatrolPoint point)
+    {
+        if (_pauseWalking)
+        {
+            NavResult walk = Enemy.Movement.WanderTo(_pauseSpot, Enemy.CurrentPatrolSpeed);
+            if (walk == NavResult.Moving) return true;
+
+            // Blocked is someone in the way, which happens. Unreachable is a spot the area said was joined to its
+            // centre and the walk found no way to, which shouldn't: said once per pause.
+            if (walk == NavResult.Unreachable && !_pauseRoamWarned)
+            {
+                Debug.LogWarning($"{Enemy.name}: {PointName(_index)}'s pause picked a spot they have no way to ({Enemy.Navigator.FailureReason}): they wait where they are instead.", Enemy);
+                _pauseRoamWarned = true;
+            }
+            _pauseWalking = false;
+            _lookBaseYaw = Enemy.transform.eulerAngles.y;
+            _lookElapsed = 0f;
+            _pauseRoamTimer = Random.Range(Enemy.PauseRoamMin, Enemy.PauseRoamMax);
+            return false;
+        }
+
+        _pauseRoamTimer -= Time.fixedDeltaTime;
+        if (_pauseRoamTimer > 0f) return false;
+
+        _pauseRoamTimer = Random.Range(Enemy.PauseRoamMin, Enemy.PauseRoamMax);
+        if (!Enemy.Movement.TryPickWanderSpot(point, out _pauseSpot))
+        {
+            if (!_pauseRoamWarned)
+                Debug.LogWarning($"{Enemy.name}: {PointName(_index)} has a long pause, but nowhere to move to in its area ({Enemy.Navigator.FailureReason}): they stay where they are. Make the area bigger, or its pause shorter than Long Pause Time.", Enemy);
+            _pauseRoamWarned = true;
+            return false;
+        }
+
+        _pauseWalking = true;
+        return true;
     }
 
     // A spot another enemy stands on, or a crate just landed on, is normal: pick another. Only a
@@ -138,13 +212,21 @@ public class PatrolState : EnemyStateBase
         _holdReported = false;
         _reported.Remove(_index);
         _paused = true;
-        _pauseTimer = point.HasPauseOverride ? point.PauseTime : Enemy.NodePauseTime;
+        _lookBaseYaw = Enemy.transform.eulerAngles.y;
+        _lookElapsed = 0f;
+        // Aggressive, the pause is spent looking about, for as long as the point says or Look Time.
+        _pauseDuration = point.HasPauseOverride ? point.PauseTime : Enemy.IsAggressive ? Enemy.LookTime : Enemy.NodePauseTime;
+        _pauseTimer = _pauseDuration;
+        _pauseRoams = _pauseDuration >= Enemy.LongPauseTime;
+        _pauseWalking = false;
+        _pauseRoamWarned = false;
+        _pauseRoamTimer = Random.Range(Enemy.PauseRoamMin, Enemy.PauseRoamMax);
     }
 
     private void Skip()
     {
         if (_reported.Add(_index))
-            Debug.LogWarning($"{Enemy.name}: patrol point {_index} skipped — {Enemy.Navigator.FailureReason}.", Enemy);
+            Debug.LogWarning($"{Enemy.name}: {PointName(_index)} skipped — {Enemy.Navigator.FailureReason}.", Enemy);
 
         if (++_failStreak < Route.Count)
         {
@@ -165,6 +247,9 @@ public class PatrolState : EnemyStateBase
         _holdTimer = Mathf.Max(Enemy.RouteRetryTime, Time.fixedDeltaTime);
         Enemy.Stop();
     }
+
+    // Names a point the way the Scene view labels it, so a warning maps back to the right route.
+    private string PointName(int index) => ReferenceEquals(Route, Enemy.AggressiveRoute) ? $"aggressive patrol point A{index}" : $"patrol point {index}";
 
     // A skipped point was never reached, so it doesn't become _cameFrom: the enemy still stands
     // where it last arrived.

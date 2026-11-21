@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a525b962b4c84a14eb67f4f6418b2fb3, type: 3}
+  m_Name: BehaviourMap
+  m_EditorClassIdentifier: Ruby.Game::BehaviourMap
+  _rows:
+  - Kind: 5
+    Priority: 50
+    Response: 2
+  - Kind: 3
+    Priority: 50
+    Response: 2
+  - Kind: 0
+    Priority: 40
+    Response: 2
+  - Kind: 1
+    Priority: 30
+    Response: 1
+  - Kind: 2
+    Priority: 30
+    Response: 1
+  - Kind: 4
+    Priority: 20
+    Response: 1
+  - Kind: 6
+    Priority: 20
+    Response: 1

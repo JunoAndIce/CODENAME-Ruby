@@ -67,7 +67,7 @@ public class ImpactDamage : MonoBehaviour
     {
         if (!enabled || _health.IsDead) return;
 
-        float speed = ImpactSpeed(collision);
+        float speed = VelocityUtil.ClosingSpeed(collision);
         if (speed < _rules.KnockdownSpeed) return;
 
         // One part of a body striking another, an arm against the chest as it falls, isn't a hit.
@@ -81,14 +81,10 @@ public class ImpactDamage : MonoBehaviour
 
         DebugLog.Info($"{name} hit by {collision.collider.name} at {speed:0.0} m/s: {damage:0.0} damage.", this);
         _health.ApplyDamage(damage);
+        // Whoever watches them die goes to where the killing thing came from, and only the thing knows that:
+        // a character on their feet isn't stamped by a hit (Disturbance), and they aren't limp until a frame later.
+        if (_health.IsDead && other != null && Disturbance.TryGetOrigin(other, out Vector3 origin))
+            Disturbance.Stamp(_health.GetComponent<Rigidbody>(), origin);
         _knockdown?.KnockDown();
-    }
-
-    // How fast the two close along the hit. relativeVelocity is taken before the solver absorbs the
-    // hit, so a glancing contact counts for less than a head-on one.
-    private static float ImpactSpeed(Collision collision)
-    {
-        if (collision.contactCount == 0) return collision.relativeVelocity.magnitude;
-        return Mathf.Abs(Vector3.Dot(collision.relativeVelocity, collision.GetContact(0).normal));
     }
 }

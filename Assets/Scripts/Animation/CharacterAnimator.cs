@@ -25,6 +25,24 @@ public class CharacterAnimator : MonoBehaviour
     public const string StanceParameter = "Stance";
     public const string WeaponParameter = "Weapon";
     public const string GripLayer = "Grip";
+    public const string BeatParameter = "Beat";
+    public const string BeatTimeParameter = "BeatTime";
+    // Notice, Lose and Stand Down plant the feet, so they cover the whole body; the Draw plays over moving legs.
+    public const string BeatLayer = "Beat";
+    public const string BeatUpperLayer = "Beat Upper";
+
+    /// <summary>A beat's state name in the controller, the same on whichever beat layer holds it.</summary>
+    public static string BeatStateName(AnimBeat beat) => beat switch
+    {
+        AnimBeat.Draw => "Draw",
+        AnimBeat.Notice => "Notice",
+        AnimBeat.Lose => "Lose",
+        AnimBeat.StandDown => "Stand Down",
+        _ => null,
+    };
+
+    /// <summary>The layer a beat's state is built on.</summary>
+    public static string BeatLayerName(AnimBeat beat) => beat == AnimBeat.Draw ? BeatUpperLayer : BeatLayer;
 
     // A floor for the speed the blend divides by, so a character standing still reads as still.
     private const float MinMoveSpeed = 0.01f;
@@ -54,6 +72,8 @@ public class CharacterAnimator : MonoBehaviour
     private const float TurnAroundAngle = 150f;
 
     private static readonly int MoveXId = Animator.StringToHash(MoveXParameter);
+    private static readonly int BeatId = Animator.StringToHash(BeatParameter);
+    private static readonly int BeatTimeId = Animator.StringToHash(BeatTimeParameter);
     private static readonly int MoveZId = Animator.StringToHash(MoveZParameter);
     private static readonly int TurnId = Animator.StringToHash(TurnParameter);
     private static readonly int StanceId = Animator.StringToHash(StanceParameter);
@@ -83,6 +103,12 @@ public class CharacterAnimator : MonoBehaviour
     private Animator _animator;
     private IAnimatedCharacter _character;
     private int _gripLayer = -1;
+    private int _beatLayer = -1;
+    private int _beatUpperLayer = -1;
+    private int _ikFrame = -1;    // the frame the IK easing last advanced: the Beat layer's pass reapplies, it doesn't ease twice
+#if RUBY_DEBUG_LOGS
+    private AnimBeat _lastBeat;   // the beat seen last frame, to say once per beat when its slot is empty
+#endif
 
     private bool _facing;      // the model's facing is its own (standing, aiming or running)
     private float _lowerYaw;   // the model's world yaw: where its legs point
@@ -118,6 +144,10 @@ public class CharacterAnimator : MonoBehaviour
         }
         // A set with no grip builds no grip layer; then there's nothing to close.
         _gripLayer = _animator.GetLayerIndex(GripLayer);
+        // A set with no beat clips (or a controller built before beats) has no beat layers: every beat then holds
+        // the stance, which the beat says when it starts (UpdateBeat).
+        _beatLayer = _animator.GetLayerIndex(BeatLayer);
+        _beatUpperLayer = _animator.GetLayerIndex(BeatUpperLayer);
     }
 
     // Start, not Awake: the Animator resolves its Avatar's bones in its own Awake.
@@ -167,6 +197,8 @@ public class CharacterAnimator : MonoBehaviour
             _animator.SetLayerWeight(_gripLayer, Mathf.MoveTowards(_animator.GetLayerWeight(_gripLayer), grip, Time.deltaTime / GripBlendTime));
         }
 
+        UpdateBeat();
+
         _hasTarget = _character.TryFindTarget(out _target);
         UpdateAimHeading();
         UpdateFacing(stance);
@@ -181,6 +213,36 @@ public class CharacterAnimator : MonoBehaviour
 
         _animator.SetFloat(MoveXId, local.x, _damping, Time.deltaTime);
         _animator.SetFloat(MoveZId, local.z, _damping, Time.deltaTime);
+    }
+
+    // The beat's slot plays on its layer, scrubbed by the beat's progress, and the layer opens while it runs. An empty
+    // slot has no state: the stance holds and the body still turns (the game does that), and it is said once.
+    private void UpdateBeat()
+    {
+        AnimBeat beat = _character.Beat;
+        // Ruby.Animation references nothing, so not DebugLog: the same define, checked here (as Pathing does).
+#if RUBY_DEBUG_LOGS
+        if (beat != AnimBeat.None && beat != _lastBeat && !HasBeatState(beat, _beatLayer) && !HasBeatState(beat, _beatUpperLayer))
+            Debug.Log($"{name}'s {beat} beat has no clip in its animation set (or the controller wasn't rebuilt since one was added): they hold their stance for it.", this);
+        _lastBeat = beat;
+#endif
+
+        if (_beatLayer < 0 && _beatUpperLayer < 0) return;
+        _animator.SetInteger(BeatId, (int)beat);
+        // Only while one runs: an ended beat's progress reads 0, and the layer, still open while it fades and still
+        // in that state, would scrub back to the clip's first frame, popping the end pose to the start pose.
+        if (beat != AnimBeat.None) _animator.SetFloat(BeatTimeId, _character.BeatProgress);
+        BlendBeatLayer(_beatLayer, HasBeatState(beat, _beatLayer));
+        BlendBeatLayer(_beatUpperLayer, HasBeatState(beat, _beatUpperLayer));
+    }
+
+    private bool HasBeatState(AnimBeat beat, int layer) =>
+        beat != AnimBeat.None && layer >= 0 && _animator.HasState(layer, Animator.StringToHash(BeatStateName(beat)));
+
+    private void BlendBeatLayer(int layer, bool open)
+    {
+        if (layer < 0) return;
+        _animator.SetLayerWeight(layer, Mathf.MoveTowards(_animator.GetLayerWeight(layer), open ? 1f : 0f, Time.deltaTime / GripBlendTime));
     }
 
     // The level heading from the body to the target, steadied for the pose only: the body itself
@@ -301,7 +363,13 @@ public class CharacterAnimator : MonoBehaviour
 
     private void OnAnimatorIK(int layerIndex)
     {
-        if (layerIndex != 0) return;
+        // The base layer, and the full-body Beat layer while it is open: an Override layer replaces the base pose,
+        // IK and all, so a Lose clip would drop the aimed arm and the gun would twist off the hand. The Draw's
+        // layer gets no IK pass, so its clip owns the arm. The easing advances once a frame, however many passes run.
+        bool beatPass = layerIndex == _beatLayer && _beatLayer > 0 && _animator.GetLayerWeight(_beatLayer) > 0f;
+        if (layerIndex != 0 && !beatPass) return;
+        float dt = _ikFrame == Time.frameCount ? 0f : Time.deltaTime;
+        _ikFrame = Time.frameCount;
 
         bool upright = IsUpright(_character.Stance);
         bool looking = upright && _aiming && (_bodyLookWeight > 0f || _headLookWeight > 0f);
@@ -309,7 +377,7 @@ public class CharacterAnimator : MonoBehaviour
         // Eased like the gun arm, so the head and chest turn onto a target that appears, let go of
         // one that's lost, and swing across when the twist changes side, rather than snapping in a
         // frame. Rising from nothing, or snapping, the look goes straight where it's wanted.
-        float t = 1f - Mathf.Exp(-Time.deltaTime / LookBlendTime);
+        float t = 1f - Mathf.Exp(-dt / LookBlendTime);
         if (looking) _lookYaw = _lookWeight <= 0.001f || _snapping ? ClampedAimYaw() : Mathf.LerpAngle(_lookYaw, ClampedAimYaw(), t);
         _lookWeight = Mathf.Lerp(_lookWeight, looking ? 1f : 0f, t);
 
@@ -326,7 +394,7 @@ public class CharacterAnimator : MonoBehaviour
             _animator.SetLookAtWeight(0f);
         }
 
-        UpdateGunArm(upright);
+        UpdateGunArm(upright, dt);
     }
 
     // Aiming, the gun arm reaches toward the target; armed but not aiming, it holds the gun low in
@@ -336,7 +404,7 @@ public class CharacterAnimator : MonoBehaviour
     // between them, the weight and the arm's direction are eased. Easing a world position instead
     // left the hand trailing behind a running character, and moved it in a straight line that cut
     // through the chest whenever the aim swung across.
-    private void UpdateGunArm(bool upright)
+    private void UpdateGunArm(bool upright, float dt)
     {
         if (_gunShoulder == null) return;
         bool armed = upright && _character.Weapon != WeaponHold.None;
@@ -345,7 +413,7 @@ public class CharacterAnimator : MonoBehaviour
         float wantedBlend = aim ? 1f : 0f;
         float aimYaw = ClampedAimYaw();
 
-        float t = 1f - Mathf.Exp(-Time.deltaTime / ArmBlendTime);
+        float t = 1f - Mathf.Exp(-dt / ArmBlendTime);
         bool rising = _handWeight <= 0.001f;
         // Rising from nothing, the arm starts where it's wanted rather than sweeping from a stale pose.
         // Snapping, it's on the target in this frame's pose, which the shot leaves from.
