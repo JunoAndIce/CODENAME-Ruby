@@ -200,6 +200,11 @@ belong here.
 - **Never write a character's Rigidbody velocity directly to push it.** Characters author their own
   velocity (`VelocityUtil.SetFlatVelocity`); the one push is knockback, explicit, carried on top of the
   move and faded on its own. Anything that steers by `transform.forward` flattens its target first.
+- **Move or turn an interpolated Rigidbody through the Rigidbody, never its Transform** (Ruby turns by
+  `MoveRotation` in `FixedUpdate`). A Transform write is pushed back into the body at the next physics
+  step with the interpolated position, which trails the real one, and the body jitters against the
+  camera (measured at about 3 px of frame-to-frame wobble at full speed). A deliberate teleport (a
+  revive) sets both.
 - **The tether never moves Ruby.** Where the host can't follow, the rope limits her walk instead.
 - **Masses are real kilograms** from `Weight` and the shared `WeightTable`; a character's whole weight
   is `Weight.MassOf`, never `Rigidbody.mass` (a ragdolled root carries 2%).

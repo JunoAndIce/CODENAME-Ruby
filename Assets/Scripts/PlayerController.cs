@@ -7,6 +7,11 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
     public float _moveSpeed = 15f;
     public int _bulletCount = 6;
 
+    [Tooltip("Seconds from standing to full Move Speed, and to turn round. Short, so the ramp reads as weight rather than lag. 0 is instant.")]
+    [SerializeField, Min(0f)] private float _speedUpTime = 0.12f;
+    [Tooltip("Seconds from full Move Speed to standing once the stick or keys are let go. 0 is instant.")]
+    [SerializeField, Min(0f)] private float _slowDownTime = 0.08f;
+
     [SerializeField] private float _gamepadAimDistance = 6f;
     [Tooltip("How fast a push (a bullet's knockback) fades, in m/s per second. 20 fades a 4 m/s push in 0.2 s.")]
     [SerializeField, Min(1f)] private float _knockbackDeceleration = 20f;
@@ -30,6 +35,12 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
     private float _limitSlackSpeed;
     private float _limitDragFraction;
     private Vector3 _aimPoint;
+    // Where she faces, worked out each frame from the aim and turned onto the body in FixedUpdate.
+    // Never written to the Transform: her Rigidbody interpolates, and a Transform write is pushed
+    // back into the body at the next physics step along with the interpolated position, which
+    // trails the real one. She lost a different slice of her move every step and jittered against
+    // the camera (measured: about 3 px of frame-to-frame wobble at full speed, none after).
+    private Quaternion _facing;
     private bool _peekHeld;
     private bool _triggerPressed;
     private GrappleController _grapple;
@@ -54,9 +65,10 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
     bool ICameraTarget.WantsPeek => _peekHeld;
 
     Rigidbody IAnimatedCharacter.Body => _myRigidbody;
-    // Only while a direction is pressed: reported as always moving, her legs would never lag behind
-    // her aim while she stands still.
-    float IAnimatedCharacter.MoveSpeed => _moveVelocity.sqrMagnitude > 0f ? _moveSpeed : 0f;
+    // The speed she's trying to reach, from the input rather than the ramped velocity: read off the
+    // ramp, her legs would walk on through the slow-down after a release, and reported as always
+    // moving, they would never lag behind her aim while she stands still.
+    float IAnimatedCharacter.MoveSpeed => Mathf.Min(_moveInput.magnitude, 1f) * _moveSpeed;
     // She always faces the cursor, so on her feet she's always aiming.
     AnimStance IAnimatedCharacter.Stance => _downed ? AnimStance.Frozen : AnimStance.Aim;
     WeaponHold IAnimatedCharacter.Weapon => WeaponHold.Pistol;
@@ -81,6 +93,7 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
 
         _startPosition = transform.position;
         _startRotation = transform.rotation;
+        _facing = transform.rotation;
         _startBullets = _bulletCount;
         _rootAboveFeet = transform.position.y - _capsule.bounds.min.y;
     }
@@ -116,6 +129,7 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
         if (!_ragdoll.IsSettled) return;
 
         _ragdoll.Recover();
+        _facing = transform.rotation;   // she gets up facing wherever she fell, not where she aimed before
         _downed = false;
         _knockback = Vector3.zero;
     }
@@ -139,6 +153,7 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
         _myRigidbody.rotation = rotation;
         _myRigidbody.linearVelocity = Vector3.zero;
         _myRigidbody.angularVelocity = Vector3.zero;
+        _facing = rotation;
 
         _health.Revive();
         _bulletCount = _startBullets;
@@ -198,19 +213,20 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
 
     void MovePlayer()
     {
-        _moveVelocity = new Vector3(_moveInput.x, 0f, _moveInput.y) * _moveSpeed;
+        RampMove();
 
         if (_playerInput.currentControlScheme == "Gamepad")
         {
             if (_lookInput.sqrMagnitude > 0.1f)
             {
                 float angle = Mathf.Atan2(_lookInput.x, _lookInput.y) * Mathf.Rad2Deg;
-                transform.rotation = Quaternion.Euler(0f, angle, 0f);
+                _facing = Quaternion.Euler(0f, angle, 0f);
             }
-            _aimPoint = transform.position + transform.forward * _gamepadAimDistance;
+            // Along the facing she's turning to, not transform.forward: the body only turns at the
+            // next physics step, and the aim shouldn't wait for it.
+            _aimPoint = transform.position + _facing * Vector3.forward * _gamepadAimDistance;
             return;
         }
-
         // Read through the Input System: the legacy Input class throws once Active Input Handling
         // is set to the Input System alone.
         Mouse mouse = Mouse.current;
@@ -221,7 +237,23 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
 
         Vector3 pointToLook = cameraRay.GetPoint(rayLength);
         _aimPoint = new Vector3(pointToLook.x, transform.position.y, pointToLook.z);
-        transform.LookAt(_aimPoint);
+        Vector3 toAim = _aimPoint - transform.position;
+        if (toAim.sqrMagnitude > 0.0001f) _facing = Quaternion.LookRotation(toAim, Vector3.up);
+    }
+
+    // Her intended velocity moves toward the input at a fixed rate: Speed Up Time from standing to
+    // full speed (turning too), Slow Down Time back to standing. It shapes the intent, never the
+    // delivered move: the walk limit and PushLimit still clip that in FixedUpdate. Ramping off the
+    // clipped speed would make a drag at full rope collapse to a crawl, each step starting from the
+    // last step's clipped speed.
+    void RampMove()
+    {
+        Vector3 target = new Vector3(_moveInput.x, 0f, _moveInput.y) * _moveSpeed;
+        bool slowing = target.sqrMagnitude < _moveVelocity.sqrMagnitude;
+        float time = slowing ? _slowDownTime : _speedUpTime;
+        _moveVelocity = time > 0f
+            ? Vector3.MoveTowards(_moveVelocity, target, _moveSpeed / time * Time.deltaTime)
+            : target;
     }
 
     void FixedUpdate()
@@ -245,6 +277,8 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
             _hasMoveLimit = false;
         }
         VelocityUtil.SetFlatVelocity(_myRigidbody, move);
+        // Through the body, so interpolation turns her smoothly between steps (see _facing).
+        _myRigidbody.MoveRotation(_facing);
     }
 
     public void LimitMove(Vector3 outward, float slackSpeed, float dragFraction)
