@@ -1,6 +1,8 @@
 # Enemy States 0.2: a squad that thinks
 
-**Status:** design, approved 2026-10-28. Branch `enemy_states_0.2`, from `main`. It
+**Status:** closed 2026-11-20 (user: "close out enemy states for now"), with pieces 1 to 7 and 10 built, 8 removed,
+and 5 part B, 7's activity spots and alarms, and 9 left for later (see Progress). Approved 2026-10-28. Branch
+`enemy_states_0.2`, from `main`. It
 will be built one piece at a time, in the order below, with a check-in and play-test after each.
 It takes over the unbuilt parts of `2026-09-29-enemy-states-v2.md`: the Cautious state and route
 (now Patrol Aggressive and the Aggressive route), Search v2 and sound. Every piece's rules are
@@ -1036,6 +1038,11 @@ with `CLAUDE.md` and the design manual (`docs/manual/design-manual.html`) brough
 from its group cases (an officer sent to Patrol Aggressive because a search team was full, and
 searching as a team), which wait for piece 5's jobs. 9 comes much later. 10 can go anywhere in the
 order.
+
+**Closed 2026-11-20.** Left unbuilt: piece 5 part B (patrol together), piece 7's other activity spots and alarms
+(waiting for models), and piece 9 (breakables). After the pieces, the enemy AI roadmap in
+`docs/architecture/project-history.md` added prop-aware pathing, sight through the cone, beats between states and
+covering the ways out; its cover, squad tactics and reading Ruby steps are paused.
 
 ## Open questions
 

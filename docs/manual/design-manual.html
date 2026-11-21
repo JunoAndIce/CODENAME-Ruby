@@ -104,7 +104,7 @@ a { color: var(--accent); }
   <div class="kicker">Design manual · Tech demo build</div>
   <h1>CODENAME: Ruby</h1>
   <p class="lede">A top-down action game in the style of Hotline Miami, built on Unity's physics engine so every kill can be improvised from whatever is in the room.</p>
-  <p class="meta">Unity 6000.5.10f1 · URP · New Input System. Values match the editor as of 12 October 2026. Items marked <span class="planned">Planned</span> are design intent and are not in the build yet.</p>
+  <p class="meta">Unity 6000.5.10f1 · URP · New Input System. Values match the editor as of 20 November 2026. Items marked <span class="planned">Planned</span> are design intent and are not in the build yet.</p>
   <p>Updating Artifact Link: <a href="#">https://claude.ai/artifact/UyTAHHiqQQ5PpZRhiKMaqN</a></p>
 </header>
 
@@ -209,51 +209,66 @@ a { color: var(--accent); }
     <tr><td>Reference Mass</td><td class="where">ImpactRules asset</td><td class="num">60 kg</td></tr>
     <tr class="group"><td colspan="3">Officers' pistol</td></tr>
     <tr><td>Damage</td><td class="where">Pistol · Gun</td><td class="num">30</td></tr>
-    <tr><td>Knockback (the push a bullet lands)</td><td class="where">Pistol · Gun</td><td class="num">240 kg·m/s</td></tr>
+    <tr><td>Knockback (the push a bullet lands)</td><td class="where">Pistol · Gun</td><td class="num">120 kg·m/s</td></tr>
     <tr><td>Bullet Speed / Bullet Lifetime</td><td class="where">Pistol · Gun</td><td class="num">40 m/s / 2 s</td></tr>
     <tr><td>Fire Cooldown</td><td class="where">Pistol · Gun</td><td class="num">0.6 s</td></tr>
-    <tr><td>Range / Min Distance</td><td class="where">Pistol · Gun</td><td class="num">12.5 m / 5 m</td></tr>
+    <tr><td>Range / Min Distance</td><td class="where">Pistol · Gun</td><td class="num">15 m / 5 m</td></tr>
     <tr><td>Spread</td><td class="where">Pistol · Gun</td><td class="num">±2°</td></tr>
     <tr><td>Weight (dropped)</td><td class="where">Pistol · Weight</td><td class="num">Small, 20 kg</td></tr>
     <tr class="group"><td colspan="3">Police officer</td></tr>
     <tr><td>Weight</td><td class="where">WeightTable · Enemy</td><td class="num">50 kg</td></tr>
     <tr><td>Health</td><td class="where">Enemy prefab · Health</td><td class="num">20</td></tr>
-    <tr><td>Chase / Patrol / Search Speed</td><td class="where">EnemyController</td><td class="num">10 / 7 / 6 m/s</td></tr>
-    <tr><td>View Range / View Angle / Close Radius</td><td class="where">EnemyController</td><td class="num">12.5 m / 135° / 3 m</td></tr>
-    <tr><td>Lose Sight Time (how long without seeing Ruby before he gives up the hunt)</td><td class="where">EnemyController</td><td class="num">4 s</td></tr>
-    <tr><td>Search Duration (counted from arrival) / Search Travel Limit</td><td class="where">EnemyController</td><td class="num">10 s / 20 s</td></tr>
-    <tr><td>Search Reach (how close he gets to a search spot)</td><td class="where">EnemyController</td><td class="num">1.5 m</td></tr>
-    <tr><td>Look Time / Stand Down Time (checking a problem)</td><td class="where">EnemyController</td><td class="num">1.5 s / 1 s</td></tr>
-    <tr><td>Look Sweep Angle / Period (his body turns side to side)</td><td class="where">EnemyController</td><td class="num">70° / 2 s</td></tr>
-    <tr><td>Attack Near Radius / Time (a thud near a recent report of Ruby is an attack)</td><td class="where">EnemyController</td><td class="num">20 m / 15 s</td></tr>
-    <tr><td>Aggressive Speed Factor (patrol speed once he's aggressive: below 1 slows him, above 1 hurries him)</td><td class="where">EnemyController</td><td class="num">1.25× (0.1–3×)</td></tr>
-    <tr><td>Distraction Time / Gap (how long a lesser disturbance has his eye, and how close two count as one)</td><td class="where">EnemyController</td><td class="num">1 s / 2 s</td></tr>
-    <tr><td>Distraction Threshold / Memory (distractions inside the memory before he aggros)</td><td class="where">EnemyController</td><td class="num">3 / 12 s</td></tr>
-    <tr><td>Post Tolerance (how near his post counts as at it)</td><td class="where">EnemyController (fixed)</td><td class="num">1 m</td></tr>
-    <tr><td>Motion Radius / Body Notice Range (how far he notices moving bodies and corpses)</td><td class="where">EnemyController</td><td class="num">12.5 m / 12.5 m</td></tr>
-    <tr><td>Scan Interval (how often he looks)</td><td class="where">EnemyController (fixed)</td><td class="num">0.2 s</td></tr>
-    <tr><td>Speak Interval (calling out Ruby while he sees her)</td><td class="where">EnemyController</td><td class="num">1 s</td></tr>
+    <tr><td>Chase / Patrol / Search Speed</td><td class="where">EnemyController</td><td class="num">13 / 4 / 3 m/s</td></tr>
+    <tr><td>Search Creep Factor (share of Search Speed while clearing a search)</td><td class="where">EnemyController</td><td class="num">0.675</td></tr>
+    <tr><td>Aggressive Speed Factor (patrol speed once they're aggressive)</td><td class="where">EnemyController</td><td class="num">1.2× (0.1–3×)</td></tr>
+    <tr><td>Turn Speed (how fast they turn while walking)</td><td class="where">EnemyController</td><td class="num">720°/s</td></tr>
+    <tr><td>Personal Space (kept from other officers)</td><td class="where">EnemyController</td><td class="num">2 m</td></tr>
+    <tr><td>View Range / View Angle / Close Radius (the circle is for Ruby only)</td><td class="where">EnemyController</td><td class="num">15 m / 80° / 2.5 m</td></tr>
     <tr><td>Eye Height</td><td class="where">EnemyController</td><td class="num">0.5 m</td></tr>
-    <tr><td>Rearm Radius</td><td class="where">EnemyController</td><td class="num">10 m</td></tr>
-    <tr><td>Node Pause Time / Route Retry Time</td><td class="where">EnemyController (Route Retry Time fixed)</td><td class="num">2.5 s / 3 s</td></tr>
+    <tr><td>Scan Interval (how often they look)</td><td class="where">EnemyController (fixed)</td><td class="num">0.2 s</td></tr>
+    <tr><td>Lose Sight Time (nobody in the fight sees Ruby for this long and it's lost)</td><td class="where">EnemyController</td><td class="num">5 s</td></tr>
+    <tr><td>Glimpse Grace (a flicker of lost sight that doesn't count)</td><td class="where">EnemyAwareness (fixed)</td><td class="num">0.25 s</td></tr>
+    <tr><td>Draw / Notice / Lose / Stand Down Time (the beats)</td><td class="where">EnemyController</td><td class="num">0.5 / 0.6 / 0.5 / 1 s</td></tr>
+    <tr><td>Speak Interval (calling out Ruby while they see her)</td><td class="where">EnemyController</td><td class="num">2 s</td></tr>
+    <tr><td>Guess Distance (how far along the floor the ways out are looked for)</td><td class="where">EnemyController</td><td class="num">8 m</td></tr>
+    <tr><td>Spot Spacing (between firing spots, and between hunters covering the ways out)</td><td class="where">EnemyController</td><td class="num">2 m</td></tr>
+    <tr><td>Attack Near Radius / Time (a thud near a recent report of Ruby is an attack)</td><td class="where">EnemyController</td><td class="num">20 m / 15 s</td></tr>
+    <tr><td>Sent To Look Threshold (from this job on, every job is a Search for an attack)</td><td class="where">EnemyController</td><td class="num">3</td></tr>
+    <tr><td>Search Duration (searching alone) / Search Travel Limit</td><td class="where">EnemyController</td><td class="num">15 s / 30 s</td></tr>
+    <tr><td>Search Reach (how close they get to a spot)</td><td class="where">EnemyController</td><td class="num">1.5 m</td></tr>
+    <tr><td>Follow Distance (behind a Check's checker)</td><td class="where">EnemyController</td><td class="num">5 m</td></tr>
+    <tr><td>Look Time (checking a problem)</td><td class="where">EnemyController</td><td class="num">2 s</td></tr>
+    <tr><td>Look Sweep Angle / Period (their body turns side to side)</td><td class="where">EnemyController</td><td class="num">70° / 2 s</td></tr>
+    <tr><td>Distraction Time / Gap (how long a lesser disturbance has their eye, and how close two count as one)</td><td class="where">EnemyController</td><td class="num">1.5 s / 1.5 s</td></tr>
+    <tr><td>Distraction Threshold / Memory (distractions inside the memory before they're provoked)</td><td class="where">EnemyController</td><td class="num">3 / 15 s</td></tr>
+    <tr><td>Post Tolerance (how near their post counts as at it)</td><td class="where">EnemyController (fixed)</td><td class="num">1 m</td></tr>
+    <tr><td>Rearm Radius</td><td class="where">EnemyController</td><td class="num">12.5 m</td></tr>
+    <tr><td>Node Pause Time / Long Pause Time (they move about during a long pause)</td><td class="where">EnemyController</td><td class="num">2.5 s / 10 s</td></tr>
+    <tr><td>Route Retry Time</td><td class="where">EnemyController (fixed)</td><td class="num">3 s</td></tr>
     <tr><td>Wander Span (a lone stop this far across is wandered)</td><td class="where">PatrolRoute (fixed)</td><td class="num">4 m</td></tr>
     <tr><td>Corner Margin / Wall Cost (paths keep off walls)</td><td class="where">PathGrid</td><td class="num">0.5 m / 20</td></tr>
-    <tr><td>Turn Speed (how fast he turns while walking)</td><td class="where">EnemyController</td><td class="num">720°/s</td></tr>
     <tr><td>Corpse Brightness</td><td class="where">EnemyController</td><td class="num">0.35</td></tr>
-    <tr><td>Grab Pop Up / Grab Pop Out (the gun hops out of his hand)</td><td class="where">EnemyController (fixed)</td><td class="num">3 / 2 m/s</td></tr>
+    <tr><td>Grab Pop Up / Grab Pop Out (the gun hops out of their hand)</td><td class="where">EnemyController (fixed)</td><td class="num">3 / 2 m/s</td></tr>
     <tr><td>Get Up Time (standing still after a fall)</td><td class="where">EnemyController</td><td class="num">1 s</td></tr>
-    <tr><td>Twist Limit / Turn Speed (his legs follow his aim)</td><td class="where">officer model · CharacterAnimator</td><td class="num">70° / 360°/s</td></tr>
+    <tr><td>Twist Limit / Turn Speed (their legs follow their aim)</td><td class="where">officer model · CharacterAnimator</td><td class="num">70° / 360°/s</td></tr>
     <tr><td>Carry Point (gun held low, not aiming)</td><td class="where">officer model · CharacterAnimator</td><td class="num">0.2, 1, 0.35 m</td></tr>
     <tr><td>Settle Speed / Settle Time (getting up)</td><td class="where">officer · SkeletonRagdollBody</td><td class="num">0.4 m/s / 0.75 s</td></tr>
     <tr class="group"><td colspan="3">What officers hear and know</td></tr>
-    <tr><td>Intel Interval (how stale the squad's shared picture is)</td><td class="where">Intel</td><td class="num">1 s</td></tr>
-    <tr><td>Speech Range (along the floor, not through walls)</td><td class="where">Intel</td><td class="num">15 m</td></tr>
-    <tr><td>Notice Speed / Alarm Speed (a moving body is worth a glance / cause for alarm)</td><td class="where">StimulusRules asset</td><td class="num">4 / 15 m/s</td></tr>
+    <tr><td>Intel Interval (how stale the squad's shared picture is; also how often jobs fill and merge)</td><td class="where">Intel</td><td class="num">0.7 s</td></tr>
+    <tr><td>Speech Range (along the floor, not through walls)</td><td class="where">Intel</td><td class="num">9 m</td></tr>
+    <tr><td>Notice Speed / Alarm Speed (a moving body is worth a glance / cause for alarm)</td><td class="where">StimulusRules asset</td><td class="num">7 / 25 m/s</td></tr>
     <tr><td>Origin Lifetime (a thrown body leads back to its thrower)</td><td class="where">StimulusRules asset</td><td class="num">5 s</td></tr>
-    <tr><td>Gunshot / Whip landing loudness</td><td class="where">StimulusRules asset</td><td class="num">25 m / 6 m</td></tr>
+    <tr><td>Gunshot / Whip landing loudness</td><td class="where">StimulusRules asset</td><td class="num">20 m / 5 m</td></tr>
     <tr><td>Impact loudness: at Notice Speed / per m/s above it / most</td><td class="where">StimulusRules asset</td><td class="num">10 m / 0.5 m / 20 m</td></tr>
-    <tr><td>Impact Cooldown (one thud per body)</td><td class="where">StimulusRules asset</td><td class="num">0.25 s</td></tr>
-    <tr><td>Priorities (1 to 5): body, fast object / gunshot / impact, whip landing / moving object, loose gun</td><td class="where">BehaviourMap asset</td><td class="num">5 / 4 / 3 / 2</td></tr>
+    <tr><td>Impact Cooldown (one thud per body)</td><td class="where">StimulusRules asset</td><td class="num">0.35 s</td></tr>
+    <tr><td>Priorities (1 to 5): body, gunshot / fast object / impact, loose gun / moving object / whip landing</td><td class="where">BehaviourMap asset</td><td class="num">5 / 4 / 3 / 2 / 1</td></tr>
+    <tr class="group"><td colspan="3">Group jobs</td></tr>
+    <tr><td>Job Cap (officers on one job)</td><td class="where">Intel</td><td class="num">6</td></tr>
+    <tr><td>Job Match Radius (a disturbance this near a job goes to it)</td><td class="where">Intel</td><td class="num">5 m</td></tr>
+    <tr><td>Gather / React / Call Time (a job's start: the team gathers, the lead reacts, then calls the rest one by one)</td><td class="where">Intel</td><td class="num">0.75 / 0.68 / 0.8 s</td></tr>
+    <tr><td>Search Area Radius (rooms reached within this of the source are searched whole)</td><td class="where">Intel</td><td class="num">15 m</td></tr>
+    <tr><td>Search Start Radius (how near the source the team arrives)</td><td class="where">Intel</td><td class="num">5 m</td></tr>
+    <tr><td>Search Minimum Time</td><td class="where">Intel</td><td class="num">7 s</td></tr>
     <tr class="group"><td colspan="3">Weight table</td></tr>
     <tr><td>Tiny / Small / Medium</td><td class="where">WeightTable asset</td><td class="num">10 / 20 / 30 kg</td></tr>
     <tr><td>Large / Huge</td><td class="where">WeightTable asset</td><td class="num">40 / 50 kg</td></tr>
@@ -498,7 +513,7 @@ a { color: var(--accent); }
 </table>
 </div>
 <p>The smallest damaging hit is about <strong>10.2</strong>: the lightest object (10 kg) at exactly Knockdown Speed.</p>
-<p class="note"><strong>Tuning rule:</strong> keep Knockdown Speed above Ruby's walk plus an officer's chase (15 + 10 = 25 m/s), or characters running into each other head-on can knock each other down. At 25 it sits exactly on that line. Spin Speed must stay above Knockdown Speed for swings to hurt.</p>
+<p class="note"><strong>Tuning rule:</strong> keep Knockdown Speed above Ruby's walk plus an officer's chase, or characters running into each other head-on can knock each other down. With the officer's Chase Speed now 13 m/s, that sum is 15 + 13 = 28 m/s, above the current Knockdown Speed of 25: either raise Knockdown Speed to at least 28 or bring Chase Speed back to 10. Spin Speed must stay above Knockdown Speed for swings to hurt.</p>
 <p>A tethered object switches to continuous collision detection, because a thrown crate can move almost a metre per physics step and would otherwise pass straight through an enemy.</p>
 
 <h2 id="pathing"><span class="num">7</span>Path Grid, colliders and navigation</h2>
@@ -520,7 +535,7 @@ a { color: var(--accent); }
   </tbody>
 </table>
 </div>
-<p>It is a rule of thumb, not a wall. An enemy walking to a single spot, such as back to his post, floods a field of its own, because it follows the field step by step as it goes.</p>
+<p>It is a rule of thumb, not a wall. An enemy walking to a single spot, such as back to their post, floods a field of its own, because it follows the field step by step as it goes.</p>
 
 <h3>Setting up a floor</h3>
 <ol>
@@ -578,7 +593,7 @@ a { color: var(--accent); }
 <p class="meta">The colours match the Scene view overlay: red is blocked, yellow is open inside the margin.</p>
 </div>
 <ul>
-  <li><strong>Why this gives walls clearance.</strong> The capsule is the enemy's body. A cell is blocked when his body would touch something standing on it, so the open cells are exactly the places his centre can be. Paths never need extra room for his width. The margin on top is covered under Navigation below.</li>
+  <li><strong>Why this gives walls clearance.</strong> The capsule is the enemy's body. A cell is blocked when their body would touch something standing on it, so the open cells are exactly the places their centre can be. Paths never need extra room for their width. The margin on top is covered under Navigation below.</li>
   <li><strong>Why the floor doesn't count.</strong> The capsule's underside floats Floor Clearance (0.1 m) above the grid's Y, and its top is Agent Height up. So the grid's Y must be at the floor's top surface. Put the grid below the floor and the floor overlaps every capsule, so the whole grid comes out blocked.</li>
   <li><strong>Only the capsule's band counts.</strong> A collider wholly below 0.1 m (a flat rug) or above 2 m (a ceiling) blocks nothing. A low beam under 2 m does.</li>
   <li><strong>Triggers never block, and layers never matter.</strong> The test ignores trigger colliders and looks at every layer. So an invisible wall needs a solid collider, on any layer.</li>
@@ -616,7 +631,7 @@ a { color: var(--accent); }
 <p>Visual children (the model, the gun, the eyes) carry no colliders. For pathing this matters because <strong>the grid assumes the enemy is a capsule of Agent Radius</strong>. A model collider that sticks out makes the body wider than the grid believes, so it snags corners the grid called clear. A collider left on a decorative mesh with no Rigidbody becomes a wall in the bake, wherever it happens to stand. The one exception is a ragdoll: its bones' colliders take over from the capsule while it's limp, and they sit on dynamic Rigidbodies, so the bake skips them.</p>
 
 <h4>My enemy won't walk there</h4>
-<p>Start with the Console. The grid and navigator log a warning that names the enemy (click it to select him). It says so once per message, so a goal that keeps moving can repeat it. The text below is exact, with the enemy's name in front.</p>
+<p>Start with the Console. The grid and navigator log a warning that names the enemy (click it to select them). It says so once per message, so a goal that keeps moving can repeat it. The text below is exact, with the enemy's name in front.</p>
 <div class="table-wrap">
 <table>
   <thead><tr><th>Warning</th><th>What it means and what to check</th></tr></thead>
@@ -624,41 +639,41 @@ a { color: var(--accent); }
     <tr><td><code>is not on any PathGrid at (x, y, z) &mdash; standing still.</code></td><td>The enemy is outside every grid: past its Size, more than 0.5 m below its Y or above its Height, or the grid hasn't baked. Check the position of both.</td></tr>
     <tr><td><code>&lt;target&gt; is not on this floor's grid (&lt;grid&gt;) &mdash; standing still.</code></td><td>A chase target is on another floor. Floors are independent, so there is no route between them.</td></tr>
     <tr><td><code>no path to (x, y, z) on &lt;grid&gt; (walled off, or beyond Max Flow Distance) &mdash; standing still.</code></td><td>The goal is sealed off by blocked cells (a doorway too narrow, a crate with <code>GridObstacle</code> jammed in it), or it's farther than Max Flow Distance along the floor.</td></tr>
-    <tr><td><code>no path to (x, y, z) on &lt;grid&gt; (too tight for the grid, or walled off), so he goes as near as he can get: (x, y, z), 1.4 m from it.</code></td><td>He is hunting Ruby (or where he last knew her) and has no path to her, because she stands where the grid has no way in, such as tight behind a crate. A hunting enemy doesn't stand still: he walks to the nearest ground he can reach within 5 m of her, and says so once. The first point is where she is, the second the ground he is walking to. If there is no reachable ground within 5 m he stops instead and warns <code>no path to (x, y, z) on &lt;grid&gt;, and no ground he can reach within 5 m of it &mdash; standing still.</code></td></tr>
+    <tr><td><code>no path to (x, y, z) on &lt;grid&gt; (too tight for the grid, or walled off), so they go as near as they can get: (x, y, z), 1.4 m from it.</code></td><td>They are hunting Ruby (or where they last knew her) and have no path to her, because she stands where the grid has no way in, such as tight behind a crate. A hunting enemy doesn't stand still: they walk to the nearest ground they can reach within 5 m of her, and says so once. The first point is where she is, the second the ground they are walking to. If there is no reachable ground within 5 m they stop instead and warns <code>no path to (x, y, z) on &lt;grid&gt;, and no ground they can reach within 5 m of it &mdash; standing still.</code></td></tr>
     <tr><td><code>patrol point 2 skipped &mdash; &lt;reason&gt;.</code> (an Aggressive route's reads <code>aggressive patrol point A2</code>)</td><td>A patrol stop couldn't be reached. The reason is one of the next three rows, or the first row's <code>not on any PathGrid</code>.</td></tr>
     <tr><td><code>no open ground inside the area</code></td><td>Every spot in the patrol area is blocked. The area's Scene-view handle is red.</td></tr>
     <tr><td><code>no path to the area (walled off, or too far for one search)</code></td><td>The area is sealed off, or A* gave up after expanding 20,000 cells.</td></tr>
     <tr><td><code>blocked: no progress for 1.5s, 3.2m short of the area</code></td><td>The grid said the way was open but the body jammed: another enemy on the spot, a prop with no <code>GridObstacle</code>, or a gap the real capsule can't pass (is Agent Radius smaller than the capsule's?). The time is Stuck Time on the enemy.</td></tr>
-    <tr><td><code>every patrol point failed &mdash; holding, retrying every 3s.</code></td><td>All the points failed in a row, so he waits Route Retry Time and tries again.</td></tr>
+    <tr><td><code>every patrol point failed &mdash; holding, retrying every 3s.</code></td><td>All the points failed in a row, so they wait Route Retry Time and try again.</td></tr>
     <tr><td><code>&lt;prop&gt; has a GridObstacle but rests on no PathGrid (outside every grid's area or Height band), so it doesn't block paths: enemies plan straight through it.</code></td><td>The prop came to rest outside every grid. Move it, or extend the grid to cover it. It warns once, and again only if it leaves a grid a second time.</td></tr>
   </tbody>
 </table>
 </div>
 <p>With no warning at all, check these:</p>
 <ul>
-  <li><strong>He walks into a crate.</strong> The crate has no <code>GridObstacle</code>, or hasn't settled yet.</li>
+  <li><strong>They walk into a crate.</strong> The crate has no <code>GridObstacle</code>, or hasn't settled yet.</li>
   <li><strong>Everything is blocked.</strong> The grid's Y is below the floor's surface, or Agent Height or Agent Radius is bigger than the rooms.</li>
-  <li><strong>A doorway is shut to him.</strong> It's narrower than 2 × Agent Radius + one Cell Size, or something static (a collider with no Rigidbody, or a kinematic one) stands in it.</li>
+  <li><strong>A doorway is shut to them.</strong> It's narrower than 2 × Agent Radius + one Cell Size, or something static (a collider with no Rigidbody, or a kinematic one) stands in it.</li>
   <li><strong>You moved something and nothing changed.</strong> The bake happened at Start. Stop Play, change it, play again.</li>
 </ul>
 
 <h3>Navigation</h3>
 <h4>Who does what</h4>
 <p><code>GridNavigator</code> plans, and the agent steers. The navigator never moves a body. Each physics step it works out a point to head for and hands it to the agent through <code>IPathAgent</code>: <code>MoveToward(target, speed, mustReach)</code> and <code>Stop()</code>. The agent also reports its <code>Body</code> (where planning starts) and its <code>StuckTime</code>. <code>EnemyController</code> implements all of this, turning its heading and writing its own velocity. The split keeps <code>Ruby.Pathing</code> free of game rules, and lets each kind of character keep its own movement.</p>
-<p>Three navigator calls cover what enemies do: a patrol or a search walks to an area (<code>MoveToArea</code>, A*), a chase follows the shared field toward its target (<code>ChaseTo</code>), and a walk back to his post goes to a point on a field of its own (<code>MoveTo</code>). Each step they all do the same three things:</p>
+<p>Three navigator calls cover what enemies do: a patrol or a search walks to an area (<code>MoveToArea</code>, A*), a chase follows the shared field toward its target (<code>ChaseTo</code>), and a walk back to their post goes to a point on a field of its own (<code>MoveTo</code>). Each step they all do the same three things:</p>
 <ol>
   <li><strong>Arrived?</strong> Within 0.5 m of the goal, or standing in the goal's cell: stop.</li>
   <li><strong>Is there a clear straight line?</strong> If so, head straight for the goal and skip the search.</li>
   <li><strong>Otherwise follow the route.</strong> That is the flow field's next step, or the next corner of the A* route.</li>
 </ol>
-<p>A patrol stop is an <strong>area</strong> (<code>GridArea</code>: a circle, or a rectangle lined up with X and Z), not a point. He heads for its centre, but if the centre is blocked (a table, an anchor) the nearest open cell inside the area counts. An exact point on an object could never be reached.</p>
+<p>A patrol stop is an <strong>area</strong> (<code>GridArea</code>: a circle, or a rectangle lined up with X and Z), not a point. They head for its centre, but if the centre is blocked (a table, an anchor) the nearest open cell inside the area counts. An exact point on an object could never be reached.</p>
 
 <h4>The flow field and A*</h4>
 <ul>
   <li><strong>Flow field.</strong> A Dijkstra flood outward from the goal: a straight step costs 10, a diagonal 14. Each enemy reads its neighbours and steps toward the lowest cost. The flood stops at Max Flow Distance, measured in plain path metres (wall costs don't count), so wall costs can never shorten a chase's reach. A cell the flood never reached is off the field, and that gives the <code>no path to ... beyond Max Flow Distance</code> warning. A chase field re-floods when its target changes cell, and any field re-floods when the grid changes, throttled to once per 0.2 s.</li>
-  <li><strong>A*.</strong> Searches from the enemy to the goal cell with the same costs, and ties go to the cell nearer the goal, so open rooms get a straight run. It gives up after 20,000 cells (the "too far for one search" warning) so a hopeless search can't hitch a frame. The route is cached. It's re-planned when the grid changes, or when the enemy is knocked off the route, meaning the next corner is out of his sight.</li>
+  <li><strong>A*.</strong> Searches from the enemy to the goal cell with the same costs, and ties go to the cell nearer the goal, so open rooms get a straight run. It gives up after 20,000 cells (the "too far for one search" warning) so a hopeless search can't hitch a frame. The route is cached. It's re-planned when the grid changes, or when the enemy is knocked off the route, meaning the next corner is out of their sight.</li>
   <li><strong>No corner cutting.</strong> Both only take a diagonal step when the two cells beside it are open too, so nobody squeezes between two blocked corners.</li>
-  <li><strong>Hugging a wall.</strong> An enemy touching a wall often stands in a cell the margin marks blocked. Planning starts from the nearest open cell within two cells of him, and his first cell is exempt from sight checks.</li>
+  <li><strong>Hugging a wall.</strong> An enemy touching a wall often stands in a cell the margin marks blocked. Planning starts from the nearest open cell within two cells of them, and their first cell is exempt from sight checks.</li>
 </ul>
 
 <h4>Keeping off corners</h4>
@@ -673,23 +688,23 @@ a { color: var(--accent); }
 <ul>
   <li><strong>Line of sight is exact.</strong> It walks the cells the line crosses rather than sampling points, so a line can't slip through the corner of a blocked cell.</li>
   <li><strong>The pull keeps the margin it had room for.</strong> Where the path had room, the pulled line keeps the full margin. Through a narrow gap it keeps only the clearance the gap has, which is its middle. This is a rule, not a fallback.</li>
-  <li><strong>He turns on sight, not on arrival.</strong> An enemy on a route moves on to the next corner as soon as that corner is in straight sight, so he starts his bend early instead of walking onto the corner first. The same sight test, at the same clearance, tells him when he has been knocked off.</li>
+  <li><strong>They turn on sight, not on arrival.</strong> An enemy on a route moves on to the next corner as soon as that corner is in straight sight, so they start their bend early instead of walking onto the corner first. The same sight test, at the same clearance, tells them when they have been knocked off.</li>
 </ul>
 
 <h4>Steering: why bends are arcs</h4>
-<p>The navigator names a point and <code>EnemyController.MoveToward</code> does the steering, using <code>Steering</code>, which is pure maths. It <strong>turns his walking heading at Turn Speed</strong> (720 degrees a second by default) rather than pivoting to face the point, so a bend is an arc that starts before the corner. A standing body with no direction to turn to keeps its facing.</p>
+<p>The navigator names a point and <code>EnemyController.MoveToward</code> does the steering, using <code>Steering</code>, which is pure maths. It <strong>turns their walking heading at Turn Speed</strong> (720 degrees a second by default) rather than pivoting to face the point, so a bend is an arc that starts before the corner. A standing body with no direction to turn to keeps its facing.</p>
 <ul>
-  <li><strong>The danger is orbiting.</strong> A body turning at a fixed rate at speed <em>v</em> sweeps a circle of radius <em>v</em> divided by the turn rate. A point inside that circle can never be reached: he circles it for ever.</li>
-  <li><strong><code>SpeedToFit</code> slows him just enough</strong> that the arc passes through the point. Within 30 degrees of straight ahead nothing is slowed, and he never drops below a tenth of his speed, so a point right behind him can't freeze him.</li>
-  <li><strong>Only for points he must reach.</strong> That means a goal on a clear line, a route corner, or a field's last step into the goal cell (the <code>mustReach</code> flag). Any other field step rolls ahead of him every step and can't be orbited, so slowing there would only slow a chase on ordinary bends.</li>
+  <li><strong>The danger is orbiting.</strong> A body turning at a fixed rate at speed <em>v</em> sweeps a circle of radius <em>v</em> divided by the turn rate. A point inside that circle can never be reached: they circle it for ever.</li>
+  <li><strong><code>SpeedToFit</code> slows them just enough</strong> that the arc passes through the point. Within 30 degrees of straight ahead nothing is slowed, and they never drop below a tenth of their speed, so a point right behind them can't freeze them.</li>
+  <li><strong>Only for points they must reach.</strong> That means a goal on a clear line, a route corner, or a field's last step into the goal cell (the <code>mustReach</code> flag). Any other field step rolls ahead of them every step and can't be orbited, so slowing there would only slow a chase on ordinary bends.</li>
   <li><strong>Turn Speed is tunable.</strong> Lower it for wider arcs. The legs' own turn on the model (<code>CharacterAnimator</code>) is a separate setting.</li>
 </ul>
 
-<h4>When is he stuck?</h4>
-<p>An area move (a patrol or a search) has a watchdog. If the distance left along the route doesn't shrink by 0.25 m for Stuck Time (1.5 s by default), he is blocked: if he is already inside the area it counts as arrived, and otherwise the move reports Blocked with the reason you saw in the table. Without it a walker would push at a jammed doorway for ever. Chase and single-spot walks have no watchdog. They keep stepping down their field.</p>
+<h4>When are they stuck?</h4>
+<p>An area move (a patrol or a search) has a watchdog. If the distance left along the route doesn't shrink by 0.25 m for Stuck Time (1.5 s by default), they are blocked: if they are already inside the area it counts as arrived, and otherwise the move reports Blocked with the reason you saw in the table. Without it a walker would push at a jammed doorway for ever. Chase and single-spot walks have no watchdog. They keep stepping down their field.</p>
 
 <h3>No silent fallbacks</h3>
-<p>When the navigator can't plan a move, it does not quietly do something else. It <strong>stops the body and says why</strong>. Chase and point walks log a warning (<code>Fail</code>) and stand still. The same message repeats only after a successful move, so a stuck enemy doesn't flood the Console, but a goal that keeps moving changes the message and logs again. Area moves (a patrol or a search) return <code>Blocked</code> or <code>Unreachable</code> with a <code>FailureReason</code>, and the caller decides: the patrol skips the point with a warning. He never walks straight at the goal through a wall, and never wanders off.</p>
+<p>When the navigator can't plan a move, it does not quietly do something else. It <strong>stops the body and says why</strong>. Chase and point walks log a warning (<code>Fail</code>) and stand still. The same message repeats only after a successful move, so a stuck enemy doesn't flood the Console, but a goal that keeps moving changes the message and logs again. Area moves (a patrol or a search) return <code>Blocked</code> or <code>Unreachable</code> with a <code>FailureReason</code>, and the caller decides: the patrol skips the point with a warning. They never walk straight at the goal through a wall, and never wanders off.</p>
 <p>Two behaviours look like fallbacks but are written rules: a path lowers its clearance to what a narrow gap allows, and a patrol move that stalls inside its area counts as arrived. Neither hides a failure.</p>
 
 <h3>Debugging tools</h3>
@@ -701,7 +716,7 @@ a { color: var(--accent); }
     <tr><td>Selected grid</td><td>Scene view, in Play</td><td>Red cells: blocked by static geometry. Orange: blocked by a resting <code>GridObstacle</code>. Yellow: open but inside the margin.</td></tr>
     <tr><td>Always Show Grid</td><td><code>PathGrid</code>, Debug</td><td>Draws those cells without selecting the grid, in the Scene and Game views (Gizmos on).</td></tr>
     <tr><td>Show Open Cells</td><td><code>PathGrid</code>, Debug</td><td>With Always Show Grid, also tints every open cell a faint green, so the floor reads as a map and not only its walls.</td></tr>
-    <tr><td>Route line</td><td>Scene view, in Play</td><td>Every enemy draws the route he is following as a yellow line.</td></tr>
+    <tr><td>Route line</td><td>Scene view, in Play</td><td>Every enemy draws the route they are following as a yellow line.</td></tr>
     <tr><td>Route handles</td><td>Scene view, enemy selected</td><td>Handles for each patrol area, coloured by the same test the bake uses, so a bad point shows while you place it, in edit mode. Green: the centre is open. Yellow: the centre is blocked but part of the area is open. Red: nothing is open, so the point will be skipped. Grey: no grid under the point. Safe points are labelled 0, 1, 2 and Aggressive ones A0, A1, A2, to match the warnings.</td></tr>
     <tr><td>Bake log</td><td>Console, with the <code>RUBY_DEBUG_LOGS</code> define</td><td>One line per bake: <code>baked &lt;width&gt;x&lt;depth&gt; cells (0.5m), &lt;n&gt; blocked.</code> Without the define it compiles away.</td></tr>
   </tbody>
@@ -736,17 +751,22 @@ a { color: var(--accent); }
 <h2 id="enemies"><span class="num">8</span>Enemies</h2>
 
 <h3>Police officer</h3>
-<p>The demo's only enemy. Weighs 50 kg and has 20 health, and carries a pistol in his right hand.</p>
+<p>The demo's only enemy. An officer weighs 50 kg, has 20 health and carries a pistol in their right hand. Officers are a squad defending their building: they see, hear and remember, share what they know a little late, check disturbances together and fight as one group. The model is Hitman's AI: each officer has their own knowledge and reacts to what they sense, and the squad shares a picture of where Ruby is.</p>
+<p>Values below are as tuned on the officer prefab and the test scene's Intel object.</p>
 
 <h3 id="officer-animation">How an officer moves</h3>
 <p>Each moment has its own animation slot. Most hold stand-in animations from the current pack until real ones are made; the moments themselves are set.</p>
 <div class="table-wrap">
 <table>
-  <thead><tr><th>Moment</th><th>His body</th><th>For now</th></tr></thead>
+  <thead><tr><th>Moment</th><th>Their body</th><th>For now</th></tr></thead>
   <tbody>
-    <tr><td>Patrolling, searching, holding a post</td><td>Gun at rest: a crouched raid walk, pistol held low</td><td>An ordinary walk, gun held low in front of him</td></tr>
-    <tr><td>Firing at Ruby (in sight and in range)</td><td>Upright, aiming, walking or backpedalling as he moves</td><td>A walk; his arm points the gun at Ruby</td></tr>
+    <tr><td>Patrolling, searching, holding a post</td><td>Gun at rest: a crouched raid walk, pistol held low</td><td>An ordinary walk, gun held low in front of them</td></tr>
+    <tr><td>Firing at Ruby (in sight and in range)</td><td>Upright, aiming, walking or backpedalling as they move</td><td>A walk; their arm points the gun at Ruby</td></tr>
     <tr><td>Closing in out of range, or out of sight</td><td>Running with the gun pointed down</td><td>A run, gun held low</td></tr>
+    <tr><td>Drawing on first sight of Ruby</td><td>A draw, legs still moving under it</td><td>Holding their stance and turning to her</td></tr>
+    <tr><td>Noticing something before checking it</td><td>A start and a look</td><td>Standing still, turning to it</td></tr>
+    <tr><td>Losing Ruby</td><td>Gun held on where she was last seen</td><td>Standing still, aiming at that spot</td></tr>
+    <tr><td>Standing down at a search's end</td><td>An all-clear gesture</td><td>Standing still</td></tr>
     <tr><td>Grabbed, alive or dead</td><td>Tied upright: pinned arms, wriggling (still, if dead)</td><td>Standing idle</td></tr>
     <tr><td>Thrown, let go, knocked down, or dead</td><td>Limp, tumbling</td><td>Same</td></tr>
     <tr><td>Getting up after a fall</td><td>A get-up</td><td>Standing still for 1 s</td></tr>
@@ -755,51 +775,132 @@ a { color: var(--accent); }
 </table>
 </div>
 <ul>
-  <li><strong>Turning to aim:</strong> standing and firing, his chest twists toward Ruby as she moves, up to 70°; past that his chest pulls his legs round with it, and his feet step round to face her.</li>
-  <li><strong>The grab:</strong> the chain knocks his pistol out of his hand with a small hop.</li>
-  <li><strong>Getting up:</strong> after a fall he stands still for a second, unable to move or shoot, then hunts again. A hard enough hit during that second puts him down again.</li>
+  <li><strong>Turning to aim:</strong> standing and firing, their chest twists toward Ruby as she moves, up to 70°; past that the chest pulls the legs round with it, and their feet step round to face her.</li>
+  <li><strong>The grab:</strong> the chain knocks the pistol out of their hand with a small hop.</li>
+  <li><strong>Getting up:</strong> after a fall they stand still for a second, unable to move or shoot, then hunt again. A hard enough hit during that second puts them down again.</li>
 </ul>
 
-<p><strong>How he walks.</strong> An officer's route keeps half a metre off walls and corners and runs down the middle of a doorway, so he never scrapes a jamb. Where the way bends he turns in an arc, starting before the corner, instead of stopping to pivot. He slows only to reach a point he must reach: the end of a straight line (including chasing Ruby in sight), a route corner, or a field's last step, never mid-field, so he never circles it. When he aims at Ruby he still turns to face her at once.</p>
+<h4 id="beats">Beats: rolling into a state</h4>
+<p>Officers never snap from one state to the next. Four moments are <strong>beats</strong>: a short, tuned pause with its own animation slot, which the clip is stretched to fill. With no clip in a slot, the officer holds their stance and turns.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Beat</th><th>When</th><th>Length</th><th>Feet</th></tr></thead>
+  <tbody>
+    <tr><td>Draw</td><td>First sight of Ruby from a calm state. This is her window: they can't fire until it ends.</td><td>0.5 s</td><td>Coast to a stop</td></tr>
+    <tr><td>Notice</td><td>An idle or patrolling officer about to check something</td><td>0.6 s</td><td>Planted</td></tr>
+    <tr><td>Lose</td><td>Losing Ruby, before searching: they keep the gun on her last known spot</td><td>0.5 s</td><td>Planted</td></tr>
+    <tr><td>Stand down</td><td>The end of a search with nothing found</td><td>1 s</td><td>Planted</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Only Ruby and things done to them cut a beat short: seeing her, being hit, grabbed, knocked down or killed. Seeing her again during the Lose beat sends them straight back to the fight with no second draw, and getting up after a fall never draws.</p>
+
+<p><strong>How they walk.</strong> An officer's route keeps half a metre off walls and corners and runs down the middle of a doorway, so they never scrape a jamb. Where the way bends they turn in an arc, starting before the corner, instead of stopping to pivot, and they turn on the spot before setting off. They keep 2 m of personal space from other officers. They slow only to reach a point they must reach, never mid-route.</p>
+<p><strong>Props on the floor.</strong> Patrolling and searching officers walk round props. Hunting or rearming officers shove light props (under 20 kg) out of the way and go round heavier ones, giving up a shove when going round is cheaper or the prop jams. They fit through any gap about 0.75 m wide or wider, and they don't drag crates by rubbing against them.</p>
 
 <h3>Pistol</h3>
 <ul>
   <li><strong>One shot kills Ruby.</strong> A bullet does 30 damage against her 30 health, and knocks her body away from the shooter (see <a href="#ruby">Ruby</a>). Bullets are visible and fly at 40 m/s, under three times her walking speed, so a sidestep can still dodge one from mid-range. Officers take no push from bullets, so a held shield doesn't budge.</li>
-  <li><strong>Fires on the move.</strong> An armed officer keeps hunting and fires every 0.6 s whenever Ruby is in sight within 12.5 m and on her feet. There's no wind-up. Once she's down, officers lower their guns.</li>
-  <li><strong>Keeps its distance.</strong> With Ruby in sight, an armed officer closes in only to 5 m and holds between 5 and 6 m. If she comes closer it backs away, still facing her and firing. Cornered, it holds its ground. Ruby walks faster than it backs off, so she can still run a gunman down.</li>
+  <li><strong>Fires on the move.</strong> An armed officer fires every 0.6 s whenever Ruby is in sight within 15 m and on her feet, after the Draw beat on first sight. Once she's down, officers lower their guns.</li>
+  <li><strong>Keeps its distance.</strong> With Ruby in sight, an armed officer walks to a firing spot of their own and holds there. With no spot, they close in only to 5 m and hold between 5 and 6 m. If she comes closer they back away, still facing her and firing. Cornered, they hold their ground. Ruby walks faster than they back off, so she can still run a gunman down.</li>
   <li><strong>What stops a bullet:</strong> walls, crates and props, Ruby, and anything Ruby holds on the chain. A held officer or corpse is a shield. Free officers and resting corpses let bullets through, so there's no friendly fire.</li>
-  <li><strong>Drops.</strong> An officer drops its pistol when it's knocked down and when it dies; the gun keeps the officer's momentum and skids, so a knockdown sends it flying. When the chain grabs him, it pops out of his hand with a small hop instead. It never starts inside or passes through a wall.</li>
+  <li><strong>Drops.</strong> An officer drops their pistol when knocked down and when killed; the gun keeps the officer's momentum and skids, so a knockdown sends it flying. When the chain grabs them, it pops out of their hand with a small hop instead. It never starts inside or passes through a wall.</li>
   <li><strong>A dropped pistol is a prop.</strong> The chain can grab, reel and throw it, but never take one out of a hand. Ruby can't pick one up or fire it.</li>
 </ul>
-<p>Officers see in a straight line from eye height. Walls, crates and tables block their sight; other characters don't. They notice Ruby only inside their view: a 135° cone in front of them out to 12.5 m, plus a 3 m circle all round, so she can't stand right behind one unnoticed. Windows are <span class="planned">Planned</span>.</p>
 
-<h3 id="officer-senses">What an officer hears, notices and knows</h3>
-<p>Sight isn't all he has. Officers hear, notice and remember, and they share what they know, a little late.</p>
+<h3 id="officer-senses">What an officer sees, hears and knows</h3>
+<h4>Sight</h4>
 <ul>
-  <li><strong>Sounds travel along the floor.</strong> A gunshot carries 25 m, the whip landing 6 m, and an impact 10 m, growing with how hard the hit was up to 20 m. It's measured along the walkable floor, so it doesn't carry through a wall, or to another floor.</li>
-  <li><strong>What a sound is worth.</strong> Each kind has a priority from 1 to 5: a body or a fast object 5, a gunshot 4, an impact or the whip landing 3, a slow-moving object or a loose gun 2. He treats a body, a fast object and a gunshot as an attack, and the rest as a problem to check. He ignores his own shot. An officer who is already fighting, rearming, held, down or dead ignores everything.</li>
+  <li>Officers see in a straight line from eye height. Walls, crates and tables block their sight; other characters don't.</li>
+  <li><strong>Everything is seen through the cone.</strong> An officer's view is an 80° cone in front of them out to 15 m. Ruby, corpses, loose guns and moving bodies are all noticed only inside it.</li>
+  <li><strong>A close circle, for Ruby only.</strong> Within 2.5 m all round they notice Ruby even behind them, so she can't stand at their back unnoticed.</li>
+  <li><strong>In a fight they see further.</strong> Once hunting her, an officer keeps track of Ruby at any distance they have a clear line to her.</li>
+  <li>Windows are <span class="planned">Planned</span>.</li>
+</ul>
+
+<h4>Hearing</h4>
+<ul>
+  <li><strong>Sounds travel along the floor.</strong> A gunshot carries 20 m, the whip landing 5 m, and an impact 10 m, growing with how hard the hit was up to 20 m. It's measured along the walkable floor, so it doesn't carry through a wall, or to another floor.</li>
   <li><strong>A thrown body leads back to Ruby.</strong> Anything she holds on the chain remembers where she stood, for 5 seconds after she lets go, and passes that on to whatever it hits. An officer who sees it fly, or hears it hit, goes to where it was thrown from, not where it landed.</li>
-  <li><strong>He notices what moves and what lies there.</strong> Within 12.5 m, in clear sight, a body moving at 4 m/s or more is worth a glance and one at 15 m/s or more is cause for alarm. An officer standing and walking never counts, only one held on the chain or tumbling. Corpses within 12.5 m in his view, and loose guns if he's armed, are noticed the same way. A body or gun the squad has never reported goes on its books and he goes to check it. One the squad already knows about he only <strong>glances</strong> at: he faces it, looks for a moment from where he stands without walking to it, and is wary from then on. Each moving body is reacted to once every 5 seconds.</li>
-  <li><strong>A thud can be an attack.</strong> A sound that's only a problem to check (an impact, a moving object) is searched for as an attack instead when the officer has seen Ruby, or when the newest news of her is under 15 seconds old and within 20 m of it.</li>
-  <li><strong>Ruby's own sounds teach him where she is.</strong> A gunshot or the whip tells everyone who hears it where she stood, and he'll hunt that spot.</li>
-  <li><strong>He never forgets her face.</strong> Once an officer has seen Ruby with his own eyes, he knows she's in the building. That memory is for good.</li>
-  <li><strong>What he knows beats what's true.</strong> Out of sight, an officer chases the newest thing he knows of Ruby: what he saw, heard or was told, or the squad's shared picture, whichever is newer. The squad's picture updates once a second, so a fight she leaves doesn't end the instant she's out of sight.</li>
-  <li><strong>He calls out what he sees.</strong> While he sees Ruby he shouts her position at once and then every second. Officers within 15 m along the floor learn it immediately. A shout doesn't carry through a wall.</li>
-  <li><strong>No level-wide alert (for now).</strong> The first officer to go to Aggro no longer flips every patroller to his Aggressive route. Only an officer who has himself seen Ruby or been after her goes aggressive. A level alert is to be explored later.</li>
+  <li><strong>Ruby's own sounds teach them where she is.</strong> A gunshot or the whip tells everyone who hears it where she stood.</li>
+</ul>
+
+<h4>What a disturbance is worth</h4>
+<p>Each kind of thing an officer senses has a priority from 1 to 5 and a response: an <strong>attack</strong> to search for, or a <strong>problem</strong> to check. These come from a <strong>behaviour map</strong>, and each room can have its own (see <a href="#rooms">Rooms</a>), so a gunshot in the firing range or a loose gun in the armory can be ignored. The default map:</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Disturbance</th><th>Priority</th><th>Response</th></tr></thead>
+  <tbody>
+    <tr><td>A body (corpse)</td><td>5</td><td>Attack</td></tr>
+    <tr><td>A gunshot</td><td>5</td><td>Attack</td></tr>
+    <tr><td>A fast-moving object (25 m/s or more)</td><td>4</td><td>Attack</td></tr>
+    <tr><td>A loose gun</td><td>3</td><td>Attack</td></tr>
+    <tr><td>An impact</td><td>3</td><td>Problem</td></tr>
+    <tr><td>A slow-moving object (7 m/s or more)</td><td>2</td><td>Problem</td></tr>
+    <tr><td>The whip landing</td><td>1</td><td>Problem</td></tr>
+  </tbody>
+</table>
+</div>
+<ul>
+  <li><strong>A thud can be an attack.</strong> A problem is searched for as an attack instead when the officer knows Ruby is about, or when the newest news of her is under 15 seconds old and within 20 m of it.</li>
+  <li><strong>Moving bodies.</strong> Only a body on the chain or tumbling counts, never an officer standing or walking. Each one is reacted to once every 5 seconds.</li>
+  <li><strong>Bodies and guns the squad knows about.</strong> One the squad has never reported goes on its books and is checked. One it already knows about only gets a <strong>glance</strong>: the officer faces it and looks for a moment from where they stand, and is wary from then on.</li>
+  <li><strong>What sends someone straight to a fight:</strong> seeing Ruby, seeing her drag or throw an officer, seeing a squadmate on a job go down, and being told she's here by someone who sees her.</li>
+</ul>
+
+<h4>What they know</h4>
+<ul>
+  <li><strong>What they know beats what's true.</strong> Each officer remembers the newest thing they know of Ruby: what they saw, heard or were told, or the squad's shared picture, whichever is newer. Out of sight, nobody ever knows her real position.</li>
+  <li><strong>The squad's shared picture</strong> updates every 0.7 s (Intel Interval), so it lags a little behind what anyone saw. It also holds the bodies and loose guns the squad has reported.</li>
+  <li><strong>They call out what they see.</strong> While they see Ruby, an officer shouts her position at once and then every 2 s. Officers within 9 m along the floor learn it immediately, and so does everyone in the speaker's room when it's a small room. A shout doesn't carry through a wall. <strong>Everyone who hears joins the fight.</strong></li>
+  <li><strong>They call out the vanish.</strong> When Ruby slips out of sight, the officer says once where she vanished and which way she was heading.</li>
+  <li><strong>They never forget her face.</strong> Once an officer has seen Ruby, or been told she's about by someone who has, they know she's in the building, for good. From then on they patrol aggressively.</li>
+</ul>
+
+<h3 id="working-together">Working together</h3>
+<h4>Group jobs: checking things as a team</h4>
+<p>One disturbance becomes one <strong>job</strong>, and up to 6 officers work it together. A sound or sight within 5 m (Job Match Radius) of a job's places goes to that job instead of starting another, and two jobs about the same place merge. Free officers nearby are called in to fill an open job.</p>
+<ul>
+  <li><strong>A Check</strong> is for a problem. The lead reacts first (0.68 s), then calls the others in one at a time (0.8 s apart). One officer, the checker, goes to the spot and looks; the rest follow 5 m behind. Then they stand down together.</li>
+  <li><strong>A Search</strong> is for an attack. The team walks to the source first, stopping within 5 m of it, then spreads out to clear the area. The area is every room the floor reaches within 15 m of the source, searched whole out to its walls, plus open ground in no room.</li>
+  <li><strong>Clearing by sight.</strong> The area is split into points about a metre apart, and a point is cleared when anyone sees it. Each member walks to the nearest unseen point nobody else has claimed, nearest on foot rather than in a straight line, sweeping their view as they go at a slow creep, and moves on as soon as it's seen. The search ends once every point is seen and at least 7 s (Search Minimum Time) have passed. A point nobody can reach is dropped with a warning.</li>
+  <li><strong>A search grows.</strong> Something new near the area adds the rooms round it to the search. A gunshot inside it throws away what was seen, so they look again.</li>
+  <li><strong>Telling.</strong> A member who has seen Ruby tells the rest of the job she's about. Being told isn't seeing: only an officer who has seen her can tell others.</li>
+  <li><strong>Distractions on a search.</strong> An ordinary disturbance sends one member to check it. A serious one (a gunshot, an unreported body, an officer seen flying) brings the whole job there, keeping its search.</li>
+  <li><strong>The third look is an attack.</strong> From the third job an officer is put on, every job they join is a Search for an attack.</li>
+  <li><strong>A job mate going down</strong> in their sight sends the others after Ruby.</li>
+</ul>
+
+<h4>Fights</h4>
+<ul>
+  <li><strong>One fight per floor.</strong> Everyone hunting Ruby on a floor is in one fight, all equal. <strong>Contact is shared:</strong> while anyone in the fight sees her, nobody gives up.</li>
+  <li><strong>Firing spots.</strong> Each armed officer with Ruby in sight claims a firing spot of their own round her, at least 2 m from anyone else's, favouring a different angle from their mates'. A fight spreads into a loose crossfire instead of closing along one line.</li>
+  <li><strong>The glimpse grace.</strong> Sight flickers at a crate's edge, so Ruby counts as gone only after a quarter second without it. Meanwhile they hold their spot and keep the gun on where she was, without firing.</li>
+  <li><strong>Covering the ways out.</strong> Out of sight, the fight finds the ways out of where Ruby vanished: doorways, corridor ends, directions across an open room, out to 8 m of floor. The way she was heading goes to the nearest officer, every other opening gets an officer before any gets a second, and no route takes more than two. Everyone else spreads round the area at least 2 m apart. On arrival they face outward, down their route. A route holder keeps their route when a new call-out moves the plan a little.</li>
+  <li><strong>Losing her.</strong> When nobody in the fight has seen Ruby for 5 s (Lose Sight Time), the fight is lost. The officers hold the Lose beat, then start a Search job where they lost her, grown toward where she was heading. Officers past the job's cap patrol aggressively instead.</li>
+  <li><strong>Provoked.</strong> An officer on a search who is disturbed 3 times within 15 s (two within 1.5 s count as one) has had enough of Ruby and goes after her, to where the last disturbance came from. They see her only with their own eyes, in their cone, until a hit gives their all-round fighting sight back.</li>
+</ul>
+
+<h3 id="rooms">Rooms</h3>
+<ul>
+  <li>A <strong>room</strong> is placed in the scene: one or more rectangles with a name, edited with handles like patrol areas. Rooms can sit inside bigger rooms, and the smallest room holding a point is the one that counts. Overlaps that make that ambiguous are warned about when the scene loads.</li>
+  <li><strong>Each room can have its own behaviour map</strong>, so the same thing is ignored in one room and searched for in another. A point in no room uses the level's default map.</li>
+  <li><strong>Searches go by room:</strong> a room the search reaches is searched whole. A shout fills the speaker's room, when it's a small one.</li>
+  <li><strong>The firing range.</strong> An officer posted at a range spot practises with real shots every 1.2 to 2.5 s, and the range's map stops those shots alarming anyone.</li>
 </ul>
 
 <h3>States</h3>
-<p>An officer is always in exactly one state. Five are AI states it chooses for itself; three are done <em>to</em> it.</p>
+<p>An officer is always in exactly one state. Five are AI states they choose for themselves; three are done <em>to</em> them. Moving, firing, seeing and remembering aren't states: they run alongside whatever state the officer is in.</p>
 <div class="table-wrap">
 <table>
   <thead><tr><th>State</th><th>Kind</th><th>Enters when</th><th>Leaves when</th></tr></thead>
   <tbody>
-    <tr><td>Idle</td><td>AI</td><td>No route for his mode</td><td>Sees Ruby or is hurt → Aggro; hears or notices something → Searching; a route appears for his mode → Patrol</td></tr>
-    <tr><td>Patrol</td><td>AI</td><td>Has a route for his mode</td><td>Sees Ruby → Aggro; hears or notices something → Searching; no route for his mode → Idle</td></tr>
-    <tr><td>Aggro</td><td>AI</td><td>Sees Ruby, is hurt, or gets up</td><td>Loses Ruby for 1.5 s, or holds 1.5 s at the last spot he knew → Searching</td></tr>
-    <tr><td>Searching</td><td>AI</td><td>Lost Ruby, or heard or noticed something</td><td>Sees Ruby → Aggro; the search finishes → Idle or Patrol</td></tr>
-    <tr><td>Rearm</td><td>AI</td><td>Unarmed, with a free gun within 10 m</td><td>Picks one up, or none left → Aggro</td></tr>
-    <tr><td>Grabbed</td><td>Imposed</td><td>The whip lands on it</td><td>Thrown or dropped → Ragdoll</td></tr>
+    <tr><td>Idle</td><td>AI</td><td>No route for their mode</td><td>Sees Ruby or is hurt → Aggro; senses something → Searching; a route appears → Patrol</td></tr>
+    <tr><td>Patrol</td><td>AI</td><td>Has a route for their mode</td><td>Sees Ruby → Aggro; senses something → Searching; no route → Idle</td></tr>
+    <tr><td>Aggro</td><td>AI</td><td>Sees Ruby, is hurt, is told, or gets up</td><td>Nobody in the fight has seen Ruby for 5 s → Searching; unarmed with a free gun near → Rearm</td></tr>
+    <tr><td>Searching</td><td>AI</td><td>Lost a fight, or sensed something</td><td>Sees Ruby → Aggro; the search finishes → Idle or Patrol</td></tr>
+    <tr><td>Rearm</td><td>AI</td><td>Unarmed, with a free gun within 12.5 m</td><td>Picks one up, or none left → Aggro</td></tr>
+    <tr><td>Grabbed</td><td>Imposed</td><td>The whip lands on them</td><td>Thrown or dropped → Ragdoll</td></tr>
     <tr><td>Ragdoll</td><td>Imposed</td><td>Knocked down, thrown or dropped</td><td>Settles, gets up (1 s) → Aggro</td></tr>
     <tr><td>Dead</td><td>Imposed</td><td>Health reaches 0</td><td>Never</td></tr>
   </tbody>
@@ -807,56 +908,55 @@ a { color: var(--accent); }
 </div>
 
 <h4>Idle</h4>
-<p>Holds its post until it sees Ruby or is hurt, either of which sends it into Aggro; an unarmed officer also goes for a free gun nearby. A sound or something it notices sends it to search the spot (see <a href="#officer-senses">What an officer hears, notices and knows</a>). <strong>Where it starts is its post.</strong> After a search, a fall or a shove, it walks back and turns the way it started, faster once it's aggressive. If the way back takes more than 20 seconds (another officer standing on the post, say), it stays where it is and tries again once it's next at its post. An idle officer given an Aggressive route walks it once he's aggressive; without one he stays at his post, alert.</p>
+<p>Holds their post until they see Ruby or are hurt, either of which sends them into Aggro. A disturbance sends them to check it (see <a href="#officer-senses">What an officer sees, hears and knows</a>). <strong>Where they start is their post.</strong> After a search, a fall or a shove, they walk back and turn the way they started. If the way back takes more than 20 seconds (another officer standing on the post, say), they stay where they are and try again next time. An idle officer given an Aggressive route walks it once they're aggressive; without one they stay at their post, alert. An officer posted at a firing range practises there (see <a href="#rooms">Rooms</a>).</p>
 
 <h4>Patrol</h4>
 <ul>
-  <li>Walks its patrol route at 7 m/s, pausing 2.5 s at each stop. A stop can set its own pause.</li>
+  <li>Walks the patrol route at 4 m/s, pausing 2.5 s at each stop. A stop can set its own pause. During a long pause (10 s or more) they move about the stop every 3 to 6 s instead of standing frozen.</li>
   <li>Each stop is an <strong>area</strong>, not an exact point: a circle, or a rectangle lined up with the grid, so it can fill a room or run along a corridor. The officer heads for its centre, and if the centre is occupied, the nearest open spot inside the area counts as reached.</li>
-  <li><strong>Mode</strong> sets the order: Loop (0, 1, 2, 0), Ping Pong (0, 1, 2, 1) or Random. Random picks any stop except the one the officer is at and the one it just came from. With two stops it goes back and forth; with three it can only go round.</li>
-  <li><strong>A route with one stop 4 m or more across is wandered</strong>: a circle 4 m wide (2 m radius) or a rectangle whose longer side is 4 m. The officer walks to random open spots inside it, each at least a quarter of the way across, pausing at each, so a 2 × 10 m corridor gets paced along. It only picks ground it can reach without leaving the area, so an area drawn across a wall is wandered on its centre's side. A smaller single stop means "stand here". The Scene view labels a wandered stop "0 · wander".</li>
-  <li>After being pulled off its route, it rejoins at the nearest stop, not the first.</li>
-  <li><strong>Aggressive.</strong> Once an officer has been after Ruby or has seen her, he patrols aggressively and never goes back. (A level-wide alert from the first Aggro was tried and removed for now: only what an officer himself has been through counts.) He walks his <strong>Aggressive route</strong> if he has one (a second route, placed the same way, with an A before each stop's number in the Scene view) and otherwise keeps walking his Safe route. He walks 25% faster and spends each pause looking around instead of standing, turning side to side. The Inspector says which rule applies to an officer with no Aggressive route.</li>
-  <li>A stop it can't reach is skipped with a warning. If every stop fails, it waits 3 s and tries again.</li>
-  <li>Routes are edited with handles in the Scene view, on the officer itself. Drag a circle's rim dot to size it, or a rectangle's edges, as on a Box Collider.</li>
+  <li><strong>Mode</strong> sets the order: Loop (0, 1, 2, 0), Ping Pong (0, 1, 2, 1) or Random. Random picks any stop except the one the officer is at and the one they just came from.</li>
+  <li><strong>A route with one stop 4 m or more across is wandered</strong>: the officer walks to random open spots inside it, pausing at each, so a long corridor gets paced along. A smaller single stop means "stand here". The Scene view labels a wandered stop "0 · wander".</li>
+  <li>After being pulled off their route, they rejoin at the nearest stop, not the first.</li>
+  <li><strong>Aggressive.</strong> Once an officer knows Ruby is about, they patrol aggressively for good. They walk their <strong>Aggressive route</strong> if they have one (a second route, with an A before each stop's number in the Scene view) and otherwise keep walking their Safe route, 20% faster, looking around at each pause.</li>
+  <li>A stop they can't reach is skipped with a warning. If every stop fails, they wait 3 s and try again.</li>
+  <li>Routes are edited with handles in the Scene view, on the officer. Drag a circle's rim dot to size it, or a rectangle's edges, as on a Box Collider.</li>
 </ul>
 
 <h4>Aggro</h4>
 <ul>
-  <li>Entered on seeing Ruby, on taking damage, or on getting up after being knocked down.</li>
-  <li>Chases Ruby at 10 m/s along the floor's shared chase paths. Armed, with her in sight, it keeps the pistol's 5–6 m band instead, and fires as it moves (see <strong>Pistol</strong>).</li>
-  <li>Stays in contact while Ruby is in sight, at any distance. Out of sight it never knows where she really is, so staying out of sight for Lose Sight Time ends a fight.</li>
-  <li>Farther away than that he still sees her, so he keeps learning where she is and calling it out. The radius only decides when the hunt ends: past it, the timer below runs even with her in sight, and then he searches where he last saw her.</li>
-  <li>It starts Searching after <strong>1.5 seconds</strong> of walking without contact. If it reaches the spot it knew first, it <strong>holds there for 1.5 seconds</strong> before giving up, because Ruby may be just past it. It never gives up while it is in contact with her, and seeing her again restarts the hold.</li>
-  <li>If it can't see Ruby and knows nothing of where she is, it searches where it stands.</li>
+  <li>Entered on seeing Ruby, on taking damage, on being told by a squadmate who sees her, or on getting up after being knocked down. From a calm state it starts with the Draw beat.</li>
+  <li>In sight, they hunt Ruby at 13 m/s. Armed, they walk to a firing spot and fire as they move (see <strong>Pistol</strong> and <a href="#working-together">Fights</a>).</li>
+  <li>Out of sight, they cover a way out of where she vanished, or spread round the area, and look outward. They know her path, never her position.</li>
+  <li>When nobody in the fight has seen her for 5 s, they hold the Lose beat and start searching. Knowing nothing at all of her ends the hunt at once.</li>
 </ul>
 
 <h4>Searching</h4>
 <ul>
-  <li>Searches at 6 m/s. After a fight it goes where the chase was leading when it gave up, since that's where Ruby went, not where she slipped out of view. After a sound or a sight it goes to the spot that sent it there: where a thrown body was thrown from, a gunshot's muzzle, a body, a loose gun. It heads for within 1.5 m of the spot, so a second officer sent to the same place looks from beside the first instead of pushing at him.</li>
-  <li><strong>Once there he looks around</strong>, turning his body side to side, and how long depends on why he came. For an <strong>attack</strong> (a gunshot, a body, a fast object, a lost fight, or anything once he has seen Ruby) he searches for <strong>10 seconds</strong>, counted from arrival and not from the sound. For a <strong>problem</strong> (a thud) he looks for 1.5 seconds, gestures that all is clear, holds for a second, and goes back to his patrol. Either way he then returns to Idle or Patrol, and a spot he hasn't reached after 20 seconds he searches from where he stands.</li>
-  <li><strong>A search gives way only to something worth more.</strong> A sound with a higher priority sends him there instead and restarts the search. A search after a lost fight outranks every sound.</li>
-  <li><strong>A lesser disturbance distracts him.</strong> One of equal or lower priority doesn't change his search, but he notices it: he turns toward it and the search waits a second, then carries on. A thrown bottle at a man searching a corpse turns his head without ending the search. Two within 2 seconds count as one (a tumbling body thuds many times, and a burst of shots is one event). <strong>On the third inside 12 seconds the jig is up</strong> (the count ends with the search, so a new one starts from none): he aggros, taking where the last disturbance came from as where Ruby is. A body or gun doesn't tell him where she is, so he aggros with what he already knows. Only an officer already searching is distracted: an idle or patrolling one goes to check.</li>
-  <li>Each officer decides alone for now, so two sent to one sound can differ: one who has seen Ruby searches for an attack while one who hasn't checks a problem and stands down. Searching as a team, and searching a room and checking behind things, are <span class="planned">Planned</span>.</li>
+  <li>Searches at 3 m/s, after a Notice beat when they were idle or patrolling. Most searches are group jobs (see <a href="#working-together">Working together</a>).</li>
+  <li><strong>A problem</strong> gets a quick look: 2 s of looking round, then the Stand Down beat, then back to their post or route.</li>
+  <li><strong>An attack</strong> gets a Search job that clears the area room by room. An officer searching alone (a glance, or a scene with no Intel object) looks round for 15 s.</li>
+  <li>A spot they can't reach within 30 s is searched from where they stand.</li>
+  <li><strong>A search gives way only to something worth more.</strong> A higher-priority disturbance sends them there instead. A lesser one distracts them: they turn toward it for 1.5 s, then carry on, and it counts toward being provoked (see <a href="#working-together">Fights</a>).</li>
 </ul>
 
 <h4>Rearm</h4>
 <ul>
-  <li>An officer without a gun goes for the nearest <strong>free</strong> one within 10 m (Rearm Radius): lying still, not on Ruby's chain, and not already claimed by another officer, so two never race for one gun.</li>
-  <li>It runs there at chase speed and picks the gun up just before touching it, so it never kicks it away. A gun against a wall or in a corner, where it can't get right up to it, it picks up from as far as 1 m. The gun sits in its hand exactly as the starting gun did. Then it goes back to hunting.</li>
-  <li>If the gun starts moving (Ruby yanks it away), is taken, or can't be reached, the officer tries the next one. With none left it chases Ruby unarmed, and waits 3 s before looking again. A gun it couldn't reach gets another try once it has moved, or after 10 s.</li>
+  <li>An officer without a gun goes for the nearest <strong>free</strong> one within 12.5 m (Rearm Radius): lying still, not on Ruby's chain, and not already claimed by another officer, so two never race for one gun.</li>
+  <li>They run there at chase speed and pick the gun up just before touching it, so they never kick it away. A gun against a wall or in a corner they pick up from as far as 1 m. Then they go back to hunting.</li>
+  <li>If the gun starts moving (Ruby yanks it away), is taken, or can't be reached, they try the next one. With none left they chase Ruby unarmed, and wait 3 s before looking again.</li>
 </ul>
 
 <h4>Grabbed</h4>
 <ul>
-  <li>Held by Ruby's chain, tied upright in one piece, even if it was already down or dead. Its pistol pops out of its hand, and it can't move on its own: it's dragged, reeled, spun and thrown like any object. While held it stops bullets, so Ruby can use it as a shield.</li>
-  <li>Thrown, it goes limp and hits whatever it flies into.</li>
-  <li>Dropped with a quick right-click tap, it falls limp where it is. If Ruby was spinning it, it flies out limp along her aim instead.</li>
+  <li>Held by Ruby's chain, tied upright in one piece, even if they were already down or dead. Their pistol pops out of their hand, and they can't move on their own: they're dragged, reeled, spun and thrown like any object. While held they stop bullets, so Ruby can use them as a shield.</li>
+  <li>Thrown, they go limp and hit whatever they fly into.</li>
+  <li>Dropped with a quick right-click tap, they fall limp where they are. If Ruby was spinning them, they fly out limp along her aim instead.</li>
+  <li>Officers who see a squadmate grabbed search round them, and go for Ruby when she drags one.</li>
 </ul>
 
 <h4 id="ragdoll">Ragdoll</h4>
 <ul>
-  <li>Knocked down, thrown or let go, the officer goes limp and tumbles on its own skeleton. Once it settles, it stands still for Get Up Time (1 s), then hunts in Aggro. A hit at Knockdown Speed during the get-up knocks it down again.</li>
+  <li>Knocked down, thrown or let go, the officer goes limp and tumbles on their own skeleton. Once they settle, they stand still for Get Up Time (1 s), then hunt in Aggro, with no draw. A hit at Knockdown Speed during the get-up knocks them down again.</li>
 </ul>
 
 <h4>Dead</h4>
@@ -868,12 +968,14 @@ a { color: var(--accent); }
 </ul>
 
 <h3>Planned behaviour <span class="planned">Planned</span></h3>
+<p>Enemy States 0.2 is finished as built. These were left for later:</p>
 <ul>
-  <li><strong>A real gesture and look-around.</strong> Looking around and the all-clear gesture use a plain body turn and a pause for now. Animations for both come with the animation work.</li>
-  <li><strong>Searching together.</strong> Up to three officers check a disturbance as a team: one goes to the spot while the others follow behind. Fights get squads, with fire lanes.</li>
-  <li><strong>Afraid.</strong> The step after aggressive. It might hide in a corner with its gun, flee the building, hunt Ruby down or cower.</li>
-  <li><strong>Police boss.</strong> A second enemy with Aiming, Patrol, Searching, Firing, Grabbed and Ragdoll states.</li>
-  <li><strong>Melee officers</strong>, once melee weapons exist.</li>
+  <li><strong>Patrolling together.</strong> Leaders with groups of two or three, followers breaking off to search a room and rejoining.</li>
+  <li><strong>Activity spots and alarms</strong>, once there are models for them: officers at desks, at a TV, cleaning guns, and alarms they switch off and grow suspicious of.</li>
+  <li><strong>Breakables:</strong> light fixtures and props that can be ripped down or broken.</li>
+  <li><strong>Cover, squad tactics by headcount, and reading Ruby</strong> (how her grabbing or hiding changes their aggression) are paused. Taking and using cover was skipped.</li>
+  <li><strong>Real animations</strong> for the beats, the look-around and the all-clear gesture.</li>
+  <li><strong>Police boss</strong> and <strong>melee officers</strong>, once melee weapons exist.</li>
 </ul>
 
 <h2 id="level"><span class="num">9</span>Level 1: Police Station</h2>

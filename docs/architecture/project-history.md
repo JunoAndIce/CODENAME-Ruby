@@ -100,8 +100,12 @@ Out of sight the fight now floods once from where Ruby vanished, finds the openi
 hunter down each (two at most) and spreads the rest round it facing outward; and a searcher clears the nearest
 point by walking distance. **Built** 2026-11-20; scripted Play checks pass; awaiting the user's play-test.
 
+**Enemy States 0.2 closed 2026-11-20** (user: "Lets close out enemy states for now"). What it built is in the spec's
+Progress (`docs/specs/2026-10-28-enemy-states-0.2.md`) and the roadmap above. Left for later: patrolling together
+(piece 5 part B), activity spots and alarms (piece 7, waiting for models), breakables (piece 9), and roadmap steps
+6 and 7 (steps 4 and 5 skipped). The design manual and its PDF now cover all of it, with the officer section
+rewritten and the stats table brought up to the prefab's and test scene's current values.
+
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
 account of what is built, and its section on the Path Grid, colliders and navigation is written for
-new coders. It deliberately says nothing about enemy work still in progress, such as group jobs
-(done, but part of the enemy states work): the user's rule is that the manual waits until all of
-enemy states is finished.
+new coders. It held back the enemy states work until that closed (2026-11-20), and now covers it.

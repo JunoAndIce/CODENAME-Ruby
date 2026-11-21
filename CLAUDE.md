@@ -256,8 +256,9 @@ belong here.
 `docs/specs/` holds dated design documents written before implementation; `docs/design/` holds
 system UX notes (the grapple); `docs/plans/` holds the implementation plans. **Read the relevant spec
 before extending a system**; status headers can lag the code. What each built, and what comes next, is in
-[project-history.md](docs/architecture/project-history.md). The design manual (`docs/manual/`) waits
-until all of Enemy States 0.2 is finished before it covers any of it.
+[project-history.md](docs/architecture/project-history.md). The design manual (`docs/manual/`, with the PDF
+`docs/CODENAME-Ruby-Design-Manual.pdf` printed from it by headless Chrome) covers Enemy States 0.2 since it closed
+on 2026-11-20; keep it in step when officer behaviour or tuning changes.
 
 ## Unity/git
 
