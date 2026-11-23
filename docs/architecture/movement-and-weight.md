@@ -91,3 +91,12 @@ never push, and a few passes opened a doorway the crates had shut. Frictionless,
 author their velocity every step, so floor friction never slowed them, and default friction also held an
 enemy steering into a corner there instead of letting them slide off it. Bones keep default friction:
 a ragdoll should drag on the floor. A new character prefab takes the material on its root capsule too.
+
+**The one time a character doesn't author its velocity is on the chain**, so a held enemy (alive, or a
+corpse tied upright) gets its friction back in code: `EnemyMovement.DragFeet` slows their flat slide by
+Held Friction (10 m/s², on `EnemyController`) every physics step they're held, after the tether has solved.
+Frictionless, nothing slowed them: measured, a yanked enemy reached Ruby and coasted on at 0.67 m/s for good,
+sliding past her; with it they stop 2 m short of her within 0.8 s. A friction material on the capsule would
+have brought back the crate-dragging above, which is why it's a deceleration and not a material. The rope
+re-closes any gap each step, so it doesn't stop the chain moving them, and the parked spin re-adds what it
+takes (it holds its own speed, never reads it back off the body).

@@ -117,6 +117,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     [SerializeField, Min(0f)] private float _getUpTime = 1f;
     [Tooltip("How bright a corpse's colours are, as a share of the living enemy's, so the dead read at a glance.")]
     [SerializeField, Range(0f, 1f)] private float _corpseBrightness = 0.35f;
+    [Tooltip("Held on the chain, alive or dead, an enemy's feet still drag on the floor: their slide slows by this much, in m/s every second, so a yank or a drag doesn't send them gliding on. Their capsule has no friction (so they don't drag crates along by rubbing them), and nothing else slows them while held.")]
+    [SerializeField, Min(0f)] private float _heldFriction = 10f;
 
     [Header("Gun")]
     [Tooltip("Unarmed, an enemy goes for a free dropped gun within this radius. 0 = never re-arms.")]
@@ -358,6 +360,8 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     private void FixedUpdate()
     {
         _state.FixedTick();
+        // After the chain has solved this step (the grapple runs first), as the floor would.
+        if (IsHeld) Movement.DragFeet(_heldFriction);
         if (!Health.IsDead && !IsOverridden)
         {
             // After the state, which waits while a beat runs, so the beat has the last word on the feet and facing.
