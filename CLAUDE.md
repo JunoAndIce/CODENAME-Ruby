@@ -171,9 +171,14 @@ never also fires a bullet.
 ### `AimPoint` is the shared aim truth
 
 `PlayerController` computes `_aimPoint` in **both** control-scheme branches — mouse via a
-ground-plane raycast, gamepad synthesised as `position + forward * _gamepadAimDistance` — so
-consumers never branch on control scheme. `CameraFocus` and `GrappleController` both read it,
-through `ICameraTarget` and `IGrappleUser`.
+ground-plane raycast, gamepad as a reticle on a ring at the grapple's max chain length that the
+right stick turns round (`AimWithStick`; holding Aim/L2 frees it to be pushed like a cursor, and
+letting go of the stick snaps it back to the ring, as in Hotline Miami) — so consumers never branch
+on control scheme. `CameraFocus` and
+`GrappleController` both read it, through `ICameraTarget` and `IGrappleUser`. `PlayerReticle` draws
+it (a ring built in code, no collider) and replaces the hidden system pointer: the reticle **is**
+the aim point, so anything new that aims, picks a node or (soon) starts a spin reads `AimPoint`,
+never the mouse.
 
 ### Topic docs: read the one you're touching first
 

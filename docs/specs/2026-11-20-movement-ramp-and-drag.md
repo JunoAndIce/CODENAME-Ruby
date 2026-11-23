@@ -1,7 +1,17 @@
 # Movement ramp and drag
 
 **Status:** approved 2026-11-20; built without a separate plan (the user's call), one piece at a time: the ramp,
-then drag.
+then drag. **The ramp shipped (3722ba1). Drag was built, tried and removed on 2026-11-21, never committed.** The
+design below is kept as a record of what was tried.
+
+**What drag taught.** Swing and reel, as designed below, was too hard to control. Direct steer (the host heads
+straight for the aim at a weight-capped speed, the rope's length following it) replaced it. That still trailed the
+cursor: aiming only at the aim's position left the host behind by about its speed × 4 τ. Feeding the aim's own
+motion forward fixed the trailing, but it still reached the mouse too slowly. Weight was the limit: Ruby is 60 kg
+and an enemy or table 50 kg, so a square-root weight curve gave them 41% of the top speed. A higher top speed
+would carry a light crate past Knockdown Speed (25 m/s), so a drag would hit like a throw. A fourth-root curve
+(64% for an enemy) was the last step before the user dropped the feature. If drag comes back, start from direct
+steer with the aim's motion fed forward, and settle how weight should slow it first.
 
 ## Intent
 
