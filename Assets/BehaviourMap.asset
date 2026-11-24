@@ -14,23 +14,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: Ruby.Game::BehaviourMap
   _rows:
   - Kind: 5
-    Priority: 50
+    Priority: 5
     Response: 2
   - Kind: 3
-    Priority: 50
+    Priority: 4
     Response: 2
   - Kind: 0
-    Priority: 40
+    Priority: 5
     Response: 2
   - Kind: 1
-    Priority: 30
+    Priority: 3
     Response: 1
   - Kind: 2
-    Priority: 30
+    Priority: 1
     Response: 1
   - Kind: 4
-    Priority: 20
+    Priority: 2
     Response: 1
   - Kind: 6
-    Priority: 20
-    Response: 1
+    Priority: 3
+    Response: 2

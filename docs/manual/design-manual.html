@@ -196,6 +196,7 @@ a { color: var(--accent); }
     <tr><td>Spin Speed</td><td class="where">GrappleController</td><td class="num">32 m/s</td></tr>
     <tr><td>Spin Up Time</td><td class="where">GrappleController</td><td class="num">1 s</td></tr>
     <tr><td>Spin Bounce</td><td class="where">GrappleController</td><td class="num">0.7</td></tr>
+    <tr><td>Clothesline Fling (share of the chain's speed a floored officer leaves at)</td><td class="where">GrappleController</td><td class="num">0.5</td></tr>
     <tr><td>Throw Impulse</td><td class="where">GrappleController</td><td class="num">120</td></tr>
     <tr><td>Tap Threshold</td><td class="where">GrappleController</td><td class="num">0.3 s</td></tr>
     <tr><td>Full Charge Time</td><td class="where">GrappleController</td><td class="num">0.8 s</td></tr>
@@ -448,6 +449,9 @@ a { color: var(--accent); }
 
 <h4>Letting go of a spin</h4>
 <p>A right-click tap while spinning lets go. The object keeps its speed but is turned onto Ruby's aim, so it flies where she points. A spun officer flies out limp, tumbling (see <a href="#ragdoll">Ragdoll</a>). At 32 m/s it's well above Knockdown Speed and hurts whatever it hits.</p>
+
+<h4>The clothesline</h4>
+<p>The chain itself knocks people down where it moves fast enough. While the chain is pulled tight (a held spin, or a spin running out after Ruby lets go), any officer it sweeps across at Knockdown Speed or faster is floored and tumbles off the way the chain was moving, and the spin carries on. The chain moves faster the further out you go, from standing still at Ruby's hand to the spun object's own speed at the end, so only its outer part floors anyone: in a 40 m/s spin on an 8 m chain, the part beyond about 5 m. Officers close to Ruby stay standing, and the chain passes through them. A floored officer is sent off at Clothesline Fling (half) of the chain's speed where it caught them, slow enough that they don't floor the next officer they bump into. The chain does no damage; the spun object is what kills. A slow or still chain bends round officers as before.</p>
 
 <h3>Revolver</h3>
 <p>For now Ruby carries the officers' pistol model in her left hand. Pulling the trigger snaps her gun arm onto the cursor, and the shot leaves the muzzle in that same frame and flies flat to the cursor: a bullet always comes out of the barrel and goes where she aims, however fast the cursor moved. There's no delay. The gun stays in her hand when she's knocked down.</p>

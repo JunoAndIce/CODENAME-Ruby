@@ -193,12 +193,12 @@ MonoBehaviour:
   _bulletPrefab: {fileID: 3479739455237520935, guid: e2ebb2d34e24c2a49ad2f3111df81702, type: 3}
   _muzzle: {fileID: 3412596131734603948}
   _damage: 30
-  _knockback: 240
-  _bulletSpeed: 40
+  _knockback: 120
+  _bulletSpeed: 33
   _fireCooldown: 0.6
   _spread: 2
   _bulletLifetime: 2
-  _range: 12.5
+  _range: 15
   _minDistance: 5
   _droppedOnly:
   - {fileID: 3387325438042766178}

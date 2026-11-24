@@ -14,7 +14,7 @@ not active.
 | ------ | ------------------------------ | -------------------- | ----------------------------------------------------------------------------- |
 | attach | right click / right bumper     | hooks a node         | — (n/a, already attached)                                                     |
 | throw  | right click / right bumper     | — (attaches instead) | on a host: tap drops it; hold charges, and letting go cancels. On a fixed anchor: lets go |
-| pull   | space / q / left bumper        | — (n/a)              | tap: one crack bite; hold: reels the chain in. Does nothing on an immovable object |
+| pull   | space / q / left bumper        | — (n/a)              | tap: a yank (one hard bite); double tap (strictly timed) and hold: spins it where it is; hold: a steady reel, and letting go stops the host where it is; keep holding 0.25 s once it's in and it spins. Does nothing on an immovable object |
 | fire   | left click / e / right trigger | gun fires            | gun fires; while a throw charges, throws at the cursor instead, harder the longer charged |
 
 Move (WASD / left stick) and aim (mouse / right stick / arrows) stay live in
@@ -33,6 +33,22 @@ it never takes the gun either, apart from while a throw charges.
   The launching click held through the flight starts the charge on landing. Let
   go early, a buffered charge only cancels, so a click held a moment past landing
   can't drop what it just grabbed.
+
+- j-quote (2026-11-22): "flipping tables on their side should be a simple space bar press BUT space should also let the player pull as much as they want and still spin on hold." And: "We want the chain to reel in with hold space instead of flying at Ruby. This way the player has more control."
+  Built as tap and hold (docs/specs/2026-11-22-chain-feel.md): a press released within Pull Tap
+  Window (0.2 s) yanks; held past it, it reels at Reel Speed with no yank first, and letting go
+  stops the host there. Reeled all the way in, it parks and spins as before. Pull Impulse is now the
+  yank alone and Reel Speed the hold: the one-dial rule below held while tap and hold were the same
+  move, and they no longer are.
+  Since 2026-11-23 the yank is a real impulse (Yank Impulse, N s, divided by the host's weight, capped
+  at Yank Max Speed) rather than rope taken in: the user asked for weight to control the yank's speed,
+  and rope taken in hit the weight cap past a few centimetres, so the setting didn't set the strength.
+- j-quote (2026-11-23): "When holding to pull, sometimes spin will start which canbe annoying. We want Tap, Hold Pull, and Hold Spin to all feel nautral within the button, with good windows for each, but not too long that it's clunky." And: "Spin speed should stay fast, Ruby is superhuman."
+  Built as Spin Delay (0.25 s): reeled all the way in, the host holds there, and spins only if pull
+  keeps holding that long. A tap never spins. Spin speed stays the same for every weight.
+- j-quote (2026-11-23): "At any width around the player, double tapping space bar lets them spin at the radius without pulling in." Single tap: yank; double tap: spin; hold: pull; keep holding: spin. Asked whether the first tap still yanks: "double tap has to be pressed with strict timing otherwise yank comes out." The double-tap spin lasts while the second press is held.
+  Built as Double Tap Window (0.18 s from the tap's release); a single tap's yank waits it out.
+- j-quote (2026-11-23): "Tap should work as many times until the object is at minimum chain length." Taps stopped after the first: a yanked host coasted inside the rope and later taps only took up slack. A pull now hauls slack in first.
 
 - j-quote (2026-10-03): "Allow the player to shoot while grabbed. Lets add space bar as the pull option and set right click to throw."
   The push moved off the gun's trigger onto right click, and pull moved off right

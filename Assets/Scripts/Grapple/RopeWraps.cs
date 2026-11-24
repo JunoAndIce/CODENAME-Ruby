@@ -17,6 +17,7 @@ class RopeWraps
     readonly RaycastHit[] _hits = new RaycastHit[8];
     readonly Rigidbody _player;
     Rigidbody _host;   // the anchor's own body (null for none): the rope never catches on it
+    bool _passMovingBodies;   // this step: the rope passes through anything that moves (see Update)
 
     public RopeWraps(Rigidbody player) => _player = player;
 
@@ -24,10 +25,18 @@ class RopeWraps
 
     public void Clear() => _points.Clear();
 
-    /// <summary>Re-check the catches for this step, from the player to the anchor.</summary>
-    public void Update(Vector3 anchor, Rigidbody host)
+    /// <summary>
+    /// Re-check the catches for this step, from the player to the anchor. `passMovingBodies` (set
+    /// while the host spins, or fans out after one) lets the rope through anything that moves (enemies, crates, any
+    /// non-kinematic body), so only walls and fixed things catch it: walking moves a spin's circle
+    /// faster than it turns (2.4 m a turn at 40 m/s on 1 m, against a 2 m circle), so enemies and
+    /// crates end up inside it and the rope swept onto them before the host could, which stopped
+    /// the spin. The spun host is what should hit them. Catches already on a moving body unwrap.
+    /// </summary>
+    public void Update(Vector3 anchor, Rigidbody host, bool passMovingBodies)
     {
         _host = host;
+        _passMovingBodies = passMovingBodies;
         Vector3 head = _player.worldCenterOfMass;
 
         Vector3 first = _points.Count > 0 ? _points[0] : anchor;
@@ -45,8 +54,9 @@ class RopeWraps
         }
     }
 
-    // Nearest hit between two points that is not the player, not the anchor's own host body,
-    // and not the anchor's mount surface. Cheap: 1-2 casts per step.
+    // Nearest hit between two points that is not the player, not the anchor's own host body, not
+    // the anchor's mount surface, and (while spinning) not anything that moves. Cheap: 1-2 casts
+    // per step.
     bool Blocked(Vector3 from, Vector3 to, out RaycastHit valid)
     {
         valid = default;
@@ -63,6 +73,7 @@ class RopeWraps
             if (h.collider == null) continue;
             if (h.collider.attachedRigidbody == _player) continue;
             if (_host != null && h.collider.attachedRigidbody == _host) continue;
+            if (_passMovingBodies && h.collider.attachedRigidbody != null && !h.collider.attachedRigidbody.isKinematic) continue;
             if ((h.point - to).sqrMagnitude < mountSkip) continue;
             if (h.distance < best)
             {

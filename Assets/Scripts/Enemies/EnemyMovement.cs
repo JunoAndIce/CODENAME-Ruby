@@ -205,6 +205,21 @@ public class EnemyMovement
         return true;
     }
 
+    /// <summary>
+    /// Held on the chain: their flat slide slows by `deceleration` m/s² for this physics step, as
+    /// feet dragging on the floor would, and never reverses. The chain still moves them: the rope
+    /// re-closes any gap each step, so this only stops the coasting a yank, a stopped reel or a
+    /// bump leaves behind, which their frictionless capsule otherwise kept forever.
+    /// </summary>
+    public void DragFeet(float deceleration)
+    {
+        Vector3 flat = VelocityUtil.Flatten(_enemy.Body.linearVelocity);
+        float speed = flat.magnitude;
+        if (speed < 0.0001f) return;
+        float slower = Mathf.Max(0f, speed - deceleration * Time.fixedDeltaTime);
+        VelocityUtil.SetFlatVelocity(_enemy.Body, flat * (slower / speed));
+    }
+
     public void Stop()
     {
         _lastWalkStep = float.NegativeInfinity;

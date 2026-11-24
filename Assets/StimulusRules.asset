@@ -12,12 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cc3506c3356d85741b73f5b85f166b7c, type: 3}
   m_Name: StimulusRules
   m_EditorClassIdentifier: Ruby.Core::StimulusRules
-  _noticeSpeed: 4
-  _alarmSpeed: 15
+  _noticeSpeed: 7
+  _alarmSpeed: 25.1
   _originLifetime: 5
-  _gunshotLoudness: 25
-  _whipLoudness: 6
+  _gunshotLoudness: 20
+  _whipLoudness: 5
   _impactLoudness: 10
   _impactLoudnessPerSpeed: 0.5
   _impactLoudnessMax: 20
-  _impactCooldown: 0.25
+  _impactCooldown: 0.35

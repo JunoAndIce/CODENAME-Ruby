@@ -14,6 +14,14 @@ node rather than searching again. Sight is tested nearest first, so usually one 
 frame. When the whip lands, a `Tether` takes over. Design truths
 and the input map live in `docs/design/grapple-ux.md`.
 
+**The chain is drawn from Ruby's right hand** (`IGrappleUser.ChainHand`; the revolver is in her left),
+found on her humanoid rig at start, with an error if it isn't there. Only the drawing starts there: the
+rope's length, wraps, pull, spin and walk limit all work from her centre of mass, so the hand's sway
+never reaches the physics (moving that pivot to her side is a later step, in
+`docs/specs/2026-11-22-chain-feel.md`). The whip simulates at physics steps, so it's drawn in
+`LateUpdate` with its first point moved to the hand as posed that frame; pinned only at the steps, the
+chain's end trailed her interpolated hand at speed.
+
 `Tether` is a **velocity constraint, not a joint**: each physics step it enforces rope length by
 writing velocity onto the host, and tension reads out as the corrective impulse. The rope catches
 on geometry (`RopeWraps`: pivots found by linecasts). **The tether never moves Ruby** ("Ruby is
@@ -23,17 +31,151 @@ follow, the rope stops her walk instead (see **The rope stops the walk** below).
 **The pull button is the hand on the chain** (`Tether.Gripped`). Held, the rope keeps its length:
 reel and tap shorten it, and it yields only under a pull the servo can't absorb. Released, it's
 loose: it slides out as the ends separate, up to max chain length, and never takes slack back in by
-itself. That's what lets a host spun up while reeling fan out when you let go. Held at min length
-with a moving host **no heavier than the player** in hand, it's **parked**: the player is the pivot,
-so the chain moves only the host, and the host spins around the player (Spin Speed, on the
-GrappleController), which is what letting go flings out. The spin **revs up** rather than snapping
-to speed: the tether's own spin speed (`_spinNow`) closes a share of the gap to Spin Speed each
-step, reaching about 95% after Spin Up Time, like an arm winding up, and the host's sideways speed
+itself. That's what lets a host spun up while reeling fan out when you let go.
+
+**Her hand brakes a spin's fan-out** (`Tether.BrakeFanOut`). Let go of a spin and, while the rope runs
+out, her grip pulls along it toward her with Release Grip (2500 N), so the host slows by grip / its
+mass: the same grip for everything, so a light crate is caught almost at once and an enemy carries its
+momentum further, as a chain sliding through a hand would (the user's pick over heavier fanning out
+less). It acts only while rope is running out and only up to the host's own outward speed over the
+ground, so it stops the run without hauling the host back in, and along the rope, so the host curves
+round her as it fans out. It ends when the host slows below 0.5 m/s over the ground, the rope reaches
+max length, she grips again, or the rope catches on a corner. Both are measured against the ground,
+not against her: relative to her, walking away after letting go read as the host running out, so the
+brake towed it along behind her and the fan-out never ended. Measured on an enemy let go at 26 m/s: before, it reached max length (8 m) in
+0.32 s and the chain snapped it from 23 m/s to 2.7 m/s in one step; with the grip it slowed to a stop
+over 0.7 s and ran out to 6.4 m. Spin speeds are the same for every weight (the user: "Ruby is
+superhuman").
+
+**Spin speeds.** Reeled all the way in and held, the host spins at **Spin Speed Held** (40 m/s), the
+fastest: the full commitment, which the user wanted to hit hardest. **A double tap's spin grows with
+the radius** (`Tether.SpinSpeedAt`): Spin Speed at the park distance, rising in a straight line to Spin
+Speed Far (40 m/s) at max length. At one speed for every radius a wide spin turned
+slowly (26 m/s: 4.1 turns a second at 1 m, 0.52 at 8 m, 1.9 s a circle) and looked lazy, and at 26 m/s
+spun hits barely cleared Knockdown Speed (25): nothing during the rev-up, after a bounce, or on an enemy
+walking away, and light crates never killed. So Spin Speed's default is 32 m/s and wide spins go faster
+still. Damage per hit is closing speed x sqrt(spun kg / 60) against 20 HP: at 32 m/s a standing enemy
+dies to anything 30 kg and up, and knocks down from a 10 kg crate. The parked cap is sized for the
+faster of Spin Speed and Spin Speed Held at the park distance (about 36 m/s for 40 m/s on 1 m), which
+covers every radius: the inward pull a circle needs is speed² / radius, largest close in.
+
+**A tap of pull yanks; a hold reels steadily** (`GrappleController.UpdatePull`). The press cracks
+the whip at once; whether it was a tap is known on the release or once Pull Tap Window (0.2 s)
+passes. **The hand grips only for a press the reading took** (a tap deciding, a hold, a double tap):
+before, it gripped whenever the button was down, so a press it missed (held through the whip's flight,
+or made while a crack travelled) held the rope without reeling, and a host already at the park distance
+spun after Spin Delay with no hold to spin. Pull held through the flight now counts as a press the
+moment the whip lands, as a held right click buffers a charge.
+
+A tap is a **yank** (`Tether.Yank`, `YankStep`): when it lands, for a 0.2 s bite the host is hauled
+toward her, or toward the corner the rope bends round, at Yank Impulse (400 N s) / its mass: heavier
+comes slower in proportion (measured: an enemy at 8.0 m/s, a 30 kg crate at 13.4), never faster than
+Yank Max Speed (20 m/s, under Knockdown Speed, so a light crate yanked into someone doesn't hit like a
+throw; a 10 kg crate measured 20.0). The haul runs along the rope's own line, not flattened, and is
+held for the bite rather than kicked once: a table whose feet catch the floor is hauled on through its
+middle, and broadside it tips (measured: flipped, 174 degrees; end-on it slides). A single flat kick
+was tried first and tipped a broadside table 0 degrees: the feet caught, the table stopped, and nothing
+was left pulling. Left to friction, a broadside table lands on its side, its back or stays upright depending on the yank's strength and the distance. (A scripted tip, `Tippable`, which put it on its side every time, was built and removed on 2026-11-24: the user no longer wanted it.) The bite ends early once the host is in at the park distance, which is why a table
+yanked by a leg barely moves from close in: its park distance is measured to the far corner (about
+4.4 m).
+Before, a tap shortened the rope by Pull Impulse x 0.3 s and the servo closed the gap in one step, so
+the speed was the gap x 100 up to the weight cap: past about 8 cm every enemy yank hit the cap whatever
+the setting, and below it every weight came at the same speed, so the setting neither set the strength
+nor let weight show. **A pull starts from the taut length** (`Tether.Taut`, the shorter of the
+rope's length and how far it actually runs): a tap or a reel hauls in any slack first. A yanked host
+coasts on inside the rope, and loose rope never takes slack back by itself; pulling from the length alone spent every later tap on slack (measured: 3 m after
+one yank, more than a tap, so the second tap only cracked the whip). A hold never yanks: once the crack lands it **reels**
+at Reel Speed (5 m/s), never faster than the servo can pull this host (`Tether.ReelIn`), so the host
+comes in under control. **Letting go of a reel stops the host where it is** (`Tether.StopReel`): the
+next solve takes off its flat speed toward her, or toward the corner the rope bends round, measured
+against the ground (against her, walking toward the host would read as its approach and shove it
+away). The rope then goes loose as above. Before, every press yanked first and a released reel let
+the host coast on into her. The stop isn't applied after a spin, which still fans out. The crack
+alone was too short a tap window: 0.1 s on a short rope, under a normal click, so clicks read as
+holds and the yank was lost up close.
+
+**A strictly timed double tap spins the host where it is** (`Tether.SpinHere`). A tap's release
+starts Double Tap Window (0.18 s by default); a second press inside it cancels the yank and spins the
+host at the distance it's at, no reeling in, for as long as that press is held, then fans out like any
+spin (braked by her grip, above). Missed, the tap yanks: a single tap's yank lands once the window has
+passed since the release (and not before its crack), so **every tap's bite comes after the crack you
+see**, by about the press length plus the window. The crack starts on the press, the window on the
+release. That's the price of telling a tap from a double tap, so keep the window short. Starting the
+crack only once the yank is decided would line the two up, but adds the crack's travel on top. Slack is taken up first; it spins at once (a double tap is
+already deliberate, so Spin Delay doesn't apply). Caught on a corner it waits, held, and spins again
+once the rope is clear: measured, a 4.4 m spin swept its rope onto a corner within 0.75 s, and clearing
+the spin then ended it for good with the button still held. Measured clear of corners: an enemy spun
+at 4.6 m, reached 25 m/s, and fanned out to 5.7 m when let go.
+
+Held at min length
+with a moving host **no heavier than the player** in hand, and kept held there for **Spin Delay**
+(0.25 s, `Tether._spinArmed`), it's **parked**: the player is the pivot,
+so the chain moves only the host, and the host spins around the player (Spin Speed Held, on the
+GrappleController), which is what letting go flings out. **Fully reeled and held counts as held in
+however wide the host swings** (a double tap's spin still needs its rope taut): a swinging host reeled
+in speeds up as its circle shrinks (a skater pulling their arms in), and measured, an enemy let go from
+a double-tap spin and reeled back in reached 50 m/s by 1.75 m, more than the plain cap (about 8 m/s for
+an enemy) could pull any tighter, so it orbited out there, never counted as in and never parked until
+Ruby moved. Parked, the spin takes its speed in hand and the parked cap draws it in. Pulling it in with
+the parked cap before it parked was tried and fed the orbit (each step's correction added speed; it
+climbed to 145 m/s). **The spin waits for that beat** so tap, hold
+to pull and hold to spin are three moves on one button: before, a reel spun the host the moment it
+arrived, so holding to pull a little long spun it by accident, and a tap that brought it all the way in
+spun it while the bite held. Only the hand (`Gripped`) arms it, never a tap's bite; reeled in and let go
+before the delay, the host stops there like any reel. Once armed it stays armed until the hand lets go,
+so a bounce that stretches the rope for a step re-parks at once (measured: spun 0.27 s after arriving,
+and back to spinning the step after a bounce). The spin **revs up** rather than snapping
+to speed: the tether's own spin speed (`_spinNow`) closes a share of the gap to its full speed each
+step, starting from however fast, and whichever way, the host arrived. That start is the first step of
+each park (`_spinStarted`, not "wasn't parked last step": the rod step returns before the spin, so a
+park whose first step was a rod step began from the last spin's stale speed, direction and wall
+contact, and could read them as a bounce), reaching about 95% after Spin Up Time, like an arm winding up, and the host's sideways speed
 is set to it every step. It must not be read back off the host: the host moves in straight steps
 around a circle, the rod takes some of its sideways speed every step (about 10% at 27 m/s on a
-1.2 m radius), and a rev-up measured after that loss stalls far below Spin Speed. Above about
+1.2 m radius), and a rev-up measured after that loss stalls far below full speed. Above about
 30–40 m/s on that radius the host covers so much of the circle per physics step that it strobes
-rather than sweeps, so higher Spin Speeds don't read as faster.
+rather than sweeps, so higher spin speeds don't read as faster.
+
+**While the host spins, the rope passes through anything that moves** (`RopeWraps.Update`'s
+`passMovingBodies`): enemies, crates, any non-kinematic body; only walls and fixed things catch it.
+Walking moves a spin's circle faster than it turns (2.4 m a turn at 40 m/s on 1 m, against a 2 m
+circle), so enemies and crates ended up inside it and the rope swept onto them before the host could;
+a caught rope never parks, so walking stopped the spin, and walking into a crowd was exactly when.
+The spun host is what should hit them. Catches already on a moving body unwrap. **The fan-out after letting go
+of a spin passes through them too** (`Tether.IsFanningOut`): caught on the first enemy in its arc, the rope bent
+round them, the catch ended her hand's brake, and the clothesline (below) never got to floor them.
+
+**The fast part of the rope is a clothesline** (`Clothesline`, owned by the `GrappleController` beside
+`RopeWraps` and stepped after each solve). A taut rope (`Tether.IsTaut`: its path at its length, within 5 cm,
+so a held spin or the fan-out through her braking hand, never slack) swept across a body carrying an
+`IKnockdown` at Impact Rules' Knockdown Speed or faster floors it and carries on; slower rope passes through as
+above, so the spin never stops for a body. Only the rope's last span sweeps, from the last wrap (or her centre of
+mass) to the anchor. Each step it tests the **strip** swept between last step's span and this one, not the line:
+at spin speed a short rope turns a long way in a step, and a line test steps clean over whoever it passed. The
+speed is the rope's own, sideways, where it crossed them: it rises in a straight line from nothing at the pivot
+to the host's speed, so in a 40 m/s spin on 8 m only the rope beyond about 5 m floors anyone, and nobody close to
+Ruby. Because the speed is linear along the span, a step where neither end reached Knockdown Speed skips the scan
+(most of a held rope's life). The floored body goes over along the sweep at **Clothesline Fling** (0.5) of that
+speed, through `IKnockdown.KnockDown(launchVelocity)`: half keeps a 25 m/s sweep's launch under Knockdown Speed, so
+a floored enemy doesn't floor the next by bumping; 1 gives chain reactions. **No damage:** the impact formula
+weighs the hitter, and a chain weighs next to nothing; the spun host kills. Ruby and the host are never hit, one
+test per `IKnockdown` per step (a ragdoll's bones all lead to one), and an enemy already down stays down (their
+`KnockDown` guards; one getting up is floored again). A step whose pivot changed (the rope caught on a corner or
+came off one) tests nothing: the strip between the two spans would be meaningless. The first step of a new rope
+records only. **Impact Rules** must be assigned on the `GrappleController`, or it logs an error at start and the
+chain floors no one. Each hit logs `CLOTHESLINE <name> at <speed> m/s` (debug logs); with Ruby selected the last
+strip is drawn, gold if it floored anyone.
+
+**A spin starts toward the reticle** (`Tether.ChooseSpinDirection`). When a hold's spin arms (after
+Spin Delay, or at once on a double tap), it picks the short way round toward the aim point, which the
+grapple hands the tether before each solve (`Tether.AimPoint`): reticle left of the line from Ruby to
+the host, one way; right, the other, so the player picks which way it sweeps into a crowd by where they
+aim. A host already moving the other way revs up from standstill rather than snapping round. The
+choice is made once per hold: re-parking after a bounce or a corner catch while the button stays down
+keeps the way it was going (`_holdDirection`), so the reticle never undoes a bounce's reversal, and
+swinging the reticle mid-spin doesn't reverse it (the user's call: start-only is predictable). Within
+5 degrees of the line (ahead of the host, or straight behind her) the reticle picks no side and the
+spin keeps the host's own motion, a stated rule that logs as such.
 
 **A spun host bounces off what stops it.** The tether remembers which way the host goes round
 (`_spinDirection`). If a step leaves the host with less than half the sideways speed an
@@ -113,4 +255,4 @@ toward the anchor as soon as she stopped walking, and held her against walls (th
 reel, no grip on bare world, immovable objects or anything as heavy as her, so the rope never zips
 her anywhere. On a movable host the servo's cap is 20 m/s times the **square root** of the drag
 fraction: a gentler weight curve than walking drag, so heavier still comes in slower but an enemy
-(fraction 0.17) arrives at about 8 m/s rather than 3. The reel rate (Pull Impulse) caps it too.
+(fraction 0.17) arrives at about 8 m/s rather than 3. A hold's reel (Reel Speed) is capped by it too.

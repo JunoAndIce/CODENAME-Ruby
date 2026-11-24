@@ -21,8 +21,9 @@ public class Tether
     // Gap kept between the player and a held host's body at the park distance.
     const float Clearance = 0.1f;
 
-    /// <summary>A pull tap is this many seconds of the reel, landed at once.</summary>
-    public const float TapSeconds = 0.3f;
+    // How long a yank keeps hauling, in seconds (see YankStep).
+    const float YankBiteSeconds = 0.2f;
+
 
     // ---- the two ends -----------------------------------------------------------
 
@@ -43,9 +44,13 @@ public class Tether
     // (fraction 0.17) comes at 8 m/s rather than a sluggish 3. It always covers her drag speed,
     // since the root of a fraction is never smaller than the fraction.
     readonly float _pullSpeed;
-    readonly float _spinSpeed;              // a parked host's full speed around the player, m/s
+    readonly float _spinSpeed;              // a parked host's full speed around the player at the park distance, m/s
+    readonly float _spinSpeedFar;           // its full speed at max length; between the two it grows with the radius
+    readonly float _spinSpeedHeld;          // a spin reeled all the way in and held: the fastest, at its own speed
     readonly float _spinUpTime;             // seconds the spin takes to get close to full speed
     readonly float _spinBounce;             // share of its spin speed a parked host keeps when it bounces off something
+    readonly float _spinDelay;              // seconds the hand must hold the host in at the park distance before it spins
+    readonly float _releaseGrip;            // newtons her hand brakes the chain with as a let-go spin runs it out
     readonly float _parkedCorrectionSpeed;  // the servo's cap while parked (see the constructor)
 
     readonly Collider[] _playerColliders;
@@ -60,9 +65,13 @@ public class Tether
     // ---- the rope -----------------------------------------------------------------
 
     float _length;
+    float _pathLength;           // how far the rope actually runs, through any wraps, at the last solve
+    Vector3 _hostPivot;          // the last wrap, which the host's end pulls toward, while caught on a corner
+    float _yankSpeed;            // a yank's speed toward her for this host (see Yank)
+    float _yankLeft;             // seconds of the yank's bite still to haul
     readonly float _minLength;   // fully reeled, the chain becomes a rod at this length
     readonly float _maxLength;
-    bool _biting;                // a tap's bite is still being taken up; the hand holds until it is
+    bool _stopInward;            // a reel just stopped: the next solve halts the host's approach (see StopReel)
     readonly PassThrough _passThrough = new();   // player/host collisions, off while parked
     // What the host touches, for telling a spin's real hits from floor snags. Added to the host for
     // the tether's life (null for static-world nodes) and removed at End.
@@ -75,6 +84,12 @@ public class Tether
     /// slack back in by itself.
     /// </summary>
     public bool Gripped { get; set; }
+
+    /// <summary>
+    /// The user's aim point (the reticle), handed in before each solve: a spin starts the short way
+    /// round toward it (see ChooseSpinDirection).
+    /// </summary>
+    public Vector3 AimPoint { get; set; }
 
     public GrappleNode Node => _node;
     public Vector3 Anchor => _node.AnchorPoint;
@@ -111,12 +126,45 @@ public class Tether
     float _spinNow;
     float _spinDirection = 1f;   // +1 counter-clockwise from above, -1 clockwise
 
+    // The spin waits for a deliberate beat: the hand must hold the host in at the park distance
+    // for Spin Delay before it spins (armed), and stays armed until the hand lets go. Before, a
+    // reel spun the host the moment it arrived, so holding to pull a little too long spun it
+    // instead, and a tap that brought it all the way in spun it while the tap's bite held the rope.
+    float _heldInFor;
+    bool _spinArmed;
+    // A double tap's spin: the host spins at the distance it's at, not reeled in, while the hand
+    // holds (see SpinHere). _wrapped is whether the last solve had the rope caught on a corner.
+    bool _spinHere;
+    // Whether the spin has had its first step since it parked (see Spin). Not wasParked: the rod
+    // step returns before Spin, so a park whose first step was a rod step reached Spin with stale
+    // speed, direction and wall contact from the last spin, and could read them as a bounce.
+    bool _spinStarted;
+    // Which way round the reticle chose when this hold's spin armed (+1 counter-clockwise, -1
+    // clockwise, 0 none yet or the reticle was on the line), used by the spin's first step. After
+    // that first step, re-parks in the same hold keep the way it was going (_holdDirection), so a
+    // bounce's reversal or a corner catch isn't undone by the reticle. Both clear when the hand lets go.
+    float _chosenDirection;
+    bool _holdDirection;
+    // Within this angle of the line from her to the host, the reticle picks no side.
+    const float AimOnLineDegrees = 5f;
+    bool _wrapped;
+
+    // A spin the hand let go of, still fanning out: her hand brakes the chain as it runs out (see
+    // BrakeFanOut) until the host slows, the rope reaches max length, or she grips again.
+    bool _fanningOut;
+    // Below this speed over the ground (m/s), a fan-out is over.
+    const float FanOutDoneSpeed = 0.5f;
+
     bool IsFullyReeled => _length <= _minLength + 0.001f;
 
     public Tether(Rigidbody player, GrappleNode node, float length, float minLength, float maxLength,
-                  float spinSpeed, float spinUpTime, float spinBounce)
+                  float spinSpeed, float spinSpeedFar, float spinSpeedHeld, float spinUpTime, float spinBounce, float spinDelay, float releaseGrip)
     {
+        _spinDelay = spinDelay;
+        _releaseGrip = releaseGrip;
         _spinSpeed = spinSpeed;
+        _spinSpeedFar = spinSpeedFar;
+        _spinSpeedHeld = spinSpeedHeld;
         _spinUpTime = spinUpTime;
         _spinBounce = spinBounce;
         _player = player;
@@ -153,27 +201,107 @@ public class Tether
                                    + Footprint.Reach(_hostColliders, node.AnchorPoint) + Clearance);
         _length = Mathf.Clamp(length, _minLength, _maxLength);
         AttachDistance = Vector3.Distance(node.AnchorPoint, player.worldCenterOfMass);
+        _pathLength = AttachDistance;
 
         // Holding a host on a circle takes an inward pull of spin² / radius each step on top of any
         // ordinary correction. Under the plain cap a fast spin can't be held: the rope stretches
         // and the host unparks.
-        _parkedCorrectionSpeed = MaxCorrectionSpeed + _spinSpeed * _spinSpeed / _minLength * Time.fixedDeltaTime;
+        float closeIn = Mathf.Max(_spinSpeed, _spinSpeedHeld);   // the fastest spin at the park distance
+        _parkedCorrectionSpeed = MaxCorrectionSpeed + closeIn * closeIn / _minLength * Time.fixedDeltaTime;
     }
 
     // ---- verbs ------------------------------------------------------------------------
 
-    /// <summary>Shorten the rope by -delta metres. Reeling never pays out.</summary>
-    public void Reel(float delta) => _length = Mathf.Max(_minLength, _length + delta);
+    /// <summary>
+    /// Reel in at `speed` m/s for `seconds`, never faster than this host can be pulled (the
+    /// servo's weight-scaled cap), so the rope doesn't run ahead of a heavy host and stretch.
+    /// Reeling never pays out.
+    /// </summary>
+    public void ReelIn(float speed, float seconds)
+        => _length = Mathf.Max(_minLength, Taut - Mathf.Min(speed, _pullSpeed) * seconds);
 
     /// <summary>
-    /// A pull tap: TapSeconds of the reel at once. The bite becomes closing speed through the
-    /// servo, scaled by the host's weight, so a light host flies to you and a heavy one crawls.
+    /// The reel stopped mid-pull: at the next solve the host loses its speed toward the player (or
+    /// toward the corner the rope bends round), so it stays at the length reeled to instead of
+    /// coasting on into her. Not after a spin, which fans out as it always has.
     /// </summary>
-    public void Tap(float pullRate)
+    public void StopReel() => _stopInward = true;
+
+    /// <summary>
+    /// A double tap: spin the host at the distance it's at, without reeling it in, for as long as
+    /// the hand holds (Gripped). Any slack is taken up first, so it spins on a taut rope. It spins
+    /// at once: a double tap is already deliberate, so Spin Delay doesn't apply. A rope caught on a
+    /// corner never spins, so there it waits, held, and spins once the rope comes clear: a wide
+    /// spin in a room sweeps onto corners often, and dropping the spin the first time it caught one
+    /// ended it for good while the button was still held. False while it's waiting like that.
+    /// </summary>
+    public bool SpinHere()
     {
-        _length = Mathf.Max(_minLength, _length - pullRate * TapSeconds);
-        _biting = true;
+        if (!_spinnable) return false;
+        _length = Mathf.Max(_minLength, Taut);
+        _spinHere = true;
+        return !_wrapped;
     }
+
+    /// <summary>
+    /// A pull tap, the yank: for Yank Bite Seconds the host is hauled toward her (or toward the
+    /// corner the rope bends round) at `impulse` / its mass, so heavier comes slower in proportion,
+    /// as a real yank would, never faster than `maxSpeed`, so a light thing yanked into someone
+    /// doesn't hit like a throw. Slack is taken up first; the rope then goes slack behind the host as
+    /// it comes, and the next pull takes that up. Before, a tap shortened the rope and the servo closed
+    /// the gap in one step, so the speed was the gap x 100 up to the weight cap: past about 8 cm every
+    /// enemy yank hit the cap whatever the setting, and below it every weight came at the same speed.
+    /// </summary>
+    public void Yank(float impulse, float maxSpeed)
+    {
+        _length = Mathf.Max(_minLength, Taut);
+        if (_host == null) return;
+        _yankSpeed = Mathf.Min(impulse / _hostMass, maxSpeed);
+        _yankLeft = YankBiteSeconds;
+        TetherLog.Event($"YANK  {impulse:0} N s on {_hostMass:0} kg: {_yankSpeed:0.0} m/s toward her for {YankBiteSeconds} s");
+    }
+
+    // One step of a yank's bite: the host's speed toward her along the rope is brought up to the
+    // yank's speed if it's slower. Held for the whole bite, not kicked once: a table whose feet catch
+    // the floor stops dead after a kick, but hauled on through its middle while its feet hold, it
+    // tips (measured: a kick slid a table broadside and tipped it 0 degrees; the old pull along the
+    // rope, which kept hauling until its bite was taken up, flipped one over). Along the rope's own
+    // line, not flattened, so a low node (a table's leg) pulls up as well as in. The bite ends early
+    // once the host is in at the park distance.
+    void YankStep(Vector3 pivot, Vector3 reference, float pathLength)
+    {
+        _yankLeft -= Time.fixedDeltaTime;
+        if (pathLength <= _minLength + 0.05f)
+        {
+            _yankLeft = 0f;
+            return;
+        }
+        Vector3 inward = pivot - _node.AnchorPoint;
+        if (inward.sqrMagnitude < 0.0001f) return;
+        inward.Normalize();
+        float coming = Vector3.Dot(_host.linearVelocity - reference, inward);
+        if (coming < _yankSpeed) _host.linearVelocity += inward * (_yankSpeed - coming);
+    }
+
+    // Where a pull starts from: the rope's length with any slack hauled in first. A yanked host
+    // coasts on inside the rope, and loose rope never takes slack back by itself, so pulling from
+    // the length alone spent every later tap on slack: measured, 3 m of it after one yank, more than
+    // a whole tap, and the host never moved again. The hand hauling the chain is the player pulling,
+    // not the rope taking slack back.
+    float Taut => Mathf.Min(_length, _pathLength);
+
+    /// <summary>
+    /// The rope runs its full length (within Clothesline.TautTolerance): a held spin, or the fan-out
+    /// running out through her braking hand. Slack rope isn't a chain swept across anyone.
+    /// </summary>
+    public bool IsTaut => _pathLength >= _length - Clothesline.TautTolerance;
+
+    /// <summary>
+    /// A spin the hand let go of is running out, braked by her grip (BrakeFanOut). Like a spin, its
+    /// rope passes through anything that moves: caught on the first enemy in its arc, it bent round
+    /// them, the catch ended the brake, and the clothesline never got to floor them.
+    /// </summary>
+    public bool IsFanningOut => _fanningOut;
 
     /// <summary>
     /// Send the host along `direction` (the player's aim). Its velocity is replaced, not added to,
@@ -279,10 +407,16 @@ public class Tether
         _hasMoveLimit = false;
         bool wasParked = IsParked;
         IsParked = false;
+        // Taken once, whatever this step does, so a stop never lingers to catch a later approach.
+        bool stopInward = _stopInward && !wasParked;
+        _stopInward = false;
 
-        if (wraps != null && wraps.Count > 0)
+        _wrapped = wraps != null && wraps.Count > 0;
+        if (!Gripped) _spinHere = false;   // the hand let go of a double tap's spin
+
+        if (_wrapped)
         {
-            SolveWrapped(wraps);
+            SolveWrapped(wraps, stopInward);
             return;
         }
 
@@ -291,14 +425,44 @@ public class Tether
         if (dist <= 0.0001f) return;
         Vector3 dir = delta / dist;   // player -> anchor
 
-        bool held = Holds(dist);
+        _pathLength = dist;
+        bool held = Gripped;
         // A host that can park gets the parked cap already here, so the spin's own stretch
         // neither counts as overload (which pays rope out) nor rules out parking.
-        bool parkable = held && IsFullyReeled && _spinnable;
+        // Parkable reeled all the way in, or anywhere on a double tap's spin.
+        bool reeledIn = held && IsFullyReeled && _spinnable;
+        bool parkable = reeledIn || (_spinHere && Gripped);
+        bool runningOut = !held && dist > _length && _length < _maxLength;   // loose rope paying out this step
         PayOut(dist, held, parkable ? _parkedCorrectionSpeed : MaxCorrectionSpeed);
 
-        bool parked = parkable && IsFullyReeled && dist - _length <= _parkedCorrectionSpeed * Time.fixedDeltaTime;
+        // Reeled all the way in counts as held in however wide the host swings; a double tap's spin
+        // needs its rope taut. A swinging host reeled in speeds up as its circle shrinks (a skater
+        // pulling their arms in): measured, an enemy let go from a double-tap spin and reeled back in
+        // reached 50 m/s by 1.75 m, beyond what the plain cap (about 8 m/s for an enemy) could pull
+        // any tighter, so with the rope fully reeled it orbited out there, never counted as in, and
+        // never parked until Ruby moved. Parked, the spin takes its speed in hand and the parked cap
+        // draws it in. (Pulling it in with the parked cap before it parked was tried: each step's
+        // correction fed the orbit, and it climbed to 145 m/s.)
+        bool heldIn = reeledIn || (parkable && dist - _length <= _parkedCorrectionSpeed * Time.fixedDeltaTime);
+        // Only the hand arms it, never a tap. Once armed, a bounce that stretches the rope for
+        // a step re-parks at once rather than waiting out the delay again.
+        _heldInFor = Gripped && heldIn ? _heldInFor + Time.fixedDeltaTime : 0f;
+        if (!Gripped)
+        {
+            _spinArmed = false;
+            _chosenDirection = 0f;
+            _holdDirection = false;
+        }
+        else if (_heldInFor >= _spinDelay || _spinHere)
+        {
+            if (!_spinArmed) _chosenDirection = ChooseSpinDirection(dir);
+            _spinArmed = true;
+        }
+        bool parked = heldIn && (_spinArmed || wasParked);
         IsParked = parked;
+        if (!parked) _spinStarted = false;
+        if (wasParked && !parked && !Gripped) _fanningOut = true;   // the hand let go of a spin
+        else if (Gripped) _fanningOut = false;
         SetPassThrough(parked);
         // Spinning, she carries the host wherever she walks, so the rope doesn't hold her back.
         if (!parked) SetMoveLimit(-dir, dist, held);
@@ -306,6 +470,7 @@ public class Tether
         if (_host == null) return;   // nothing the rope can move
 
         _host.WakeUp();   // a sleeping body ignores velocity writes
+        if (stopInward) StopApproach(-dir);
         Vector3 relative = _host.linearVelocity - _player.linearVelocity;
         float cap = parked ? _parkedCorrectionSpeed : _pullSpeed;
 
@@ -317,7 +482,54 @@ public class Tether
 
         if (dist > _length + 0.0001f) CorrectHost(-dir, dist - _length, relative, cap);   // pull
 
-        if (parked) Spin(wasParked);
+        if (_yankLeft > 0f && !parked) YankStep(_player.worldCenterOfMass, _player.linearVelocity, dist);
+        if (_fanningOut) BrakeFanOut(dir, runningOut);
+        if (parked) Spin();
+    }
+
+    // Let go of a spin, the chain runs out through her hand, and her grip brakes it: Release Grip
+    // newtons along the rope, toward her, so the host slows by grip / its mass. A light crate is
+    // caught almost at once; an enemy carries its momentum further before she stops it, as a
+    // real chain sliding through a hand would. Only while rope is actually running out, and only
+    // up to the speed it runs out at: tension can stop the run, never haul the host back in. It
+    // acts along the rope, so the host curves round her as it fans out instead of flying off
+    // straight. Before, nothing slowed it: it left at the full spin speed until the chain snapped
+    // tight at max length and swung it round, which the user found exaggerated. Measured against
+    // the ground, not against her: relative to her, walking away after letting go read as the
+    // host running out, so the brake towed it along behind her and the fan-out never ended.
+    void BrakeFanOut(Vector3 dir, bool runningOut)
+    {
+        Vector3 ground = VelocityUtil.Flatten(_host.linearVelocity);
+        if (_length >= _maxLength || ground.magnitude < FanOutDoneSpeed)
+        {
+            _fanningOut = false;
+            TetherLog.Event($"FAN OUT done  len={_length:F1}");
+            return;
+        }
+        if (!runningOut) return;   // slack: the host coasts inside the rope, nothing pulls on it
+
+        Vector3 outward = VelocityUtil.Flatten(dir);
+        if (outward.sqrMagnitude < 0.0001f) return;
+        outward.Normalize();
+        float runOut = Vector3.Dot(ground, outward);   // the host's own run away from her
+        if (runOut <= 0f) return;
+        float slow = Mathf.Min(_releaseGrip / _hostMass * Time.fixedDeltaTime, runOut);
+        _host.linearVelocity -= outward * slow;
+    }
+
+    // Takes off the host's flat speed along `inward` (toward her, or the corner the rope bends
+    // round), so it stops where the reel left it. Measured against the ground, not against her:
+    // relative to her, walking toward the host would read as its approach, and cancelling that
+    // would shove it away at her walking speed.
+    void StopApproach(Vector3 inward)
+    {
+        inward = VelocityUtil.Flatten(inward);
+        if (inward.sqrMagnitude < 0.0001f) return;
+        inward.Normalize();
+
+        float closing = Vector3.Dot(_host.linearVelocity, inward);
+        if (closing > 0f) _host.linearVelocity -= inward * closing;
+        TetherLog.Event($"REEL STOP  took off {Mathf.Max(0f, closing):0.0} m/s of approach");
     }
 
     // Fix `error` metres by moving the host along `push`, at up to `cap` less however fast it
@@ -347,13 +559,6 @@ public class Tether
         _limitSlackSpeed = (limit - pathLength) / Time.fixedDeltaTime;
     }
 
-    // A tap holds the rope until its bite is taken up, so it lands even when the button came up
-    // before the crack did.
-    bool Holds(float pathLength)
-    {
-        if (_biting && pathLength <= _length + 0.0001f) _biting = false;
-        return Gripped || _biting;
-    }
 
     // Loose, the rope slides out to wherever the ends are. Held, it yields only to a stretch the
     // servo can't close in one step at `cap`: yielding to the small outward drift of circling
@@ -380,7 +585,7 @@ public class Tether
     // step closes a share of the gap, sized so it is about 95% there after Spin Up Time (three
     // time constants). It keeps going round the way it started, and something that stops it
     // bounces it back the other way instead of letting the spin grind it into a wall.
-    void Spin(bool wasParked)
+    void Spin()
     {
         Vector3 offset = VelocityUtil.Flatten(_node.AnchorPoint - _player.worldCenterOfMass);
         if (offset.sqrMagnitude < 0.0001f) return;
@@ -388,11 +593,24 @@ public class Tether
         Vector3 counterClockwise = Vector3.Cross(offset.normalized, Vector3.up);
         float along = Vector3.Dot(_host.linearVelocity - _player.linearVelocity, counterClockwise);
 
-        if (!wasParked)
+        if (!_spinStarted)
         {
-            // The rev-up starts from however fast, and whichever way, it arrived.
-            _spinDirection = along < 0f ? -1f : 1f;
-            _spinNow = Mathf.Abs(along);
+            _spinStarted = true;
+            if (_chosenDirection != 0f || _holdDirection)
+            {
+                // The way the reticle chose (or, re-parking in the same hold, the way it was going).
+                // Moving the other way already, it revs up from standstill rather than snapping round.
+                if (_chosenDirection != 0f) _spinDirection = _chosenDirection;
+                _chosenDirection = 0f;
+                _spinNow = Mathf.Max(0f, along * _spinDirection);
+            }
+            else
+            {
+                // The rev-up starts from however fast, and whichever way, it arrived.
+                _spinDirection = along < 0f ? -1f : 1f;
+                _spinNow = Mathf.Abs(along);
+            }
+            _holdDirection = true;
             _contacts.TakeWall();   // a wall touched before the spin began isn't a hit on it
         }
         else
@@ -413,8 +631,46 @@ public class Tether
         Vector3 tangent = counterClockwise * _spinDirection;
         float current = along * _spinDirection;
         float share = _spinUpTime > 0f ? 1f - Mathf.Exp(-3f * Time.fixedDeltaTime / _spinUpTime) : 1f;
-        _spinNow += (_spinSpeed - _spinNow) * share;
+        float full = _spinHere ? SpinSpeedAt(offset.magnitude) : _spinSpeedHeld;
+        _spinNow += (full - _spinNow) * share;
         _host.linearVelocity += tangent * (_spinNow - current);
+    }
+
+    // A double tap's spin speed at this radius: Spin Speed at the park distance, growing in a
+    // straight line to Spin Speed Far at max length. At one speed for every radius a wide spin
+    // turned slowly (an 8 m one took 1.9 s a circle, eight times a 1 m one) and looked lazy, so it's
+    // faster further out, which also hits harder there. Reeled all the way in and held, it spins at
+    // Spin Speed Held instead, the fastest: the full commitment, which the user wanted to hit
+    // hardest. The parked cap is sized for the faster of Spin Speed and Spin Speed Held at the park
+    // distance, which covers every radius: holding a host on its circle takes speed² / radius a
+    // step, largest close in (40 m/s at 1 m needs 16 m/s a step, inside a cap of about 36; at 8 m,
+    // 2).
+    float SpinSpeedAt(float radius)
+        => Mathf.Lerp(_spinSpeed, _spinSpeedFar, Mathf.InverseLerp(_minLength, _maxLength, radius));
+
+    // Which way round a spin starts: the short way toward the reticle, +1 counter-clockwise seen from
+    // above, -1 clockwise, so the player picks which way it sweeps into a crowd by where they aim.
+    // The reticle on the line from her to the host (ahead of it, or straight behind her) picks no
+    // side: 0, and the spin keeps whichever way the host was already moving. That's the rule for it,
+    // logged so it can't pass for a dropped choice.
+    float ChooseSpinDirection(Vector3 dir)
+    {
+        Vector3 toHost = VelocityUtil.Flatten(dir);
+        Vector3 toAim = VelocityUtil.Flatten(AimPoint - _player.worldCenterOfMass);
+        if (toHost.sqrMagnitude < 0.0001f || toAim.sqrMagnitude < 0.0001f)
+        {
+            TetherLog.Event("SPIN DIRECTION  no reticle direction: it keeps the way it's moving");
+            return 0f;
+        }
+        float side = Vector3.SignedAngle(toHost, toAim, Vector3.up);   // positive: clockwise seen from above
+        if (Mathf.Abs(side) < AimOnLineDegrees || Mathf.Abs(side) > 180f - AimOnLineDegrees)
+        {
+            TetherLog.Event($"SPIN DIRECTION  reticle on the line ({side:0} deg): it keeps the way it's moving");
+            return 0f;
+        }
+        float direction = side > 0f ? -1f : 1f;
+        TetherLog.Event($"SPIN DIRECTION  toward the reticle ({side:0} deg): {(direction > 0f ? "counter-clockwise" : "clockwise")}");
+        return direction;
     }
 
     // The sideways speed an unobstructed host keeps through one step: it moves in a straight line
@@ -431,9 +687,10 @@ public class Tether
 
     // Wrap pivots are static, so the rope genuinely redirects: the host's end servos toward the
     // last pivot, and the walk is limited along the player's own span, away from the first.
-    void SolveWrapped(IReadOnlyList<Vector3> wraps)
+    void SolveWrapped(IReadOnlyList<Vector3> wraps, bool stopInward)
     {
         SetPassThrough(false);   // a caught rope never parks
+        _fanningOut = false;     // caught on a corner, the corner takes the run, not her hand
         Vector3 playerPos = _player.worldCenterOfMass;
         Vector3 anchor = _node.AnchorPoint;
 
@@ -447,17 +704,21 @@ public class Tether
         float lastSpanLen = Vector3.Distance(prev, anchor);
         float pathLen2 = pathLen + lastSpanLen;
 
-        bool held = Holds(pathLen2);
+        _pathLength = pathLen2;
+        bool held = Gripped;
+        _hostPivot = wraps[wraps.Count - 1];
         PayOut(pathLen2, held, MaxCorrectionSpeed);
         SetMoveLimit(playerPos - wraps[0], pathLen2, held);
 
         if (_host == null) return;
 
         _host.WakeUp();
+        if (stopInward) StopApproach(wraps[wraps.Count - 1] - _host.worldCenterOfMass);
         float availN = _length - (pathLen2 - lastSpanLen);
         Vector3 hostPull = SolveEnd(_host, wraps[wraps.Count - 1], availN, _pullSpeed);
         _host.linearVelocity += hostPull;
         Tension = hostPull.magnitude * _hostMass / Time.fixedDeltaTime;
+        if (_yankLeft > 0f) YankStep(_hostPivot, Vector3.zero, pathLen2);
     }
 
     // The host's end against a static pivot. Returns the velocity change for the caller to apply.
@@ -482,7 +743,7 @@ public class Tether
         // The node and host may be destroyed by now (detaching because they were): don't read them then.
         string node = _node != null ? _node.name : "(destroyed)";
         string host = _host == null ? "static or gone" : $"{_host.name} m={_hostMass}";
-        string hand = Gripped ? "held" : _biting ? "bite" : "loose";
+        string hand = Gripped ? "held" : "loose";
         return $"node={node} len={_length:F1} hand={hand} tension={Tension:F0} playerSpeed={speed:F1} host=({host})";
     }
 }

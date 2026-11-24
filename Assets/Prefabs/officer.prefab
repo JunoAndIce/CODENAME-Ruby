@@ -162,35 +162,59 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c831a698db3d6ff49af932a190f63372, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyController
-  _chaseSpeed: 10
-  _patrolSpeed: 7
-  _searchSpeed: 6
-  _alertRadius: 12.5
-  _giveUpRadius: 16.5
-  _aggroTime: 1.5
+  _chaseSpeed: 13
+  _patrolSpeed: 4
+  _aggressiveSpeedFactor: 1.2
+  _searchSpeed: 3
+  _searchCreepFactor: 0.675
+  _turnSpeed: 360
+  _personalSpace: 2
+  _stuckTime: 0.98
+  _viewRange: 15
+  _viewAngle: 80
+  _closeRadius: 2.5
   _eyeHeight: 0.5
-  _searchDuration: 10
-  _grabPopUp: 3
-  _grabPopOut: 2
-  _getUpTime: 1
-  _corpseBrightness: 0.35
+  _draggedDistance: 1
+  _loseSightTime: 5
+  _drawTime: 0.5
+  _speakInterval: 2
+  _guessDistance: 10
+  _spotSpacing: 2
+  _attackNearRadius: 20
+  _attackNearTime: 15
+  _sentToLookThreshold: 3
+  _searchDuration: 15
+  _searchReach: 1.5
+  _searchTravelLimit: 30
+  _walkSweepAngle: 45
+  _followDistance: 5
+  _lookTime: 2
+  _standDownTime: 1
+  _noticeTime: 0.81
+  _loseTime: 0.5
+  _lookSweepAngle: 30
+  _lookSweepPeriod: 2
+  _distractionTime: 1.5
+  _distractionThreshold: 3
+  _distractionMemory: 15
+  _distractionGap: 0.8
   _safeRoute:
     _mode: 0
-    _points:
-    - _position: {x: -15.188435, y: -0.27581, z: -18.51728}
-      _shape: 0
-      _radius: 1.7232742
-      _size: {x: 2, y: 2}
-      _pauseTime: -1
-    - _position: {x: -27.381302, y: -0.27581, z: -10.143349}
-      _shape: 0
-      _radius: 3.069481
-      _size: {x: 2, y: 2}
-      _pauseTime: -1
+    _points: []
+  _aggressiveRoute:
+    _mode: 0
+    _points: []
   _nodePauseTime: 2.5
-  _stuckTime: 1.5
-  _routeRetryTime: 3
-  _rearmRadius: 10
+  _longPauseTime: 10
+  _pauseRoamMin: 3
+  _pauseRoamMax: 6
+  _postSpot: {fileID: 0}
+  _practiceIntervalMin: 1.2
+  _practiceIntervalMax: 2.5
+  _getUpTime: 1
+  _corpseBrightness: 0.35
+  _heldFriction: 10
+  _rearmRadius: 12.5
   _player: {fileID: 0}
 --- !u!114 &-7499668176266741108
 MonoBehaviour:

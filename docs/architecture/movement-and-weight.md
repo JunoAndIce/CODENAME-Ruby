@@ -17,6 +17,24 @@ how characters author movement:
   enemies in corners. **Any new push follows knockback's pattern: explicit, carried on top of the
   move and faded on its own; never inferred from the body, and never by writing a character's
   Rigidbody velocity directly.**
+- **She turns through her Rigidbody, never her Transform** (`MoveRotation` in `FixedUpdate`, toward
+  the facing `MovePlayer` works out from the aim each frame). Her Rigidbody interpolates, so the
+  camera follows a smoothed position. A Transform write is pushed back into the body at the next
+  physics step, carrying the interpolated position, which trails the real one: she lost a
+  different slice of her move every step and her model jittered against the camera. That was how
+  she turned until 2026-11-20 (`transform.LookAt` every frame). Measured walking at full speed,
+  her on-screen position wobbled about 3.4 px from frame to frame (up to 6 px) before the change
+  and 0.01 px after. Anything that must move or turn an interpolated body goes through the
+  Rigidbody; a revive's teleport sets both on purpose. (A test that writes the Transform in
+  `Application.onBeforeRender` does not reproduce it: write it in `Update`, as the old code did.)
+- **Her move ramps** (since 2026-11-20): her intended velocity moves toward input × Move Speed at
+  a fixed rate, reaching full speed in Speed Up Time (0.12 s, turning too) and standing in Slow Down
+  Time (0.08 s). One press used to take her to full speed in a frame, which made precise movement
+  fiddly. **The ramp shapes the intent, never the delivered move**: `PushLimit` and the rope limit
+  clip it afterwards, as before. Ramping off the clipped speed would collapse a drag at full rope
+  to a crawl, each step starting from the last one's clipped speed. Her legs read the speed she's
+  trying to reach (from the input), not the ramp. The ramp cost one thing: a yank from standing
+  still at full rope length is gone, though one with a run-up from slack still lands.
 - **Enemies** set their velocity directly (`SetFlatVelocity`): nothing pushes them while their AI
   steers, because the rope only acts while grabbed, and `GrabbedState` doesn't steer.
 - `Flatten()` redirects an upward launch into XZ **preserving magnitude**, so throw distance depends
@@ -73,3 +91,12 @@ never push, and a few passes opened a doorway the crates had shut. Frictionless,
 author their velocity every step, so floor friction never slowed them, and default friction also held an
 enemy steering into a corner there instead of letting them slide off it. Bones keep default friction:
 a ragdoll should drag on the floor. A new character prefab takes the material on its root capsule too.
+
+**The one time a character doesn't author its velocity is on the chain**, so a held enemy (alive, or a
+corpse tied upright) gets its friction back in code: `EnemyMovement.DragFeet` slows their flat slide by
+Held Friction (10 m/s², on `EnemyController`) every physics step they're held, after the tether has solved.
+Frictionless, nothing slowed them: measured, a yanked enemy reached Ruby and coasted on at 0.67 m/s for good,
+sliding past her; with it they stop 2 m short of her within 0.8 s. A friction material on the capsule would
+have brought back the crate-dragging above, which is why it's a deceleration and not a material. The rope
+re-closes any gap each step, so it doesn't stop the chain moving them, and the parked spin re-adds what it
+takes (it holds its own speed, never reads it back off the body).

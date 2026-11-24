@@ -8,6 +8,13 @@ public interface IGrappleUser
 {
     Vector3 AimPoint { get; }
 
+    /// <summary>
+    /// Where the drawn chain leaves the user (their chain hand), read live: as posed this frame when
+    /// read after the animation. It's only where the chain is drawn from: the rope's length, wraps
+    /// and pull all work from the user's centre of mass.
+    /// </summary>
+    Vector3 ChainHand { get; }
+
     /// <summary>False while the user can't use the chain (knocked down): the grapple lets go and stands down.</summary>
     bool CanAct { get; }
 
