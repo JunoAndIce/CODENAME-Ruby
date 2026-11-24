@@ -114,5 +114,6 @@ new coders. It held back the enemy states work until that closed (2026-11-20), a
 pull split into a tap's yank, a hold's steady reel and a double tap's spin (step 2), with the spin starting toward
 the reticle (a yanked table tipping onto its side, `Tippable`, was built and then removed on 2026-11-24); and **the clothesline** (step 3, built
 2026-11-24, `docs/plans/2026-11-24-clothesline.md`): a taut rope swept across an enemy at Knockdown Speed floors
-them along the sweep, and the spin carries on. Step 4, the chain acting at the node point, is shelved (2026-11-24). Next on the list: a
-play-test of a spin walked through a crowd.
+them along the sweep, and the spin carries on. Step 4, the chain acting at the node point, is shelved (2026-11-24), and so is a pose for the chain arm (no clip
+for it yet). The user play-tested a spin walked through a crowd. The branch closed there, and enemy work resumed
+with Enemy States 0.3.
