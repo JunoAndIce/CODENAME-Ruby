@@ -55,7 +55,6 @@ public class Tether
 
     readonly Collider[] _playerColliders;
     readonly Collider[] _hostColliders;   // empty for static-world nodes
-    readonly Tippable _tippable;          // a host a yank tips onto its side (a table), or null
 
     // A parked host that keeps less than this share of the sideways speed it should have kept
     // through a step was stopped by something (a wall, a crate, an enemy), and bounces.
@@ -186,7 +185,6 @@ public class Tether
             // prop skips clean through a 0.7 m enemy and the hit never happens. Left on after the
             // tether ends, since the thrown body is still flying.
             _host.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            _host.TryGetComponent(out _tippable);
             _addedContacts = !_host.TryGetComponent(out _contacts);
             if (_addedContacts) _contacts = _host.gameObject.AddComponent<HostContacts>();
             _contacts.Ignore(player);
@@ -259,16 +257,6 @@ public class Tether
         _length = Mathf.Max(_minLength, Taut);
         if (_host == null) return;
         _yankSpeed = Mathf.Min(impulse / _hostMass, maxSpeed);
-
-        // A tippable host (a table) pulled broadside hard enough tips onto its side instead, the same
-        // way every time; the haul would only add the friction's luck back in.
-        Vector3 pivot = _wrapped ? _hostPivot : _player.worldCenterOfMass;
-        if (_tippable != null && _tippable.TryTip(pivot - _host.worldCenterOfMass, _yankSpeed))
-        {
-            _yankLeft = 0f;
-            TetherLog.Event($"YANK  tipped {_host.name} onto its side ({_yankSpeed:0.0} m/s)");
-            return;
-        }
         _yankLeft = YankBiteSeconds;
         TetherLog.Event($"YANK  {impulse:0} N s on {_hostMass:0} kg: {_yankSpeed:0.0} m/s toward her for {YankBiteSeconds} s");
     }

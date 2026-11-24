@@ -1,8 +1,8 @@
 # Chain feel
 
 **Status:** step 1 (the right hand) and step 2 (tap and hold) built and committed 2026-11-22 to 2026-11-24 (with the
-spin toward the reticle and `Tippable`). Step 3 (the clothesline) designed and built 2026-11-24, play-tested by
-the user ("works well"); plan `docs/plans/2026-11-24-clothesline.md`. Step 4 is named, not designed.
+spin toward the reticle, and `Tippable`, removed again 2026-11-24 at the user's call). Step 3 (the clothesline) designed and built 2026-11-24, play-tested by
+the user ("works well"); plan `docs/plans/2026-11-24-clothesline.md`. Step 4 is named, not designed, and shelved 2026-11-24 at the user's call.
 
 ## Intent
 

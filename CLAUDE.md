@@ -70,7 +70,7 @@ The scripts are split into assembly definitions so the systems can be lifted int
 
 | Assembly | Folder (under `Assets/Scripts/`) | References | Holds |
 | --- | --- | --- | --- |
-| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, `Tippable` (props a yank tips onto their side), ragdolls (seam and skeleton), `IKnockback`, pooling, `DebugLog`, the stimulus bus (`Stimuli`, `StimulusRules`) and `Disturbance` |
+| `Ruby.Core` | `Core/` | none | state machine, `Health`, impact damage, `VelocityUtil`, weight classes, ragdolls (seam and skeleton), `IKnockback`, pooling, `DebugLog`, the stimulus bus (`Stimuli`, `StimulusRules`) and `Disturbance` |
 | `Ruby.Pathing` | `Pathing/` | none | grid, flow fields (bounded floods with a distance query), A\*, `GridNavigator`, `Steering`, patrol routes |
 | `Ruby.CameraRig` | `CameraRig/` | none | `CameraFocus` |
 | `Ruby.Grapple` | `Grapple/` | Core, Input System | grapple, tether, whip, nodes |

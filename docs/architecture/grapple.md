@@ -75,24 +75,7 @@ throw; a 10 kg crate measured 20.0). The haul runs along the rope's own line, no
 held for the bite rather than kicked once: a table whose feet catch the floor is hauled on through its
 middle, and broadside it tips (measured: flipped, 174 degrees; end-on it slides). A single flat kick
 was tried first and tipped a broadside table 0 degrees: the feet caught, the table stopped, and nothing
-was left pulling. **A tippable host tips onto its side instead** (`Tippable`, in `Ruby.Core`, on the table's root): when
-a yank lands on one that's upright, pulled within 45 degrees of its narrow side, at least Min Yank Speed
-(3 m/s), the haul is skipped and the prop gets exactly the spin that rocks it over the feet nearest
-Ruby and through its balance point still turning at Balance Spin (2.2 rad/s), worked out from its own
-colliders, weight and inertia. Balance Spin is held under 75% of the spin at which it would lift off
-its feet (sqrt(g / reach), from its size), with a warning when that cap applies: at 3 rad/s the table
-left the floor and tumbled onto its back. Past the balance point its spin is held to Landing Spin
-(6 rad/s), and once it comes down on its side, at the tilt where the first point beyond its feet (a
-table's overhanging top edge) meets the floor (71 degrees for the table), it stops turning, along with
-the share of its slide that turning carried. A disabled Tippable refuses to tip (its FixedUpdate, which
-lands it, wouldn't run). Left to friction, side, back or upright swung with the yank's strength and the
-distance (one strength put it on its side from 5 m and on its back from 7.5 m, and a stronger one could
-leave it standing); measured with Tippable, broadside yanks at 175 and 400 N s from 5 and 7.5 m, either
-side, all reached 70 degrees within 0.5 s and rested on its side at 71, and a 100 N s yank (under Min
-Yank Speed) slid it. Two traps on the way: ending the tip the moment it was slow past the balance point
-dropped the landing cap just as it fell, and landing at 1.2 rad/s rolled it on over the top's edge,
-because a table's resting place on its side is shallow (its centre of mass need rise only about 7 cm
-more to go over onto its back). End-on, too slow, or not upright, the yank goes ahead as for any prop. The bite ends early once the host is in at the park distance, which is why a table
+was left pulling. Left to friction, a broadside table lands on its side, its back or stays upright depending on the yank's strength and the distance. (A scripted tip, `Tippable`, which put it on its side every time, was built and removed on 2026-11-24: the user no longer wanted it.) The bite ends early once the host is in at the park distance, which is why a table
 yanked by a leg barely moves from close in: its park distance is measured to the far corner (about
 4.4 m).
 Before, a tap shortened the rope by Pull Impulse x 0.3 s and the servo closed the gap in one step, so
