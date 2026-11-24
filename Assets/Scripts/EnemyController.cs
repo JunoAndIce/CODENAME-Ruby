@@ -446,18 +446,24 @@ public class EnemyController : MonoBehaviour, IGrabbable, IPathAgent, IKnockdown
     /// it with, then gets up into Aggro. Held on the chain or already down, the hit only hurts, so
     /// a swung enemy keeps swinging.
     /// </summary>
-    public void KnockDown()
+    public void KnockDown() => KnockDown(VelocityUtil.Flatten(Body.linearVelocity));
+
+    /// <summary>
+    /// Knocked down as KnockDown(), but sent tumbling at `launchVelocity` (the chain's clothesline,
+    /// along its sweep). The same guards: held, dead or down, nothing happens.
+    /// </summary>
+    public void KnockDown(Vector3 launchVelocity)
     {
         if (Health.IsDead || _state.Current is GrabbedState or DeadState) return;
         if (_state.Current == Ragdoll)
         {
             // Getting up, it's on its feet, so a hard enough hit floors it again, as it would anyone
             // standing. SetState can't re-enter Ragdoll, so the state is relaunched instead.
-            if (Ragdoll.Standing) Ragdoll.Relaunch(VelocityUtil.Flatten(Body.linearVelocity));
+            if (Ragdoll.Standing) Ragdoll.Relaunch(launchVelocity);
             return;
         }
         BodyState.DropGun();
-        Ragdoll.Launch(VelocityUtil.Flatten(Body.linearVelocity));
+        Ragdoll.Launch(launchVelocity);
         _state.SetState(Ragdoll);
     }
 

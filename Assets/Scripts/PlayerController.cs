@@ -165,7 +165,13 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
     /// Knocked down by a hit (ImpactDamage): she ragdolls at the velocity the hit left her with and
     /// loses control. Alive, she gets up once settled; dead, she comes back after Revive Delay.
     /// </summary>
-    public void KnockDown()
+    public void KnockDown() => KnockDown(_myRigidbody.linearVelocity);
+
+    /// <summary>
+    /// Knocked down as KnockDown(), but ragdolled at `launchVelocity`. Nothing calls it on her today:
+    /// the clothesline never hits the one holding the chain.
+    /// </summary>
+    public void KnockDown(Vector3 launchVelocity)
     {
         if (_downed || _ragdoll == null) return;
 
@@ -175,7 +181,7 @@ public class PlayerController : MonoBehaviour, IGrappleUser, ICameraTarget, IKno
         // The chain lets go before the ragdoll switches her capsule off: letting go gives the
         // capsule its collisions back, which Unity refuses on a disabled collider.
         if (_grapple != null) _grapple.StandDown();
-        _ragdoll.Ragdoll(_myRigidbody.linearVelocity);
+        _ragdoll.Ragdoll(launchVelocity);
         if (_health != null && _health.IsDead) DebugLog.Info($"{name} is dead.", this);
     }
 
