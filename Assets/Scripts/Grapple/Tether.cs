@@ -303,6 +303,12 @@ public class Tether
     float Taut => Mathf.Min(_length, _pathLength);
 
     /// <summary>
+    /// The rope runs its full length (within Clothesline.TautTolerance): a held spin, or the fan-out
+    /// running out through her braking hand. Slack rope isn't a chain swept across anyone.
+    /// </summary>
+    public bool IsTaut => _pathLength >= _length - Clothesline.TautTolerance;
+
+    /// <summary>
     /// Send the host along `direction` (the player's aim). Its velocity is replaced, not added to,
     /// so a spinning host leaves on the aim instead of curving off. Speed is split by mass; the
     /// player takes none of it.

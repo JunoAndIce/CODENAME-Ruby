@@ -160,6 +160,27 @@ circle), so enemies and crates ended up inside it and the rope swept onto them b
 a caught rope never parks, so walking stopped the spin, and walking into a crowd was exactly when.
 The spun host is what should hit them. Catches already on a moving body unwrap.
 
+**The fast part of the rope is a clothesline** (`Clothesline`, owned by the `GrappleController` beside
+`RopeWraps` and stepped after each solve). A taut rope (`Tether.IsTaut`: its path at its length, within 5 cm,
+so a held spin or the fan-out through her braking hand, never slack) swept across a body carrying an
+`IKnockdown` at Impact Rules' Knockdown Speed or faster floors it and carries on; slower rope passes through as
+above, so the spin never stops for a body. Only the rope's last span sweeps, from the last wrap (or her centre of
+mass) to the anchor. Each step it tests the **strip** swept between last step's span and this one, not the line:
+at spin speed a short rope turns a long way in a step, and a line test steps clean over whoever it passed. The
+speed is the rope's own, sideways, where it crossed them: it rises in a straight line from nothing at the pivot
+to the host's speed, so in a 40 m/s spin on 8 m only the rope beyond about 5 m floors anyone, and nobody close to
+Ruby. Because the speed is linear along the span, a step where neither end reached Knockdown Speed skips the scan
+(most of a held rope's life). The floored body goes over along the sweep at **Clothesline Fling** (0.5) of that
+speed, through `IKnockdown.KnockDown(launchVelocity)`: half keeps a 25 m/s sweep's launch under Knockdown Speed, so
+a floored enemy doesn't floor the next by bumping; 1 gives chain reactions. **No damage:** the impact formula
+weighs the hitter, and a chain weighs next to nothing; the spun host kills. Ruby and the host are never hit, one
+test per `IKnockdown` per step (a ragdoll's bones all lead to one), and an enemy already down stays down (their
+`KnockDown` guards; one getting up is floored again). A step whose pivot changed (the rope caught on a corner or
+came off one) tests nothing: the strip between the two spans would be meaningless. The first step of a new rope
+records only. **Impact Rules** must be assigned on the `GrappleController`, or it logs an error at start and the
+chain floors no one. Each hit logs `CLOTHESLINE <name> at <speed> m/s` (debug logs); with Ruby selected the last
+strip is drawn, gold if it floored anyone.
+
 **A spin starts toward the reticle** (`Tether.ChooseSpinDirection`). When a hold's spin arms (after
 Spin Delay, or at once on a double tap), it picks the short way round toward the aim point, which the
 grapple hands the tether before each solve (`Tether.AimPoint`): reticle left of the line from Ruby to

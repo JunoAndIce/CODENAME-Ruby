@@ -30,7 +30,10 @@ speed (Ruby 15 + an enemy's chase, about 25), and a swing only hurts once Spin S
 Damage is big from the threshold on purpose: fast enough to knock a character down usually kills.
 
 `EnemyController.KnockDown` ragdolls the enemy at the velocity the hit left it with; held on the
-chain or already down, the hit only hurts, so a swung enemy keeps swinging. **Getting up:** once a
+chain or already down, the hit only hurts, so a swung enemy keeps swinging. **`KnockDown(launchVelocity)`**
+does the same at a given velocity instead, under the same guards: the chain's clothesline (see `grapple.md`)
+floors an enemy along its sweep, and nothing outside a character writes its velocity, so the owner launches it.
+`KnockDown()` is that with the body's own velocity; Ruby implements both, though nothing calls the second on her. **Getting up:** once a
 survivor's body settles, `RagdollState` stands it up and holds it still for Get Up Time (1 s, the
 stand-in for a get-up clip's length) before the table sends it hunting. Getting up, it's standing
 again: a hit at Knockdown Speed floors it once more (`RagdollState.Relaunch`, since `SetState` can't

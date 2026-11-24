@@ -44,6 +44,12 @@ public class GrappleController : MonoBehaviour
     [Tooltip("When a spinning host hits a wall (or anything that stops it), it bounces back the other way keeping this share of its speed, then revs up again.")]
     [SerializeField, Range(0f, 1f)] private float _spinBounce = 0.7f;
 
+    [Header("Clothesline")]
+    [Tooltip("The shared Impact Rules asset (the one ImpactDamage uses). Its Knockdown Speed is the speed at which a taut chain swept across an enemy floors them. Unassigned, the chain never clotheslines, and says so at start.")]
+    [SerializeField] private ImpactRules _impactRules;
+    [Tooltip("An enemy the swept chain floors is sent off at this share of the rope's speed where it crossed them, along the sweep. 0.5 keeps a 25 m/s sweep's launch under Knockdown Speed, so they don't floor the next one by bumping; 1 for chain reactions through a crowd.")]
+    [SerializeField, Range(0f, 1f)] private float _clotheslineFling = 0.5f;
+
     [Header("Throw")]
     [Tooltip("Throw strength at full charge, split by mass: light things fly faster.")]
     [FormerlySerializedAs("_pushImpulse")]
@@ -91,6 +97,7 @@ public class GrappleController : MonoBehaviour
     Rigidbody _body;
     AimOrb _aimOrb;
     RopeWraps _wraps;
+    Clothesline _clothesline;    // null without Impact Rules: the chain floors no one, as Awake reports
     WhipChain _whip;
     Tether _tether;              // Attached only
     GrappleNode _marked;         // Ready: the node the aim orb shows, and so what a click hooks
@@ -142,6 +149,8 @@ public class GrappleController : MonoBehaviour
         _body = GetComponent<Rigidbody>();
         _input = GetComponent<PlayerInput>();
         _wraps = new RopeWraps(_body);
+        if (_impactRules != null) _clothesline = new Clothesline(_body);
+        else Debug.LogError($"{name}: GrappleController has no Impact Rules, so the chain won't knock down anyone it sweeps across. Assign the ImpactRules asset.", this);
         _aimOrb = new AimOrb(_aimOrbSize);
         if (_chain == null) _chain = GetComponentInChildren<LineRenderer>();
         if (_chain != null) StyleChain(_chain);
@@ -441,6 +450,7 @@ public class GrappleController : MonoBehaviour
         }
 
         _tether = new Tether(_body, node, len, _minChainLength, _maxChainLength, _spinSpeed, _spinSpeedFar, _spinSpeedHeld, _spinUpTime, _spinBounce, _spinDelay, _releaseGrip);
+        _clothesline?.Reset();   // a new rope swept nothing yet
         _pendingNode = null;
         _phase = Phase.Attached;
 
@@ -471,6 +481,7 @@ public class GrappleController : MonoBehaviour
         _whip.Step(_user.ChainHand, _tether.Anchor, _tether.Length, _wraps.Points);
         _tether.AimPoint = _user.AimPoint;   // a spin starts toward the reticle
         _tether.Solve(_wraps.Points);
+        StepClothesline();
         // A held body always leads back to her, so whatever it knocks into does too.
         if (_tether.HasHost) Disturbance.Stamp(_tether.Host, _body.position);
         UpdateJiggle();
@@ -581,7 +592,26 @@ public class GrappleController : MonoBehaviour
             _phase = Phase.Ready;
         }
         _wraps.Clear();
+        _clothesline?.Reset();
         _tether = null;
+    }
+
+    // The rope's last span, from the last wrap (or her centre of mass) to the anchor, swept across
+    // anyone this step floors them if it moved fast enough there. After the solve, on the wraps it used.
+    void StepClothesline()
+    {
+        if (_clothesline == null) return;
+        var wraps = _wraps.Points;
+        bool wrapped = wraps.Count > 0;
+        Vector3 wrapPoint = wrapped ? wraps[wraps.Count - 1] : Vector3.zero;
+        Vector3 pivot = wrapped ? wrapPoint : _body.worldCenterOfMass;
+        _clothesline.Step(pivot, _tether.Anchor, wrapped, wrapPoint, _tether.Host, _tether.IsTaut,
+                          _impactRules.KnockdownSpeed, _clotheslineFling, Time.fixedDeltaTime);
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        if (_phase == Phase.Attached) _clothesline?.DrawGizmos();
     }
 
     // ---- trailing a throw -------------------------------------------------------------

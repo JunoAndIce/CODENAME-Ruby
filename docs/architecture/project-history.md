@@ -109,3 +109,10 @@ rewritten and the stats table brought up to the prefab's and test scene's curren
 The design manual (`docs/manual/design-manual.html`, with a PDF beside it) is the designer-facing
 account of what is built, and its section on the Path Grid, colliders and navigation is written for
 new coders. It held back the enemy states work until that closed (2026-11-20), and now covers it.
+
+**Chain feel, from 2026-11-22** (`docs/specs/2026-11-22-chain-feel.md`): the chain leaves Ruby's right hand (step 1);
+pull split into a tap's yank, a hold's steady reel and a double tap's spin (step 2), with the spin starting toward
+the reticle and a yanked table tipping onto its side (`Tippable`); and **the clothesline** (step 3, built
+2026-11-24, `docs/plans/2026-11-24-clothesline.md`): a taut rope swept across an enemy at Knockdown Speed floors
+them along the sweep, and the spin carries on. Next on the list: step 4, the chain acting at the node point, and a
+play-test of a spin walked through a crowd.

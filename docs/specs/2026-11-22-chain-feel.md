@@ -1,7 +1,8 @@
 # Chain feel
 
-**Status:** step 1 (the right hand) and step 2 (tap and hold) built 2026-11-22, awaiting play-test. Later steps are named here, not
-designed.
+**Status:** step 1 (the right hand) and step 2 (tap and hold) built and committed 2026-11-22 to 2026-11-24 (with the
+spin toward the reticle and `Tippable`). Step 3 (the clothesline) designed and built 2026-11-24, play-tested by
+the user ("works well"); plan `docs/plans/2026-11-24-clothesline.md`. Step 4 is named, not designed.
 
 ## Intent
 
@@ -68,3 +69,68 @@ pulling benches over depend on where the chain pulls, not where the thing ends u
 `python tools/compile_check.py`, then play: the chain leaves her right hand while standing, walking, turning a
 full circle, aiming, during a throw's trail, while spinning, and while caught on a pillar; no visible lag between
 hand and chain at full speed; knocked down, the chain lets go as today.
+
+## Step 3: the clothesline (designed 2026-11-24)
+
+### Intent
+
+A taut chain swept across an enemy fast enough knocks them down, as a real chain would in a superhuman's hands. In
+practice only a spin moves rope that fast: speed along the rope rises from nothing at Ruby to the host's speed, her
+walk tops out at 15 m/s, a yank pulls along the rope's own line and a throw lets go at once, so it's the outer part
+of a wide spin that clears a path for the spun host.
+
+### Decided (the user, 2026-11-24)
+
+- **The fast part floors, the rest passes.** Where a spin's rope crosses an enemy at Knockdown Speed or more they go
+  down and the rope carries on; slower rope, near Ruby, keeps passing through moving bodies as it does today
+  (`RopeWraps`' `passMovingBodies`). The spin never stops for a body.
+- **A rope that isn't fast does what it does today:** it bends round an enemy like a corner and they walk through.
+  Blocking (a rope that stops a walk, or a slow sweep that shoves) is a later step, if ever.
+- **Approach 1, below.**
+
+### Approaches
+
+1. **Work out the sweep each physics step (picked).** Compare the rope's free run this step with the last, find
+   characters inside the strip it swept, read the rope's sideways speed where it crossed them. Testing the strip,
+   not the line, means a fast spin can't step over anyone: at 40 m/s on a short rope it turns a long way per step.
+2. A trigger collider riding the rope. Rejected: it jumps clean over people at spin speed, and a collider beside
+   Ruby has to be hidden from the node-sight and wrap raycasts.
+3. Test the drawn whip's segments. Rejected: the drawing leaves her hand and sways; step 1 settled that the drawing
+   never drives the physics.
+
+### Design
+
+- **`Clothesline`**, a plain class in `Ruby.Grapple`, stepped each physics step after the tether's solve. (Built
+  owned by the `GrappleController` beside `RopeWraps`, not the `Tether`: the controller holds the wraps, the
+  settings and the gizmo hook; the tether has no gizmos.) It knows nothing of enemies: it finds anything carrying an `IKnockdown` (`Ruby.Core`).
+- **The swept run** is the rope's last span, from the last wrap (or Ruby's centre of mass) to the host, on the
+  floor plane. Only a **taut** rope counts (its path at its length, give or take a few centimetres): a gripped spin,
+  and the fan-out while her hand brakes it. Slack rope isn't a chain swept across anyone.
+- **Who it hits:** one overlap around the span's pivot at the span's length, keeping colliders whose
+  `IKnockdown` (on them or a parent) isn't Ruby's or the host's, once per `IKnockdown` per step (a ragdoll's bones
+  all lead to one). A character counts as crossed when their body (a circle of their capsule's radius, or of the
+  collider's extent for bones) meets the strip between last step's span and this one.
+- **How fast:** the speed of the rope's point at the crossing, sideways to the span (the point's movement over the
+  step, across the rope). At or above `ImpactRules.KnockdownSpeed` they're floored; below it nothing happens.
+- **Knocked down along the sweep.** `IKnockdown` gains `KnockDown(Vector3 launchVelocity)`: the enemy ragdolls at
+  that velocity instead of their own (the existing `KnockDown()` keeps its behaviour); Ruby implements it too,
+  though the rope never hits her. The launch is the rope's sideways velocity at the crossing times **Clothesline
+  Fling** (on the `GrappleController`, default 0.5: a 25 m/s sweep sends them off at 12.5 m/s, under Knockdown
+  Speed, so a floored enemy doesn't floor the next by bumping them).
+- **No damage.** The impact formula weighs the hitter, and a chain weighs next to nothing: the rope floors, the
+  spun host kills.
+- **Visible:** each hit logs `CLOTHESLINE <name> at <speed> m/s` through `DebugLog.Info`; the swept strip of the
+  last step is drawn in the `GrappleController`'s selected gizmos, gold if it floored anyone.
+
+### Left to the builder
+
+- The exact strip-versus-circle test, as long as it can't miss a body the rope passed over in one step.
+- What an already-down or getting-up enemy does with the new overload: whatever `KnockDown()` does today for those
+  states (getting up floors them again, down stays down).
+
+### Verification
+
+`python tools/compile_check.py`, then play: a wide spin through a group floors those its outer rope crosses and
+leaves those close to Ruby standing; the spin keeps going; floored enemies go over the way the rope swept; a rope at
+rest or swung slowly still bends round enemies; the fan-out after letting go floors anyone it sweeps fast enough.
+With `RUBY_DEBUG_LOGS` on, each hit logs once.
