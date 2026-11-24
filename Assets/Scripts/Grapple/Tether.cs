@@ -309,6 +309,13 @@ public class Tether
     public bool IsTaut => _pathLength >= _length - Clothesline.TautTolerance;
 
     /// <summary>
+    /// A spin the hand let go of is running out, braked by her grip (BrakeFanOut). Like a spin, its
+    /// rope passes through anything that moves: caught on the first enemy in its arc, it bent round
+    /// them, the catch ended the brake, and the clothesline never got to floor them.
+    /// </summary>
+    public bool IsFanningOut => _fanningOut;
+
+    /// <summary>
     /// Send the host along `direction` (the player's aim). Its velocity is replaced, not added to,
     /// so a spinning host leaves on the aim instead of curving off. Speed is split by mass; the
     /// player takes none of it.

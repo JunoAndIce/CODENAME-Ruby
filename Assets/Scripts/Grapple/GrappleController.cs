@@ -477,7 +477,7 @@ public class GrappleController : MonoBehaviour
             if (_crackTimer <= 0f) LandYank();
         }
 
-        _wraps.Update(_tether.Anchor, _tether.Node.Host, passMovingBodies: _tether.IsParked);
+        _wraps.Update(_tether.Anchor, _tether.Node.Host, passMovingBodies: _tether.IsParked || _tether.IsFanningOut);
         _whip.Step(_user.ChainHand, _tether.Anchor, _tether.Length, _wraps.Points);
         _tether.AimPoint = _user.AimPoint;   // a spin starts toward the reticle
         _tether.Solve(_wraps.Points);

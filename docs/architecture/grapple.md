@@ -158,7 +158,9 @@ rather than sweeps, so higher spin speeds don't read as faster.
 Walking moves a spin's circle faster than it turns (2.4 m a turn at 40 m/s on 1 m, against a 2 m
 circle), so enemies and crates ended up inside it and the rope swept onto them before the host could;
 a caught rope never parks, so walking stopped the spin, and walking into a crowd was exactly when.
-The spun host is what should hit them. Catches already on a moving body unwrap.
+The spun host is what should hit them. Catches already on a moving body unwrap. **The fan-out after letting go
+of a spin passes through them too** (`Tether.IsFanningOut`): caught on the first enemy in its arc, the rope bent
+round them, the catch ended her hand's brake, and the clothesline (below) never got to floor them.
 
 **The fast part of the rope is a clothesline** (`Clothesline`, owned by the `GrappleController` beside
 `RopeWraps` and stepped after each solve). A taut rope (`Tether.IsTaut`: its path at its length, within 5 cm,

@@ -27,7 +27,7 @@ class RopeWraps
 
     /// <summary>
     /// Re-check the catches for this step, from the player to the anchor. `passMovingBodies` (set
-    /// while the host spins) lets the rope through anything that moves (enemies, crates, any
+    /// while the host spins, or fans out after one) lets the rope through anything that moves (enemies, crates, any
     /// non-kinematic body), so only walls and fixed things catch it: walking moves a spin's circle
     /// faster than it turns (2.4 m a turn at 40 m/s on 1 m, against a 2 m circle), so enemies and
     /// crates end up inside it and the rope swept onto them before the host could, which stopped
