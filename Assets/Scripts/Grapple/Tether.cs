@@ -85,6 +85,12 @@ public class Tether
     /// </summary>
     public bool Gripped { get; set; }
 
+    /// <summary>
+    /// The user's aim point (the reticle), handed in before each solve: a spin starts the short way
+    /// round toward it (see ChooseSpinDirection).
+    /// </summary>
+    public Vector3 AimPoint { get; set; }
+
     public GrappleNode Node => _node;
     public Vector3 Anchor => _node.AnchorPoint;
     public float Length => _length;
@@ -133,6 +139,14 @@ public class Tether
     // step returns before Spin, so a park whose first step was a rod step reached Spin with stale
     // speed, direction and wall contact from the last spin, and could read them as a bounce.
     bool _spinStarted;
+    // Which way round the reticle chose when this hold's spin armed (+1 counter-clockwise, -1
+    // clockwise, 0 none yet or the reticle was on the line), used by the spin's first step. After
+    // that first step, re-parks in the same hold keep the way it was going (_holdDirection), so a
+    // bounce's reversal or a corner catch isn't undone by the reticle. Both clear when the hand lets go.
+    float _chosenDirection;
+    bool _holdDirection;
+    // Within this angle of the line from her to the host, the reticle picks no side.
+    const float AimOnLineDegrees = 5f;
     bool _wrapped;
 
     // A spin the hand let go of, still fanning out: her hand brakes the chain as it runs out (see
@@ -420,8 +434,17 @@ public class Tether
         // Only the hand arms it, never a tap. Once armed, a bounce that stretches the rope for
         // a step re-parks at once rather than waiting out the delay again.
         _heldInFor = Gripped && heldIn ? _heldInFor + Time.fixedDeltaTime : 0f;
-        if (!Gripped) _spinArmed = false;
-        else if (_heldInFor >= _spinDelay || _spinHere) _spinArmed = true;
+        if (!Gripped)
+        {
+            _spinArmed = false;
+            _chosenDirection = 0f;
+            _holdDirection = false;
+        }
+        else if (_heldInFor >= _spinDelay || _spinHere)
+        {
+            if (!_spinArmed) _chosenDirection = ChooseSpinDirection(dir);
+            _spinArmed = true;
+        }
         bool parked = heldIn && (_spinArmed || wasParked);
         IsParked = parked;
         if (!parked) _spinStarted = false;
@@ -559,10 +582,22 @@ public class Tether
 
         if (!_spinStarted)
         {
-            // The rev-up starts from however fast, and whichever way, it arrived.
             _spinStarted = true;
-            _spinDirection = along < 0f ? -1f : 1f;
-            _spinNow = Mathf.Abs(along);
+            if (_chosenDirection != 0f || _holdDirection)
+            {
+                // The way the reticle chose (or, re-parking in the same hold, the way it was going).
+                // Moving the other way already, it revs up from standstill rather than snapping round.
+                if (_chosenDirection != 0f) _spinDirection = _chosenDirection;
+                _chosenDirection = 0f;
+                _spinNow = Mathf.Max(0f, along * _spinDirection);
+            }
+            else
+            {
+                // The rev-up starts from however fast, and whichever way, it arrived.
+                _spinDirection = along < 0f ? -1f : 1f;
+                _spinNow = Mathf.Abs(along);
+            }
+            _holdDirection = true;
             _contacts.TakeWall();   // a wall touched before the spin began isn't a hit on it
         }
         else
@@ -599,6 +634,31 @@ public class Tether
     // 2).
     float SpinSpeedAt(float radius)
         => Mathf.Lerp(_spinSpeed, _spinSpeedFar, Mathf.InverseLerp(_minLength, _maxLength, radius));
+
+    // Which way round a spin starts: the short way toward the reticle, +1 counter-clockwise seen from
+    // above, -1 clockwise, so the player picks which way it sweeps into a crowd by where they aim.
+    // The reticle on the line from her to the host (ahead of it, or straight behind her) picks no
+    // side: 0, and the spin keeps whichever way the host was already moving. That's the rule for it,
+    // logged so it can't pass for a dropped choice.
+    float ChooseSpinDirection(Vector3 dir)
+    {
+        Vector3 toHost = VelocityUtil.Flatten(dir);
+        Vector3 toAim = VelocityUtil.Flatten(AimPoint - _player.worldCenterOfMass);
+        if (toHost.sqrMagnitude < 0.0001f || toAim.sqrMagnitude < 0.0001f)
+        {
+            TetherLog.Event("SPIN DIRECTION  no reticle direction: it keeps the way it's moving");
+            return 0f;
+        }
+        float side = Vector3.SignedAngle(toHost, toAim, Vector3.up);   // positive: clockwise seen from above
+        if (Mathf.Abs(side) < AimOnLineDegrees || Mathf.Abs(side) > 180f - AimOnLineDegrees)
+        {
+            TetherLog.Event($"SPIN DIRECTION  reticle on the line ({side:0} deg): it keeps the way it's moving");
+            return 0f;
+        }
+        float direction = side > 0f ? -1f : 1f;
+        TetherLog.Event($"SPIN DIRECTION  toward the reticle ({side:0} deg): {(direction > 0f ? "counter-clockwise" : "clockwise")}");
+        return direction;
+    }
 
     // The sideways speed an unobstructed host keeps through one step: it moves in a straight line
     // and the rod turns it back onto the circle, which costs more the further round it gets in a

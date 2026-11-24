@@ -177,8 +177,8 @@ letting go of the stick snaps it back to the ring, as in Hotline Miami) — so c
 on control scheme. `CameraFocus` and
 `GrappleController` both read it, through `ICameraTarget` and `IGrappleUser`. `PlayerReticle` draws
 it (a ring built in code, no collider) and replaces the hidden system pointer: the reticle **is**
-the aim point, so anything new that aims, picks a node or (soon) starts a spin reads `AimPoint`,
-never the mouse.
+the aim point, so anything that aims, picks a node or starts a spin (its direction) reads
+`AimPoint`, never the mouse.
 
 ### Topic docs: read the one you're touching first
 

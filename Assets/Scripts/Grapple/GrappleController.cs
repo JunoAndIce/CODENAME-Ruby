@@ -469,6 +469,7 @@ public class GrappleController : MonoBehaviour
 
         _wraps.Update(_tether.Anchor, _tether.Node.Host, passMovingBodies: _tether.IsParked);
         _whip.Step(_user.ChainHand, _tether.Anchor, _tether.Length, _wraps.Points);
+        _tether.AimPoint = _user.AimPoint;   // a spin starts toward the reticle
         _tether.Solve(_wraps.Points);
         // A held body always leads back to her, so whatever it knocks into does too.
         if (_tether.HasHost) Disturbance.Stamp(_tether.Host, _body.position);

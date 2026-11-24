@@ -143,6 +143,17 @@ circle), so enemies and crates ended up inside it and the rope swept onto them b
 a caught rope never parks, so walking stopped the spin, and walking into a crowd was exactly when.
 The spun host is what should hit them. Catches already on a moving body unwrap.
 
+**A spin starts toward the reticle** (`Tether.ChooseSpinDirection`). When a hold's spin arms (after
+Spin Delay, or at once on a double tap), it picks the short way round toward the aim point, which the
+grapple hands the tether before each solve (`Tether.AimPoint`): reticle left of the line from Ruby to
+the host, one way; right, the other, so the player picks which way it sweeps into a crowd by where they
+aim. A host already moving the other way revs up from standstill rather than snapping round. The
+choice is made once per hold: re-parking after a bounce or a corner catch while the button stays down
+keeps the way it was going (`_holdDirection`), so the reticle never undoes a bounce's reversal, and
+swinging the reticle mid-spin doesn't reverse it (the user's call: start-only is predictable). Within
+5 degrees of the line (ahead of the host, or straight behind her) the reticle picks no side and the
+spin keeps the host's own motion, a stated rule that logs as such.
+
 **A spun host bounces off what stops it.** The tether remembers which way the host goes round
 (`_spinDirection`). If a step leaves the host with less than half the sideways speed an
 unobstructed one keeps (`ExpectedAfterStep`, which allows for the rod's own loss at speed) **and** it
